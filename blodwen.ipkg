@@ -1,0 +1,10 @@
+package blodwen
+
+pkgs = contrib
+
+modules = Core.TT
+
+sourcedir = src
+executable = blodwen
+main = Main
+
