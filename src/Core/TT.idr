@@ -17,8 +17,8 @@ data Name = UN String
 public export
 data NameType : Type where
      Func    : NameType
-     DataCon : (tag : Int) -> (arity : Int) -> NameType
-     TyCon   : (tag : Int) -> (arity : Int) -> NameType
+     DataCon : (tag : Int) -> (arity : Nat) -> NameType
+     TyCon   : (tag : Int) -> (arity : Nat) -> NameType
 
 export
 Eq Name where
@@ -48,6 +48,12 @@ Ord Name where
 public export
 data Constant = I Int
               | IntType
+
+export
+Eq Constant where
+   (I x) == (I y) = x == y
+   IntType == IntType = True
+   _ == _ = False
 
 public export
 data PiInfo = Implicit | Explicit | AutoImplicit | Constraint
@@ -82,6 +88,15 @@ data Term : List Name -> Type where
      App : Term scope -> Term scope -> Term scope
      PrimVal : Constant -> Term scope
      TType : Term scope
+
+-- TMP HACK!
+Show (Term scope) where
+  show (Local y) = "V"
+  show (Ref x fn) = "Ref"
+  show (Bind x y z) = "Bind"
+  show (App x y) = "(" ++ show x ++ ", " ++ show y ++ ")"
+  show (PrimVal x) = "Prim"
+  show TType = "Type"
 
 export
 tm_id : Term []
@@ -123,6 +138,20 @@ thin n (App f a) = App (thin n f) (thin n a)
 thin n (PrimVal x) = PrimVal x
 thin n TType = TType
 
+export
+elemExtend : Elem x xs -> Elem x (xs ++ ys)
+elemExtend Here = Here
+elemExtend (There later) = There (elemExtend later)
+
+export
+embed : Term scope -> Term (scope ++ more)
+embed (Local prf) = Local (elemExtend prf)
+embed (Ref x fn) = Ref x fn
+embed (Bind x b tm) = Bind x (assert_total (map embed b)) (embed tm)
+embed (App f a) = App (embed f) (embed a)
+embed (PrimVal x) = PrimVal x
+embed TType = TType
+
 public export
 interface Weaken (tm : List Name -> Type) where
   weaken : tm scope -> tm (n :: scope)
@@ -139,6 +168,13 @@ export
 getBinder : Weaken tm => Elem x scope -> Env tm scope -> Binder (tm scope)
 getBinder Here (b :: env) = map weaken b
 getBinder (There later) (b :: env) = map weaken (getBinder later env)
+
+-- Some simple syntax manipulation
+
+export
+apply : Term scope -> List (Term scope) -> Term scope
+apply fn [] = fn
+apply fn (arg :: args) = apply (App fn arg) args
 
 -- Raw terms, not yet typechecked
 public export
