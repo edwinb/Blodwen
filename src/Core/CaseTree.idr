@@ -8,19 +8,19 @@ import Data.List
 mutual
   public export
   data CaseTree : List Name -> Type where
-       Case : Elem var scope -> List (CaseAlt scope) -> CaseTree scope
-       STerm : Term scope -> CaseTree scope
-       Unmatched : (msg : String) -> CaseTree scope
-       Impossible : CaseTree scope
+       Case : Elem var vars -> List (CaseAlt vars) -> CaseTree vars
+       STerm : Term vars -> CaseTree vars
+       Unmatched : (msg : String) -> CaseTree vars
+       Impossible : CaseTree vars
 
   %name CaseTree sc
 
   public export
   data CaseAlt : List Name -> Type where
        ConCase : Name -> (tag : Int) -> (args : List Name) ->
-                 CaseTree (args ++ scope) -> CaseAlt scope
-       ConstCase : Constant -> CaseTree scope -> CaseAlt scope
-       DefaultCase : CaseTree scope -> CaseAlt scope
+                 CaseTree (args ++ vars) -> CaseAlt vars
+       ConstCase : Constant -> CaseTree vars -> CaseAlt vars
+       DefaultCase : CaseTree vars -> CaseAlt vars
   
   %name CaseAlt alt
 

@@ -1,6 +1,6 @@
 package blodwen
 
-pkgs = contrib
+pkgs = contrib, pruviloj
 
 modules = Core.TT
 
