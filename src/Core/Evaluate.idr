@@ -292,6 +292,12 @@ mutual
   quoteBinder env (Pi x ty) 
       = do ty' <- quoteGen env ty
            pure (Pi x ty')
+  quoteBinder env (PVar ty) 
+      = do ty' <- quoteGen env ty
+           pure (PVar ty')
+  quoteBinder env (PVTy ty) 
+      = do ty' <- quoteGen env ty
+           pure (PVTy ty')
 
   Quote Value where
     quoteGen env (VLocal prf) = pure $ Local prf

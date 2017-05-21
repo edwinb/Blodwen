@@ -77,6 +77,14 @@ parameters (gam : Gamma)
         = do (tyv, tyt) <- chk env ty
              doConvert gam env tyt TType
              pure (Pi x tyv, tyt)
+    chkBinder env (PVar ty) 
+        = do (tyv, tyt) <- chk env ty
+             doConvert gam env tyt TType
+             pure (PVar tyv, tyt)
+    chkBinder env (PVTy ty) 
+        = do (tyv, tyt) <- chk env ty
+             doConvert gam env tyt TType
+             pure (PVTy tyv, tyt)
 
     discharge : (nm : Name) -> Binder (Term vars) -> Term vars ->
                 Term (nm :: vars) -> Term (nm :: vars) -> 
@@ -87,6 +95,10 @@ parameters (gam : Gamma)
          = (Bind nm (Let val ty) scope, Bind nm (Let val ty) scopety)
     discharge nm (Pi x ty) bindty scope scopety 
          = (Bind nm (Pi x ty) scope, bindty)
+    discharge nm (PVar ty) bindty scope scopety 
+         = (Bind nm (PVar ty) scope, Bind nm (PVTy ty) scopety)
+    discharge nm (PVTy ty) bindty scope scopety 
+         = (Bind nm (PVTy ty) scope, bindty)
 
     chkConstant : Constant -> (Term vars, Term vars)
     chkConstant (I x) = (PrimVal (I x), PrimVal IntType)

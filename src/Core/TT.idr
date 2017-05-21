@@ -84,18 +84,24 @@ data Binder : Type -> Type where
      Lam : (ty : type) -> Binder type
      Let : (val : type) -> (ty : type) -> Binder type
      Pi : PiInfo -> (ty : type) -> Binder type
+     PVar : (ty : type) -> Binder type
+     PVTy : (ty : type) -> Binder type
 
 export
 binderType : Binder tm -> tm
 binderType (Lam ty) = ty
 binderType (Let val ty) = ty
 binderType (Pi x ty) = ty
+binderType (PVar ty) = ty
+binderType (PVTy ty) = ty
 
 export
 Functor Binder where
   map func (Lam ty) = Lam (func ty)
   map func (Let val ty) = Let (func val) (func ty)
   map func (Pi x ty) = Pi x (func ty)
+  map func (PVar ty) = PVar (func ty)
+  map func (PVTy ty) = PVTy (func ty)
 
 namespace ArgList
   data ArgList : (tm : List Name -> Type) ->
