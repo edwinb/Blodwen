@@ -1,30 +1,19 @@
 module Core.TT
 
 import Data.List
-import Pruviloj.Derive.DecEq
 import Language.Reflection
 
 %default total
-
-%language ElabReflection
 
 public export
 data Name = UN String
           | MN String Int
           | NS (List String) Name
 
-decEqName : (x : Name) -> (y : Name) -> Dec (x = y)
-%runElab (deriveDecEq `{decEqName})
-
-export
-DecEq Name where
-  decEq = decEqName
-
 %hide Raw -- from Reflection in the Prelude
 %hide Binder
 %hide NameType
 %hide Case
-
 
 export
 Eq Name where
@@ -33,6 +22,24 @@ Eq Name where
   (==) (NS xs x) (NS xs' x') = xs == xs' && x == x'
   (==) _ _ = False
 
+-- There's no way I'm maintaining a DecEq instance for this without
+-- deriving it automatically... this is boring enough...
+export
+eqName : (x : Name) -> (y : Name) -> Maybe (x = y)
+eqName (UN x) (UN y) with (decEq x y)
+  eqName (UN y) (UN y) | (Yes Refl) = Just Refl
+  eqName (UN x) (UN y) | (No contra) = Nothing
+eqName (MN x t) (MN x' t') with (decEq x x')
+  eqName (MN x t) (MN x t') | (Yes Refl) with (decEq t t')
+    eqName (MN x t) (MN x t) | (Yes Refl) | (Yes Refl) = Just Refl
+    eqName (MN x t) (MN x t') | (Yes Refl) | (No contra) = Nothing
+  eqName (MN x t) (MN x' t') | (No contra) = Nothing
+eqName (NS xs x) (NS ys y) with (decEq xs ys)
+  eqName (NS ys x) (NS ys y) | (Yes Refl) with (eqName x y)
+    eqName (NS ys x) (NS ys y) | (Yes Refl) | Nothing = Nothing
+    eqName (NS ys y) (NS ys y) | (Yes Refl) | (Just Refl) = Just Refl
+  eqName (NS xs x) (NS ys y) | (No contra) = Nothing
+eqName _ _ = Nothing
 
 export
 Ord Name where
@@ -77,6 +84,12 @@ data Binder : Type -> Type where
      Lam : (ty : type) -> Binder type
      Let : (val : type) -> (ty : type) -> Binder type
      Pi : PiInfo -> (ty : type) -> Binder type
+
+export
+binderType : Binder tm -> tm
+binderType (Lam ty) = ty
+binderType (Let val ty) = ty
+binderType (Pi x ty) = ty
 
 export
 Functor Binder where
@@ -136,6 +149,15 @@ namespace Env
 
 %name Env env
 
+export
+defined : (n : Name) -> Env Term vars -> Maybe (Elem n vars)
+defined n [] = Nothing
+defined {vars = x :: xs} n (b :: env) with (eqName x n)
+  defined {vars = n :: xs} n (b :: env) | (Just Refl) 
+      = Just Here
+  defined {vars = x :: xs} n (b :: env) | Nothing 
+      = Just (There !(defined n env))
+
 {- Some ugly mangling to allow us to extend the scope of a term - a
    term is always valid in a bigger scope than it needs. -}
 insertElem : Elem x (outer ++ inner) -> Elem x (outer ++ n :: inner)
@@ -176,9 +198,6 @@ embed (PrimVal x) = PrimVal x
 embed Erased = Erased
 embed TType = TType
 
-export
-rename : (new : Name) -> Term (old :: vars) -> Term (new :: vars)
-
 public export
 interface Weaken (tm : List Name -> Type) where
   weaken : tm vars -> tm (n :: vars)
@@ -207,17 +226,18 @@ newLocal : Elem fn (later ++ fn :: vars)
 newLocal {later = []} = Here
 newLocal {later = (x :: xs)} = There newLocal
 
+-- Replace any reference to 'x' with a locally bound name 'new'
 export
-refToLocal : (x : Name) -> Term vars -> Term (x :: vars)
-refToLocal x tm = mkLocal {later = []} x Here tm
+refToLocal : (x : Name) -> (new : Name) -> Term vars -> Term (new :: vars)
+refToLocal x new tm = mkLocal {later = []} x Here tm
   where
     mkLocal : (x : Name) -> 
-              Elem x (later ++ x :: vars) ->
-              Term (later ++ vars) -> Term (later ++ x :: vars)
+              Elem new (later ++ new :: vars) ->
+              Term (later ++ vars) -> Term (later ++ new :: vars)
     mkLocal x loc (Local prf) = Local (addVar prf)
-    mkLocal x loc (Ref y fn) with (decEq x fn)
-      mkLocal fn loc (Ref y fn) | (Yes Refl) = Local loc
-      mkLocal x loc (Ref y fn) | (No contra) = Ref y fn
+    mkLocal x loc (Ref y fn) with (x == fn)
+      mkLocal x loc (Ref y fn) | True = Local loc
+      mkLocal x loc (Ref y fn) | False = Ref y fn
     mkLocal {later} x loc (Bind y b tm) 
         = Bind y (assert_total (map (mkLocal x loc) b)) 
                  (mkLocal {later = y :: later} x (There loc) tm)

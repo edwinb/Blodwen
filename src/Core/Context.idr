@@ -2,7 +2,9 @@ module Core.Context
 
 import Core.TT
 import Core.CaseTree
+
 import Data.SortedMap
+import Data.List
 
 %default total
 
@@ -50,6 +52,11 @@ lookupDef n gam = do def <- lookupCtxt n gam
                      pure (definition def)
 
 export
+lookupDefTy : Name -> Gamma -> Maybe (Def, ClosedTerm)
+lookupDefTy n gam = do def <- lookupCtxt n gam
+                       pure (definition def, type def)
+
+export
 plusDef : GlobalDef
 plusDef = MkGlobalDef TType Public
            (PMDef [UN "x", UN "y"]
@@ -86,3 +93,12 @@ export
 two : Term sc
 two = App succ one
 
+export
+lam : (x : String) -> Term sc -> Term (UN x :: sc) -> Term sc
+lam x ty tm = Bind (UN x) (Lam ty) tm
+
+var : (x : String) -> {auto prf : Elem (UN x) sc} -> Term sc
+var x {prf} = Local prf
+
+idFn : Term []
+idFn = lam "X" TType (lam "x" (var "X") (var "X"))
