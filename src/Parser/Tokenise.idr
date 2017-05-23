@@ -9,9 +9,9 @@ module Parser.Tokenise
 -- the beginning of the string doesn't match that token at all.
 --
 -- The reason for implementing it this strange way is that it allows us
--- to use 'substr' to pull out the token and the tail, which means the tokens
--- will be represented at runtime as pointers into the original string,
--- so no allocation is needed.
+-- to use 'substr' to pull out the remainder of the string easily, and to
+-- only allocate for the token when we've got to the end of it, which 
+-- reduces the need to allocate strings too often
 LexerFn : Type
 LexerFn = (idx : Nat) -> (input : String) -> 
         Maybe (String, String)
@@ -63,6 +63,30 @@ data Pred = One (Char -> Bool)
           | Some (Char -> Bool)
           | Many (Char -> Bool)
 
+export
+is : Char -> Pred
+is x = One (== x)
+
+export
+isNot : Char -> Pred
+isNot x = One (/= x)
+
+export
+many : Char -> Pred
+many x = Many (== x)
+
+export
+manyNot : Char -> Pred
+manyNot x = Many (/= x)
+
+export
+some : Char -> Pred
+some x = Some (== x)
+
+export
+someNot : Char -> Pred
+someNot x = Some (/= x)
+
 -- keep matching according to a predicate. When one fails,
 -- move on to the next. Stop when the predicates run out
 -- (Not entirely unlike regular expressions in fact...)
@@ -90,8 +114,12 @@ predList : List Pred -> Lexer
 predList p = LF (predListFn p)
 
 export
-string : Lexer
-string = predList [One (== '\"'), Many (/= '\"'), One (== '\"')]
+stringLit : Lexer
+stringLit = predList [One (== '\"'), Many (/= '\"'), One (== '\"')]
+
+export
+exact : String -> Lexer
+exact str = predList (map (\x => One (==x)) (unpack str))
 
 public export
 TokenMap : Type -> Type
@@ -106,14 +134,14 @@ record TokenData a where
 
 tokenise : (line : Int) -> (col : Int) ->
            List (TokenData a) -> TokenMap a -> 
-           String -> (List (TokenData a), String)
+           String -> (List (TokenData a), (Int, Int, String))
 tokenise line col acc tmap str 
     = case getFirstToken tmap str of
            Just (tok, line', col', rest) =>
            -- assert total because getFirstToken must consume something
            -- given a valid lexer
                 assert_total (tokenise line' col' (tok :: acc) tmap rest)
-           Nothing => (reverse acc, str)
+           Nothing => (reverse acc, (line, col, str))
   where
     countNLs : List Char -> Nat
     countNLs str = List.length (filter (== '\n') str)
@@ -134,22 +162,19 @@ tokenise line col acc tmap str
                Nothing => getFirstToken ts str
 
 export
-lex : TokenMap a -> String -> (List (TokenData a), String)
+lex : TokenMap a -> String -> (List (TokenData a), (Int, Int, String))
 lex = tokenise 0 0 []
 
-data Token = Ident String
-           | Literal Integer
-           | Symbol String
-           | Keyword String
-           | Comment String
-
+{-
 testMap : TokenMap Token
 testMap = [(digits, \x => Literal (cast x)),
            (symbol, Symbol),
-           (space, Comment)]
+           (space, Comment),
+           (exact "foo", Keyword)]
 
 testMap' : TokenMap String
 testMap' = [(digits, id),
            (symbol, id),
            (space, id)]
+           -}
 
