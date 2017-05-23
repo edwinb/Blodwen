@@ -1,4 +1,4 @@
-module Parser.TT
+module Parser.Raw
 
 import Core.TT
 import Parser.Lexer
@@ -19,7 +19,8 @@ term = do tok <- Terminal isLiteral
 
 terms : Grammar Token True Integer
 terms = do t <- term
+           dbl <- Empty (t * 2) -- gratuitous empty rule
            (do ts <- terms
-               Empty (t + ts)) <|> Empty t
+               Empty (t + ts)) <|> Empty dbl
 
 
