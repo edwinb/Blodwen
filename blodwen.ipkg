@@ -8,6 +8,8 @@ modules = Core.CaseTree,
           Core.TT,
           Core.Typecheck,
 
+          Parser.Grammar,
+          Parser.Lexer,
           Parser.Raw,
           Parser.Tokenise
 

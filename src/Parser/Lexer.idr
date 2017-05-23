@@ -2,6 +2,8 @@ module Parser.Lexer
 
 import Parser.Tokenise
 
+%default total
+
 public export
 data Token = Ident String
            | Literal Integer
@@ -25,7 +27,7 @@ ident = predList [One startIdent, Many validIdent]
     validIdent x = isAlphaNum x
 
 keywords : List String
-keywords = ["data", "module"]
+keywords = ["data", "module", "where"]
 
 rawTokens : TokenMap Token
 rawTokens = map (\x => (exact x, Keyword)) keywords ++
