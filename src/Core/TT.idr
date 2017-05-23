@@ -123,6 +123,12 @@ data Term : List Name -> Type where
      Erased : Term vars
      TType : Term vars
 
+export
+sameVar : Elem x xs -> Elem y xs -> Bool
+sameVar Here Here = True
+sameVar (There x) (There y) = sameVar x y
+sameVar _ _ = False
+
 -- TMP HACK!
 Show (Term vars) where
   show (Local y) = "V"
@@ -182,12 +188,6 @@ thin n (App f a) = App (thin n f) (thin n a)
 thin n (PrimVal x) = PrimVal x
 thin n Erased = Erased
 thin n TType = TType
-
-export
-sameVar : Elem x xs -> Elem y xs -> Bool
-sameVar Here Here = True
-sameVar (There x) (There y) = sameVar x y
-sameVar _ _ = False
 
 export
 elemExtend : Elem x xs -> Elem x (xs ++ ys)
@@ -267,4 +267,7 @@ data Raw : Type where
      RPrimVal : Constant -> Raw
      RType : Raw
 
-
+export
+rawApply : Raw -> List Raw -> Raw
+rawApply fn [] = fn
+rawApply fn (arg :: args) = rawApply (RApp fn arg) args

@@ -1,8 +1,15 @@
 package blodwen
 
-pkgs = contrib, pruviloj
+pkgs = contrib, pruviloj 
 
-modules = Core.TT
+modules = Core.CaseTree,
+          Core.Context, 
+          Core.Evaluate,
+          Core.TT,
+          Core.Typecheck,
+
+          Parser.Raw,
+          Parser.Tokenise
 
 sourcedir = src
 executable = blodwen
