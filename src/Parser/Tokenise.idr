@@ -113,9 +113,15 @@ export
 predList : List Pred -> Lexer
 predList p = LF (predListFn p)
 
+-- TODO: Neither of the following are quite right because they don't
+-- deal with \ properly
 export
 stringLit : Lexer
 stringLit = predList [One (== '\"'), Many (/= '\"'), One (== '\"')]
+
+export
+charLit : Lexer
+charLit = predList [One (== '\''), Some (/= '\''), One (== '\'')]
 
 export
 exact : String -> Lexer

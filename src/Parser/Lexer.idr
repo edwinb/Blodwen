@@ -1,6 +1,6 @@
 module Parser.Lexer
 
-import Parser.Tokenise
+import public Parser.Tokenise
 
 %default total
 
@@ -8,8 +8,10 @@ public export
 data Token = Ident String
            | Literal Integer
            | StrLit String
+           | CharLit String
            | Symbol String
            | Keyword String
+           | Unrecognised String
            | Comment String
          
 comment : Lexer
@@ -26,17 +28,31 @@ ident = predList [One startIdent, Many validIdent]
     validIdent '_' = True
     validIdent x = isAlphaNum x
 
+-- Reserved words
 keywords : List String
 keywords = ["data", "module", "where"]
 
+-- Reserved symbols
+symbols : List String
+symbols = [".(", -- for things such as Foo.Bar.(+)
+           ".", 
+           "(", ")", "{", "}", "[", "]", "`", ","]
+
+validSymbol : Lexer
+validSymbol = pred (\x => x `elem` unpack ":!#$%&*+./<=>?@\\^|-~")
+
 rawTokens : TokenMap Token
-rawTokens = map (\x => (exact x, Keyword)) keywords ++
+rawTokens = 
+   map (\x => (exact x, Keyword)) keywords ++
+   map (\x => (exact x, Symbol)) symbols ++
     [(digits, \x => Literal (cast x)),
      (stringLit, StrLit),
+     (charLit, CharLit),
      (ident, Ident),
      (space, Comment),
      (comment, Comment),
-     (symbol, Symbol)]
+     (validSymbol, Symbol),
+     (symbol, Unrecognised)]
 
 export
 lex : String -> Either (Int, Int, String) (List (TokenData Token))

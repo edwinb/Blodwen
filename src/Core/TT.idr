@@ -67,7 +67,7 @@ data NameType : Type where
      TyCon   : (tag : Int) -> (arity : Nat) -> NameType
 
 public export
-data Constant = I Int
+data Constant = I Integer
               | IntType
 
 export
