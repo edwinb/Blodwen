@@ -2,11 +2,11 @@ module Parser.Tokenise
 
 %default total
 
-public export
+export
 data Recognise : (consumes : Bool) -> Type where
      Empty : Recognise False
      Fail : Recognise c
-     One : (Char -> Bool) -> Recognise True
+     Pred : (Char -> Bool) -> Recognise True
      SeqEat : Recognise True -> Inf (Recognise e) -> Recognise True
      SeqEmpty : Recognise e1 -> Recognise e2 -> Recognise (e1 || e2)
      Alt : Recognise e1 -> Recognise e2 -> Recognise (e1 && e2)
@@ -20,7 +20,7 @@ inf : Bool -> Type -> Type
 inf True t = Inf t
 inf False t = t
   
-public export %inline
+export %inline
 (<+>) : Recognise c1 -> inf c1 (Recognise c2) -> Recognise (c1 || c2)
 (<+>) {c1 = False} = SeqEmpty
 (<+>) {c1 = True} = SeqEat
@@ -31,11 +31,11 @@ export
 
 export
 is : Char -> Lexer
-is x = One (==x)
+is x = Pred (==x)
 
 export
 isNot : Char -> Lexer
-isNot x = One (/=x)
+isNot x = Pred (/=x)
 
 export
 some : Lexer -> Lexer
@@ -45,15 +45,28 @@ export
 many : Lexer -> Recognise False
 many l = some l <|> Empty
 
+export
 any : Lexer
-any = One (const True)
+any = Pred (const True)
+
+export
+empty : Recognise False
+empty = Empty
+
+export
+pred : (Char -> Bool) -> Lexer
+pred = Pred
+
+export
+oneOf : String -> Lexer
+oneOf cs = pred (\x => x `elem` unpack cs)
 
 -- If the string is recognised, returns the index at which the token
 -- ends
 scan : Recognise c -> Nat -> String -> Maybe Nat
 scan Empty idx str = pure idx
 scan Fail idx str = Nothing
-scan (One f) idx str = assert_total $
+scan (Pred f) idx str = assert_total $
       if idx >= length str
          then Nothing
          else if f (strIndex str (cast idx))
@@ -78,22 +91,22 @@ takeToken lex str
 
 export
 digits : Lexer
-digits = some (One isDigit)
+digits = some (Pred isDigit)
 
 export
 exact : String -> Lexer
 exact str with (unpack str)
   exact str | [] = Fail -- Not allowed, Lexer has to consume
   exact str | (x :: xs) 
-      = foldl SeqEmpty (One (==x)) (map (\c => One (==c)) xs)
+      = foldl SeqEmpty (is x) (map is xs)
 
 export
 space : Lexer
-space = some (One isSpace)
+space = some (pred isSpace)
 
 export
 symbol : Lexer
-symbol = some (One (\x => not (isAlphaNum x) && not (isSpace x)))
+symbol = some (pred (\x => not (isAlphaNum x) && not (isSpace x)))
 
 strChar : Lexer
 strChar = (is '\\' <+> any) <|> isNot '"'
@@ -153,9 +166,11 @@ export
 lex : TokenMap a -> String -> (List (TokenData a), (Int, Int, String))
 lex = tokenise 0 0 []
 
+{-
 testMap : TokenMap String
 testMap = [(space, id),
            (charLit, show),
            (intLit, show),
            (stringLit, id)]
+           -}
 

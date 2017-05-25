@@ -29,7 +29,7 @@ comment : Lexer
 comment = is '-' <+> is '-' <+> some (isNot '\n') <+> is '\n'
 
 ident : Lexer
-ident = One startIdent <+> many (One validIdent)
+ident = pred startIdent <+> many (pred validIdent)
   where
     startIdent : Char -> Bool
     startIdent '_' = True
@@ -51,7 +51,7 @@ symbols = [".(", -- for things such as Foo.Bar.(+)
            "->", "=>"]
 
 validSymbol : Lexer
-validSymbol = some (One (\x => x `elem` unpack ":!#$%&*+./<=>?@\\^|-~"))
+validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
 
 rawTokens : TokenMap Token
 rawTokens = 

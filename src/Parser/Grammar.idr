@@ -2,7 +2,7 @@ module Parser.Grammar
 
 %default total
 
-public export
+export
 data Grammar : (tok : Type) -> (consumes : Bool) -> Type -> Type where
      Empty : (val : ty) -> Grammar tok False ty
      Terminal : (tok -> Maybe a) -> Grammar tok True a
@@ -23,7 +23,7 @@ inf : Bool -> Type -> Type
 inf True t = Inf t
 inf False t = t
   
-public export %inline
+export %inline
 (>>=) : Grammar tok c1 a -> inf c1 (a -> Grammar tok c2 b) ->
         Grammar tok (c1 || c2) b
 (>>=) {c1 = False} = SeqEmpty
