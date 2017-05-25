@@ -20,17 +20,17 @@ data ParseError = ParseFail String (Maybe (Int, Int))
                 | LexFail (Int, Int, String)
 
 export
-runParser : String -> Rule a -> Either ParseError (a, List Token)
+runParser : String -> Rule ty -> Either ParseError ty
 runParser str p 
     = case lex str of
            Left err => Left $ LexFail err
            Right toks => 
               case parse toks p of
-                   Failure err [] => 
+                   Left (Error err []) => 
                           Left $ ParseFail err Nothing
-                   Failure err (tok :: xs) => 
+                   Left (Error err (tok :: xs)) => 
                           Left $ ParseFail err (Just (line tok, col tok))
-                   NonEmptyRes val more => Right (val, map tok more)
+                   Right val => Right val
 
 export
 location : EmptyRule (Int, Int)
