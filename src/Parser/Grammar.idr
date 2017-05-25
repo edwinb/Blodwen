@@ -100,12 +100,12 @@ doParse com xs act with (smallerAcc xs)
         = if f x 
              then EmptyRes com x (x :: xs)
              else Failure com "Unrecognised token" (x :: xs)
-  doParse com xs (Alt x y) | sml with (doParse com xs x | sml)
+  doParse com xs (Alt x y) | sml with (doParse False xs x | sml)
     doParse com xs (Alt x y) | sml | Failure com' msg ts
           = if com' -- If the alternative had committed, don't try the
                     -- other branch (and reset commit flag)
-               then Failure False msg ts
-               else weakenRes (doParse com' xs y | sml)
+               then Failure com msg ts
+               else weakenRes (doParse False xs y | sml)
     -- Successfully parsed the first option, so use the outer commit flag
     doParse com xs (Alt x y) | sml | (EmptyRes _ val xs) 
           = EmptyRes com val xs
