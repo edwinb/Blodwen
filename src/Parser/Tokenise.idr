@@ -1,131 +1,114 @@
 module Parser.Tokenise
 
-%default total -- we're going to have to assert to do this, but things are,
-               -- as long as we only export 'Lexer' functions that guarantee
-               -- to consume at least one character!
+%default total
 
--- A lexer moves along a string until it hits a part of the string that
--- doesn't match the token we're looking for. It returns 'Nothing' if
--- the beginning of the string doesn't match that token at all.
---
--- The reason for implementing it this strange way is that it allows us
--- to use 'substr' to pull out the remainder of the string easily, and to
--- only allocate for the token when we've got to the end of it, which 
--- reduces the need to allocate strings too often
-LexerFn : Type
-LexerFn = (idx : Nat) -> (input : String) -> 
-        Maybe (String, String)
+public export
+data Recognise : (consumes : Bool) -> Type where
+     Empty : Recognise False
+     Fail : Recognise c
+     One : (Char -> Bool) -> Recognise True
+     SeqEat : Recognise True -> Inf (Recognise e) -> Recognise True
+     SeqEmpty : Recognise e1 -> Recognise e2 -> Recognise (e1 || e2)
+     Alt : Recognise e1 -> Recognise e2 -> Recognise (e1 && e2)
+
+public export
+Lexer : Type
+Lexer = Recognise True
+
+public export
+inf : Bool -> Type -> Type
+inf True t = Inf t
+inf False t = t
+  
+public export %inline
+(<+>) : Recognise c1 -> inf c1 (Recognise c2) -> Recognise (c1 || c2)
+(<+>) {c1 = False} = SeqEmpty
+(<+>) {c1 = True} = SeqEat
+     
+export
+(<|>) : Recognise c1 -> Recognise c2 -> Recognise (c1 && c2)
+(<|>) = Alt
 
 export
-data Lexer = LF LexerFn
-
-endLex : Nat -> String -> Maybe (String, String)
-endLex Z str = Nothing
-endLex i str = Just (substr 0 i str, substr i (length str) str)
-
-runLex : Nat -> String -> 
-         (ok : Char -> Maybe (String, String)) -> 
-         (fail : Maybe (String, String)) ->
-         Maybe (String, String)
-runLex idx "" k fail = fail
-runLex idx str k fail
-    = if idx >= length str 
-         then fail
-         else assert_total (k (strIndex str (cast idx)))
-
-predFn : (Char -> Bool) -> LexerFn
-predFn p idx str
--- assert_total - we've checked the string isn't empty above, and we're
--- making progress by walking along the string
-    = runLex idx str 
-          (\c => if p c
-                    then assert_total (predFn p (idx + 1) str)
-                    else endLex idx str) (endLex idx str)
+is : Char -> Lexer
+is x = One (==x)
 
 export
-pred : (Char -> Bool) -> Lexer
-pred p = LF (predFn p)
+isNot : Char -> Lexer
+isNot x = One (/=x)
+
+export
+some : Lexer -> Lexer
+some l = l <+> (some l <|> Empty)
+
+export
+many : Lexer -> Recognise False
+many l = some l <|> Empty
+
+any : Lexer
+any = One (const True)
+
+-- If the string is recognised, returns the index at which the token
+-- ends
+scan : Recognise c -> Nat -> String -> Maybe Nat
+scan Empty idx str = pure idx
+scan Fail idx str = Nothing
+scan (One f) idx str = assert_total $
+      if idx >= length str
+         then Nothing
+         else if f (strIndex str (cast idx))
+                 then Just (idx + 1)
+                 else Nothing
+scan (SeqEat r1 r2) idx str 
+    = do idx' <- scan r1 idx str
+         -- TODO: Can we prove totality instead by showing idx has increased?
+         assert_total (scan r2 idx' str)
+scan (SeqEmpty r1 r2) idx str 
+    = do idx' <- scan r1 idx str
+         scan r2 idx' str
+scan (Alt r1 r2) idx str 
+    = case scan r1 idx str of
+           Nothing => scan r2 idx str
+           Just idx => Just idx
+
+takeToken : Lexer -> String -> Maybe (String, String)
+takeToken lex str 
+    = do i <- scan lex 0 str -- i must be > 0 if successful
+         pure (substr 0 i str, substr i (length str) str)
 
 export
 digits : Lexer
-digits = pred isDigit
-
-export
-symbol : Lexer
-symbol = pred (\x => not (isAlphaNum x) && not (isSpace x))
-
-export
-space : Lexer
-space = pred isSpace
-
-public export
-data Pred = One (Char -> Bool)
-          | Some (Char -> Bool)
-          | Many (Char -> Bool)
-
-export
-is : Char -> Pred
-is x = One (== x)
-
-export
-isNot : Char -> Pred
-isNot x = One (/= x)
-
-export
-many : Char -> Pred
-many x = Many (== x)
-
-export
-manyNot : Char -> Pred
-manyNot x = Many (/= x)
-
-export
-some : Char -> Pred
-some x = Some (== x)
-
-export
-someNot : Char -> Pred
-someNot x = Some (/= x)
-
--- keep matching according to a predicate. When one fails,
--- move on to the next. Stop when the predicates run out
--- (Not entirely unlike regular expressions in fact...)
-predListFn : List Pred -> LexerFn
-predListFn [] idx str = endLex idx str
--- assert_totals justified as above
-predListFn (One p :: ps) idx str
-    = runLex idx str (\c =>
-          if p c
-             then (predListFn ps (idx + 1) str)
-             else Nothing) Nothing
-predListFn (Many p :: ps) idx str
-    = runLex idx str (\c =>
-          if p c
-             then assert_total (predListFn (Many p :: ps) (idx + 1) str)
-             else predListFn ps idx str) (predListFn ps idx str)
-predListFn (Some p :: ps) idx str
-    = runLex idx str (\c =>
-          if p c
-             then assert_total (predListFn (Many p :: ps) (idx + 1) str)
-             else Nothing) Nothing
-
-export
-predList : List Pred -> Lexer
-predList p = LF (predListFn p)
-
--- TODO: Neither of the following are quite right because they don't
--- deal with \ properly
-export
-stringLit : Lexer
-stringLit = predList [One (== '\"'), Many (/= '\"'), One (== '\"')]
-
-export
-charLit : Lexer
-charLit = predList [One (== '\''), Some (/= '\''), One (== '\'')]
+digits = some (One isDigit)
 
 export
 exact : String -> Lexer
-exact str = predList (map (\x => One (==x)) (unpack str))
+exact str with (unpack str)
+  exact str | [] = Fail -- Not allowed, Lexer has to consume
+  exact str | (x :: xs) 
+      = foldl SeqEmpty (One (==x)) (map (\c => One (==c)) xs)
+
+export
+space : Lexer
+space = some (One isSpace)
+
+export
+symbol : Lexer
+symbol = some (One (\x => not (isAlphaNum x) && not (isSpace x)))
+
+strChar : Lexer
+strChar = (is '\\' <+> any) <|> isNot '"'
+
+export
+stringLit : Lexer
+stringLit = is '"' <+> many strChar <+> is '"'
+
+export
+charLit : Lexer
+charLit = is '\'' <+> strChar <+> is '\''
+
+export
+intLit : Lexer
+intLit = (is '-' <|> Empty) <+> digits
 
 public export
 TokenMap : Type -> Type
@@ -145,7 +128,6 @@ tokenise line col acc tmap str
     = case getFirstToken tmap str of
            Just (tok, line', col', rest) =>
            -- assert total because getFirstToken must consume something
-           -- given a valid lexer
                 assert_total (tokenise line' col' (tok :: acc) tmap rest)
            Nothing => (reverse acc, (line, col, str))
   where
@@ -160,8 +142,8 @@ tokenise line col acc tmap str
 
     getFirstToken : TokenMap a -> String -> Maybe (TokenData a, Int, Int, String)
     getFirstToken [] str = Nothing
-    getFirstToken ((LF lex, fn) :: ts) str
-        = case lex 0 str of
+    getFirstToken ((lex, fn) :: ts) str
+        = case takeToken lex str of
                Just (tok, rest) => Just (MkToken line col (fn tok),
                                          line + cast (countNLs (unpack tok)), 
                                          getCols tok col, rest)
@@ -171,16 +153,9 @@ export
 lex : TokenMap a -> String -> (List (TokenData a), (Int, Int, String))
 lex = tokenise 0 0 []
 
-{-
-testMap : TokenMap Token
-testMap = [(digits, \x => Literal (cast x)),
-           (symbol, Symbol),
-           (space, Comment),
-           (exact "foo", Keyword)]
-
-testMap' : TokenMap String
-testMap' = [(digits, id),
-           (symbol, id),
-           (space, id)]
-           -}
+testMap : TokenMap String
+testMap = [(space, id),
+           (charLit, show),
+           (intLit, show),
+           (stringLit, id)]
 

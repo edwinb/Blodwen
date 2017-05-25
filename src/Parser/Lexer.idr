@@ -13,12 +13,23 @@ data Token = Ident String
            | Keyword String
            | Unrecognised String
            | Comment String
-         
+
+export
+Show Token where
+  show (Ident x) = "Ident " ++ x
+  show (Literal x) = "Lit " ++ show x
+  show (StrLit x) = "Str " ++ show x
+  show (CharLit x) = "Char " ++ show x
+  show (Symbol x) = "Sym " ++ x
+  show (Keyword x) = "Keyword " ++ x
+  show (Unrecognised x) = "BAD_TOKEN " ++ x
+  show (Comment x) = "Comment"
+
 comment : Lexer
-comment = predList [is '-', is '-', someNot '\n', is '\n']
+comment = is '-' <+> is '-' <+> some (isNot '\n') <+> is '\n'
 
 ident : Lexer
-ident = predList [One startIdent, Many validIdent]
+ident = One startIdent <+> many (One validIdent)
   where
     startIdent : Char -> Bool
     startIdent '_' = True
@@ -36,16 +47,17 @@ keywords = ["data", "module", "where"]
 symbols : List String
 symbols = [".(", -- for things such as Foo.Bar.(+)
            ".", 
-           "(", ")", "{", "}", "[", "]", "`", ","]
+           "(", ")", "{", "}", "[", "]", "`", ",", 
+           "->", "=>"]
 
 validSymbol : Lexer
-validSymbol = pred (\x => x `elem` unpack ":!#$%&*+./<=>?@\\^|-~")
+validSymbol = some (One (\x => x `elem` unpack ":!#$%&*+./<=>?@\\^|-~"))
 
 rawTokens : TokenMap Token
 rawTokens = 
    map (\x => (exact x, Keyword)) keywords ++
    map (\x => (exact x, Symbol)) symbols ++
-    [(digits, \x => Literal (cast x)),
+    [(intLit, \x => Literal (cast x)),
      (stringLit, StrLit),
      (charLit, CharLit),
      (ident, Ident),

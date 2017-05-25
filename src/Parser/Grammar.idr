@@ -8,7 +8,7 @@ data Grammar : (tok : Type) -> (consumes : Bool) -> Type -> Type where
      Terminal : (tok -> Maybe a) -> Grammar tok True a
      Peek : (tok -> Bool) -> Grammar tok False tok
 
-     Fail : String -> Grammar tok False tok
+     Fail : String -> Grammar tok False ty
 
      SeqEat : Grammar tok True a -> Inf (a -> Grammar tok c2 b) ->
               Grammar tok True b

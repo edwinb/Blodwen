@@ -16,6 +16,18 @@ data Name = UN String
 %hide Case
 
 export
+showSep : String -> List String -> String
+showSep sep [] = ""
+showSep sep [x] = x
+showSep sep (x :: xs) = x ++ sep ++ showSep sep xs
+
+export
+Show Name where
+  show (UN str) = str
+  show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
+  show (NS ns n) = showSep "." ns ++ "." ++ show n
+
+export
 Eq Name where
   (==) (UN x) (UN y) = x == y
   (==) (MN x y) (MN x' y') = x == x' && y == y'
@@ -69,6 +81,11 @@ data NameType : Type where
 public export
 data Constant = I Integer
               | IntType
+
+export
+Show Constant where
+  show (I x) = show x
+  show IntType = "Int"
 
 export
 Eq Constant where
