@@ -120,12 +120,6 @@ Functor Binder where
   map func (PVar ty) = PVar (func ty)
   map func (PVTy ty) = PVTy (func ty)
 
-namespace ArgList
-  data ArgList : (tm : List Name -> Type) ->
-                 List Name -> Type where
-       Nil : ArgList tm []
-       (::) : tm vars -> ArgList tm ns -> ArgList tm (n :: ns)
-
 -- Typechecked terms
 -- These are guaranteed to be well-scoped wrt local variables, because they are
 -- indexed by the names of local variables in scope

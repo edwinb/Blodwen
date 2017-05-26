@@ -16,8 +16,15 @@ EmptyRule : Type -> Type
 EmptyRule ty = Grammar (TokenData Token) False ty
 
 public export
-data ParseError = ParseFail String (Maybe (Int, Int))
+data ParseError = ParseFail String (Maybe (Int, Int)) (List Token)
                 | LexFail (Int, Int, String)
+
+export
+Show ParseError where
+  show (ParseFail err loc toks)
+      = "Parse error: " ++ err ++ " at " ++ show loc ++ "\n" ++ show toks
+  show (LexFail (c, l, str)) 
+      = "Lex error at " ++ show (c, l) ++ " input: " ++ str
 
 export
 runParser : String -> Rule ty -> Either ParseError ty
@@ -25,11 +32,12 @@ runParser str p
     = case lex str of
            Left err => Left $ LexFail err
            Right toks => 
-              case parse toks p of
+              case parse toks (do res <- p; eof; pure res) of
                    Left (Error err []) => 
-                          Left $ ParseFail err Nothing
-                   Left (Error err (tok :: xs)) => 
-                          Left $ ParseFail err (Just (line tok, col tok))
+                          Left $ ParseFail err Nothing []
+                   Left (Error err (t :: ts)) => 
+                          Left $ ParseFail err (Just (line t, col t))
+                                               (map tok (t :: ts))
                    Right val => Right val
 
 export
@@ -52,6 +60,14 @@ symbol req
     = terminal (\x => case tok x of
                            Symbol s => if s == req then Just ()
                                                    else Nothing
+                           _ => Nothing)
+
+export
+keyword : String -> Rule ()
+keyword req
+    = terminal (\x => case tok x of
+                           Keyword s => if s == req then Just ()
+                                                    else Nothing
                            _ => Nothing)
 
 operator : Rule String
@@ -89,3 +105,30 @@ name
      mkFullName ([] ++ [n]) | (Snoc rec) = UN n
      mkFullName (ns ++ [n]) | (Snoc rec) = NS ns (UN n)
 
+mutual
+  rawAtom : Rule Raw
+  rawAtom 
+      = do symbol "\\"; n <- name; symbol ":"; commit
+           ty <- raw; symbol "=>"; sc <- raw
+           pure (RBind n (Lam ty) sc)
+    <|> do keyword "let"; commit
+           n <- name; symbol ":"; ty <- raw
+           symbol "="; val <- raw
+           keyword "in"; sc <- raw
+           pure (RBind n (Let val ty) sc)
+    <|> do symbol "("; commit; 
+           tm <- raw; symbol ")"
+           pure tm
+    <|> do keyword "Type"
+           pure RType
+    <|> do c <- constant
+           pure (RPrimVal c)
+    <|> do n <- name
+           pure (RVar n)
+
+  export
+  raw : Rule Raw
+  raw 
+      = do f <- rawAtom
+           args <- many rawAtom
+           pure (rawApply f args)

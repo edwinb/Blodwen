@@ -2,13 +2,17 @@ module Parser.Grammar
 
 %default total
 
+-- TODO: Add some primitives for helping with error messages.
+-- e.g. perhaps set a string to state what we're currently trying to 
+-- parse, or to say what the next expected token is in words
 export
 data Grammar : (tok : Type) -> (consumes : Bool) -> Type -> Type where
      Empty : (val : ty) -> Grammar tok False ty
      Terminal : (tok -> Maybe a) -> Grammar tok True a
      Peek : (tok -> Bool) -> Grammar tok False tok
+     EOF : Grammar tok False ()
 
-     Fail : String -> Grammar tok False ty
+     Fail : String -> Grammar tok c ty
      Commit : Grammar tok False ()
 
      SeqEat : Grammar tok True a -> Inf (a -> Grammar tok c2 b) ->
@@ -51,8 +55,12 @@ terminal : (tok -> Maybe a) -> Grammar tok True a
 terminal = Terminal
 
 export
-fail : String -> Grammar tok False tok
+fail : String -> Grammar tok c ty
 fail = Fail
+
+export
+eof : Grammar tok False ()
+eof = EOF
 
 -- Commit to an alternative; if the current branch of an alternative 
 -- fails to parse, no more branches will be tried
@@ -95,6 +103,9 @@ doParse com xs act with (smallerAcc xs)
              (Failure com "Unrecognised token" (x :: xs))
              (\a => NonEmptyRes com {xs=[]} a xs)
              (f x)
+  doParse com [] EOF | sml = EmptyRes com () []
+  doParse com (x :: xs) EOF | sml 
+        = Failure com "Expected end of input" (x :: xs)
   doParse com [] (Peek f) | sml = Failure com "End of input" []
   doParse com (x :: xs) (Peek f) | sml 
         = if f x 

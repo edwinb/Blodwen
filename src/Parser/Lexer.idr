@@ -41,7 +41,7 @@ ident = pred startIdent <+> many (pred validIdent)
 
 -- Reserved words
 keywords : List String
-keywords = ["data", "module", "where"]
+keywords = ["data", "module", "where", "let", "in", "Type"]
 
 -- Reserved symbols
 symbols : List String

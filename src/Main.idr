@@ -6,9 +6,10 @@ import Parser.Raw
 main : IO ()
 main = do putStr ": "
           x <- getLine
-          case runParser x name of
+          case runParser x raw of
                Left err => do putStrLn "bad input"
+                              printLn err
                               main
-               Right ok => do print ok
+               Right ok => do printLn "parsed"
                               main
 
