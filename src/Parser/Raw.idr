@@ -43,6 +43,29 @@ data RawDecl = FnDecl RawFnDef
              | DataDecl RawData
 
 export
+Show RawTy where
+  show (MkRawTy n ty) = show n ++ " : " ++ show ty
+
+export
+Show RawData where
+  show (MkRawData ty cons) = "data " ++ show ty ++ " " ++ show cons
+
+export
+Show RawClause where
+  show (MkRawClause pvs lhs rhs)
+       = show pvs ++ " . " ++ show lhs ++ " = " ++ show rhs
+
+export
+Show RawFnDef where
+  show (MkRawFn n ty cs) = show n ++ " : " ++ show ty ++ " " ++ show cs
+
+export
+Show RawDecl where
+  show (FnDecl fn) = show fn
+  show (DataDecl d) = show d
+
+
+export
 Show ParseError where
   show (ParseFail err loc toks)
       = "Parse error: " ++ err ++ " at " ++ show loc ++ "\n" ++ show toks

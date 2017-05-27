@@ -279,6 +279,26 @@ data Raw : Type where
      RType : Raw
 
 export
+Show Raw where
+  show (RVar n) = show n
+  show (RBind n (Lam ty) sc)
+       = "(\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc ++ ")"
+  show (RBind n (Pi _ ty) sc)
+       = "(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc
+  show (RBind n (Let val ty) sc)
+       = "let " ++ show n ++ " : " ++ show ty ++ " = " ++ show val ++
+         " in " ++ show sc
+  show (RBind n (PVar ty) sc)
+       = "pat " ++ show n ++ " : " ++ show ty ++ ". " ++ show sc
+  show (RBind n (PVTy ty) sc)
+       = "pty " ++ show n ++ " : " ++ show ty ++ ". " ++ show sc
+  show (RApp f a)
+       = "(" ++ show f ++ " " ++ show a ++ ")"
+  show (RPrimVal p) = show p
+  show RType = "Type"
+  
+
+export
 rawApply : Raw -> List Raw -> Raw
 rawApply fn [] = fn
 rawApply fn (arg :: args) = rawApply (RApp fn arg) args
