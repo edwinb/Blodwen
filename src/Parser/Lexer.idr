@@ -47,7 +47,7 @@ keywords = ["data", "module", "where", "let", "in", "Type"]
 symbols : List String
 symbols = [".(", -- for things such as Foo.Bar.(+)
            ".", 
-           "(", ")", "{", "}", "[", "]", "`", ",", 
+           "(", ")", "{", "}", "[", "]", "`", ",", "|", ";",
            "->", "=>"]
 
 validSymbol : Lexer

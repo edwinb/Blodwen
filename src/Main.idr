@@ -1,15 +1,12 @@
 module Main
 
 import Core.TT
+import Core.Evaluate
 import Parser.Raw
 
 main : IO ()
-main = do putStr ": "
-          x <- getLine
-          case runParser x raw of
-               Left err => do putStrLn "bad input"
-                              printLn err
-                              main
-               Right ok => do printLn "parsed"
-                              main
+main = do putStrLn "Parsing"
+          Right res <- parseFile "test.tt" prog
+                | Left err => printLn err
+          putStrLn "Parsed OK"
 

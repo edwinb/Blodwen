@@ -18,6 +18,29 @@ EmptyRule ty = Grammar (TokenData Token) False ty
 public export
 data ParseError = ParseFail String (Maybe (Int, Int)) (List Token)
                 | LexFail (Int, Int, String)
+                | FileFail FileError
+
+public export
+data RawTy : Type where
+     MkRawTy : (n : Name) -> (ty : Raw) -> RawTy
+
+public export
+data RawData : Type where
+     MkRawData : (tycon : RawTy) -> (datacons : List RawTy) -> RawData
+
+public export
+data RawClause : Type where
+     MkRawClause : (pvars : List (Name, Raw)) ->
+                   (lhs : Raw) -> (rhs : Raw) -> RawClause
+
+public export
+data RawFnDef : Type where
+     MkRawFn : (n : Name) -> (ty : Raw) -> (clauses : List RawClause) ->
+               RawFnDef
+
+public export
+data RawDecl = FnDecl RawFnDef
+             | DataDecl RawData
 
 export
 Show ParseError where
@@ -25,6 +48,8 @@ Show ParseError where
       = "Parse error: " ++ err ++ " at " ++ show loc ++ "\n" ++ show toks
   show (LexFail (c, l, str)) 
       = "Lex error at " ++ show (c, l) ++ " input: " ++ str
+  show (FileFail err)
+      = "File error: " ++ show err
 
 export
 runParser : String -> Rule ty -> Either ParseError ty
@@ -39,6 +64,13 @@ runParser str p
                           Left $ ParseFail err (Just (line t, col t))
                                                (map tok (t :: ts))
                    Right val => Right val
+
+export
+parseFile : (fn : String) -> Rule ty -> IO (Either ParseError ty)
+parseFile fn p
+    = do Right str <- readFile fn
+             | Left err => pure (Left (FileFail err))
+         pure (runParser str p)
 
 export
 location : EmptyRule (Int, Int)
@@ -111,6 +143,10 @@ mutual
       = do symbol "\\"; n <- name; symbol ":"; commit
            ty <- raw; symbol "=>"; sc <- raw
            pure (RBind n (Lam ty) sc)
+    <|> do symbol "("; n <- name; symbol ":"; commit; 
+           ty <- raw; symbol ")"
+           symbol "->"; sc <- raw
+           pure (RBind n (Pi Explicit ty) sc)
     <|> do keyword "let"; commit
            n <- name; symbol ":"; ty <- raw
            symbol "="; val <- raw
@@ -132,3 +168,55 @@ mutual
       = do f <- rawAtom
            args <- many rawAtom
            pure (rawApply f args)
+
+tyDecl : Rule (Name, Raw)
+tyDecl
+    = do n <- name; symbol ":"; commit
+         ty <- raw
+         pure (n, ty)
+
+patList : Rule (List (Name, Raw))
+patList
+    = do symbol "["
+         ps <- sepBy (symbol ",") tyDecl
+         symbol "]"
+         pure ps
+
+clause : Rule RawClause
+clause 
+    = do ps <- patList
+         lhs <- raw
+         symbol "="
+         rhs <- raw
+         symbol ";"
+         pure (MkRawClause ps lhs rhs)
+
+
+dataDecl : Rule RawData
+dataDecl 
+    = do keyword "data"; commit
+         d <- tyDecl
+         keyword "where"
+         symbol "{"
+         cons <- sepBy (symbol "|") tyDecl 
+         symbol "}"
+         pure (MkRawData (MkRawTy (fst d) (snd d))
+                  (map (\ (n, ty) => MkRawTy n ty) cons))
+           
+fnDecl : Rule RawFnDef
+fnDecl
+    = do td <- tyDecl; symbol ";"
+         cs <- many clause
+         pure (MkRawFn (fst td) (snd td) cs)
+
+rawDecl : Rule RawDecl
+rawDecl
+    = do d <- dataDecl
+         pure (DataDecl d)
+  <|> do f <- fnDecl
+         pure (FnDecl f)
+
+export
+prog : Rule (List RawDecl)
+prog = some rawDecl 
+

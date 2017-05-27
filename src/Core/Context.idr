@@ -56,6 +56,22 @@ lookupDefTy : Name -> Gamma -> Maybe (Def, ClosedTerm)
 lookupDefTy n gam = do def <- lookupCtxt n gam
                        pure (definition def, type def)
 
+
+data Constructor : Type where
+     MkCon : (n : Name) -> (ty : ClosedTerm) -> Constructor
+
+data DataDef : Type where
+     MkData : (tycon : Constructor) -> (datacons : List Constructor) ->
+              DataDef
+
+data Clause : Type where
+     MkClause : (lhs : ClosedTerm) -> (rhs : ClosedTerm) -> Clause
+
+data FnDef : Type where
+     MkFn : (n : Name) -> (ty : ClosedTerm) -> (clauses : List Clause) ->
+            FnDef
+
+--- Some test entries
 export
 plusDef : GlobalDef
 plusDef = MkGlobalDef TType Public
