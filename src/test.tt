@@ -1,0 +1,8 @@
+data Nat : Type where {
+     Z : Nat
+   | S : (x : Nat) -> Nat
+}
+
+plus : (x : Nat) -> (y : Nat) -> Nat;
+[y : Nat]          plus Z y = y;
+[k : Nat, y : Nat] plus (S k) y = S plus (k y);
