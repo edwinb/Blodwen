@@ -1,6 +1,7 @@
 module Parser.Raw
 
 import Core.TT
+import Core.RawContext
 import public Parser.Lexer
 import public Parser.Combinators
 import Data.List.Views
@@ -19,28 +20,6 @@ public export
 data ParseError = ParseFail String (Maybe (Int, Int)) (List Token)
                 | LexFail (Int, Int, String)
                 | FileFail FileError
-
-public export
-data RawTy : Type where
-     MkRawTy : (n : Name) -> (ty : Raw) -> RawTy
-
-public export
-data RawData : Type where
-     MkRawData : (tycon : RawTy) -> (datacons : List RawTy) -> RawData
-
-public export
-data RawClause : Type where
-     MkRawClause : (pvars : List (Name, Raw)) ->
-                   (lhs : Raw) -> (rhs : Raw) -> RawClause
-
-public export
-data RawFnDef : Type where
-     MkRawFn : (n : Name) -> (ty : Raw) -> (clauses : List RawClause) ->
-               RawFnDef
-
-public export
-data RawDecl = FnDecl RawFnDef
-             | DataDecl RawData
 
 export
 Show RawTy where

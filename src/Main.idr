@@ -2,6 +2,7 @@ module Main
 
 import Core.TT
 import Core.Evaluate
+import Core.RawContext
 import Parser.Raw
 
 main : IO ()

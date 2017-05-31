@@ -9,17 +9,6 @@ import Data.List
 
 %default covering
 
--- All possible errors (not only typechecking errors)
-public export
-data Error = CantConvert (Env Term vars) (Term vars) (Term vars)
-           | UndefinedName Name
-           | NotFunctionType (Term vars)
-           | Msg String
-
-export
-error : Error -> Either Error a
-error = Left
-
 export
 doConvert : (Quote tm, Convert tm) => Gamma -> Env Term outer -> 
             tm outer -> tm outer -> Either Error ()
@@ -39,7 +28,7 @@ parameters (gam : Gamma)
                             pure $ (Ref Func x, embed ty)
                        Just (DCon tag arity, ty) => 
                             pure $ (Ref (DataCon tag arity) x, embed ty)
-                       Just (TCon tag arity, ty) => 
+                       Just (TCon tag arity _, ty) => 
                             pure $ (Ref (TyCon tag arity) x, embed ty)
                        Just (_, ty) => 
                             pure $ (Ref Func x, embed ty)
@@ -103,3 +92,23 @@ parameters (gam : Gamma)
     chkConstant : Constant -> (Term vars, Term vars)
     chkConstant (I x) = (PrimVal (I x), PrimVal IntType)
     chkConstant IntType = (PrimVal IntType, TType)
+
+export
+checkHas : (gam : Gamma) -> Env Term vars ->
+           (term : Raw) -> (expected : Term vars) -> 
+           Either Error (Term vars)
+checkHas gam env tm exp
+    = do (val, ty) <- chk gam env tm
+         doConvert gam env ty exp
+         pure val
+
+export
+check : CtxtManage m =>
+        (w : Var) -> Env Term vars ->
+        (term : Raw) -> (expected : Term vars) -> 
+        ST m (Term vars) [w ::: Defs]
+check w env term expected 
+    = case checkHas !(getCtxt w) env term expected of
+           Left err => throw err
+           Right ok => pure ok
+

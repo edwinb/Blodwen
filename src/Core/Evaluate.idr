@@ -7,7 +7,10 @@ import Core.CaseTree
 import Control.Monad.State
 import Data.List
 
-%default covering -- total is hard here...
+%default covering -- total is hard here, because the things we're evaluating
+                  -- might not themselves terminate, but covering is important.
+-- TODO/Question: Use a partiality monad instead, or can we capture the
+-- partiality with ST?
 
 mutual
   export
@@ -43,7 +46,7 @@ data Value : List Name -> Type where
      VErased  : Value vars
      VType    : Value vars
 
-%name Value val, val'
+%name Evaluate.Value val, val'
 
 Stack : List Name -> Type
 Stack outer = List (Closure outer)
@@ -163,7 +166,7 @@ parameters (gam : Gamma)
                     case takeFromStack arity stk of
                          Nothing => unload (VRef nt fn) stk
                          Just (args, stk') => unload (VDCon fn tag arity args) stk'
-                Just (TCon tag arity) =>
+                Just (TCon tag arity _) =>
                     case takeFromStack arity stk of
                          Nothing => unload (VRef nt fn) stk
                          Just (args, stk') => unload (VTCon fn tag arity args) stk'
@@ -188,6 +191,16 @@ whnf gam env tm = eval gam env [] [] tm
 export
 evalClosure : Gamma -> Closure vars -> Value vars
 evalClosure gam (MkClosure loc env tm) = eval gam env loc [] tm
+
+export
+getValArity : Gamma -> Env Term vars -> Value vars -> Nat
+getValArity gam env (VBind x (Pi _ _) sc) 
+    = S (getValArity gam env (evalClosure gam (sc (MkClosure [] env Erased))))
+getValArity gam env val = 0
+
+export
+getArity : Gamma -> Env Term vars -> Term vars -> Nat
+getArity gam env tm = getValArity gam env (whnf gam env tm)
 
 export
 normalise : Gamma -> Env Term outer -> Term outer -> Term outer
