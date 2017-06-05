@@ -5,6 +5,8 @@ import Core.CaseTree
 
 import public Control.ST
 import public Control.ST.Exception
+
+import Control.IOExcept
 import Data.SortedMap
 import Data.List
 
@@ -98,6 +100,14 @@ data Error = CantConvert (Env Term vars) (Term vars) (Term vars)
            | Msg String
 
 export
+Show Error where
+  show (CantConvert env x y) 
+      = "Type mismatch: " ++ show x ++ " and " ++ show y
+  show (UndefinedName x) = "Undefined name " ++ show x
+  show (NotFunctionType tm) = "Not a function type: " ++ show tm
+  show (Msg str) = str
+
+export
 error : Error -> Either Error a
 error = Left
 
@@ -148,6 +158,11 @@ addDef ctxt n def
          setCtxt ctxt (addCtxt n def g)
 
 export
+addFnDef : CtxtManage m =>
+           (ctxt : Var) -> Visibility ->
+           FnDef -> ST m () [ctxt ::: Defs]
+
+export
 addData : CtxtManage m =>
           (ctxt : Var) -> Visibility ->
           DataDef -> ST m () [ctxt ::: Defs]
@@ -178,6 +193,12 @@ mapST f (x :: xs)
     = do x' <- f x
          xs' <- mapST f xs
          pure (x' :: xs')
+
+export
+runWithCtxt : ST (IOExcept Error) () [] -> IO ()
+runWithCtxt prog = ioe_run (run prog) 
+                           (\err => printLn err)
+                           (\ok => pure ())
 
 --- Some test entries
 export

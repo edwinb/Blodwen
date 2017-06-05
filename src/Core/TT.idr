@@ -141,6 +141,7 @@ sameVar (There x) (There y) = sameVar x y
 sameVar _ _ = False
 
 -- TMP HACK!
+export
 Show (Term vars) where
   show (Local y) = "V"
   show (Ref x fn) = "Ref"

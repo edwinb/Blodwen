@@ -104,11 +104,20 @@ checkHas gam env tm exp
 
 export
 check : CtxtManage m =>
-        (w : Var) -> Env Term vars ->
+        (ctxt : Var) -> Env Term vars ->
         (term : Raw) -> (expected : Term vars) -> 
-        ST m (Term vars) [w ::: Defs]
-check w env term expected 
-    = case checkHas !(getCtxt w) env term expected of
+        ST m (Term vars) [ctxt ::: Defs]
+check ctxt env term expected 
+    = case checkHas !(getCtxt ctxt) env term expected of
+           Left err => throw err
+           Right ok => pure ok
+
+export
+infer : CtxtManage m =>
+        (ctxt : Var) -> Env Term vars ->
+        (term : Raw) -> ST m (Term vars, Term vars) [ctxt ::: Defs]
+infer ctxt env term
+    = case chk !(getCtxt ctxt) env term of
            Left err => throw err
            Right ok => pure ok
 

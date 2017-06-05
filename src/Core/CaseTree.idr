@@ -24,6 +24,7 @@ mutual
   
   %name CaseAlt alt
 
+mutual
   export
   embed : CaseTree args -> CaseTree (args ++ more)
   embed (Case x xs) = Case (elemExtend x) (map embedAlt xs)
@@ -39,16 +40,17 @@ mutual
   embedAlt (ConstCase x sc) = ConstCase x (embed sc)
   embedAlt (DefaultCase sc) = DefaultCase (embed sc)
 
-  export
-  testPlus : Name -> CaseTree [UN "x", UN "y"]
-  testPlus plus
-      = Case Here
-            [ConCase (UN "Z") 0 []
-              (STerm (Local {x = UN "y"} (There Here))),
-             ConCase (UN "S") 1 [UN "k"]
-              (STerm (App (Ref (DataCon 1 1) (UN "S")) 
-              (App (App (Ref Func plus) 
-                    (Local {x = UN "k"} Here)) 
-                    (Local {x = UN "y"} (There (There Here))))))
-            ]
+-- A test case
+export
+testPlus : Name -> CaseTree [UN "x", UN "y"]
+testPlus plus
+    = Case Here
+          [ConCase (UN "Z") 0 []
+            (STerm (Local {x = UN "y"} (There Here))),
+           ConCase (UN "S") 1 [UN "k"]
+            (STerm (App (Ref (DataCon 1 1) (UN "S")) 
+            (App (App (Ref Func plus) 
+                  (Local {x = UN "k"} Here)) 
+                  (Local {x = UN "y"} (There (There Here))))))
+          ]
 

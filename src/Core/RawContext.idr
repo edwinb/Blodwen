@@ -37,7 +37,24 @@ using (CtxtManage m)
            addDef ctxt n (MkGlobalDef tyc Public None)
            pure (n, tyc)
 
+  checkClause : (ctxt : Var) -> RawClause -> ST m Clause [ctxt ::: Defs]
+  checkClause ctxt (MkRawClause pvars lhs rhs)
+      = do let lhs_in = bind pvars lhs
+           let rhs_in = bind pvars rhs
+           (lhsc, lhsty) <- infer ctxt [] lhs_in
+           rhsc <- check ctxt [] rhs_in lhsty
+           pure (MkClause lhsc rhsc)
+    where
+      bind : List (Name, Raw) -> Raw -> Raw
+      bind [] tm = tm
+      bind ((n, ty) :: ps) tm = RBind n (PVar ty) (bind ps tm)
+
+
   addFn : (ctxt : Var) -> (def : RawFnDef) -> ST m () [ctxt ::: Defs]
+  addFn ctxt (MkRawFn n ty cs)
+      = do tyc <- check ctxt [] ty TType
+           csc <- mapST (checkClause ctxt) cs
+           addFnDef ctxt Public (MkFn n tyc csc)
 
   addData : (ctxt : Var) -> (def : RawData) -> ST m () [ctxt ::: Defs]
   addData ctxt (MkRawData tycon datacons)
@@ -53,3 +70,6 @@ using (CtxtManage m)
                gam <- getCtxt ctxt
                pure (MkCon n (getArity gam [] tyc) tyc)
 
+  addDecl : (ctxt : Var) -> (def : RawDecl) -> ST m () [ctxt ::: Defs]
+  addDecl ctxt (FnDecl f) = addFn ctxt f
+  addDecl ctxt (DataDecl d) = addData ctxt d
