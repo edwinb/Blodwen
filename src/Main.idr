@@ -15,7 +15,8 @@ using (CtxtManage m, FileIO m)
   processDecls ctxt decls
       = do putStrLn "Parsed OK"
            putStrLn (showSep "\n" (map show decls))
-           ?foo
+           xs <- mapST (addDecl ctxt) decls
+           pure ()
 
   process : (ctxt : Var) -> String -> ST m () [ctxt ::: Defs]
   process ctxt file

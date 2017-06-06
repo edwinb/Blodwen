@@ -53,6 +53,7 @@ using (CtxtManage m)
   addFn : (ctxt : Var) -> (def : RawFnDef) -> ST m () [ctxt ::: Defs]
   addFn ctxt (MkRawFn n ty cs)
       = do tyc <- check ctxt [] ty TType
+           addDef ctxt n (MkGlobalDef tyc Public None)
            csc <- mapST (checkClause ctxt) cs
            addFnDef ctxt Public (MkFn n tyc csc)
 
@@ -70,6 +71,7 @@ using (CtxtManage m)
                gam <- getCtxt ctxt
                pure (MkCon n (getArity gam [] tyc) tyc)
 
+  export
   addDecl : (ctxt : Var) -> (def : RawDecl) -> ST m () [ctxt ::: Defs]
   addDecl ctxt (FnDecl f) = addFn ctxt f
   addDecl ctxt (DataDecl d) = addData ctxt d
