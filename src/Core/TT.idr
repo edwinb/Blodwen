@@ -171,6 +171,10 @@ namespace Env
        Nil : Env tm []
        (::) : Binder (tm vars) -> Env tm vars -> Env tm (x :: vars)
 
+  export
+  extend : (x : Name) -> Binder (tm vars) -> Env tm vars -> Env tm (x :: vars)
+  extend x = (::) {x} 
+
 %name Env env
 
 export
@@ -269,6 +273,23 @@ apply : Term vars -> List (Term vars) -> Term vars
 apply fn [] = fn
 apply fn (arg :: args) = apply (App fn arg) args
 
+export
+getPatternEnv : Env Term vars -> 
+                (tm : Term vars) -> (ty : Term vars) ->
+                (pvars ** (Env Term (pvars ++ vars),
+                           Term (pvars ++ vars),
+                           Term (pvars ++ vars)))
+getPatternEnv {vars} env (Bind n (PVar ty) sc) (Bind n' (PVTy ty') sc') 
+    = case eqName n n' of -- TODO: They should always be the same, but the
+                          -- types don't tell us this. Better in any case to
+                          -- rename n' to n since the de Bruijn indices will
+                          -- match up okay.
+           Nothing => ([] ** (env, Bind n (PVar ty) sc, Bind n' (PVTy ty') sc'))
+           Just Refl => let (more ** envtm) 
+                              = getPatternEnv (extend n (PVar ty) env) sc sc' in
+                            (more ++ [n] ** rewrite sym (appendAssociative more [n] vars) in
+                                                    envtm)
+getPatternEnv env tm ty = ([] ** (env, tm, ty))
 
 -- Raw terms, not yet typechecked
 public export

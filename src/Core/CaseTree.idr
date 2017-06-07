@@ -40,6 +40,13 @@ mutual
   embedAlt (ConstCase x sc) = ConstCase x (embed sc)
   embedAlt (DefaultCase sc) = DefaultCase (embed sc)
 
+-- Assumption (given 'ClosedTerm') is that the pattern variables are
+-- explicitly named. We'll assign de Bruijn indices when we're done
+export
+simpleCase : (def : CaseTree []) ->
+             (clauses : List (ClosedTerm, ClosedTerm)) ->
+             CaseTree []
+
 -- A test case
 export
 testPlus : Name -> CaseTree [UN "x", UN "y"]

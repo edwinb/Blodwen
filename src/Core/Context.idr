@@ -85,7 +85,8 @@ data DataDef : Type where
 
 public export
 data Clause : Type where
-     MkClause : (lhs : ClosedTerm) -> (rhs : ClosedTerm) -> Clause
+     MkClause : (env : Env Term vars) ->
+                (lhs : Term vars) -> (rhs : Term vars) -> Clause
 
 public export
 data FnDef : Type where

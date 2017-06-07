@@ -41,14 +41,18 @@ using (CtxtManage m)
   checkClause ctxt (MkRawClause pvars lhs rhs)
       = do let lhs_in = bind pvars lhs
            let rhs_in = bind pvars rhs
+           putStrLn ("Checking LHS " ++ show lhs_in)
            (lhsc, lhsty) <- infer ctxt [] lhs_in
-           rhsc <- check ctxt [] rhs_in lhsty
-           pure (MkClause lhsc rhsc)
+           let (patvars ** (lhsenv, lhsbound, lhsboundty)) 
+                = getPatternEnv [] lhsc lhsty
+           putStrLn ("Checking RHS " ++ show rhs_in)
+           (rhsc, rhsty) <- infer ctxt lhsenv rhs
+           checkConvert ctxt lhsenv lhsboundty rhsty
+           pure (MkClause lhsenv lhsbound rhsc)
     where
       bind : List (Name, Raw) -> Raw -> Raw
       bind [] tm = tm
       bind ((n, ty) :: ps) tm = RBind n (PVar ty) (bind ps tm)
-
 
   addFn : (ctxt : Var) -> (def : RawFnDef) -> ST m () [ctxt ::: Defs]
   addFn ctxt (MkRawFn n ty cs)

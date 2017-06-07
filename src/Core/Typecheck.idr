@@ -121,3 +121,13 @@ infer ctxt env term
            Left err => throw err
            Right ok => pure ok
 
+export
+checkConvert : CtxtManage m =>
+               (ctxt : Var) -> Env Term vars ->
+               (x : Term vars) -> (y : Term vars) ->
+               ST m () [ctxt ::: Defs]
+checkConvert ctxt env x y 
+    = case doConvert !(getCtxt ctxt) env x y of
+           Left err => throw err
+           Right ok => pure ()
+
