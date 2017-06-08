@@ -41,11 +41,12 @@ mutual
   embedAlt (DefaultCase sc) = DefaultCase (embed sc)
 
 -- Assumption (given 'ClosedTerm') is that the pattern variables are
--- explicitly named. We'll assign de Bruijn indices when we're done
+-- explicitly named. We'll assign de Bruijn indices when we're done, and
+-- the names of the top level variables we created are returned in 'args'
 export
 simpleCase : (def : CaseTree []) ->
              (clauses : List (ClosedTerm, ClosedTerm)) ->
-             CaseTree []
+             (args ** CaseTree args)
 
 -- A test case
 export

@@ -134,11 +134,34 @@ data Term : List Name -> Type where
      Erased : Term vars
      TType : Term vars
 
+data SameElem : Elem x xs -> Elem x' xs -> Type where
+     SameHere : SameElem Here Here
+     SameThere : SameElem p1 p2 -> SameElem (There p1) (There p2)
+
+hereNotThere : SameElem Here (There later) -> Void
+hereNotThere SameHere impossible
+hereNotThere (SameThere _) impossible
+
+thereNotHere : SameElem (There later) Here -> Void
+thereNotHere SameHere impossible
+thereNotHere (SameThere _) impossible
+
+thereLater : (same : SameElem p1 p2 -> Void) -> SameElem (There p1) (There p2) -> Void
+thereLater same (SameThere p) = same p
+
+sameElem : (p1 : Elem x xs) -> (p2 : Elem x' xs) -> Dec (SameElem p1 p2)
+sameElem Here Here = Yes SameHere
+sameElem Here (There later) = No hereNotThere
+sameElem (There later) Here = No thereNotHere
+sameElem (There p1) (There p2) with (sameElem p1 p2)
+  sameElem (There p1) (There p2) | No same = No (thereLater same)
+  sameElem (There p1) (There p2) | (Yes later) = Yes (SameThere later)
+
 export
 sameVar : Elem x xs -> Elem y xs -> Bool
-sameVar Here Here = True
-sameVar (There x) (There y) = sameVar x y
-sameVar _ _ = False
+sameVar p1 p2 = case sameElem p1 p2 of
+                     Yes prf => True
+                     No contra => False
 
 -- TMP HACK!
 export
@@ -267,6 +290,40 @@ refToLocal x new tm = mkLocal {later = []} x Here tm
     mkLocal x loc (PrimVal y) = PrimVal y
     mkLocal x loc Erased = Erased
     mkLocal x loc TType = TType
+
+namespace SubstEnv
+  data SubstEnv : List Name -> List Name -> Type where
+       Nil : SubstEnv [] vars
+       (::) : Term vars -> 
+              SubstEnv ds vars -> SubstEnv (d :: ds) vars
+
+  findDrop : Elem x (drop ++ vars) -> SubstEnv drop vars -> Term vars
+  findDrop {drop = []} var env = Local var
+  findDrop {drop = (x :: xs)} Here (tm :: env) = tm
+  findDrop {drop = (x :: xs)} (There later) (tm :: env) = findDrop later env
+
+  find : Elem x (outer ++ (drop ++ vars)) ->
+         SubstEnv drop vars ->
+         Term (outer ++ vars)
+  find {outer = []} var env = findDrop var env
+  find {outer = (x :: xs)} Here env = Local Here
+  find {outer = (x :: xs)} (There later) env = weaken (find later env)
+
+substEnv : SubstEnv drop vars -> Term (outer ++ (drop ++ vars)) -> 
+           Term (outer ++ vars)
+substEnv env (Local prf) = find prf env
+substEnv env (Ref y fn) = Ref y fn
+substEnv {outer} env (Bind y b tm) 
+    = Bind y (assert_total (map (substEnv env) b)) 
+             (substEnv {outer = y :: outer} env tm)
+substEnv env (App fn arg) = App (substEnv env fn) (substEnv env arg)
+substEnv env (PrimVal y) = PrimVal y
+substEnv env Erased = Erased
+substEnv env TType = TType
+
+export
+subst : Term vars -> Term (x :: vars) -> Term vars
+subst val tm = substEnv {outer = []} {drop = [_]} [val] tm
 
 export
 apply : Term vars -> List (Term vars) -> Term vars

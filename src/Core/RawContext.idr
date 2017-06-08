@@ -39,13 +39,14 @@ using (CtxtManage m)
 
   checkClause : (ctxt : Var) -> RawClause -> ST m Clause [ctxt ::: Defs]
   checkClause ctxt (MkRawClause pvars lhs rhs)
+  -- Plan: Check the LHS, extract the environment, use that to check the RHS,
+  -- then make sure the types of each side are convertible.
       = do let lhs_in = bind pvars lhs
-           let rhs_in = bind pvars rhs
            putStrLn ("Checking LHS " ++ show lhs_in)
            (lhsc, lhsty) <- infer ctxt [] lhs_in
            let (patvars ** (lhsenv, lhsbound, lhsboundty)) 
                 = getPatternEnv [] lhsc lhsty
-           putStrLn ("Checking RHS " ++ show rhs_in)
+           putStrLn ("Checking RHS " ++ show rhs)
            (rhsc, rhsty) <- infer ctxt lhsenv rhs
            checkConvert ctxt lhsenv lhsboundty rhsty
            pure (MkClause lhsenv lhsbound rhsc)

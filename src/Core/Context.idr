@@ -162,6 +162,20 @@ export
 addFnDef : CtxtManage m =>
            (ctxt : Var) -> Visibility ->
            FnDef -> ST m () [ctxt ::: Defs]
+addFnDef ctxt vis (MkFn n ty clauses) 
+    = do let cs = map toClosed clauses
+         let (_ ** caseTree) = simpleCase (Unmatched "Unmatched case") cs
+         let def = MkGlobalDef ty vis (PMDef _ caseTree)
+         addDef ctxt n def
+  where
+    close : Int -> Env Term vars -> Term vars -> ClosedTerm
+    close i [] tm = tm
+    close i (b :: bs) tm 
+        = close (i + 1) bs (subst (Ref Bound (MN "pat" i)) tm)
+
+    toClosed : Clause -> (ClosedTerm, ClosedTerm)
+    toClosed (MkClause env lhs rhs) 
+          = (close 0 env lhs, close 0 env rhs)
 
 export
 addData : CtxtManage m =>
