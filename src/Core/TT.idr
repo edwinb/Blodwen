@@ -36,22 +36,27 @@ Eq Name where
 
 -- There's no way I'm maintaining a DecEq instance for this without
 -- deriving it automatically... this is boring enough...
+-- Maybe there should be a type class for these - things which are
+-- weaker than DecEq but nevertheless useful - at least until I work out
+-- how to get deriving DecEq to work (and if we want to use that feature
+-- here in any case... might be best to avoid extensions if there really
+-- is a self hosting goal)
 export
-eqName : (x : Name) -> (y : Name) -> Maybe (x = y)
-eqName (UN x) (UN y) with (decEq x y)
-  eqName (UN y) (UN y) | (Yes Refl) = Just Refl
-  eqName (UN x) (UN y) | (No contra) = Nothing
-eqName (MN x t) (MN x' t') with (decEq x x')
-  eqName (MN x t) (MN x t') | (Yes Refl) with (decEq t t')
-    eqName (MN x t) (MN x t) | (Yes Refl) | (Yes Refl) = Just Refl
-    eqName (MN x t) (MN x t') | (Yes Refl) | (No contra) = Nothing
-  eqName (MN x t) (MN x' t') | (No contra) = Nothing
-eqName (NS xs x) (NS ys y) with (decEq xs ys)
-  eqName (NS ys x) (NS ys y) | (Yes Refl) with (eqName x y)
-    eqName (NS ys x) (NS ys y) | (Yes Refl) | Nothing = Nothing
-    eqName (NS ys y) (NS ys y) | (Yes Refl) | (Just Refl) = Just Refl
-  eqName (NS xs x) (NS ys y) | (No contra) = Nothing
-eqName _ _ = Nothing
+nameEq : (x : Name) -> (y : Name) -> Maybe (x = y)
+nameEq (UN x) (UN y) with (decEq x y)
+  nameEq (UN y) (UN y) | (Yes Refl) = Just Refl
+  nameEq (UN x) (UN y) | (No contra) = Nothing
+nameEq (MN x t) (MN x' t') with (decEq x x')
+  nameEq (MN x t) (MN x t') | (Yes Refl) with (decEq t t')
+    nameEq (MN x t) (MN x t) | (Yes Refl) | (Yes Refl) = Just Refl
+    nameEq (MN x t) (MN x t') | (Yes Refl) | (No contra) = Nothing
+  nameEq (MN x t) (MN x' t') | (No contra) = Nothing
+nameEq (NS xs x) (NS ys y) with (decEq xs ys)
+  nameEq (NS ys x) (NS ys y) | (Yes Refl) with (nameEq x y)
+    nameEq (NS ys x) (NS ys y) | (Yes Refl) | Nothing = Nothing
+    nameEq (NS ys y) (NS ys y) | (Yes Refl) | (Just Refl) = Just Refl
+  nameEq (NS xs x) (NS ys y) | (No contra) = Nothing
+nameEq _ _ = Nothing
 
 export
 Ord Name where
@@ -78,9 +83,19 @@ data NameType : Type where
      DataCon : (tag : Int) -> (arity : Nat) -> NameType
      TyCon   : (tag : Int) -> (arity : Nat) -> NameType
 
+%name TT.NameType nt
+
 public export
 data Constant = I Integer
               | IntType
+
+export
+constantEq : (x, y : Constant) -> Maybe (x = y)
+constantEq (I x) (I y) = case decEq x y of
+                              Yes Refl => Just Refl
+                              No contra => Nothing
+constantEq IntType IntType = Just Refl
+constantEq _ _ = Nothing
 
 export
 Show Constant where
@@ -203,7 +218,7 @@ namespace Env
 export
 defined : (n : Name) -> Env Term vars -> Maybe (Elem n vars)
 defined n [] = Nothing
-defined {vars = x :: xs} n (b :: env) with (eqName x n)
+defined {vars = x :: xs} n (b :: env) with (nameEq x n)
   defined {vars = n :: xs} n (b :: env) | (Just Refl) 
       = Just Here
   defined {vars = x :: xs} n (b :: env) | Nothing 
@@ -217,16 +232,43 @@ insertElem {outer = (x :: xs)} Here = Here
 insertElem {outer = (y :: xs)} (There later) 
    = There (insertElem {outer = xs} later)
 
+export
 thin : (n : Name) -> Term (outer ++ inner) -> Term (outer ++ n :: inner)
 thin n (Local prf) = Local (insertElem prf)
 thin n (Ref x fn) = Ref x fn
 thin {outer} {inner} n (Bind x b sc) 
    = let sc' = thin {outer = x :: outer} {inner} n sc in
-         assert_total $ Bind x (map (thin n) b) sc'
+         Bind x (assert_total (map (thin n) b)) sc'
 thin n (App f a) = App (thin n f) (thin n a)
 thin n (PrimVal x) = PrimVal x
 thin n Erased = Erased
 thin n TType = TType
+
+export
+weakenElem : Elem x xs -> Elem x (ns ++ xs)
+weakenElem {ns = []} p = p
+weakenElem {ns = (x :: xs)} p = There (weakenElem p)
+
+export
+insertElemNames : (ns : List Name) -> Elem x (outer ++ inner) ->
+                  Elem x (outer ++ (ns ++ inner))
+insertElemNames {outer = []} ns p = weakenElem p
+insertElemNames {outer = (x :: xs)} ns Here = Here
+insertElemNames {outer = (x :: xs)} ns (There later) 
+    = There (insertElemNames ns later)
+
+export
+insertNames : (ns : List Name) -> Term (outer ++ inner) ->
+              Term (outer ++ (ns ++ inner))
+insertNames ns (Local prf) = Local (insertElemNames ns prf)
+insertNames ns (Ref x fn) = Ref x fn
+insertNames {outer} {inner} ns (Bind x b sc) 
+    = Bind x (assert_total (map (insertNames ns) b)) 
+             (insertNames {outer = x :: outer} {inner} ns sc)
+insertNames ns (App fn arg) = App (insertNames ns fn) (insertNames ns arg)
+insertNames ns (PrimVal x) = PrimVal x
+insertNames ns Erased = Erased
+insertNames ns TType = TType
 
 export
 elemExtend : Elem x xs -> Elem x (xs ++ ys)
@@ -246,10 +288,17 @@ embed TType = TType
 public export
 interface Weaken (tm : List Name -> Type) where
   weaken : tm vars -> tm (n :: vars)
+  weakenNs : (ns : List Name) -> tm vars -> tm (ns ++ vars)
+
+  weakenNs [] t = t
+  weakenNs (n :: ns) t = weaken (weakenNs ns t)
+
+  weaken = weakenNs [_]
 
 export
 Weaken Term where
   weaken tm = thin {outer = []} _ tm
+  weakenNs ns tm = insertNames {outer = []} ns tm
 
 export
 weakenBinder : Weaken tm => Binder (tm vars) -> Binder (tm (n :: vars))
@@ -267,30 +316,46 @@ addVar {later = []} prf = There prf
 addVar {later = (var :: xs)} Here = Here
 addVar {later = (y :: xs)} (There prf) = There (addVar prf)
 
-newLocal : Elem fn (later ++ fn :: vars)
-newLocal {later = []} = Here
-newLocal {later = (x :: xs)} = There newLocal
+export
+localPrf : Elem fn (later ++ fn :: vars)
+localPrf {later = []} = Here
+localPrf {later = (x :: xs)} = There localPrf
+
+export
+mkLocal : (x : Name) -> 
+          Elem new (later ++ new :: vars) ->
+          Term (later ++ vars) -> Term (later ++ new :: vars)
+mkLocal x loc (Local prf) = Local (addVar prf)
+mkLocal x loc (Ref y fn) with (x == fn)
+  mkLocal x loc (Ref y fn) | True = Local loc
+  mkLocal x loc (Ref y fn) | False = Ref y fn
+mkLocal {later} x loc (Bind y b tm) 
+    = Bind y (assert_total (map (mkLocal x loc) b)) 
+             (mkLocal {later = y :: later} x (There loc) tm)
+mkLocal x loc (App f a) = App (mkLocal x loc f) (mkLocal x loc a)
+mkLocal x loc (PrimVal y) = PrimVal y
+mkLocal x loc Erased = Erased
+mkLocal x loc TType = TType
 
 -- Replace any reference to 'x' with a locally bound name 'new'
 export
 refToLocal : (x : Name) -> (new : Name) -> Term vars -> Term (new :: vars)
 refToLocal x new tm = mkLocal {later = []} x Here tm
-  where
-    mkLocal : (x : Name) -> 
-              Elem new (later ++ new :: vars) ->
-              Term (later ++ vars) -> Term (later ++ new :: vars)
-    mkLocal x loc (Local prf) = Local (addVar prf)
-    mkLocal x loc (Ref y fn) with (x == fn)
-      mkLocal x loc (Ref y fn) | True = Local loc
-      mkLocal x loc (Ref y fn) | False = Ref y fn
-    mkLocal {later} x loc (Bind y b tm) 
-        = Bind y (assert_total (map (mkLocal x loc) b)) 
-                 (mkLocal {later = y :: later} x (There loc) tm)
-    mkLocal x loc (App f a) = App (mkLocal x loc f) (mkLocal x loc a)
-    mkLocal x loc (PrimVal y) = PrimVal y
-    mkLocal x loc Erased = Erased
-    mkLocal x loc TType = TType
 
+export
+refToLocals : (ns : List Name) -> Term vars -> Term (ns ++ vars)
+refToLocals [] tm = tm
+refToLocals (n :: ns) tm = refToLocal n n (refToLocals ns tm)
+
+export
+innerRefToLocals : (ns : List Name) -> 
+                   Term (outer ++ vars) -> Term (outer ++ ns ++ vars)
+innerRefToLocals [] tm = tm
+innerRefToLocals (n :: ns) tm 
+     = mkLocal n {new = n} localPrf (innerRefToLocals ns tm)
+
+-- Substitute some explicit terms for names in a term, and remove those
+-- names from the scope
 namespace SubstEnv
   data SubstEnv : List Name -> List Name -> Type where
        Nil : SubstEnv [] vars
@@ -309,21 +374,39 @@ namespace SubstEnv
   find {outer = (x :: xs)} Here env = Local Here
   find {outer = (x :: xs)} (There later) env = weaken (find later env)
 
-substEnv : SubstEnv drop vars -> Term (outer ++ (drop ++ vars)) -> 
-           Term (outer ++ vars)
-substEnv env (Local prf) = find prf env
-substEnv env (Ref y fn) = Ref y fn
-substEnv {outer} env (Bind y b tm) 
-    = Bind y (assert_total (map (substEnv env) b)) 
-             (substEnv {outer = y :: outer} env tm)
-substEnv env (App fn arg) = App (substEnv env fn) (substEnv env arg)
-substEnv env (PrimVal y) = PrimVal y
-substEnv env Erased = Erased
-substEnv env TType = TType
+  substEnv : SubstEnv drop vars -> Term (outer ++ (drop ++ vars)) -> 
+             Term (outer ++ vars)
+  substEnv env (Local prf) = find prf env
+  substEnv env (Ref y fn) = Ref y fn
+  substEnv {outer} env (Bind y b tm) 
+      = Bind y (assert_total (map (substEnv env) b)) 
+               (substEnv {outer = y :: outer} env tm)
+  substEnv env (App fn arg) = App (substEnv env fn) (substEnv env arg)
+  substEnv env (PrimVal y) = PrimVal y
+  substEnv env Erased = Erased
+  substEnv env TType = TType
 
+-- Replace the most recently bound name with a term
 export
 subst : Term vars -> Term (x :: vars) -> Term vars
 subst val tm = substEnv {outer = []} {drop = [_]} [val] tm
+
+-- Replace an explicit name with a term
+export
+substName : Name -> Term vars -> Term vars -> Term vars
+substName x new (Local p) = Local p
+substName x new (Ref nt fn) = case nameEq x fn of
+                                   Nothing => Ref nt fn
+                                   Just Refl => new
+-- ASSUMPTION: When we substitute under binders, the name has always been
+-- resolved to a Local, so no need to check that x isn't shadowing
+substName x new (Bind y b tm) 
+    = Bind y (assert_total (map (substName x new) b)) 
+             (substName x (weaken new) tm)
+substName x new (App fn arg) = App (substName x new fn) (substName x new arg)
+substName x new (PrimVal y) = PrimVal y
+substName x new Erased = Erased
+substName x new TType = TType
 
 export
 apply : Term vars -> List (Term vars) -> Term vars
@@ -337,7 +420,7 @@ getPatternEnv : Env Term vars ->
                            Term (pvars ++ vars),
                            Term (pvars ++ vars)))
 getPatternEnv {vars} env (Bind n (PVar ty) sc) (Bind n' (PVTy ty') sc') 
-    = case eqName n n' of -- TODO: They should always be the same, but the
+    = case nameEq n n' of -- TODO: They should always be the same, but the
                           -- types don't tell us this. Better in any case to
                           -- rename n' to n since the de Bruijn indices will
                           -- match up okay.
