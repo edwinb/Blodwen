@@ -239,13 +239,30 @@ groupCons cs = gc [] cs
       addConG n tag pargs pats rhs (g :: gs) | NoMatch 
         = do gs' <- addConG n tag pargs pats rhs gs
              pure (g :: gs')
+    
+    addConstG : Constant -> NamedPats todo ->
+                (rhs : Term (a :: done)) ->
+                (acc : List (Group todo (a :: done))) ->
+                State Int (List (Group todo (a :: done)))
+    addConstG {a} c pats rhs [] 
+        = pure [ConstGroup c [MkPatClause pats (subst (Ref Bound a) rhs)]]
+    addConstG {a} c pats rhs (g :: gs) with (checkGroupMatch (CConst c) [] g)
+      addConstG {a} c pats rhs 
+              ((ConstGroup c ((MkPatClause ps tm) :: rest)) :: gs) | ConstMatch                    
+          = let newclause = MkPatClause pats (subst (Ref Bound a) rhs) in
+                pure ((ConstGroup c 
+                      (newclause :: (MkPatClause ps tm) :: rest)) :: gs)
+      addConstG c pats rhs (g :: gs) | NoMatch 
+          = do gs' <- addConstG c pats rhs gs
+               pure (g :: gs')
 
     addGroup : Pat -> NamedPats todo -> Term (a :: done) -> 
                List (Group todo (a :: done)) -> 
                State Int (List (Group todo (a :: done)))
     addGroup (PCon n t pargs) pats rhs acc 
         = addConG n t pargs pats rhs acc
-    addGroup (PConst x) pats rhs acc = ?agrhs_2
+    addGroup (PConst c) pats rhs acc 
+        = addConstG c pats rhs acc
     addGroup _ pats rhs acc = pure acc -- Can't happen, not a constructor
         -- FIXME: Is this possible to rule out with a type? Probably.
 
@@ -278,8 +295,12 @@ localiseArgs newargs (Unmatched msg) = Unmatched msg
 localiseArgs newargs Impossible = Impossible
 
 mutual
-  -- TODO: Needs to be 'processed args' and 'not processed args', and
-  -- result is 'processed+not processed' while the input is 'List not processed'
+  {- 'PatClause' contains a list of patterns still to process (that's the 
+     "todo") and a right hand side for the patterns already processed (that's 
+     the "done"). So "match" builds the remainder of the case tree for
+     the unprocessed patterns. "err" is the tree for when the patterns don't
+     cover the input (i.e. the "fallthrough" pattern, which at the top
+     level will be an error). -}
   match : List (PatClause todo done) -> (err : CaseTree (done ++ todo)) -> 
                State Int (CaseTree (done ++ todo))
   match {todo = []} [] err = pure err
@@ -357,6 +378,7 @@ export
 simpleCase : (def : CaseTree []) ->
              (clauses : List (ClosedTerm, ClosedTerm)) ->
              (args ** CaseTree args)
+simpleCase def clauses = ?simpleCase_rhs
 
 
 
@@ -365,7 +387,7 @@ simpleCase : (def : CaseTree []) ->
 
 plusClauses : List (PatClause [UN "x", UN "y"] [])
 plusClauses =
-   [MkPatClause [PCon (UN "S") 1 [PVar (UN "k")], PVar (UN "y")]
+   [MkPatClause [PCon (UN "S") 1 [PVar (UN "k")], PCon (UN "S") 1 [PVar (UN "y")]]
                      (Ref Bound (UN "k")),
     MkPatClause [PCon (UN "Z") 0 [], PVar (UN "y")] 
                      (Ref Bound (UN "y"))]
