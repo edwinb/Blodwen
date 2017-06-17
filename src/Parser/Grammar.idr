@@ -81,19 +81,20 @@ data ParseResult : List tok -> (consumes : Bool) -> Type -> Type where
                    (val : ty) -> (more : List tok) ->
                    ParseResult (x :: xs ++ more) c ty 
 
-weakenRes : {whatever : Bool} ->
+weakenRes : {whatever, c : Bool} -> {xs : List tok} ->
             ParseResult xs c ty -> ParseResult xs (whatever && c) ty
 weakenRes (Failure com msg ts) = Failure com msg ts
 weakenRes {whatever=True} (EmptyRes com val xs) = EmptyRes com val xs
 weakenRes {whatever=False} (EmptyRes com val xs) = EmptyRes com val xs
 weakenRes (NonEmptyRes com val more) = NonEmptyRes com val more
 
-shorter : (more : List tok) -> (ys : List tok) -> 
+shorter : (more : List tok) -> .(ys : List tok) -> 
           LTE (S (length more)) (S (length (ys ++ more)))
 shorter more [] = lteRefl
 shorter more (x :: xs) = LTESucc (lteSuccLeft (shorter more xs))
 
-doParse : (commit : Bool) -> (xs : List tok) -> (act : Grammar tok c ty) -> 
+doParse : {c : Bool} ->
+          (commit : Bool) -> (xs : List tok) -> (act : Grammar tok c ty) -> 
           ParseResult xs c ty
 doParse com xs act with (smallerAcc xs)
   doParse com xs (Empty val) | sml = EmptyRes com val xs
