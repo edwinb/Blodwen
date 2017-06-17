@@ -17,6 +17,15 @@ data Context : Type -> Type where
      MkContext : SortedMap Name a -> Context a
 
 export
+mapST : (a -> STrans m b cs (const cs)) -> List a ->
+        STrans m (List b) cs (const cs)
+mapST f [] = pure []
+mapST f (x :: xs) 
+    = do x' <- f x
+         xs' <- mapST f xs
+         pure (x' :: xs')
+
+export
 empty : Context a
 empty = MkContext empty
 
@@ -98,7 +107,8 @@ public export
 data Error = CantConvert (Env Term vars) (Term vars) (Term vars)
            | UndefinedName Name
            | NotFunctionType (Term vars)
-           | Msg String
+           | CaseCompile Name CaseError 
+           | GenericMsg String
 
 export
 Show Error where
@@ -106,7 +116,9 @@ Show Error where
       = "Type mismatch: " ++ show x ++ " and " ++ show y
   show (UndefinedName x) = "Undefined name " ++ show x
   show (NotFunctionType tm) = "Not a function type: " ++ show tm
-  show (Msg str) = str
+  show (CaseCompile n DifferingArgNumbers) 
+       = "Patterns for " ++ show n ++ " have different numbers of arguments"
+  show (GenericMsg str) = str
 
 export
 error : Error -> Either Error a
@@ -158,14 +170,49 @@ addDef ctxt n def
     = do g <- getCtxt ctxt
          setCtxt ctxt (addCtxt n def g)
 
+argToPat : ClosedTerm -> Pat
+argToPat tm with (unapply tm)
+  argToPat (apply (Ref (DataCon tag _) cn) args) | ArgsList 
+         = PCon cn tag (assert_total (map argToPat args))
+  argToPat (apply (Ref _ var) []) | ArgsList = PVar var
+  argToPat (apply (PrimVal c) []) | ArgsList = PConst c
+  argToPat (apply f args) | ArgsList = PAny
+
+toPatClause : CtxtManage m =>
+              (ctxt : Var) -> Name -> (ClosedTerm, ClosedTerm) ->
+              ST m (List Pat, ClosedTerm) [ctxt ::: Defs]
+toPatClause ctxt n (lhs, rhs) with (unapply lhs)
+  toPatClause ctxt n (apply (Ref Func fn) args, rhs) | ArgsList 
+      = case nameEq n fn of
+             Nothing => throw (GenericMsg "Wrong function name in pattern LHS")
+             Just Refl => do putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
+                             pure (map argToPat args, rhs)
+  toPatClause ctxt n (apply f args, rhs) | ArgsList 
+      = throw (GenericMsg "Not a function name in pattern LHS")
+
+-- Assumption (given 'ClosedTerm') is that the pattern variables are
+-- explicitly named. We'll assign de Bruijn indices when we're done, and
+-- the names of the top level variables we created are returned in 'args'
+export
+simpleCase : CtxtManage m =>
+             (ctxt : Var) -> Name -> (def : CaseTree []) ->
+             (clauses : List (ClosedTerm, ClosedTerm)) ->
+             ST m (args ** CaseTree args) [ctxt ::: Defs]
+simpleCase ctxt fn def clauses 
+    = do ps <- mapST (toPatClause ctxt fn) clauses
+         case patCompile ps def of
+              Left err => throw (CaseCompile fn err)
+              Right ok => pure ok
+
 export
 addFnDef : CtxtManage m =>
            (ctxt : Var) -> Visibility ->
            FnDef -> ST m () [ctxt ::: Defs]
 addFnDef ctxt vis (MkFn n ty clauses) 
     = do let cs = map toClosed clauses
-         let (_ ** caseTree) = simpleCase (Unmatched "Unmatched case") cs
-         let def = MkGlobalDef ty vis (PMDef _ caseTree)
+         (args ** tree) <- simpleCase ctxt n (Unmatched "Unmatched case") cs
+         putStrLn $ "Case tree: " ++ show args ++ " " ++ show tree
+         let def = MkGlobalDef ty vis (PMDef args tree)
          addDef ctxt n def
   where
     close : Int -> Env Term vars -> Term vars -> ClosedTerm
@@ -199,15 +246,6 @@ addData ctxt vis (MkData (MkCon tyn arity tycon) datacons)
         = do let condef = MkGlobalDef ty (conVisibility vis) (DCon tag a)
              let gam' = addCtxt n condef gam
              addDataConstructors tag cs gam'
-
-export
-mapST : (a -> STrans m b cs (const cs)) -> List a ->
-        STrans m (List b) cs (const cs)
-mapST f [] = pure []
-mapST f (x :: xs) 
-    = do x' <- f x
-         xs' <- mapST f xs
-         pure (x' :: xs')
 
 export
 runWithCtxt : ST (IOExcept Error) () [] -> IO ()

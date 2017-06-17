@@ -6,3 +6,39 @@ data Nat : Type where {
 plus : (x : Nat) -> (y : Nat) -> Nat;
 [y : Nat]          plus Z y = y;
 [k : Nat, y : Nat] plus (S k) y = S (plus k y);
+
+data Vect : (len : Nat) -> (a : Type) -> Type where {
+     Nil : (a : Type) -> Vect Z a
+   | Cons : (a : Type) -> (k : Nat) -> 
+            (x : a) -> (xs : Vect k a) -> Vect (S k) a
+}
+
+append : (a : Type) -> (n : Nat) -> (m : Nat) ->
+         (xs : Vect n a) -> (ys : Vect m a) -> Vect (plus n m) a;
+[a : Type, m : Nat, ys : Vect m a]
+   append a Z m (Nil a) ys = ys;
+[a : Type, k : Nat, m : Nat, x : a, xs : Vect k a, ys : Vect m a]
+   append a (S k) m (Cons a k x xs) ys 
+       = Cons a (plus k m) x (append a k m xs ys);
+
+one : Nat;
+[] one = S Z;
+
+two : Nat;
+[] two = S one;
+
+three : Nat;
+[] three = S two;
+
+four : Nat;
+[] four = S three;
+
+vec_xs : Vect two Nat;
+[] vec_xs = Cons Nat (S Z) one (Cons Nat Z two (Nil Nat));
+
+vec_ys : Vect two Nat;
+[] vec_ys = Cons Nat (S Z) three (Cons Nat Z four (Nil Nat));
+
+main : Vect four Nat;
+[] main = append Nat two two vec_xs vec_ys;
+

@@ -178,17 +178,6 @@ sameVar p1 p2 = case sameElem p1 p2 of
                      Yes prf => True
                      No contra => False
 
--- TMP HACK!
-export
-Show (Term vars) where
-  show (Local y) = "V"
-  show (Ref x fn) = "Ref"
-  show (Bind x y z) = "Bind"
-  show (App x y) = "(" ++ show x ++ ", " ++ show y ++ ")"
-  show (PrimVal x) = "Prim"
-  show Erased = "[__]"
-  show TType = "Type"
-
 export
 tm_id : Term []
 tm_id = Bind (UN "ty") (Lam TType) $
@@ -413,6 +402,25 @@ apply : Term vars -> List (Term vars) -> Term vars
 apply fn [] = fn
 apply fn (arg :: args) = apply (App fn arg) args
 
+public export
+data Unapply : Term vars -> Type where
+     ArgsList : {f : Term vars} -> {args : List (Term vars)} ->
+                Unapply (apply f args)
+
+rewriteApp : (f : Term vars) -> (xs : List (Term vars)) -> 
+             apply f (xs ++ [arg]) = App (apply f xs) arg
+rewriteApp f [] = Refl
+rewriteApp f (x :: xs) {arg} 
+    = rewrite (rewriteApp (App f x) xs {arg}) in Refl
+
+export
+unapply : (tm : Term vars) -> Unapply tm
+unapply (App fn arg) with (unapply fn)
+  unapply (App (apply f xs) arg) | ArgsList 
+      = rewrite sym (rewriteApp f xs {arg}) in 
+                ArgsList {f} {args = xs ++ [arg]}
+unapply tm = ArgsList {f = tm} {args = []}
+
 export
 getPatternEnv : Env Term vars -> 
                 (tm : Term vars) -> (ty : Term vars) ->
@@ -430,6 +438,22 @@ getPatternEnv {vars} env (Bind n (PVar ty) sc) (Bind n' (PVTy ty') sc')
                             (more ++ [n] ** rewrite sym (appendAssociative more [n] vars) in
                                                     envtm)
 getPatternEnv env tm ty = ([] ** (env, tm, ty))
+
+export
+Show (Term vars) where
+  show tm with (unapply tm)
+    show (apply f args) | ArgsList = showApp f args
+      where
+        showApp : Term vars -> List (Term vars) -> String
+        showApp (Local {x} y) [] = show x
+        showApp (Ref x fn) [] = show fn
+        showApp (Bind n b sc) [] = "[binder]"
+        showApp (App f args) [] = "Can't happen!"
+        showApp (PrimVal x) [] = show x
+        showApp TType [] = "Type"
+        showApp f args = "(" ++ assert_total (show f) ++ " " ++
+                                assert_total (showSep " " (map show args))
+                             ++ ")"
 
 -- Raw terms, not yet typechecked
 public export

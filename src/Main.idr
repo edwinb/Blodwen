@@ -2,6 +2,7 @@ module Main
 
 import Core.TT
 import Core.Evaluate
+import Core.Typecheck
 import Core.Context
 import Core.RawContext
 import Parser.Raw
@@ -32,7 +33,14 @@ using (CtxtManage m, FileIO m)
   stMain 
       = do ctxt <- newCtxt
            process ctxt "test.tt"
-           deleteCtxt ctxt
+           case runParser "main" raw of
+                Left err => deleteCtxt ctxt
+                Right raw => do
+                  (ptm, pty) <- infer ctxt [] raw
+                  putStr "Evaluating main: "
+                  gam <- getCtxt ctxt
+                  printLn (normalise gam [] ptm) 
+                  deleteCtxt ctxt
 
 main : IO ()
 main = do putStrLn "Welcome to Blodwen. Good luck."

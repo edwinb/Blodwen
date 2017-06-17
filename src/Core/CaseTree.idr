@@ -27,6 +27,26 @@ mutual
   %name CaseAlt alt
 
 mutual
+  export
+  Show (CaseTree vars) where
+    show (Case {var} prf alts)
+        = "case " ++ show var ++ " of { " ++
+                     showSep "| " (assert_total (map show alts))
+    show (STerm tm) = show tm
+    show (Unmatched msg) = "Error: " ++ show msg
+    show Impossible = "Impossible"
+
+  export
+  Show (CaseAlt vars) where
+    show (ConCase n tag args sc)
+        = show n ++ " " ++ showSep " " (map show args) ++ " => " ++
+          show sc
+    show (ConstCase c sc)
+        = show c ++ " => " ++ show sc
+    show (DefaultCase sc)
+        = "_ => " ++ show sc
+
+mutual
   insertCaseNames : (ns : List Name) -> CaseTree (outer ++ inner) ->
                     CaseTree (outer ++ (ns ++ inner))
   insertCaseNames {outer} {inner} ns (Case x xs) 
@@ -66,6 +86,7 @@ mutual
   embedAlt (ConstCase x sc) = ConstCase x (embed sc)
   embedAlt (DefaultCase sc) = DefaultCase (embed sc)
 
+public export
 data Pat = PCon Name Int (List Pat)
          | PConst Constant
          | PVar Name
@@ -354,9 +375,15 @@ mutual
                                err)
            rewrite appendAssociative done [a] todo in pure rest
     where
+      -- Turn the pattern name into a locally bound nameless variable on
+      -- the RHS. Use the variable name if given, or nothing if not
       repVar : (a : Name) -> PatClause (a :: todo) done -> PatClause todo (done ++ [a])
-      repVar a (MkPatClause pats rhs) 
-        = MkPatClause (tail pats) (mkLocal a {new=a} {later=done} {vars=[]} 
+      repVar a (MkPatClause (PVar n :: pats) rhs) 
+        = MkPatClause pats (mkLocal n {new=a} {later=done} {vars=[]} 
+                                           localPrf
+              (rewrite appendNilRightNeutral done in rhs))
+      repVar a (MkPatClause (p :: pats) rhs) 
+        = MkPatClause pats (mkLocal a {new=a} {later=done} {vars=[]} 
                                            localPrf
               (rewrite appendNilRightNeutral done in rhs))
 
@@ -371,17 +398,37 @@ mutual
            varRule vs fallthrough
   mixture NoClauses err = pure err
 
--- Assumption (given 'ClosedTerm') is that the pattern variables are
--- explicitly named. We'll assign de Bruijn indices when we're done, and
--- the names of the top level variables we created are returned in 'args'
+public export
+data CaseError = DifferingArgNumbers
+
+mkPatClause : (args : List Name) -> (List Pat, ClosedTerm) ->
+              Either CaseError (PatClause args [])
+mkPatClause args (ps, rhs) 
+    = case checkLengthMatch args ps of
+           Nothing => Left DifferingArgNumbers
+           Just eq => Right (MkPatClause (mkNames args ps eq) rhs)
+  where
+    mkNames : (args : List Name) -> (ps : List Pat) -> 
+              LengthMatch args ps -> NamedPats args
+    mkNames [] [] NilMatch = []
+    mkNames (arg :: args) (p :: ps) (ConsMatch eq)
+        = p :: mkNames args ps eq
+
 export
-simpleCase : (def : CaseTree []) ->
-             (clauses : List (ClosedTerm, ClosedTerm)) ->
-             (args ** CaseTree args)
-simpleCase def clauses = ?simpleCase_rhs
-
-
-
+patCompile : List (List Pat, ClosedTerm) -> CaseTree [] ->
+             Either CaseError (args ** CaseTree args)
+patCompile [] def = pure ([] ** def)
+patCompile (p :: ps) def 
+    = do let ns = getNames 0 (fst p)
+         pats <- traverse (mkPatClause ns) (p :: ps)
+         let cases = evalState (match pats 
+                                (rewrite sym (appendNilRightNeutral ns) in
+                                         (weakenNs ns def))) 0
+         pure (ns ** cases)
+  where
+    getNames : Int -> List Pat -> List Name
+    getNames i [] = []
+    getNames i (x :: xs) = MN "arg" i :: getNames (i + 1) xs
 
 -- A test case
 
