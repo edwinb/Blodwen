@@ -17,9 +17,11 @@ data Grammar : (tok : Type) -> (consumes : Bool) -> Type -> Type where
 
      SeqEat : Grammar tok True a -> Inf (a -> Grammar tok c2 b) ->
               Grammar tok True b
-     SeqEmpty : Grammar tok c1 a -> (a -> Grammar tok c2 b) ->
+     SeqEmpty : {c1, c2 : Bool} ->
+                Grammar tok c1 a -> (a -> Grammar tok c2 b) ->
                 Grammar tok (c1 || c2) b
-     Alt : Grammar tok c1 ty -> Grammar tok c2 ty -> 
+     Alt : {c1, c2 : Bool} ->
+           Grammar tok c1 ty -> Grammar tok c2 ty -> 
            Grammar tok (c1 && c2) ty
 
 public export
@@ -28,7 +30,8 @@ inf True t = Inf t
 inf False t = t
   
 export %inline
-(>>=) : Grammar tok c1 a -> inf c1 (a -> Grammar tok c2 b) ->
+(>>=) : {c1 : Bool} ->
+        Grammar tok c1 a -> inf c1 (a -> Grammar tok c2 b) ->
         Grammar tok (c1 || c2) b
 (>>=) {c1 = False} = SeqEmpty
 (>>=) {c1 = True} = SeqEat
@@ -78,7 +81,8 @@ data ParseResult : List tok -> (consumes : Bool) -> Type -> Type where
                    (val : ty) -> (more : List tok) ->
                    ParseResult (x :: xs ++ more) c ty 
 
-weakenRes : ParseResult xs c ty -> ParseResult xs (whatever && c) ty
+weakenRes : {whatever : Bool} ->
+            ParseResult xs c ty -> ParseResult xs (whatever && c) ty
 weakenRes (Failure com msg ts) = Failure com msg ts
 weakenRes {whatever=True} (EmptyRes com val xs) = EmptyRes com val xs
 weakenRes {whatever=False} (EmptyRes com val xs) = EmptyRes com val xs

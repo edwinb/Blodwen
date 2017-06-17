@@ -21,7 +21,8 @@ inf True t = Inf t
 inf False t = t
   
 export %inline
-(<+>) : Recognise c1 -> inf c1 (Recognise c2) -> Recognise (c1 || c2)
+(<+>) : {c1 : Bool} -> 
+        Recognise c1 -> inf c1 (Recognise c2) -> Recognise (c1 || c2)
 (<+>) {c1 = False} = SeqEmpty
 (<+>) {c1 = True} = SeqEat
      
