@@ -3,7 +3,7 @@ module Parser.Raw
 import Core.TT
 import Core.RawContext
 import public Parser.Lexer
-import public Parser.Combinators
+import public Text.Parser
 import Data.List.Views
 
 %default total
@@ -65,7 +65,7 @@ runParser str p
                    Left (Error err (t :: ts)) => 
                           Left $ ParseFail err (Just (line t, col t))
                                                (map tok (t :: ts))
-                   Right val => Right val
+                   Right (val, _) => Right val
 
 export
 parseFile : (fn : String) -> Rule ty -> IO (Either ParseError ty)
@@ -77,7 +77,7 @@ parseFile fn p
 export
 location : EmptyRule (Int, Int)
 location 
-    = do tok <- nextToken
+    = do tok <- peek
          pure (line tok, col tok)
 
 export

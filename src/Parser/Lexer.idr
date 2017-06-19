@@ -1,6 +1,6 @@
 module Parser.Lexer
 
-import public Parser.Tokenise
+import public Text.Lexer
 
 %default total
 
@@ -68,7 +68,7 @@ rawTokens =
 
 export
 lex : String -> Either (Int, Int, String) (List (TokenData Token))
-lex str = case Tokenise.lex rawTokens str of
+lex str = case Lexer.lex rawTokens str of
                (tok, (_, _, "")) => Right (filter notComment tok)
                (_, fail) => Left fail
     where
