@@ -8,13 +8,12 @@ modules = Core.CaseTree,
           Core.TT,
           Core.Typecheck,
 
-          Parser.Combinators,
-          Parser.Grammar,
           Parser.Lexer,
-          Parser.Raw,
-          Parser.Tokenise
+          Parser.Raw
 
 sourcedir = src
 executable = blodwen
+opts = "--warnreach --dumpcases blodwen.dc"
+
 main = Main
 
