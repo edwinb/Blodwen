@@ -5,6 +5,9 @@ import Core.Evaluate
 import Core.Typecheck
 import Core.Context
 import Core.RawContext
+import TTImp.TTImp
+
+import Parser.RawImp
 import Parser.Raw
 
 import Control.ST

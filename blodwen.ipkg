@@ -9,7 +9,11 @@ modules = Core.CaseTree,
           Core.Typecheck,
 
           Parser.Lexer,
-          Parser.Raw
+          Parser.Raw,
+          Parser.Support,
+          Parser.RawImp,
+
+          TTImp.TTImp
 
 sourcedir = src
 executable = blodwen

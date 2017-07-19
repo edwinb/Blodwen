@@ -43,10 +43,14 @@ ident = pred startIdent <+> many (pred validIdent)
 keywords : List String
 keywords = ["data", "module", "where", "let", "in", "Type"]
 
+-- Reserved words for internal syntax
+special : List String
+special = ["%lam", "%pi", "%imppi", "%let"]
+
 -- Reserved symbols
 symbols : List String
 symbols = [".(", -- for things such as Foo.Bar.(+)
-           ".", 
+           ".", "%",
            "(", ")", "{", "}", "[", "]", "`", ",", "|", ";",
            "->", "=>"]
 
@@ -56,6 +60,7 @@ validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
 rawTokens : TokenMap Token
 rawTokens = 
    map (\x => (exact x, Keyword)) keywords ++
+   map (\x => (exact x, Keyword)) special ++
    map (\x => (exact x, Symbol)) symbols ++
     [(intLit, \x => Literal (cast x)),
      (stringLit, StrLit),
@@ -68,11 +73,13 @@ rawTokens =
 
 export
 lex : String -> Either (Int, Int, String) (List (TokenData Token))
-lex str = case Lexer.lex rawTokens str of
-               (tok, (_, _, "")) => Right (filter notComment tok)
-               (_, fail) => Left fail
+lex str 
+    = case Lexer.lex rawTokens str of
+           (tok, (_, _, "")) => Right (filter notComment tok)
+           (_, fail) => Left fail
     where
       notComment : TokenData Token -> Bool
       notComment t = case tok t of
                           Comment _ => False
                           _ => True
+
