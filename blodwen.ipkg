@@ -13,7 +13,7 @@ modules = Core.CaseTree,
 
 sourcedir = src
 executable = blodwen
-opts = "--warnreach --dumpcases blodwen.dc"
+opts = "--warnreach --partial-eval --dumpcases blodwen.dc"
 
 main = Main
 

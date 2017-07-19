@@ -37,12 +37,24 @@ export
 addCtxt : Name -> a -> Context a -> Context a
 addCtxt n val (MkContext dict) = MkContext (insert n val dict)
 
+-- An unsolved constraint, noting two terms which need to be convertible
+-- in a particular environment
+public export
+data Constraint : Type where
+     MkConstraint : (env : Env Term vars) ->
+                    (x : Term vars) -> (y : Term vars) -> 
+                    (ty : Maybe (Term vars)) -> Constraint
+
 public export
 data Def : Type where
      None  : Def -- Not yet defined
      PMDef : (args : List Name) -> CaseTree args -> Def
      DCon  : (tag : Int) -> (arity : Nat) -> Def
      TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
+
+     Hole : Def
+     Guess : (guess : ClosedTerm) -> List Constraint -> Def
+
 
 public export
 data Visibility = Public | Export | Private
@@ -66,9 +78,10 @@ record ContextDefs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
       nextTag : Int -- next tag for type constructors
+      holes : List Name -- unsolved metavariables in gamma
 
 initCtxt : ContextDefs
-initCtxt = MkAllDefs empty 100
+initCtxt = MkAllDefs empty 100 []
 
 export
 lookupDef : Name -> Gamma -> Maybe Def

@@ -6,9 +6,10 @@ import Language.Reflection
 %default total
 
 public export
-data Name = UN String
-          | MN String Int
-          | NS (List String) Name
+data Name = UN String -- user given name
+          | MN String Int -- machine generated name
+          | NS (List String) Name -- a name in a hierarchical namespace 
+          | HN String Int -- machine generated metavariable name
 
 %hide Raw -- from Reflection in the Prelude
 %hide Binder
@@ -26,12 +27,14 @@ Show Name where
   show (UN str) = str
   show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
   show (NS ns n) = showSep "." ns ++ "." ++ show n
+  show (HN str int) = "?" ++ str ++ "_" ++ show int
 
 export
 Eq Name where
   (==) (UN x) (UN y) = x == y
   (==) (MN x y) (MN x' y') = x == x' && y == y'
   (==) (NS xs x) (NS xs' x') = xs == xs' && x == x'
+  (==) (HN x y) (HN x' y') = x == x' && y == y'
   (==) _ _ = False
 
 -- There's no way I'm maintaining a DecEq instance for this without
@@ -56,23 +59,37 @@ nameEq (NS xs x) (NS ys y) with (decEq xs ys)
     nameEq (NS ys x) (NS ys y) | (Yes Refl) | Nothing = Nothing
     nameEq (NS ys y) (NS ys y) | (Yes Refl) | (Just Refl) = Just Refl
   nameEq (NS xs x) (NS ys y) | (No contra) = Nothing
+nameEq (HN x t) (HN x' t') with (decEq x x')
+  nameEq (HN x t) (HN x t') | (Yes Refl) with (decEq t t')
+    nameEq (HN x t) (HN x t) | (Yes Refl) | (Yes Refl) = Just Refl
+    nameEq (HN x t) (HN x t') | (Yes Refl) | (No contra) = Nothing
+  nameEq (HN x t) (HN x' t') | (No contra) = Nothing
 nameEq _ _ = Nothing
 
 export
 Ord Name where
   compare (UN _) (MN _ _) = LT
   compare (UN _) (NS _ _) = LT
+  compare (UN _) (HN _ _) = LT
   compare (MN _ _) (NS _ _) = LT
+  compare (MN _ _) (HN _ _) = LT
+  compare (NS _ _) (HN _ _) = LT
 
   compare (MN _ _) (UN _) = GT
   compare (NS _ _) (UN _) = GT
+  compare (HN _ _) (UN _) = GT
   compare (NS _ _) (MN _ _) = GT
+  compare (HN _ _) (MN _ _) = GT
+  compare (HN _ _) (NS _ _) = GT
 
   compare (UN x) (UN y) = compare x y
   compare (MN x y) (MN x' y') = case compare x x' of
                                      EQ => compare y y'
                                      t => t
   compare (NS x y) (NS x' y') = case compare x x' of
+                                     EQ => compare y y'
+                                     t => t
+  compare (HN x y) (HN x' y') = case compare x x' of
                                      EQ => compare y y'
                                      t => t
 
