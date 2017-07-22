@@ -10,33 +10,33 @@ import Data.List.Views
 
 %default total
 
-atom : Rule RawImp
+atom : Rule (RawImp ())
 atom
     = do x <- constant
-         pure (IPrimVal x)
+         pure (IPrimVal () x)
   <|> do x <- name
-         pure (IVar x)
+         pure (IVar () x)
   <|> do symbol "_"
-         pure Implicit
+         pure (Implicit ())
 
 mutual
-  bracketed : Rule RawImp
+  bracketed : Rule (RawImp ())
   bracketed
       = do keyword "%pi"
            commit
            b <- binder
            scope <- expr
-           pure (IPi Explicit (fst b) (snd b) scope)
+           pure (IPi () Explicit (fst b) (snd b) scope)
     <|> do keyword "%imppi"
            commit
            b <- binder
            scope <- expr
-           pure (IPi Implicit (fst b) (snd b) scope)
+           pure (IPi () Implicit (fst b) (snd b) scope)
     <|> do keyword "%lam"
            commit
            b <- binder
            scope <- expr
-           pure (ILam (fst b) (snd b) scope)
+           pure (ILam () (fst b) (snd b) scope)
     <|> do keyword "%let"
            commit
            symbol "("
@@ -45,12 +45,12 @@ mutual
            val <- expr
            symbol ")"
            scope <- expr
-           pure (ILet n ty val scope)
+           pure (ILet () n ty val scope)
     <|> do f <- expr
            args <- some expr
            pure (apply f args)
 
-  binder : Rule (Name, RawImp)
+  binder : Rule (Name, RawImp ())
   binder
       = do symbol "("
            n <- name
@@ -59,7 +59,7 @@ mutual
            pure (n, t)
 
   export
-  expr : Rule RawImp
+  expr : Rule (RawImp ())
   expr
       = atom
     <|> do symbol "("

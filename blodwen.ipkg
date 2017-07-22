@@ -7,12 +7,14 @@ modules = Core.CaseTree,
           Core.Evaluate,
           Core.TT,
           Core.Typecheck,
+          Core.Unify,
 
           Parser.Lexer,
           Parser.Raw,
           Parser.Support,
           Parser.RawImp,
 
+          TTImp.Elab,
           TTImp.TTImp
 
 sourcedir = src

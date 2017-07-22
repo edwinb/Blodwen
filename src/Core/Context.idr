@@ -72,16 +72,16 @@ Gamma : Type
 Gamma = Context GlobalDef
 
 -- Everything needed to typecheck data types/functions
--- (Keep metadata separately)
 export
 record ContextDefs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
       nextTag : Int -- next tag for type constructors
+      nextHole : Int -- next hole id
       holes : List Name -- unsolved metavariables in gamma
 
 initCtxt : ContextDefs
-initCtxt = MkAllDefs empty 100 []
+initCtxt = MkAllDefs empty 100 0 []
 
 export
 lookupDef : Name -> Gamma -> Maybe Def
@@ -160,6 +160,14 @@ getNextTypeTag ctxt
     = do defs <- read ctxt
          let t = nextTag defs
          write ctxt (record { nextTag = t + 1 } defs)
+         pure t
+
+export
+getNextHole : (ctxt : Var) -> ST m Int [ctxt ::: Defs]
+getNextHole ctxt 
+    = do defs <- read ctxt
+         let t = nextHole defs
+         write ctxt (record { nextHole = t + 1 } defs)
          pure t
 
 export

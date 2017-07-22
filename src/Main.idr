@@ -6,6 +6,7 @@ import Core.Typecheck
 import Core.Context
 import Core.RawContext
 import TTImp.TTImp
+import TTImp.Elab
 
 import Parser.RawImp
 import Parser.Raw
