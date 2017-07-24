@@ -53,7 +53,8 @@ data Def : Type where
      TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
 
      Hole : Def
-     Guess : (guess : ClosedTerm) -> List Constraint -> Def
+     -- The constraint names refer into the context of constraints in Gamma
+     Guess : (guess : ClosedTerm) -> (constraints : List Name) -> Def
 
 
 public export
@@ -77,11 +78,12 @@ record ContextDefs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
       nextTag : Int -- next tag for type constructors
-      nextHole : Int -- next hole id
+      nextHole : Int -- next hole/constraint id
       holes : List Name -- unsolved metavariables in gamma
+      constraints : Context Constraint -- unsolved metavariable constraints 
 
 initCtxt : ContextDefs
-initCtxt = MkAllDefs empty 100 0 []
+initCtxt = MkAllDefs empty 100 0 [] empty
 
 export
 lookupDef : Name -> Gamma -> Maybe Def

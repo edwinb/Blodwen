@@ -28,25 +28,30 @@ export
 toClosure : Env Term outer -> Term outer -> Closure outer
 toClosure env tm = MkClosure [] env tm
 
-%name LocalEnv loc, loc'
-%name Closure thunk, thunk'
+%name LocalEnv loc, loc1
+%name Closure thunk, thunk1
 
+-- Things you can apply arguments to
+public export
+data VHead : List Name -> Type where
+     VLocal   : Elem x vars -> VHead vars
+     VRef     : NameType -> Name -> VHead vars
+
+-- Weak head normal forms
 public export
 data Value : List Name -> Type where
-     VLocal   : Elem x vars -> Value vars
      VBind    : (x : Name) -> Binder (Closure vars) -> 
                 (Closure vars -> Closure vars) -> Value vars
-     VApp     : Value vars -> Closure vars -> Value vars
-     VPrimVal : Constant -> Value vars
-     VRef     : NameType -> Name -> Value vars
+     VApp     : VHead vars -> List (Closure vars) -> Value vars
      VDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
                 List (Closure vars) -> Value vars
      VTCon    : Name -> (tag : Int) -> (arity : Nat) -> 
                 List (Closure vars) -> Value vars
+     VPrimVal : Constant -> Value vars
      VErased  : Value vars
      VType    : Value vars
 
-%name Evaluate.Value val, val'
+%name Evaluate.Value val, val1
 
 Stack : List Name -> Type
 Stack outer = List (Closure outer)
@@ -60,7 +65,7 @@ parameters (gam : Gamma)
     evalLocal {vars = []} env loc stk p 
           = case getBinder p env of
                  Let val ty => eval env [] stk val
-                 b => VLocal p
+                 b => VApp (VLocal p) []
     evalLocal {vars = (x :: xs)} 
               env ((MkClosure loc' env' tm') :: locs) stk Here 
                    = eval env' loc' stk tm'
@@ -146,10 +151,6 @@ parameters (gam : Gamma)
     evalTree env loc stk (Unmatched msg) = Nothing
     evalTree env loc stk Impossible = Nothing
 
-    unload : Value outer -> Stack outer -> Value outer
-    unload val [] = val
-    unload val (arg :: xs) = unload (VApp val arg) xs
-
     eval : Env Term outer -> LocalEnv outer vars -> Stack outer -> 
            Term (vars ++ outer) -> Value outer
     eval env loc stk (Local p) = evalLocal env loc stk p
@@ -157,30 +158,36 @@ parameters (gam : Gamma)
          = case lookupDef fn gam of
                 Just (PMDef args tree) => 
                     case extendFromStack args loc stk of
-                         Nothing => unload (VRef nt fn) stk
+                         Nothing => VApp (VRef nt fn) stk
                          Just (loc', stk') => 
                               case evalTree env loc' stk' tree of
-                                   Nothing => unload (VRef nt fn) stk
+                                   Nothing => VApp (VRef nt fn) stk
                                    Just val => val
                 Just (DCon tag arity) => 
                     case takeFromStack arity stk of
-                         Nothing => unload (VRef nt fn) stk
-                         Just (args, stk') => unload (VDCon fn tag arity args) stk'
+                         Nothing => VApp (VRef nt fn) stk
+                         Just (args, stk') => VDCon fn tag arity (args ++ stk')
                 Just (TCon tag arity _) =>
                     case takeFromStack arity stk of
-                         Nothing => unload (VRef nt fn) stk
-                         Just (args, stk') => unload (VTCon fn tag arity args) stk'
-                _ => unload (VRef nt fn) stk
+                         Nothing => VApp (VRef nt fn) stk
+                         Just (args, stk') => VTCon fn tag arity (args ++ stk')
+                _ => VApp (VRef nt fn) stk
     eval env loc (closure :: stk) (Bind x (Lam ty) tm) 
          = eval env (closure :: loc) stk tm
+    eval env loc stk (Bind x (Let val ty) tm)
+         = eval env (MkClosure loc env val :: loc) stk tm
 
+    -- If stk is not empty, this won't have been well typed, since we can't
+    -- apply binders to arguments when those binders are values
     eval env loc stk (Bind x b tm) 
-         = unload (VBind x (map (MkClosure loc env) b) 
-                           (\arg => MkClosure (arg :: loc) env tm)) stk
+         = VBind x (map (MkClosure loc env) b)
+                   (\arg => MkClosure (arg :: loc) env tm)
 
     eval env loc stk (App fn arg) 
          = eval env loc (MkClosure loc env arg :: stk) fn
-    eval env loc stk (PrimVal x) = unload (VPrimVal x) stk
+    -- If stk is not empty, this won't have been well typed, since we can't
+    -- apply primitives to arguments
+    eval env loc stk (PrimVal x) = VPrimVal x
     eval env loc stk Erased = VErased
     eval env loc stk TType = VType
 
@@ -214,14 +221,16 @@ normalise gam env tm = quote env (whnf gam env tm)
 
     quoteClosure : Env Term outer -> Closure outer -> Term outer
 
+    quoteHead : Env Term outer -> VHead outer -> Term outer
+    quoteHead env (VLocal y) = Local y
+    quoteHead env (VRef nt n) = Ref nt n
+
     quote : Env Term outer -> Value outer -> Term outer
-    quote env (VLocal y) = Local y
     quote env (VBind x b f) 
         = Bind x (map (quoteClosure env) b) ?quote_rhs_2
-    quote env (VApp f (MkClosure loc env' arg)) 
+    quote env (VApp f args) 
         = ?quoteapp -- App (quote env f) (quote env (eval gam env' loc [] arg))
     quote env (VPrimVal x) = PrimVal x
-    quote env (VRef nt n) = Ref nt n
     quote env (VDCon nm tag arity xs) 
         = let xs' = quoteArgs env xs in
               apply (Ref (DataCon tag arity) nm) xs'
@@ -251,17 +260,22 @@ mutual
       = pure $ !(convGen gam env x y) && !(allConv gam env xs ys)
   allConv gam env _ _ = pure False
 
+  chkConvHead : Gamma -> Env Term vars ->
+                VHead vars -> VHead vars -> State Int Bool 
+  chkConvHead gam env (VLocal x) (VLocal y) = pure $ sameVar x y
+  chkConvHead gam env (VRef x y) (VRef x' y') = pure $ y == y'
+  chkConvHead gam env x y = pure False
+
   chkConv : Gamma -> Env Term vars -> 
             Value vars -> Value vars -> State Int Bool 
-  chkConv gam env (VLocal x) (VLocal y) = pure $ sameVar x y
   chkConv gam env (VBind x b scope) (VBind x' b' scope') 
       = do var <- genName "convVar"
            let c = MkClosure [] env (Ref Bound var)
            convGen gam env (scope c) (scope' c)
-  chkConv gam env (VApp val arg) (VApp val' arg')
-      = pure $ !(convGen gam env val val') && !(convGen gam env arg arg')
+  chkConv gam env (VApp val args) (VApp val' args')
+      = pure $ !(chkConvHead gam env val val') 
+                 && !(allConv gam env args args')
   chkConv gam env (VPrimVal x) (VPrimVal y) = pure $ x == y
-  chkConv gam env (VRef x y) (VRef x' y') = pure $ y == y'
   chkConv gam env (VDCon _ tag _ xs) (VDCon _ tag' _ xs') 
       = pure $ (tag == tag' && !(allConv gam env xs xs'))
   chkConv gam env (VTCon _ tag _ xs) (VTCon _ tag' _ xs')
@@ -312,19 +326,21 @@ mutual
       = do ty' <- quoteGen env ty
            pure (PVTy ty')
 
-  Quote Value where
+  Quote VHead where
     quoteGen env (VLocal prf) = pure $ Local prf
+    quoteGen env (VRef t fn) = pure $ Ref t fn
+
+  Quote Value where
     quoteGen env (VBind x b sc) 
         = do var <- genName "quoteVar"
              sc' <- quoteGen env (sc (toClosure env (Ref Bound var)))
              b' <- quoteBinder env b
              pure (Bind x b' (refToLocal var x sc'))
-    quoteGen env (VApp val thunk) 
+    quoteGen env (VApp val thunks) 
         = do val' <- quoteGen env val
-             thunk' <- quoteGen env thunk
-             pure (App val' thunk')
+             thunks' <- traverse (quoteGen env) thunks
+             pure (apply val' thunks')
     quoteGen env (VPrimVal x) = pure $ PrimVal x
-    quoteGen env (VRef t fn) = pure $ Ref t fn
     quoteGen env (VDCon x tag arity xs) 
         = do xs' <- traverse (quoteGen env) xs
              pure (apply (Ref (DataCon tag arity) x) xs')
