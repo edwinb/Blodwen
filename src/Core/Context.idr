@@ -37,14 +37,6 @@ export
 addCtxt : Name -> a -> Context a -> Context a
 addCtxt n val (MkContext dict) = MkContext (insert n val dict)
 
--- An unsolved constraint, noting two terms which need to be convertible
--- in a particular environment
-public export
-data Constraint : Type where
-     MkConstraint : (env : Env Term vars) ->
-                    (x : Term vars) -> (y : Term vars) -> 
-                    (ty : Maybe (Term vars)) -> Constraint
-
 public export
 data Def : Type where
      None  : Def -- Not yet defined
@@ -53,9 +45,9 @@ data Def : Type where
      TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
 
      Hole : Def
-     -- The constraint names refer into the context of constraints in Gamma
+     -- The constraint names refer into a context of constraints,
+     -- defiend in Core.Unify
      Guess : (guess : ClosedTerm) -> (constraints : List Name) -> Def
-
 
 public export
 data Visibility = Public | Export | Private
@@ -79,11 +71,9 @@ record ContextDefs where
       gamma : Gamma -- All the definitions
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
-      holes : List Name -- unsolved metavariables in gamma
-      constraints : Context Constraint -- unsolved metavariable constraints 
 
 initCtxt : ContextDefs
-initCtxt = MkAllDefs empty 100 0 [] empty
+initCtxt = MkAllDefs empty 100 0
 
 export
 lookupDef : Name -> Gamma -> Maybe Def
@@ -140,7 +130,7 @@ error : Error -> Either Error a
 error = Left
 
 -- When we're manipulating contexts, we can throw exceptions and log errors
--- TODO: Maybe ConsolIO should be a logging interface, therefore?
+-- TODO: Maybe ConsoleIO should be a logging interface, therefore?
 export
 interface (Exception m Error, ConsoleIO m) =>
           CtxtManage (m : Type -> Type) where

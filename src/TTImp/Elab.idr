@@ -22,16 +22,18 @@ interface (Exception m (InferError annot), CtxtManage m) =>
 export
 (Exception m (InferError annot), CtxtManage m) => InferCtxt m annot where
 
-convert : InferCtxt m annot => 
-          (ctxt : Var) -> annot ->
-          Env Term vars ->
-          Term vars -> Term vars -> ST m (List Name) [ctxt ::: Defs]
-convert ctxt loc env x y 
-    = catch (unify ctxt env x y)
-            (\_ => throw (CantUnify loc env x y))
+parameters (ctxt : Var, ustate : Var)
+  convert : InferCtxt m annot => 
+            annot ->
+            Env Term vars ->
+            Term vars -> Term vars -> 
+            ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
+  convert loc env x y 
+      = catch (unify ctxt ustate env x y)
+              (\_ => throw (CantUnify loc env x y))
 
-check : InferCtxt m annot =>
-        (ctxt : Var) -> Env Term vars ->
-        (term : RawImp annot) -> (expected : Term vars) ->
-        ST m (Term vars) [ctxt ::: Defs]
+  check : InferCtxt m annot =>
+          Env Term vars ->
+          (term : RawImp annot) -> (expected : Term vars) ->
+          ST m (Term vars) [ctxt ::: Defs, ustate ::: UState]
  

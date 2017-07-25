@@ -128,6 +128,14 @@ Eq Constant where
 public export
 data PiInfo = Implicit | Explicit | AutoImplicit | Constraint
 
+export
+Eq PiInfo where
+  (==) Implicit Implicit = True
+  (==) Explicit Explicit = True
+  (==) AutoImplicit AutoImplicit = True
+  (==) Constraint Constraint = True
+  (==) _ _ = False
+
 public export
 data Binder : Type -> Type where
      Lam : (ty : type) -> Binder type

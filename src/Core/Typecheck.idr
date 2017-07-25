@@ -41,10 +41,10 @@ parameters (gam : Gamma)
     chk env (RApp f a) 
         = do (f', fty) <- chk env f
              case whnf gam env fty of
-                  VBind _ (Pi _ ty) sc => 
+                  VBind _ (Pi _ ty) (VScope scdone scblock) => 
                         do (a', aty) <- chk env a
                            doConvert gam env ty (toClosure env aty)
-                           let sc' = sc (toClosure env a')
+                           let sc' = scdone (toClosure env a')
                            pure (App f' a', quote env sc')
                   _ => error (NotFunctionType fty)
     chk env (RPrimVal x) = pure $ chkConstant x
