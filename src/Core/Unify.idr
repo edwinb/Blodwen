@@ -112,14 +112,13 @@ parameters (ctxt : Var, ustate : Var)
 
   export
   instantiate : CtxtManage m => 
-                Env Term vars -> (x : Name) ->
-                (Closure vars -> Closure vars) -> Term (x :: vars) ->
+                Env Term vars -> (tmpx : Name) -> (x : Name) ->
+                (Closure vars -> Closure vars) -> Term vars ->
                 ST m (Value (x :: vars)) [ctxt ::: Defs, ustate ::: UState]
-  instantiate env x f tm 
-      = do dummy <- genName ustate "scope"
-           gam <- getCtxt ctxt
-           let scope = refToLocal dummy x 
-                  (quote env (f (MkClosure [] env (Ref Bound dummy))))
+  instantiate env tmpx x f tm 
+      = do gam <- getCtxt ctxt
+           let scope = refToLocal tmpx x 
+                  (quote env (f (MkClosure [] env tm)))
            ?foo
 
   mutual
@@ -162,24 +161,23 @@ parameters (ctxt : Var, ustate : Var)
                                  (evalClosure gam ty)
                  let env' : TT.Env.Env Term (x :: _) 
                           = Pi ix (quote env tx) :: env
+                 xn <- genName ustate "x"
                  case ct of
                       [] => -- no constraints, check the scopes
-                            ?uvalsPi1
---                             uvals env' !(instantiate env x fx (Local Here))
---                                        !(instantiate env x fy (Local Here))
+                            uvals env' !(instantiate env xn x fx (Ref Bound xn))
+                                       !(instantiate env xn x fy (Ref Bound xn))
                       cs => -- constraints, so make new guarded constant
-                          do ?uvalsPi2
---                              let txtm = quote env tx
---                              let tytm = quote env ty
---                              c <- addConstant ctxt ustate env 
---                                      (Bind x (Lam txtm) (Local Here))
---                                      (Bind x (Pi Explicit txtm) (weaken tytm))
---                                      cs
---                              let scy = mkConstantApp c env'
---                              cs' <- uvals env' 
---                                        !(instantiate env x fx (Local Here))
---                                        !(instantiate env x fy scy) 
---                              pure (union cs cs')
+                          do let txtm = quote env tx
+                             let tytm = quote env ty
+                             c <- addConstant ctxt ustate env 
+                                     (Bind x (Lam txtm) (Ref Bound xn))
+                                     (Bind x (Pi Explicit txtm) (weaken tytm))
+                                     cs
+                             let scy = mkConstantApp c env
+                             cs' <- uvals env' 
+                                       !(instantiate env xn x fx (Ref Bound xn))
+                                       !(instantiate env xn x fy scy) 
+                             pure (union cs cs')
     uvals env (VBind x bx fx) (VBind y by fy)
         = ?uvals_rhs_1
     uvals env (VApp var args) val = unifyApp env var args val

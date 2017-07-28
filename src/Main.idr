@@ -2,6 +2,7 @@ module Main
 
 import Core.TT
 import Core.Evaluate
+import Core.Normalise
 import Core.Typecheck
 import Core.Context
 import Core.RawContext

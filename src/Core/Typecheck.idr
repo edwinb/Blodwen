@@ -41,7 +41,7 @@ parameters (gam : Gamma)
     chk env (RApp f a) 
         = do (f', fty) <- chk env f
              case whnf gam env fty of
-                  VBind _ (Pi _ ty) (VScope scdone scblock) => 
+                  VBind _ (Pi _ ty) scdone => 
                         do (a', aty) <- chk env a
                            doConvert gam env ty (toClosure env aty)
                            let sc' = scdone (toClosure env a')

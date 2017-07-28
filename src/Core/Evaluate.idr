@@ -37,17 +37,11 @@ data VHead : List Name -> Type where
      VLocal   : Elem x vars -> VHead vars
      VRef     : NameType -> Name -> VHead vars
 
-public export
-data ValScope : Name -> List Name -> Type where
-     VScope   : (ready : Closure vars -> Closure vars) -> 
-                (blocked : Lazy (Term (x :: vars))) ->
-                ValScope x vars
-
 -- Weak head normal forms
 public export
 data Value : List Name -> Type where
      VBind    : (x : Name) -> Binder (Closure vars) -> 
-                ValScope x vars -> Value vars
+                (Closure vars -> Closure vars) -> Value vars
      VApp     : VHead vars -> List (Closure vars) -> Value vars
      VDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
                 List (Closure vars) -> Value vars
@@ -185,10 +179,9 @@ parameters (gam : Gamma)
 
     -- If stk is not empty, this won't have been well typed, since we can't
     -- apply binders to arguments when those binders are values
-    eval env loc stk (Bind x b tm) 
+    eval {outer} {vars} env loc stk (Bind x b tm) 
          = VBind x (map (MkClosure loc env) b)
-                   (VScope (\arg => MkClosure (arg :: loc) env tm)
-                           ?blocked)
+                   (\arg => MkClosure (arg :: loc) env tm)
 
     eval env loc stk (App fn arg) 
          = eval env loc (MkClosure loc env arg :: stk) fn
@@ -208,44 +201,13 @@ evalClosure gam (MkClosure loc env tm) = eval gam env loc [] tm
 
 export
 getValArity : Gamma -> Env Term vars -> Value vars -> Nat
-getValArity gam env (VBind x (Pi _ _) (VScope sc bl)) 
+getValArity gam env (VBind x (Pi _ _) sc) 
     = S (getValArity gam env (evalClosure gam (sc (MkClosure [] env Erased))))
 getValArity gam env val = 0
 
 export
 getArity : Gamma -> Env Term vars -> Term vars -> Nat
 getArity gam env tm = getValArity gam env (whnf gam env tm)
-
-export
-normalise : Gamma -> Env Term outer -> Term outer -> Term outer
-normalise gam env tm = quote env (whnf gam env tm)
-  where 
-   mutual
-    quoteArgs : Env Term outer -> List (Closure outer) -> List (Term outer)
-    quoteArgs env [] = []
-    quoteArgs env (thunk :: args) 
-          = quote env (evalClosure gam thunk) :: quoteArgs env args
-
-    quoteClosure : Env Term outer -> Closure outer -> Term outer
-
-    quoteHead : Env Term outer -> VHead outer -> Term outer
-    quoteHead env (VLocal y) = Local y
-    quoteHead env (VRef nt n) = Ref nt n
-
-    quote : Env Term outer -> Value outer -> Term outer
-    quote env (VBind x b f) 
-        = Bind x (map (quoteClosure env) b) ?quote_rhs_2
-    quote env (VApp f args) 
-        = ?quoteapp -- App (quote env f) (quote env (eval gam env' loc [] arg))
-    quote env (VPrimVal x) = PrimVal x
-    quote env (VDCon nm tag arity xs) 
-        = let xs' = quoteArgs env xs in
-              apply (Ref (DataCon tag arity) nm) xs'
-    quote env (VTCon nm tag arity xs) 
-        = let xs' = quoteArgs env xs in
-              apply (Ref (TyCon tag arity) nm) xs'
-    quote env VErased = Erased
-    quote env VType = TType
 
 public export
 interface Convert (tm : List Name -> Type) where
@@ -259,54 +221,6 @@ genName root
     = do n <- get
          put (n + 1)
          pure (MN root n)
-
-mutual
-  allConv : Gamma -> Env Term vars ->
-            List (Closure vars) -> List (Closure vars) -> State Int Bool
-  allConv gam env [] [] = pure True
-  allConv gam env (x :: xs) (y :: ys) 
-      = pure $ !(convGen gam env x y) && !(allConv gam env xs ys)
-  allConv gam env _ _ = pure False
-
-  chkConvHead : Gamma -> Env Term vars ->
-                VHead vars -> VHead vars -> State Int Bool 
-  chkConvHead gam env (VLocal x) (VLocal y) = pure $ sameVar x y
-  chkConvHead gam env (VRef x y) (VRef x' y') = pure $ y == y'
-  chkConvHead gam env x y = pure False
-
-  chkConv : Gamma -> Env Term vars -> 
-            Value vars -> Value vars -> State Int Bool 
-  chkConv gam env (VBind x b (VScope _ scope)) (VBind x' b' (VScope _ scope')) 
---       = do var <- genName "convVar"
---            let c = MkClosure [] env (Ref Bound var)
---            convGen gam env (scope c) (scope' c)
-         = ?chkConvBlock
-  chkConv gam env (VApp val args) (VApp val' args')
-      = pure $ !(chkConvHead gam env val val') 
-                 && !(allConv gam env args args')
-  chkConv gam env (VPrimVal x) (VPrimVal y) = pure $ x == y
-  chkConv gam env (VDCon _ tag _ xs) (VDCon _ tag' _ xs') 
-      = pure $ (tag == tag' && !(allConv gam env xs xs'))
-  chkConv gam env (VTCon _ tag _ xs) (VTCon _ tag' _ xs')
-      = pure $ (tag == tag' && !(allConv gam env xs xs'))
-  chkConv gam env VErased _ = pure True
-  chkConv gam env _ VErased = pure True
-  chkConv gam env VType VType = pure True
-  chkConv gam env x y = pure False
-
-  export
-  Convert Value where
-    convGen = chkConv
-
-  export
-  Convert Term where
-    convGen gam env x y = convGen gam env (whnf gam env x) (whnf gam env y)
-
-  export
-  Convert Closure where
-    convGen gam env thunk thunk'
-        = convGen gam env (evalClosure gam thunk)
-                          (evalClosure gam thunk')
 
 public export
 interface Quote (tm : List Name -> Type) where
@@ -340,9 +254,11 @@ mutual
     quoteGen env (VRef t fn) = pure $ Ref t fn
 
   Quote Value where
-    quoteGen env (VBind x b (VScope _ sc)) 
-        = do b' <- quoteBinder env b
-             pure (Bind x b' sc)
+    quoteGen env (VBind x b sc) 
+          = do var <- genName "quoteVar"
+               sc' <- quoteGen env (sc (toClosure env (Ref Bound var)))
+               b' <- quoteBinder env b
+               pure (Bind x b' (refToLocal var x sc'))
     quoteGen env (VApp val thunks) 
         = do val' <- quoteGen env val
              thunks' <- traverse (quoteGen env) thunks
@@ -365,4 +281,51 @@ mutual
   export
   Quote Term where
     quoteGen env tm = pure tm
+
+mutual
+  allConv : Gamma -> Env Term vars ->
+            List (Closure vars) -> List (Closure vars) -> State Int Bool
+  allConv gam env [] [] = pure True
+  allConv gam env (x :: xs) (y :: ys) 
+      = pure $ !(convGen gam env x y) && !(allConv gam env xs ys)
+  allConv gam env _ _ = pure False
+
+  chkConvHead : Gamma -> Env Term vars ->
+                VHead vars -> VHead vars -> State Int Bool 
+  chkConvHead gam env (VLocal x) (VLocal y) = pure $ sameVar x y
+  chkConvHead gam env (VRef x y) (VRef x' y') = pure $ y == y'
+  chkConvHead gam env x y = pure False
+
+  chkConv : Gamma -> Env Term vars -> 
+            Value vars -> Value vars -> State Int Bool 
+  chkConv gam env (VBind x b scope) (VBind x' b' scope') 
+      = do var <- genName "convVar"
+           let c = MkClosure [] env (Ref Bound var)
+           convGen gam env (scope c) (scope' c)
+  chkConv gam env (VApp val args) (VApp val' args')
+      = pure $ !(chkConvHead gam env val val') 
+                 && !(allConv gam env args args')
+  chkConv gam env (VPrimVal x) (VPrimVal y) = pure $ x == y
+  chkConv gam env (VDCon _ tag _ xs) (VDCon _ tag' _ xs') 
+      = pure $ (tag == tag' && !(allConv gam env xs xs'))
+  chkConv gam env (VTCon _ tag _ xs) (VTCon _ tag' _ xs')
+      = pure $ (tag == tag' && !(allConv gam env xs xs'))
+  chkConv gam env VErased _ = pure True
+  chkConv gam env _ VErased = pure True
+  chkConv gam env VType VType = pure True
+  chkConv gam env x y = pure False
+
+  export
+  Convert Value where
+    convGen = chkConv
+
+  export
+  Convert Term where
+    convGen gam env x y = convGen gam env (whnf gam env x) (whnf gam env y)
+
+  export
+  Convert Closure where
+    convGen gam env thunk thunk'
+        = convGen gam env (evalClosure gam thunk)
+                          (evalClosure gam thunk')
 

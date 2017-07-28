@@ -5,6 +5,7 @@ pkgs = contrib, pruviloj
 modules = Core.CaseTree,
           Core.Context, 
           Core.Evaluate,
+          Core.Normalise,
           Core.TT,
           Core.Typecheck,
           Core.Unify,
