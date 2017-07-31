@@ -46,7 +46,7 @@ data Def : Type where
 
      Hole : Def
      -- The constraint names refer into a context of constraints,
-     -- defiend in Core.Unify
+     -- defined in Core.Unify
      Guess : (guess : ClosedTerm) -> (constraints : List Name) -> Def
 
 public export

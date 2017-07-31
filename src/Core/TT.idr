@@ -422,6 +422,83 @@ substName x new (PrimVal y) = PrimVal y
 substName x new Erased = Erased
 substName x new TType = TType
 
+public export
+data SubVars : List Name -> List Name -> Type where
+     SubRefl  : SubVars xs xs
+     DropCons : SubVars xs ys -> SubVars xs (y :: ys)
+     KeepCons : SubVars xs ys -> SubVars (x :: xs) (x :: ys)
+
+subElem : Elem x xs -> SubVars ys xs -> Maybe (Elem x ys)
+subElem prf SubRefl = Just prf
+subElem Here (DropCons ds) = Nothing
+subElem (There later) (DropCons ds) 
+       = Just !(subElem later ds)
+subElem Here (KeepCons ds) = Just Here
+subElem (There later) (KeepCons ds) 
+       = Just (There !(subElem later ds))
+
+-- Would be handy if binders were Traversable...
+
+mutual
+  shrinkBinder : Binder (Term vars) -> SubVars newvars vars -> 
+                 Maybe (Binder (Term newvars))
+  shrinkBinder (Lam ty) subprf 
+      = Just (Lam !(shrinkTerm ty subprf))
+  shrinkBinder (Let val ty) subprf 
+      = Just (Let !(shrinkTerm val subprf)
+                  !(shrinkTerm ty subprf))
+  shrinkBinder (Pi x ty) subprf 
+      = Just (Pi x !(shrinkTerm ty subprf))
+  shrinkBinder (PVar ty) subprf 
+      = Just (PVar !(shrinkTerm ty subprf))
+  shrinkBinder (PVTy ty) subprf 
+      = Just (PVTy !(shrinkTerm ty subprf))
+
+  -- Try to make a term which uses fewer variables, as long as it only uses
+  -- the variables given as a subset
+  export
+  shrinkTerm : Term vars -> SubVars newvars vars -> Maybe (Term newvars)
+  shrinkTerm (Local y) subprf = Just (Local !(subElem y subprf))
+  shrinkTerm (Ref nt fn) subprf = Just (Ref nt fn)
+  shrinkTerm (Bind x b sc) subprf 
+      = do sc' <- shrinkTerm sc (KeepCons subprf)
+           b' <- shrinkBinder b subprf
+           Just (Bind x b' sc')
+  shrinkTerm (App fn arg) subprf 
+      = Just (App !(shrinkTerm fn subprf) !(shrinkTerm arg subprf))
+  shrinkTerm (PrimVal x) subprf = Just (PrimVal x)
+  shrinkTerm Erased subprf = Just Erased
+  shrinkTerm TType subprf = Just TType
+
+public export
+data CompatibleVars : List Name -> List Name -> Type where
+     CompatPre : CompatibleVars xs xs
+     CompatExt : CompatibleVars xs ys -> CompatibleVars (n :: xs) (m :: ys)
+
+export
+renameVars : CompatibleVars xs ys -> Term xs -> Term ys 
+renameVars CompatPre tm = tm
+renameVars prf (Local p) 
+    = let (_ ** yprf) = renameLocal prf p in
+          Local yprf
+  where
+    renameLocal : CompatibleVars xs ys -> Elem x xs -> (y ** Elem y ys)
+    renameLocal CompatPre Here = (_ ** Here)
+    renameLocal (CompatExt x) Here = (_ ** Here)
+    renameLocal CompatPre (There later) = (_ ** There later)
+    renameLocal (CompatExt x) (There later) 
+        = let (_ ** prf) = renameLocal x later in
+              (_ ** There prf)
+renameVars prf (Ref nt fn) = Ref nt fn
+renameVars prf (Bind x b tm) 
+    = Bind x (assert_total (map (renameVars prf) b)) 
+             (renameVars (CompatExt prf) tm)
+renameVars prf (App fn arg) 
+    = App (renameVars prf fn) (renameVars prf arg)
+renameVars prf (PrimVal x) = PrimVal x
+renameVars prf Erased = Erased
+renameVars prf TType = TType
+
 export
 apply : Term vars -> List (Term vars) -> Term vars
 apply fn [] = fn

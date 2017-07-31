@@ -71,6 +71,7 @@ parameters (gam : Gamma)
     eval env loc stk Erased = NErased
     eval env loc stk TType = NType
 
+    export
     evalClosure : Closure free -> NF free
     evalClosure (MkClosure loc env tm)
         = eval env loc [] tm
@@ -200,62 +201,69 @@ genName root
     = do n <- get
          put (n + 1)
          pure (MN root n)
+
+public export
+interface Quote (tm : List Name -> Type) where
+  quote : Gamma -> Env Term vars -> tm vars -> Term vars
+  quoteGen :  Gamma ->Env Term vars -> tm vars -> State Int (Term vars)
+
+  quote gam env tm = evalState (quoteGen gam env tm) 0
    
-parameters (gam : Gamma)
-  mutual
-    quoteArgs : Env Term free -> List (Closure free) -> 
-                State Int (List (Term free))
-    quoteArgs env [] = pure []
-    quoteArgs env (thunk :: args) 
-          = pure $ !(quoteGen env (evalClosure gam thunk)) :: 
-                   !(quoteArgs env args)
+mutual
+  quoteArgs : Gamma -> Env Term free -> List (Closure free) -> 
+              State Int (List (Term free))
+  quoteArgs gam env [] = pure []
+  quoteArgs gam env (thunk :: args) 
+        = pure $ !(quoteGen gam env (evalClosure gam thunk)) :: 
+                 !(quoteArgs gam env args)
 
-    quoteHead : NHead free -> State Int (Term free)
-    quoteHead (NLocal y) = pure $ Local y
-    quoteHead (NRef nt n) = pure $ Ref nt n
+  quoteHead :  NHead free -> State Int (Term free)
+  quoteHead (NLocal y) = pure $ Local y
+  quoteHead (NRef nt n) = pure $ Ref nt n
 
-    quoteBinder : Env Term free -> Binder (NF free) -> 
-                  State Int (Binder (Term free))
-    quoteBinder env (Lam ty) 
-        = do ty' <- quoteGen env ty
-             pure (Lam ty')
-    quoteBinder env (Let val ty) 
-        = do val' <- quoteGen env val
-             ty' <- quoteGen env ty
-             pure (Let val' ty')
-    quoteBinder env (Pi x ty) 
-        = do ty' <- quoteGen env ty
-             pure (Pi x ty')
-    quoteBinder env (PVar ty) 
-        = do ty' <- quoteGen env ty
-             pure (PVar ty')
-    quoteBinder env (PVTy ty) 
-        = do ty' <- quoteGen env ty
-             pure (PVTy ty')
+  quoteBinder :  Gamma ->Env Term free -> Binder (NF free) -> 
+                State Int (Binder (Term free))
+  quoteBinder gam env (Lam ty) 
+      = do ty' <- quoteGen gam env ty
+           pure (Lam ty')
+  quoteBinder gam env (Let val ty) 
+      = do val' <- quoteGen gam env val
+           ty' <- quoteGen gam env ty
+           pure (Let val' ty')
+  quoteBinder gam env (Pi x ty) 
+      = do ty' <- quoteGen gam env ty
+           pure (Pi x ty')
+  quoteBinder gam env (PVar ty) 
+      = do ty' <- quoteGen gam env ty
+           pure (PVar ty')
+  quoteBinder gam env (PVTy ty) 
+      = do ty' <- quoteGen gam env ty
+           pure (PVTy ty')
 
-    quoteGen : Env Term free -> NF free -> State Int (Term free)
-    quoteGen env (NBind n b sc) 
+  export
+  Quote NF where
+    quoteGen gam env (NBind n b sc) 
         = do var <- genName "qv"
-             sc' <- quoteGen env (sc (toClosure env (Ref Bound var)))
-             b' <- quoteBinder env b
+             sc' <- quoteGen gam env (sc (toClosure env (Ref Bound var)))
+             b' <- quoteBinder gam env b
              pure (Bind n b' (refToLocal var n sc'))
-    quoteGen env (NApp f args) 
+    quoteGen gam env (NApp f args) 
         = do f' <- quoteHead f
-             args' <- quoteArgs env args
+             args' <- quoteArgs gam env args
              pure $ apply f' args'
-    quoteGen env (NDCon nm tag arity xs) 
-        = do xs' <- quoteArgs env xs
+    quoteGen gam env (NDCon nm tag arity xs) 
+        = do xs' <- quoteArgs gam env xs
              pure $ apply (Ref (DataCon tag arity) nm) xs'
-    quoteGen env (NTCon nm tag arity xs) 
-        = do xs' <- quoteArgs env xs
+    quoteGen gam env (NTCon nm tag arity xs) 
+        = do xs' <- quoteArgs gam env xs
              pure $ apply (Ref (TyCon tag arity) nm) xs'
-    quoteGen env (NPrimVal x) = pure $ PrimVal x
-    quoteGen env NErased = pure $ Erased
-    quoteGen env NType = pure $ TType
+    quoteGen gam env (NPrimVal x) = pure $ PrimVal x
+    quoteGen gam env NErased = pure $ Erased
+    quoteGen gam env NType = pure $ TType
 
 export
-quote : Gamma -> Env Term free -> NF free -> Term free
-quote gam env nf = evalState (quoteGen gam env nf) 0
+Quote Closure where
+  quoteGen gam env thunk = quoteGen gam env (evalClosure gam thunk)
 
 export
 normalise : Gamma -> Env Term free -> Term free -> Term free
