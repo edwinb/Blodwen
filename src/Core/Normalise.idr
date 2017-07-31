@@ -268,3 +268,57 @@ Quote Closure where
 export
 normalise : Gamma -> Env Term free -> Term free -> Term free
 normalise gam env tm = quote gam env (nf gam env tm)
+
+public export
+interface Convert (tm : List Name -> Type) where
+  convert : Gamma -> Env Term vars -> tm vars -> tm vars -> Bool
+  convGen : Gamma -> Env Term vars -> tm vars -> tm vars -> State Int Bool
+
+  convert gam env tm tm' = evalState (convGen gam env tm tm') 0
+
+mutual
+  allConv : Gamma -> Env Term vars ->
+            List (Closure vars) -> List (Closure vars) -> State Int Bool
+  allConv gam env [] [] = pure True
+  allConv gam env (x :: xs) (y :: ys) 
+      = pure $ !(convGen gam env x y) && !(allConv gam env xs ys)
+  allConv gam env _ _ = pure False
+  
+  chkConvHead : Gamma -> Env Term vars ->
+                NHead vars -> NHead vars -> State Int Bool 
+  chkConvHead gam env (NLocal x) (NLocal y) = pure $ sameVar x y
+  chkConvHead gam env (NRef x y) (NRef x' y') = pure $ y == y'
+  chkConvHead gam env x y = pure False
+
+  export
+  Convert NF where
+    convGen gam env (NBind x b scope) (NBind x' b' scope') 
+        = do var <- genName "convVar"
+             let c = MkClosure [] env (Ref Bound var)
+             convGen gam env (scope c) (scope' c)
+    convGen gam env (NApp val args) (NApp val' args') 
+        = do hs <- chkConvHead gam env val val'
+             as <- allConv gam env args args'
+             pure $ hs && as
+    convGen gam env (NDCon _ tag _ xs) (NDCon _ tag' _ xs') 
+        = do as <- allConv gam env xs xs'
+             pure (tag == tag' && as)
+    convGen gam env (NTCon _ tag _ xs) (NTCon _ tag' _ xs')
+        = do as <- allConv gam env xs xs'
+             pure (tag == tag' && as)
+    convGen gam env (NPrimVal x) (NPrimVal y) = pure (x == y)
+    convGen gam env NErased _ = pure True
+    convGen gam env _ NErased = pure True
+    convGen gam env NType NType = pure True
+    convGen gam env x y = pure False
+
+  export
+  Convert Term where
+    convGen gam env x y = convGen gam env (nf gam env x) (nf gam env y)
+
+  export
+  Convert Closure where
+    convGen gam env thunkx thunky
+        = convGen gam env (evalClosure gam thunkx)
+                          (evalClosure gam thunky)
+

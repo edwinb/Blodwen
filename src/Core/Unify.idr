@@ -314,9 +314,15 @@ mutual
       = postpone ctxt ustate env
                  (quote empty env (NApp hd args)) 
                  (quote empty env (NApp hd' args'))
+  -- If they're already convertible without metavariables, we're done,
+  -- otherwise postpone
   unifyApp ctxt ustate env hd args tm 
-      = postpone ctxt ustate env
-                 (quote empty env (NApp hd args)) (quote empty env tm)
+      = do gam <- getCtxt ctxt
+           if convert gam env (quote empty env (NApp hd args))
+                              (quote empty env tm)
+              then pure []
+              else postpone ctxt ustate env
+                         (quote empty env (NApp hd args)) (quote empty env tm)
 
   export
   Unify Closure where
@@ -330,8 +336,63 @@ mutual
 
   export
   Unify NF where
-    unify ctxt ustate env (NBind x b f) y 
-        = ?Unify_rhs_2
+    unify ctxt ustate env (NBind x (Pi ix tx) scx) (NBind y (Pi iy ty) scy) 
+        = if ix /= iy
+             then ufail
+             else
+               do ct <- unify ctxt ustate env tx ty
+                  xn <- genName ustate "x"
+                  let env' : TT.Env.Env Term (x :: _)
+                           = Pi ix (quote empty env tx) :: env
+                  case ct of
+                       [] => -- no constraints, check the scope
+                             do let tscx = scx (toClosure env (Ref Bound xn))
+                                let tscy = scy (toClosure env (Ref Bound xn))
+                                let termx = refToLocal xn x (quote empty env tscx)
+                                let termy = refToLocal xn x (quote empty env tscy)
+                                unify ctxt ustate env' termx termy
+                       cs => -- constraints, make new guarded constant
+                             do let txtm = quote empty env tx
+                                let tytm = quote empty env ty
+                                c <- addConstant ctxt ustate env
+                                       (Bind x (Lam txtm) (Local Here))
+                                       (Bind x (Pi Explicit txtm)
+                                           (weaken tytm)) cs
+                                let tscx = scx (toClosure env (Ref Bound xn))
+                                let tscy = scy (toClosure env 
+                                               (App (mkConstantApp c env) (Ref Bound xn)))
+                                let termx = refToLocal xn x (quote empty env tscx)
+                                let termy = refToLocal xn x (quote empty env tscy)
+                                cs' <- unify ctxt ustate env' termx termy
+                                pure (union cs cs')
+{- -- probably not...
+    unify ctxt ustate env (NBind x (Lam tx) scx) (NBind y (Lam ty) scy) 
+       = do ct <- unify ctxt ustate env tx ty
+            xn <- genName ustate "x"
+            let env' : TT.Env.Env Term (x :: _)
+                     = Lam (quote empty env tx) :: env
+            case ct of
+                 [] => -- no constraints, check the scope
+                       do let tscx = scx (toClosure env (Ref Bound xn))
+                          let tscy = scy (toClosure env (Ref Bound xn))
+                          let termx = refToLocal xn x (quote empty env tscx)
+                          let termy = refToLocal xn x (quote empty env tscy)
+                          unify ctxt ustate env' termx termy
+                 cs => -- constraints, make new guarded constant
+                       do let txtm = quote empty env tx
+                          let tytm = quote empty env ty
+                          c <- addConstant ctxt ustate env
+                                 (Bind x (Lam txtm) (Local Here))
+                                 (Bind x (Pi Explicit txtm)
+                                     (weaken tytm)) cs
+                          let tscx = scx (toClosure env (Ref Bound xn))
+                          let tscy = scy (toClosure env 
+                                         (App (mkConstantApp c env) (Ref Bound xn)))
+                          let termx = refToLocal xn x (quote empty env tscx)
+                          let termy = refToLocal xn x (quote empty env tscy)
+                          cs' <- unify ctxt ustate env' termx termy
+                          pure (union cs cs')
+-}
     unify ctxt ustate env (NApp hd args) y 
         = unifyApp ctxt ustate env hd args y
     unify ctxt ustate env y (NApp hd args)
@@ -351,7 +412,11 @@ mutual
     unify ctxt ustate env x NErased = pure []
     unify ctxt ustate env NErased y = pure []
     unify ctxt ustate env NType NType = pure []
-    unify ctxt ustate env _ _ = ufail
+    unify ctxt ustate env x y 
+        = do gam <- getCtxt ctxt
+             if convert gam env x y
+                then pure []
+                else ufail
 
   export
   Unify Term where
@@ -361,103 +426,3 @@ mutual
           = do gam <- getCtxt ctxt
                unify ctxt ustate env (nf gam env x) (nf gam env y)
 
-{-
-parameters (ctxt : Var, ustate : Var)
-
-  export
-  instantiate : CtxtManage m => 
-                Env Term vars -> (tmpx : Name) -> (x : Name) ->
-                (Closure vars -> Closure vars) -> Term vars ->
-                ST m (Value (x :: vars)) [ctxt ::: Defs, ustate ::: UState]
-  instantiate env tmpx x f tm 
-      = do gam <- getCtxt ctxt
-           let scope = refToLocal tmpx x 
-                  (quote env (f (MkClosure [] env tm)))
-           ?foo
-
-  mutual
-    unifyArgs : CtxtManage m =>
-                Env Term vars ->
-                List (Closure vars) -> List (Closure vars) ->
-                ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-    unifyArgs env [] [] = pure []
-    unifyArgs env (cx :: cxs) (cy :: cys)
-        = do gam <- getCtxt ctxt
-             let vx = evalClosure gam cx
-             let vy = evalClosure gam cy
-             constr <- uvals env vx vy
-             case constr of
-                  [] => unifyArgs env cxs cys
-                  _ => do c <- addConstraint ctxt ustate 
-                                 (MkSeqConstraint env (cx :: cxs) (cy :: cys))
-                          pure [c]
-    unifyArgs env _ _ = throw (GenericMsg "UnifyFail")
-
-    unifyApp : CtxtManage m =>
-               Env Term vars ->
-               VHead vars -> List (Closure vars) -> Value vars ->
-               ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-
-    -- Attempt to unify two values.
-    -- Throw an exception on failure - just a generic message since it will be
-    -- reported in terms of the higher level expressions being unified rather
-    -- than the values themselves.
-    uvals : CtxtManage m =>
-            Env Term vars ->
-            Value vars -> Value vars -> 
-            ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-    uvals env (VBind x (Pi ix tx) fx) (VBind y (Pi iy ty) fy)
-        = if ix /= iy 
-             then throw (GenericMsg "Unify failure in plicity")
-             else
-              do gam <- getCtxt ctxt
-                 ct <- uvals env (evalClosure gam tx)
-                                 (evalClosure gam ty)
-                 let env' : TT.Env.Env Term (x :: _) 
-                          = Pi ix (quote env tx) :: env
-                 xn <- genName ustate "x"
-                 case ct of
-                      [] => -- no constraints, check the scopes
-                            uvals env' !(instantiate env xn x fx (Ref Bound xn))
-                                       !(instantiate env xn x fy (Ref Bound xn))
-                      cs => -- constraints, so make new guarded constant
-                          do let txtm = quote env tx
-                             let tytm = quote env ty
-                             c <- addConstant ctxt ustate env 
-                                     (Bind x (Lam txtm) (Ref Bound xn))
-                                     (Bind x (Pi Explicit txtm) (weaken tytm))
-                                     cs
-                             let scy = mkConstantApp c env
-                             cs' <- uvals env' 
-                                       !(instantiate env xn x fx (Ref Bound xn))
-                                       !(instantiate env xn x fy scy) 
-                             pure (union cs cs')
-    uvals env (VBind x bx fx) (VBind y by fy)
-        = ?uvals_rhs_1
-    uvals env (VApp var args) val = unifyApp env var args val
-    uvals env val (VApp var args) = unifyApp env var args val
-    uvals env (VDCon x tagx arityx xs) (VDCon y tagy arityy ys)
-        = if tagx == tagy
-             then unifyArgs env xs ys
-             else throw (GenericMsg "Unify failure")
-    uvals env (VTCon x tagx arityx xs) (VTCon y tagy arityy ys)
-        = if tagx == tagy
-             then unifyArgs env xs ys
-             else throw (GenericMsg "Unify failure")
-    uvals env (VPrimVal x) (VPrimVal y) 
-        = if x == y then pure []
-                    else throw (GenericMsg "Unify failure")
-    uvals env VErased _ = pure []
-    uvals env _ VErased = pure []
-    uvals env VType VType = pure []
-    uvals env x y = throw (GenericMsg "Unify failure")
-
-export
-unify : CtxtManage m =>
-        (ctxt : Var) -> (ustate : Var) ->
-        Env Term vars -> Term vars -> Term vars -> 
-        ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-unify ctxt ustate env x y 
-    = do gam <- getCtxt ctxt
-         uvals ctxt ustate env (whnf gam env x) (whnf gam env y)
-         -}
