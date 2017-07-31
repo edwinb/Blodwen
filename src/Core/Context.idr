@@ -183,6 +183,18 @@ addDef ctxt n def
     = do g <- getCtxt ctxt
          setCtxt ctxt (addCtxt n def g)
 
+export
+updateDef : CtxtManage m => (ctxt : Var) -> Name -> Def -> 
+                            ST m () [ctxt ::: Defs]
+updateDef ctxt n def 
+    = do g <- getCtxt ctxt
+         case lookupCtxt n g of
+              Nothing => throw (UndefinedName n)
+              Just odef => 
+                   let gdef = record { definition = def } odef in
+                       setCtxt ctxt (addCtxt n gdef g)
+ 
+
 argToPat : ClosedTerm -> Pat
 argToPat tm with (unapply tm)
   argToPat (apply (Ref (DataCon tag _) cn) args) | ArgsList 

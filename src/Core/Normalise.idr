@@ -205,7 +205,7 @@ genName root
 public export
 interface Quote (tm : List Name -> Type) where
   quote : Gamma -> Env Term vars -> tm vars -> Term vars
-  quoteGen :  Gamma ->Env Term vars -> tm vars -> State Int (Term vars)
+  quoteGen :  Gamma -> Env Term vars -> tm vars -> State Int (Term vars)
 
   quote gam env tm = evalState (quoteGen gam env tm) 0
    
@@ -260,6 +260,10 @@ mutual
     quoteGen gam env (NPrimVal x) = pure $ PrimVal x
     quoteGen gam env NErased = pure $ Erased
     quoteGen gam env NType = pure $ TType
+
+  export
+  Quote Term where
+    quoteGen gam env tm = pure tm
 
 export
 Quote Closure where

@@ -1,19 +1,21 @@
 module TTImp.Elab
 
 import TTImp.TTImp
+import Core.CaseTree
 import Core.Context
 import Core.TT
 import Core.Unify
 
 import public Control.ST
 import public Control.ST.Exception
+import public Control.ST.ImplicitCall
 
 public export
 data InferError : Type -> Type where
      CoreError : annot -> Error -> InferError annot
      CantUnify : annot -> Env Term vars -> Term vars -> Term vars ->
                  InferError annot
-     GenericMsg : annot -> String -> InferError annot
+     GenericError : annot -> String -> InferError annot
 
 export
 interface (Exception m (InferError annot), CtxtManage m) =>

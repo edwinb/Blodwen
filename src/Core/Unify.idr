@@ -23,11 +23,11 @@ data Constraint : Type where
      -- application where solving later constraints relies on solving earlier
      -- ones
      MkSeqConstraint : (env : Env Term vars) ->
-                       (x : List (Term vars)) ->
-                       (y : List (Term vars)) ->
+                       (xs : List (Term vars)) ->
+                       (ys : List (Term vars)) ->
                        Constraint
-     -- a previously resolved constraint
-     Resolved : Constraint 
+     -- A resolved constraint
+     Resolved : Constraint
 
 -- union : List Name -> List Name -> List Name
 -- union cs cs' = nub (cs ++ cs') -- TODO: as a set, not list
@@ -37,7 +37,8 @@ data Constraint : Type where
 export
 record UnifyState where
      constructor MkUnifyState
-     holes : List Name -- unsolved metavariables in gamma
+     holes : List Name -- unsolved metavariables in gamma (holes and
+                       -- guarded constants)
      constraints : Context Constraint -- metavariable constraints 
      nextVar : Int -- next name for checking scopes of binders
 
@@ -48,16 +49,25 @@ export
 UState : Type
 UState = State UnifyState
 
+export
 isHole : (ustate : Var) -> Name -> ST m Bool [ustate ::: UState]
 isHole ustate n 
     = do ust <- read ustate
          pure (n `elem` holes ust)
 
+export
+getHoleNames : (ustate : Var) -> ST m (List Name) [ustate ::: UState]
+getHoleNames ustate
+    = do ust <- read ustate
+         pure (holes ust)
+
+export
 addHoleName : (ustate : Var) -> Name -> ST m () [ustate ::: UState]
 addHoleName ustate n
     = do ust <- read ustate
          write ustate (record { holes $= (n ::) } ust)
 
+export
 removeHoleName : (ustate : Var) -> Name -> ST m () [ustate ::: UState]
 removeHoleName ustate n
     = do ust <- read ustate
@@ -137,6 +147,12 @@ addHole ctxt ustate env ty
 ufail : CtxtManage m => ST m a []
 ufail = throw (GenericMsg "Unification failure")
 
+setConstraint : (ustate : Var) -> Name -> Constraint ->
+                ST m () [ustate ::: UState]
+setConstraint ustate cname c
+    = do ust <- read ustate
+         write ustate (record { constraints $= addCtxt cname c } ust)
+
 export
 addConstraint : (ctxt : Var) -> (ustate : Var) ->
                 Constraint ->        
@@ -144,9 +160,7 @@ addConstraint : (ctxt : Var) -> (ustate : Var) ->
 addConstraint ctxt ustate constr
     = do c_id <- getNextHole ctxt
          let cn = MN "constraint" c_id
-         ust <- read ustate
-         write ustate (record { constraints = 
-                                  addCtxt cn constr (constraints ust) } ust)
+         setConstraint ustate cn constr
          pure cn
 
 public export
@@ -425,4 +439,63 @@ mutual
     unify ctxt ustate env x y 
           = do gam <- getCtxt ctxt
                unify ctxt ustate env (nf gam env x) (nf gam env y)
+
+-- Try again to solve the given named constraint, and return the list
+-- of constraint names are generated when trying to solve it.
+export
+retry : CtxtManage m =>
+        (ctxt : Var) -> (ustate : Var) ->
+        (cname : Name) -> ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
+retry ctxt ustate cname
+    = do ust <- read ustate
+         case lookupCtxt cname (constraints ust) of
+              Nothing => throw (GenericMsg ("No such constraint " ++ show cname))
+              -- If the constraint is now resolved (i.e. unifying now leads
+              -- to no new constraints) replace it with 'Resolved' in the
+              -- constraint context so we don't do it again
+              Just Resolved => pure []
+              Just (MkConstraint env x y) =>
+                   do cs <- unify ctxt ustate env x y
+                      case cs of
+                           [] => do setConstraint ustate cname Resolved
+                                    pure cs
+                           _ => pure cs
+              Just (MkSeqConstraint env xs ys) =>
+                   do cs <- unifyArgs ctxt ustate env xs ys
+                      case cs of
+                           [] => do setConstraint ustate cname Resolved
+                                    pure cs
+                           _ => pure cs
+
+retryHole : CtxtManage m =>
+            (ctxt : Var) -> (ustate : Var) ->
+            (hole : Name) ->
+            ST m () [ctxt ::: Defs, ustate ::: UState]
+retryHole ctxt ustate hole
+    = do gam <- getCtxt ctxt
+         case lookupDef hole gam of
+              Nothing => throw (GenericMsg ("No such hole " ++ show hole))
+              Just (Guess tm constraints) => 
+                   do cs' <- mapST (retry ctxt ustate) constraints
+                      case concat cs' of
+                           -- All constraints resolved, so turn into a
+                           -- proper definition and remove it from the
+                           -- hole list
+                           [] => do updateDef ctxt hole (PMDef [] (STerm tm))
+                                    removeHoleName ustate hole
+                           newcs => updateDef ctxt hole (Guess tm newcs)
+              Just _ => pure () -- Nothing we can do
+
+-- Attempt to solve any remaining constraints in the unification context.
+-- Do this by working through the list of holes
+-- On encountering a 'Guess', try the constraints attached to it 
+export
+solveConstraints : CtxtManage m =>
+                   (ctxt : Var) -> (ustate : Var) ->
+                   ST m () [ctxt ::: Defs, ustate ::: UState]
+solveConstraints ctxt ustate 
+    = do hs <- getHoleNames ustate
+         mapST (retryHole ctxt ustate) hs
+         -- Question: Another iteration if any holes have been resolved?
+         pure ()
 
