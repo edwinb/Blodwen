@@ -38,4 +38,5 @@ parameters (ctxt : Var, ustate : Var)
           Env Term vars ->
           (term : RawImp annot) -> (expected : Term vars) ->
           ST m (Term vars) [ctxt ::: Defs, ustate ::: UState]
+  check env term expected = ?check_rhs
  

@@ -42,11 +42,12 @@ using (CtxtManage m)
   -- Plan: Check the LHS, extract the environment, use that to check the RHS,
   -- then make sure the types of each side are convertible.
       = do let lhs_in = bind pvars lhs
-           putStrLn ("Checking LHS " ++ show lhs_in)
+           -- TODO: Logging here instead
+           -- putStrLn ("Checking LHS " ++ show lhs_in)
            (lhsc, lhsty) <- infer ctxt [] lhs_in
            let (patvars ** (lhsenv, lhsbound, lhsboundty)) 
                 = getPatternEnv [] lhsc lhsty
-           putStrLn ("Checking RHS " ++ show rhs)
+           -- putStrLn ("Checking RHS " ++ show rhs)
            (rhsc, rhsty) <- infer ctxt lhsenv rhs
            checkConvert ctxt lhsenv lhsboundty rhsty
            pure (MkClause lhsenv lhsbound rhsc)

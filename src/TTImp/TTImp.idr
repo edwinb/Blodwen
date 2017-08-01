@@ -35,6 +35,26 @@ data RawImp : (annotation : Type) -> Type where
 -- against what's given)
 
 export
+Show (RawImp annot) where
+  show (IVar _ nm) = show nm
+  show (IPi _ Implicit n argTy retTy) 
+      = "(%imppi (" ++ show n ++ " " ++ show argTy ++ ") " 
+             ++ show retTy ++ ")"
+  show (IPi _ _ n argTy retTy)
+      = "(%pi (" ++ show n ++ " " ++ show argTy ++ ") " 
+             ++ show retTy ++ ")"
+  show (ILam _ n argTy scope) 
+      = "(%lam (" ++ show n ++ " " ++ show argTy ++ ") " 
+             ++ show scope ++ ")"
+  show (ILet _ n nTy nVal scope)
+      = "(%let (" ++ show n ++ " " ++ show nTy ++ " " ++ show nVal ++ ") "
+             ++ show scope ++ ")"
+  show (IApp _ fn arg) 
+      = "(" ++ show fn ++ " " ++ show arg ++ ")"
+  show (IPrimVal _ y) = show y
+  show (Implicit _) = "_"
+
+export
 getAnnot : RawImp a -> a
 getAnnot (IVar x _) = x
 getAnnot (IPi x _ _ _ _) = x

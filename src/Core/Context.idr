@@ -210,7 +210,7 @@ toPatClause ctxt n (lhs, rhs) with (unapply lhs)
   toPatClause ctxt n (apply (Ref Func fn) args, rhs) | ArgsList 
       = case nameEq n fn of
              Nothing => throw (GenericMsg "Wrong function name in pattern LHS")
-             Just Refl => do putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
+             Just Refl => do -- putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
                              pure (map argToPat args, rhs)
   toPatClause ctxt n (apply f args, rhs) | ArgsList 
       = throw (GenericMsg "Not a function name in pattern LHS")
@@ -236,7 +236,7 @@ addFnDef : CtxtManage m =>
 addFnDef ctxt vis (MkFn n ty clauses) 
     = do let cs = map toClosed clauses
          (args ** tree) <- simpleCase ctxt n (Unmatched "Unmatched case") cs
-         putStrLn $ "Case tree: " ++ show args ++ " " ++ show tree
+         -- putStrLn $ "Case tree: " ++ show args ++ " " ++ show tree
          let def = MkGlobalDef ty vis (PMDef args tree)
          addDef ctxt n def
   where
