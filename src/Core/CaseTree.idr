@@ -373,7 +373,7 @@ mutual
            rest <- match {done = done ++ [a]} alts' 
                       (rewrite sym (appendAssociative done [a] todo) in 
                                err)
-           rewrite appendAssociative done [a] todo in pure rest
+           (rewrite appendAssociative done [a] todo in pure rest)
     where
       -- Turn the pattern name into a locally bound nameless variable on
       -- the RHS. Use the variable name if given, or nothing if not
