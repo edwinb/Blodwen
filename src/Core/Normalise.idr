@@ -273,6 +273,16 @@ export
 normalise : Gamma -> Env Term free -> Term free -> Term free
 normalise gam env tm = quote gam env (nf gam env tm)
 
+export
+getValArity : Gamma -> Env Term vars -> NF vars -> Nat
+getValArity gam env (NBind x (Pi _ _) sc) 
+    = S (getValArity gam env (sc (MkClosure [] env Erased)))
+getValArity gam env val = 0
+
+export
+getArity : Gamma -> Env Term vars -> Term vars -> Nat
+getArity gam env tm = getValArity gam env (nf gam env tm)
+
 public export
 interface Convert (tm : List Name -> Type) where
   convert : Gamma -> Env Term vars -> tm vars -> tm vars -> Bool

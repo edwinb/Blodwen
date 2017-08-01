@@ -2,7 +2,7 @@ module Core.RawContext
 
 import Core.Context
 import Core.Typecheck
-import Core.Evaluate
+import Core.Normalise
 import Core.TT
 
 %default covering

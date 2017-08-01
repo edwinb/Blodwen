@@ -1,7 +1,6 @@
 module Main
 
 import Core.TT
-import Core.Evaluate
 import Core.Normalise
 import Core.Typecheck
 import Core.Context
@@ -15,6 +14,7 @@ import Parser.Raw
 import Control.ST
 import Control.IOExcept
 import Interfaces.FileIO
+import Interfaces.SystemIO
 
 using (CtxtManage m, FileIO m)
   processDecls : (ctxt : Var) -> List RawDecl -> ST m () [ctxt ::: Defs]
@@ -34,10 +34,15 @@ using (CtxtManage m, FileIO m)
                      catch (processDecls ctxt decls)
                            (\err => printLn err)
 
-  stMain : ST m () []
+  usageMsg : ST m () []
+  usageMsg = putStrLn "Usage: blodwen [source file]"
+
+  stMain : SystemIO m => ST m () []
   stMain 
       = do ctxt <- newCtxt
-           process ctxt "test.tt"
+           [_, fname] <- getArgs | _ => do usageMsg; deleteCtxt ctxt
+           putStrLn $ "Loading " ++ fname
+           process ctxt fname
            case runParser "main" raw of
                 Left err => deleteCtxt ctxt
                 Right raw => do

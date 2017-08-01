@@ -39,9 +39,9 @@ vec_xs : Vect two Nat;
 vec_ys : Vect two Nat;
 [] vec_ys = Cons Nat (S Z) three (Cons Nat Z four (Nil Nat));
 
--- main : Vect four Nat;
--- [] main = append Nat two two vec_xs vec_ys;
+main : Vect four Nat;
+[] main = append Nat two two vec_xs vec_ys;
 
-main : (x : Nat) -> Nat;
-[] main = \x : Nat => plus (S (S x)) (S (S Z));
+-- main : (x : Nat) -> Nat;
+-- [] main = \x : Nat => plus (S (S x)) (S (S Z));
 

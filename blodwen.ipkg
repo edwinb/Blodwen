@@ -10,6 +10,9 @@ modules = Core.CaseTree,
           Core.Typecheck,
           Core.Unify,
 
+          Interfaces.FileIO,
+          Interfaces.SystemIO,
+
           Parser.Lexer,
           Parser.Raw,
           Parser.Support,

@@ -2,7 +2,7 @@ module Core.Typecheck
 
 import Core.TT
 import Core.Context
-import Core.Evaluate
+import Core.Normalise
 import Core.CaseTree
 
 import Data.List
@@ -15,7 +15,7 @@ doConvert : (Quote tm, Convert tm) => Gamma -> Env Term outer ->
 doConvert gam env x y 
     = if convert gam env x y 
          then pure ()
-         else error (CantConvert env (quote env x) (quote env y))
+         else error (CantConvert env (quote gam env x) (quote gam env y))
 
 parameters (gam : Gamma)
   mutual
@@ -40,12 +40,12 @@ parameters (gam : Gamma)
              pure $ discharge nm b' bt sc' sct
     chk env (RApp f a) 
         = do (f', fty) <- chk env f
-             case whnf gam env fty of
-                  VBind _ (Pi _ ty) scdone => 
+             case nf gam env fty of
+                  NBind _ (Pi _ ty) scdone => 
                         do (a', aty) <- chk env a
-                           doConvert gam env ty (toClosure env aty)
+                           doConvert gam env (quote gam env ty) aty
                            let sc' = scdone (toClosure env a')
-                           pure (App f' a', quote env sc')
+                           pure (App f' a', quote gam env sc')
                   _ => error (NotFunctionType fty)
     chk env (RPrimVal x) = pure $ chkConstant x
     chk env RType = pure (TType, TType)
