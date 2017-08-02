@@ -50,6 +50,14 @@ UState : Type
 UState = State UnifyState
 
 export
+setupUnify : ST m Var [add UState]
+setupUnify = new initUState
+
+export
+doneUnify : (ustate : Var) -> ST m () [remove ustate UState]
+doneUnify ustate = delete ustate
+
+export
 isHole : (ustate : Var) -> Name -> ST m Bool [ustate ::: UState]
 isHole ustate n 
     = do ust <- read ustate
@@ -73,6 +81,7 @@ removeHoleName ustate n
     = do ust <- read ustate
          write ustate (record { holes $= filter (/= n) } ust)
 
+export
 genName : (ustate : Var) -> String -> ST m Name [ustate ::: UState]
 genName ustate root
     = do ust <- read ustate
@@ -103,6 +112,7 @@ mkConstantAppArgs (b :: env) xs
           Local Here :: map weaken rec
 
 -- Apply a named constant to the current environment.
+export
 mkConstantApp : Name -> Env Term vars -> Term vars
 -- Leftmost argument is the outermost variable, so make a list of local
 -- variables then reverse it

@@ -549,6 +549,8 @@ Show (Term vars) where
         showApp : Term vars -> List (Term vars) -> String
         showApp (Local {x} y) [] = show x
         showApp (Ref x fn) [] = show fn
+        showApp (Bind n (Lam ty) sc) [] 
+            = assert_total ("\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
         showApp (Bind n b sc) [] 
             = "[binder] " ++ assert_total (show sc)
         showApp (App f args) [] = "Can't happen!"

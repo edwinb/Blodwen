@@ -14,10 +14,12 @@ atom : Rule (RawImp ())
 atom
     = do x <- constant
          pure (IPrimVal () x)
-  <|> do x <- name
-         pure (IVar () x)
+  <|> do keyword "Type"
+         pure (IType ())
   <|> do symbol "_"
          pure (Implicit ())
+  <|> do x <- name
+         pure (IVar () x)
 
 mutual
   bracketed : Rule (RawImp ())

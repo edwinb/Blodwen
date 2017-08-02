@@ -122,7 +122,7 @@ Show Error where
   show (UndefinedName x) = "Undefined name " ++ show x
   show (NotFunctionType tm) = "Not a function type: " ++ show tm
   show (CaseCompile n DifferingArgNumbers) 
-       = "Patterns for " ++ show n ++ " have different numbers of arguments"
+      = "Patterns for " ++ show n ++ " have different numbers of arguments"
   show (GenericMsg str) = str
 
 export

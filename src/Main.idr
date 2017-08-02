@@ -3,6 +3,7 @@ module Main
 import Core.TT
 import Core.Normalise
 import Core.Typecheck
+import Core.Unify
 import Core.Context
 import Core.RawContext
 import TTImp.TTImp
@@ -12,6 +13,7 @@ import Parser.RawImp
 import Parser.Raw
 
 import Control.ST
+import Control.ST.Exception
 import Control.IOExcept
 import Interfaces.FileIO
 import Interfaces.SystemIO
@@ -46,16 +48,22 @@ using (CtxtManage m, FileIO m)
                gam <- getCtxt ctxt
                printLn (normalise gam [] ptm) 
 
-  tryTTImp : (ctxt : Var) -> ST m () [ctxt ::: Defs]
-  tryTTImp ctxt
+  tryTTImp : (ctxt : Var) -> (ustate : Var) -> 
+             ST m () [ctxt ::: Defs, ustate ::: UState]
+  tryTTImp ctxt ustate
       = do putStr "Blodwen> "
            inp <- getStr
            case runParser inp expr of
                 Left err => do printLn err
-                               tryTTImp ctxt
+                               tryTTImp ctxt ustate
                 Right ttimp =>
-                    do putStrLn $ "Parsed okay: " ++ show ttimp
-                       tryTTImp ctxt
+                    do -- putStrLn $ "Parsed okay: " ++ show ttimp
+                       (tm, ty) <- inferTerm ctxt ustate ttimp 
+--                        putStrLn (show tm ++ " : " ++ show ty)
+                       gam <- getCtxt ctxt
+                       putStrLn (show (normalise gam [] tm) ++ " : " ++
+                                 show (normalise gam [] ty))
+                       tryTTImp ctxt ustate
 
   usageMsg : ST m () []
   usageMsg = putStrLn "Usage: blodwen [source file]"
@@ -66,7 +74,9 @@ using (CtxtManage m, FileIO m)
            [_, fname] <- getArgs | _ => do usageMsg; deleteCtxt ctxt
            putStrLn $ "Loading " ++ fname
            process ctxt fname
-           tryTTImp ctxt
+           ustate <- setupUnify
+           tryTTImp ctxt ustate
+           doneUnify ustate
            deleteCtxt ctxt
 
 main : IO ()

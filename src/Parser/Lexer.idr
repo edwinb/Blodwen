@@ -41,7 +41,7 @@ ident = pred startIdent <+> many (pred validIdent)
 
 -- Reserved words
 keywords : List String
-keywords = ["data", "module", "where", "let", "in", "Type"]
+keywords = ["data", "module", "where", "let", "in", "Type", "Int"]
 
 -- Reserved words for internal syntax
 special : List String
@@ -51,7 +51,7 @@ special = ["%lam", "%pi", "%imppi", "%let"]
 symbols : List String
 symbols = [".(", -- for things such as Foo.Bar.(+)
            ".", "%",
-           "(", ")", "{", "}", "[", "]", "`", ",", "|", ";",
+           "(", ")", "{", "}", "[", "]", "`", ",", "|", ";", "_",
            "->", "=>"]
 
 validSymbol : Lexer

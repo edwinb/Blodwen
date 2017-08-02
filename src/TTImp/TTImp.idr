@@ -30,6 +30,7 @@ data RawImp : (annotation : Type) -> Type where
      IApp : annot -> 
             (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
      IPrimVal : annot -> Constant -> RawImp annot
+     IType : annot -> RawImp annot
      Implicit : annot -> RawImp annot
 -- TODO: IDotted (things which must be solved by inference and checked
 -- against what's given)
@@ -52,6 +53,7 @@ Show (RawImp annot) where
   show (IApp _ fn arg) 
       = "(" ++ show fn ++ " " ++ show arg ++ ")"
   show (IPrimVal _ y) = show y
+  show (IType _) = "Type"
   show (Implicit _) = "_"
 
 export
@@ -62,6 +64,7 @@ getAnnot (ILam x _ _ _) = x
 getAnnot (ILet x _ _ _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IPrimVal x _) = x
+getAnnot (IType x) = x
 getAnnot (Implicit x) = x
 
 export
