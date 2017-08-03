@@ -509,3 +509,40 @@ solveConstraints ctxt ustate
          -- Question: Another iteration if any holes have been resolved?
          pure ()
 
+dumpHole : CtxtManage m =>
+           (ctxt : Var) -> (ustate : Var) ->
+           (hole : Name) ->
+           ST m () [ctxt ::: Defs, ustate ::: UState]
+dumpHole ctxt ustate hole
+    = do gam <- getCtxt ctxt
+         case lookupDefTy hole gam of
+              Nothing => throw (GenericMsg ("No such hole " ++ show hole))
+              Just (Guess tm constraints, ty) => 
+                   do putStrLn $ "!" ++ show hole ++ " : " ++ show ty
+                      mapST dumpConstraint constraints 
+                      pure ()
+              Just (_, ty) =>
+                   putStrLn $ "?" ++ show hole ++ " : " ++ show ty
+  where
+    dumpConstraint : ConsoleIO m => Name -> ST m () [ctxt ::: Defs, ustate ::: UState]
+    dumpConstraint n
+        = do ust <- read ustate
+             gam <- getCtxt ctxt
+             case lookupCtxt n (constraints ust) of
+                  Nothing => pure ()
+                  Just Resolved => putStrLn "\tResolved"
+                  Just (MkConstraint env x y) =>
+                       putStrLn $ "\t" ++ show (normalise gam env x) 
+                                      ++ " =?= " ++ show (normalise gam env y)
+                  Just (MkSeqConstraint _ xs ys) =>
+                       putStrLn $ "\t" ++ show xs ++ " =?= " ++ show ys
+
+export
+dumpConstraints : CtxtManage m =>
+                  (ctxt : Var) -> (ustate : Var) ->
+                  ST m () [ctxt ::: Defs, ustate ::: UState]
+dumpConstraints ctxt ustate
+    = do hs <- getHoleNames ustate
+         mapST (dumpHole ctxt ustate) hs
+         pure ()
+

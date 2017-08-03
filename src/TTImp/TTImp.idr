@@ -31,6 +31,7 @@ data RawImp : (annotation : Type) -> Type where
             (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
      IPrimVal : annot -> Constant -> RawImp annot
      IType : annot -> RawImp annot
+     IBindVar : annot -> Name -> RawImp annot -- a name to be implicitly bound
      Implicit : annot -> RawImp annot
 -- TODO: IDotted (things which must be solved by inference and checked
 -- against what's given)
@@ -54,6 +55,7 @@ Show (RawImp annot) where
       = "(" ++ show fn ++ " " ++ show arg ++ ")"
   show (IPrimVal _ y) = show y
   show (IType _) = "Type"
+  show (IBindVar _ n) = "$" ++ show n
   show (Implicit _) = "_"
 
 export
@@ -65,6 +67,7 @@ getAnnot (ILet x _ _ _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IPrimVal x _) = x
 getAnnot (IType x) = x
+getAnnot (IBindVar x _) = x
 getAnnot (Implicit x) = x
 
 export

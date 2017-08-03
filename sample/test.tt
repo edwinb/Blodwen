@@ -8,12 +8,12 @@ plus : (x : Nat) -> (y : Nat) -> Nat;
 [k : Nat, y : Nat] plus (S k) y = S (plus k y);
 
 data Vect : (len : Nat) -> (a : Type) -> Type where {
-     Nil : (a : Type) -> Vect Z a
-   | Cons : (a : Type) -> (k : Nat) -> 
+     Nil : {a : Type} -> Vect Z a
+   | Cons : {a : Type} -> {k : Nat} -> 
             (x : a) -> (xs : Vect k a) -> Vect (S k) a
 }
 
-append : (a : Type) -> (n : Nat) -> (m : Nat) ->
+append : {a : Type} -> {n : Nat} -> {m : Nat} ->
          (xs : Vect n a) -> (ys : Vect m a) -> Vect (plus n m) a;
 [a : Type, m : Nat, ys : Vect m a]
    append a Z m (Nil a) ys = ys;

@@ -18,6 +18,9 @@ atom
          pure (IType ())
   <|> do symbol "_"
          pure (Implicit ())
+  <|> do symbol "$"
+         x <- name
+         pure (IBindVar () x)
   <|> do x <- name
          pure (IVar () x)
 

@@ -75,12 +75,12 @@ parameters (ctxt : Var, ustate : Var)
     check env (IVar loc x) expected 
         = do (x', ty) <- infer ctxt env (RVar x)
              checkExp loc env x' ty expected
-    check env (IPi loc y n ty retTy) expected 
-        = ?check_rhs_2
+    check env (IPi loc plicity n ty retTy) expected 
+        = checkPi loc env plicity n ty retTy expected
     check env (ILam loc n ty scope) expected
         = checkLam loc env n ty scope expected
     check env (ILet loc n nTy nVal scope) expected 
-        = ?check_rhs_4
+        = checkLet loc env n nTy nVal scope expected
     check env (IApp loc fn arg) expected 
         = do (fntm, fnty) <- check env fn Nothing
              gam <- getCtxt ctxt
@@ -100,24 +100,39 @@ parameters (ctxt : Var, ustate : Var)
     check env (IPrimVal loc x) expected 
         = do (x', ty) <- infer ctxt env (RPrimVal x)
              checkExp loc env x' ty expected
+    check env (IType loc) exp
+        = checkExp loc env TType TType exp
+    check env (IBindVar loc n) expected
+        = ?ibindvar
     check env (Implicit loc) Nothing
         = do t <- addHole ctxt ustate env TType
              let hty = mkConstantApp t env
              n <- addHole ctxt ustate env hty
              pure (mkConstantApp n env, hty)
-    check env (IType loc) exp
-        = checkExp loc env TType TType exp
     check env (Implicit loc) (Just expected) 
         = do n <- addHole ctxt ustate env expected
              pure (mkConstantApp n env, expected)
     
+    checkPi : CtxtManage m =>
+              annot -> Env Term vars ->
+              PiInfo -> Name -> 
+              (argty : RawImp annot) -> (retty : RawImp annot) ->
+              Maybe (Term vars) ->
+              ST m (Term vars, Term vars) [ctxt ::: Defs, ustate ::: UState]
+    checkPi loc env info n argty retty expected
+        = do (tyv, tyt) <- Elab.check env argty (Just TType)
+             let env' : Env Term (n :: _) = Pi info tyv :: env
+             (scopev, scopet) <- Elab.check env' retty (Just TType)
+             checkExp loc env (Bind n (Pi info tyv) scopev) 
+                              TType expected
+
     checkLam : CtxtManage m =>
                annot -> Env Term vars ->
                Name -> (ty : RawImp annot) -> (scope : RawImp annot) ->
                Maybe (Term vars) ->
                ST m (Term vars, Term vars) [ctxt ::: Defs, ustate ::: UState]
     checkLam loc env n ty scope (Just (Bind bn (Pi Explicit pty) psc))
-        = do (tyv, tyt) <- Elab.check env ty (Just TType)
+        = do (tyv, tyt) <- check env ty (Just TType)
              (scopev, scopet) <- check (Pi Explicit pty :: env) scope (Just psc)
              checkExp loc env (Bind bn (Lam tyv) scopev)
                           (Bind bn (Pi Explicit tyv) scopet)
@@ -129,6 +144,21 @@ parameters (ctxt : Var, ustate : Var)
              checkExp loc env (Bind n (Lam tyv) scopev)
                           (Bind n (Pi Explicit tyv) scopet)
                           expected
+    
+    checkLet : CtxtManage m =>
+               annot -> Env Term vars ->
+               Name -> (val : RawImp annot) -> 
+               (ty : RawImp annot) -> (scope : RawImp annot) ->
+               Maybe (Term vars) ->
+               ST m (Term vars, Term vars) [ctxt ::: Defs, ustate ::: UState]
+    checkLet loc env n val ty scope expected
+        = do (tyv, tyt) <- check env ty (Just TType)
+             (valv, valt) <- check env val (Just tyv)
+             let env' : Env Term (n :: _) = Let valv tyv :: env
+             (scopev, scopet) <- check env' scope (map weaken expected)
+             checkExp loc env (Bind n (Let valv tyv) scopev)
+                              (Bind n (Let valv tyv) scopet)
+                              expected
  
 export
 inferTerm : CtxtManage m => 
@@ -136,4 +166,5 @@ inferTerm : CtxtManage m =>
             ST m (Term [], Term []) [ctxt ::: Defs, ustate ::: UState]
 inferTerm ctxt ustate tm
     = do (chktm, ty) <- check ctxt ustate [] tm Nothing
+         dumpConstraints ctxt ustate
          pure (chktm, ty)

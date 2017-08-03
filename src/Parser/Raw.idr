@@ -39,6 +39,10 @@ mutual
            ty <- raw; symbol ")"
            symbol "->"; sc <- raw
            pure (RBind n (Pi Explicit ty) sc)
+    <|> do symbol "{"; n <- name; symbol ":"; commit; 
+           ty <- raw; symbol "}"
+           symbol "->"; sc <- raw
+           pure (RBind n (Pi Implicit ty) sc)
     <|> do keyword "let"; commit
            n <- name; symbol ":"; ty <- raw
            symbol "="; val <- raw

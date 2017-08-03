@@ -551,8 +551,12 @@ Show (Term vars) where
         showApp (Ref x fn) [] = show fn
         showApp (Bind n (Lam ty) sc) [] 
             = assert_total ("\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
+        showApp (Bind n (Pi Explicit ty) sc) [] 
+            = assert_total ("(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
+        showApp (Bind n (Pi Implicit ty) sc) [] 
+            = assert_total ("{" ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
         showApp (Bind n b sc) [] 
-            = "[binder] " ++ assert_total (show sc)
+            = "[no show for binder] " ++ assert_total (show sc)
         showApp (App f args) [] = "Can't happen!"
         showApp (PrimVal x) [] = show x
         showApp TType [] = "Type"
