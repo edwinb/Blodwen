@@ -72,23 +72,38 @@ parameters (ctxt : Var, ustate : Var)
             Env Term vars ->
             (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
             ST m (Term vars, Term vars) [ctxt ::: Defs, ustate ::: UState]
-    check env (IVar loc x) expected 
-        = do (x', ty) <- infer ctxt env (RVar x)
-             checkExp loc env x' ty expected
-    check env (IPi loc plicity n ty retTy) expected 
+    check env tm exp = checkImp env (insertImpLam env tm exp) exp
+
+    insertImpLam : Env Term vars ->
+                   (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
+                   RawImp annot
+    insertImpLam env tm Nothing = tm
+    insertImpLam env tm (Just ty) = tm -- TODO
+
+    checkImp : CtxtManage m =>
+               Env Term vars ->
+               (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
+               ST m (Term vars, Term vars) [ctxt ::: Defs, ustate ::: UState]
+    checkImp env (IVar loc x) expected 
+        = do (x', varty) <- infer ctxt env (RVar x)
+             gam <- getCtxt ctxt
+             (ty, imps) <- getImps loc env (nf gam env varty) []
+             checkExp loc env (apply x' imps) (quote empty env ty) expected
+    checkImp env (IPi loc plicity n ty retTy) expected 
         = checkPi loc env plicity n ty retTy expected
-    check env (ILam loc n ty scope) expected
+    checkImp env (ILam loc n ty scope) expected
         = checkLam loc env n ty scope expected
-    check env (ILet loc n nTy nVal scope) expected 
+    checkImp env (ILet loc n nTy nVal scope) expected 
         = checkLet loc env n nTy nVal scope expected
-    check env (IApp loc fn arg) expected 
+    checkImp env (IApp loc fn arg) expected 
         = do (fntm, fnty) <- check env fn Nothing
              gam <- getCtxt ctxt
-             case nf gam env fnty of
+             (scopeTy, impArgs) <- getImps loc env (nf gam env fnty) []
+             case scopeTy of
                   NBind _ (Pi _ ty) scdone =>
                     do (argtm, argty) <- check env arg (Just (quote empty env ty))
                        let sc' = scdone (toClosure env argtm)
-                       checkExp loc env (App fntm argtm)
+                       checkExp loc env (App (apply fntm impArgs) argtm)
                                     (quote gam env sc') expected
                   _ => 
                     do bn <- genName ustate "aTy"
@@ -97,22 +112,38 @@ parameters (ctxt : Var, ustate : Var)
                            check env arg (Just (Bind bn (Pi Explicit expty) scty))
                        checkExp loc env (App fntm argtm)
                                     (Bind bn (Let argtm argty) scty) expected
-    check env (IPrimVal loc x) expected 
+    checkImp env (IPrimVal loc x) expected 
         = do (x', ty) <- infer ctxt env (RPrimVal x)
              checkExp loc env x' ty expected
-    check env (IType loc) exp
+    checkImp env (IType loc) exp
         = checkExp loc env TType TType exp
-    check env (IBindVar loc n) expected
+    checkImp env (IBindVar loc n) expected
         = ?ibindvar
-    check env (Implicit loc) Nothing
+    checkImp env (Implicit loc) Nothing
         = do t <- addHole ctxt ustate env TType
              let hty = mkConstantApp t env
              n <- addHole ctxt ustate env hty
              pure (mkConstantApp n env, hty)
-    check env (Implicit loc) (Just expected) 
+    checkImp env (Implicit loc) (Just expected) 
         = do n <- addHole ctxt ustate env expected
              pure (mkConstantApp n env, expected)
-    
+   
+    -- Get the implicit arguments that need to be inserted at this point
+    -- in a function application. Do this by reading off implicit Pis
+    -- in the expected type ('ty') and adding new holes for each.
+    -- Return the (normalised) remainder of the type, and the list of
+    -- implicits added
+    getImps : CtxtManage m =>
+              annot -> Env Term vars ->
+              (ty : NF vars) -> List (Term vars) ->
+              ST m (NF vars, List (Term vars)) 
+                   [ctxt ::: Defs, ustate ::: UState]
+    getImps loc env (NBind _ (Pi Implicit ty) sc) imps
+        = do n <- addHole ctxt ustate env (quote empty env ty)
+             let arg = mkConstantApp n env
+             getImps loc env (sc (toClosure env arg)) (arg :: imps)
+    getImps loc env ty imps = pure (ty, reverse imps)
+
     checkPi : CtxtManage m =>
               annot -> Env Term vars ->
               PiInfo -> Name -> 
