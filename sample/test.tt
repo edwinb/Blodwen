@@ -13,6 +13,10 @@ data Vect : (len : Nat) -> (a : Type) -> Type where {
             (x : a) -> (xs : Vect k a) -> Vect (S k) a
 }
 
+data Env : {n : Nat} -> {a : Type} -> (xs : Vect n a) -> Type where {
+     ENil : {a : Type} -> Env Z a (Nil a)
+}
+
 append : {a : Type} -> {n : Nat} -> {m : Nat} ->
          (xs : Vect n a) -> (ys : Vect m a) -> Vect (plus n m) a;
 [a : Type, m : Nat, ys : Vect m a]

@@ -555,8 +555,10 @@ Show (Term vars) where
             = assert_total ("(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
         showApp (Bind n (Pi Implicit ty) sc) [] 
             = assert_total ("{" ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
-        showApp (Bind n b sc) [] 
-            = "[no show for binder] " ++ assert_total (show sc)
+        showApp (Bind n (PVar ty) sc) [] 
+            = assert_total ("pat " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
+        showApp (Bind n (PVTy ty) sc) [] 
+            = assert_total ("pty " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
         showApp (App f args) [] = "Can't happen!"
         showApp (PrimVal x) [] = show x
         showApp TType [] = "Type"

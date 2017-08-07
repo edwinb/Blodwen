@@ -58,7 +58,7 @@ using (CtxtManage m, FileIO m)
                                tryTTImp ctxt ustate
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
-                       (tm, ty) <- inferTerm ctxt ustate ttimp 
+                       (tm, ty) <- inferTerm ctxt ustate [] ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
                        gam <- getCtxt ctxt
                        putStrLn (show (normalise gam [] tm) ++ " : " ++

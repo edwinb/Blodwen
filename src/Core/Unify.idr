@@ -39,11 +39,12 @@ record UnifyState where
      constructor MkUnifyState
      holes : List Name -- unsolved metavariables in gamma (holes and
                        -- guarded constants)
+     currentHoles : List Name -- unsolved metavariables in this session
      constraints : Context Constraint -- metavariable constraints 
      nextVar : Int -- next name for checking scopes of binders
 
 initUState : UnifyState
-initUState = MkUnifyState [] empty 0
+initUState = MkUnifyState [] [] empty 0
 
 export
 UState : Type
@@ -70,10 +71,23 @@ getHoleNames ustate
          pure (holes ust)
 
 export
+getCurrentHoleNames : (ustate : Var) -> ST m (List Name) [ustate ::: UState]
+getCurrentHoleNames ustate
+    = do ust <- read ustate
+         pure (currentHoles ust)
+
+export
+resetHoles : (ustate : Var) -> ST m () [ustate ::: UState]
+resetHoles ustate
+    = do ust <- read ustate
+         write ustate (record { currentHoles = [] } ust)
+
+export
 addHoleName : (ustate : Var) -> Name -> ST m () [ustate ::: UState]
 addHoleName ustate n
     = do ust <- read ustate
-         write ustate (record { holes $= (n ::) } ust)
+         write ustate (record { holes $= (n ::),
+                                currentHoles $= (n ::) } ust)
 
 export
 removeHoleName : (ustate : Var) -> Name -> ST m () [ustate ::: UState]
@@ -102,7 +116,7 @@ mkConstantTy : Env Term vars -> Term vars -> ClosedTerm
 mkConstantTy [] tm = tm
 mkConstantTy {vars = x :: _} (b :: env) tm 
     = let ty = binderType b in
-          mkConstant env (Bind x (Pi Explicit ty) tm)
+          mkConstantTy env (Bind x (Pi Explicit ty) tm)
 
 mkConstantAppArgs : Env Term vars -> 
                     List (Term done) -> List (Term (vars ++ done))
@@ -140,6 +154,19 @@ addConstant ctxt ustate env tm ty constrs
          pure cn
 
 -- Given a type, add a new global metavariable and return its name
+addNamedHole : CtxtManage m =>
+               (ctxt : Var) -> (ustate : Var) ->
+               Name ->
+               Env Term vars ->
+               (ty : Term vars) ->
+               ST m () [ctxt ::: Defs, ustate ::: UState]
+addNamedHole ctxt ustate cn env ty
+    = do let defty = mkConstantTy env ty
+         let hole = MkGlobalDef defty Public Hole
+         addHoleName ustate cn
+         addDef ctxt cn hole
+
+-- Given a type, add a new global metavariable and return its name
 export
 addHole : CtxtManage m =>
           (ctxt : Var) -> (ustate : Var) ->
@@ -147,12 +174,19 @@ addHole : CtxtManage m =>
           (ty : Term vars) ->
           ST m Name [ctxt ::: Defs, ustate ::: UState]
 addHole ctxt ustate env ty
-    = do let defty = mkConstantTy env ty
-         let hole = MkGlobalDef defty Public Hole
-         cn <- genName ustate "h"
-         addHoleName ustate cn
-         addDef ctxt cn hole
+    = do cn <- genName ustate "h"
+         addNamedHole ctxt ustate cn env ty
          pure cn
+
+export
+addBoundName : CtxtManage m =>
+               (ctxt : Var) -> (ustate : Var) ->
+               Name -> Env Term vars ->
+               (ty : Term vars) ->
+               ST m (Term vars) [ctxt ::: Defs, ustate ::: UState]
+addBoundName ctxt ustate n env exp
+    = do addNamedHole ctxt ustate n env exp
+         pure (mkConstantApp n env)
 
 ufail : CtxtManage m => ST m a []
 ufail = throw (GenericMsg "Unification failure")
@@ -518,11 +552,13 @@ dumpHole ctxt ustate hole
          case lookupDefTy hole gam of
               Nothing => throw (GenericMsg ("No such hole " ++ show hole))
               Just (Guess tm constraints, ty) => 
-                   do putStrLn $ "!" ++ show hole ++ " : " ++ show ty
+                   do putStrLn $ "!" ++ show hole ++ " : " ++ 
+                                        show (normalise gam [] ty)
                       mapST dumpConstraint constraints 
                       pure ()
               Just (_, ty) =>
-                   putStrLn $ "?" ++ show hole ++ " : " ++ show ty
+                   putStrLn $ "?" ++ show hole ++ " : " ++ 
+                                     show (normalise gam [] ty)
   where
     dumpConstraint : ConsoleIO m => Name -> ST m () [ctxt ::: Defs, ustate ::: UState]
     dumpConstraint n
@@ -542,7 +578,7 @@ dumpConstraints : CtxtManage m =>
                   (ctxt : Var) -> (ustate : Var) ->
                   ST m () [ctxt ::: Defs, ustate ::: UState]
 dumpConstraints ctxt ustate
-    = do hs <- getHoleNames ustate
+    = do hs <- getCurrentHoleNames ustate
          mapST (dumpHole ctxt ustate) hs
          pure ()
 
