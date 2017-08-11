@@ -24,6 +24,13 @@ data InferError : Type -> Type where
                  InferError annot
      GenericError : annot -> String -> InferError annot
 
+-- How the elaborator should deal with IBindVar:
+-- * NONE: IBindVar is not valid (rhs of an definition, top level expression)
+-- * PI: Bind implicits as Pi, in the appropriate scope
+-- * PATT: Bind implicits as PVar, but only at the top level
+public export
+data ImplicitMode = NONE | PI | PATTERN
+
 export
 interface (Exception m (InferError annot), CtxtManage m) =>
           InferCtxt (m : Type -> Type) annot | m where
@@ -36,9 +43,12 @@ record ElabState (vars : List Name) where
   boundNames : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variable bindings and the 
                   -- term/type they elaborated to
+  toBind : List (Name, (Term vars, Term vars))
+                  -- implicit pattern/type variables which haven't been
+                  -- bound yet
 
 initEState : ElabState vars
-initEState = MkElabState []
+initEState = MkElabState [] []
 
 EState : List Name -> Type
 EState vs = State (ElabState vs)
@@ -47,7 +57,8 @@ weakenEState : (estate : Var) ->
                ST m () [estate ::: EState vs :-> EState (n :: vs)]
 weakenEState estate
     = do est <- read estate
-         write estate (MkElabState (map wknTms (boundNames est)))
+         write estate (MkElabState (map wknTms (boundNames est))
+                                   (map wknTms (toBind est)))
   where
     wknTms : (Name, (Term vs, Term vs)) -> 
              (Name, (Term (n :: vs), Term (n :: vs)))
@@ -56,6 +67,44 @@ weakenEState estate
 clearEState : (estate : Var) ->
               ST m () [estate ::: EState (n :: vs) :-> EState vs]
 clearEState estate = write estate initEState
+
+clearToBind : (estate : Var) ->
+              ST m () [estate ::: EState vs :-> EState vs]
+clearToBind estate = 
+    do est <- read estate
+       write estate (record { toBind = [] } est)
+    
+bindImplicits : Int -> 
+                List (Name, (Term vars, Term vars)) ->
+                Term vars -> Term vars
+bindImplicits i [] scope = scope
+bindImplicits i ((n, (tm, ty)) :: imps) scope
+    = let scope' = bindImplicits (i + 1) imps scope
+          tmpN = MN "unb" i
+          repName = repName (Ref Bound tmpN) scope' in
+          Bind n (Pi Implicit ty) (refToLocal tmpN n repName)
+  where
+    -- Replace the name applied to *any* arguments with another term
+    repName : (new : Term vars) -> Term vars -> Term vars
+    repName new (Local p) = Local p
+    repName new (Ref nt fn)
+        = case nameEq n fn of
+               Nothing => Ref nt fn
+               Just Refl => new
+    repName new (Bind y b tm) 
+        = Bind y (assert_total (map (repName new) b)) 
+                 (repName (weaken new) tm)
+    repName new (App fn arg) 
+        = case getFn fn of
+               Ref nt fn' =>
+                   case nameEq n fn' of
+                        Nothing => App (repName new fn) (repName new arg)
+                        Just Refl => new
+               _ => App (repName new fn) (repName new arg)
+    repName new (PrimVal y) = PrimVal y
+    repName new Erased = Erased
+    repName new TType = TType
+
 
 parameters (ctxt : Var, ustate : Var, estate : Var)
   convert : CtxtManage m => 
@@ -80,8 +129,12 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
   checkExp loc env tm got Nothing
       = pure (tm, got)
   checkExp loc env tm got (Just exp) 
-      = do vars <- convert loc env got exp
-           pure (tm, got)
+      = do constr <- convert loc env got exp
+           case constr of
+                [] => pure (tm, got)
+                cs => do gam <- getCtxt ctxt
+                         c <- addConstant ctxt ustate env tm exp cs
+                         pure (mkConstantApp c env, got)
 
   inventFnType : CtxtManage m =>
                  Env Term vars ->
@@ -159,7 +212,8 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
                   Nothing =>
                     do tm <- addBoundName ctxt ustate n env hty
                        write estate 
-                           (record { boundNames $= ((n, (tm, hty)) ::) } est)
+                           (record { boundNames $= ((n, (tm, hty)) ::),
+                                     toBind $= ((n, (tm, hty)) ::) } est)
                        pure (tm, hty)
                   Just (tm, ty) =>
                        pure (tm, ty)
@@ -169,10 +223,11 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
                   Nothing =>
                     do tm <- addBoundName ctxt ustate n env expected
                        write estate 
-                           (record { boundNames $= ((n, (tm, expected)) ::) } est)
+                           (record { boundNames $= ((n, (tm, expected)) ::),
+                                     toBind $= ((n, (tm, expected)) :: ) } est)
                        pure (tm, expected)
                   Just (tm, ty) =>
-                       pure (tm, ty)
+                       checkExp loc env tm ty (Just expected)
     checkImp env (Implicit loc) Nothing
         = do t <- addHole ctxt ustate env TType
              let hty = mkConstantApp t env
@@ -208,11 +263,27 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
     checkPi loc env info n argty retty expected
         = do (tyv, tyt) <- Elab.check env argty (Just TType)
              let env' : Env Term (n :: _) = Pi info tyv :: env
+             est <- read estate
+             let argImps = reverse $ toBind est
+             clearToBind estate
              weakenEState estate
              (scopev, scopet) <- check env' retty (Just TType)
+             est <- read estate
+             let scopeImps = reverse $ toBind est
              clearEState estate
-             checkExp loc env (Bind n (Pi info tyv) scopev) 
-                              TType expected
+             -- Bind implicits which were first used in
+             -- the argument type 'tyv'
+             -- TODO: Also bind the necessary holes for the implicits...
+             -- Remember to sort the holes...
+             -- This is only in 'PI' implicit mode - it's an error to
+             -- have implicits at this level in 'PATT' implicit mode
+             let scopev' = bindImplicits 0 scopeImps scopev
+             let binder = bindImplicits 0 argImps 
+                             (Bind n (Pi info tyv) scopev')
+--              putStrLn "CONSTRAINTS AFTER SCOPE"
+--              dumpConstraints ctxt ustate
+
+             checkExp loc env binder TType expected
 
     checkLam : CtxtManage m =>
                annot -> Env Term vars ->
@@ -265,11 +336,16 @@ inferTerm : CtxtManage m =>
                  [ctxt ::: Defs, ustate ::: UState]
 inferTerm ctxt ustate env tm
     = do resetHoles ustate
-         est <- new initEState
-         (chktm, ty) <- call $ check ctxt ustate est env tm Nothing
-         delete est
-         dumpConstraints ctxt ustate
-         pure (chktm, ty)
+         estate <- new initEState
+         (chktm, ty) <- call $ check ctxt ustate estate env tm Nothing
+         est <- read estate
+         -- Bind the implicits and any unsolved holes they refer to
+         -- This is in implicit mode 'PATTERN' and 'PI'
+         let fullImps = reverse $ toBind est
+         delete estate
+--          putStrLn "--- CONSTRAINTS AND HOLES ---"
+--          dumpConstraints ctxt ustate
+         pure (bindImplicits 0 fullImps chktm, ty)
 
 export
 checkTerm : CtxtManage m => 
@@ -284,3 +360,4 @@ checkTerm ctxt ustate env tm ty
          delete est
          dumpConstraints ctxt ustate
          pure chktm
+

@@ -153,6 +153,14 @@ binderType (PVar ty) = ty
 binderType (PVTy ty) = ty
 
 export
+setType : Binder tm -> tm -> Binder tm
+setType (Lam _) ty = Lam ty
+setType (Let val _) ty = Let val ty
+setType (Pi x _) ty = Pi x ty
+setType (PVar _) ty = PVar ty
+setType (PVTy _) ty = PVTy ty
+
+export
 Functor Binder where
   map func (Lam ty) = Lam (func ty)
   map func (Let val ty) = Let (func val) (func ty)
@@ -409,9 +417,10 @@ subst val tm = substEnv {outer = []} {drop = [_]} [val] tm
 export
 substName : Name -> Term vars -> Term vars -> Term vars
 substName x new (Local p) = Local p
-substName x new (Ref nt fn) = case nameEq x fn of
-                                   Nothing => Ref nt fn
-                                   Just Refl => new
+substName x new (Ref nt fn) 
+    = case nameEq x fn of
+           Nothing => Ref nt fn
+           Just Refl => new
 -- ASSUMPTION: When we substitute under binders, the name has always been
 -- resolved to a Local, so no need to check that x isn't shadowing
 substName x new (Bind y b tm) 
@@ -476,6 +485,16 @@ data CompatibleVars : List Name -> List Name -> Type where
      CompatExt : CompatibleVars xs ys -> CompatibleVars (n :: xs) (m :: ys)
 
 export
+areVarsCompatible : (xs : List Name) -> (ys : List Name) -> 
+                    Maybe (CompatibleVars xs ys)
+areVarsCompatible [] [] = pure CompatPre
+areVarsCompatible (x :: xs) (y :: ys)
+    = do compat <- areVarsCompatible xs ys
+         pure (CompatExt compat)
+areVarsCompatible _ _ = Nothing
+
+
+export
 renameVars : CompatibleVars xs ys -> Term xs -> Term ys 
 renameVars CompatPre tm = tm
 renameVars prf (Local p) 
@@ -522,6 +541,16 @@ unapply (App fn arg) with (unapply fn)
       = rewrite sym (rewriteApp f xs {arg}) in 
                 ArgsList {f} {args = xs ++ [arg]}
 unapply tm = ArgsList {f = tm} {args = []}
+
+export
+getFn : (tm : Term vars) -> Term vars
+getFn tm with (unapply tm)
+  getFn (apply f args) | ArgsList = f
+
+export
+getArgs : (tm : Term vars) -> List (Term vars)
+getArgs tm with (unapply tm)
+  getArgs (apply f args) | ArgsList = args
 
 export
 getPatternEnv : Env Term vars -> 
