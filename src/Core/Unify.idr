@@ -137,7 +137,7 @@ instantiate ctxt ustate metavar smvs tm {newvars}
                              (rewrite appendNilRightNeutral newvars in tm) of
                          Nothing => ufail $ "Can't make solution for " ++ show metavar
                          Just rhs => 
-                            do let soln = MkGlobalDef ty Public 
+                            do let soln = newDef ty Public 
                                                (PMDef [] (STerm rhs))
                                addDef ctxt metavar soln
                                removeHoleName ustate metavar
@@ -153,6 +153,22 @@ instantiate ctxt ustate metavar smvs tm {newvars}
                 pure (Bind x (Lam ty) sc')
       -- Run out of variables to bind
       mkRHS got (ns ++ [n]) cvs ty tm | (Snoc rec) = Nothing
+
+-- Check that the references in the term are defined before the given
+-- creation time (essentially this checks that there's no cycles in hole
+-- solutions, i.e. that holes are defined in terms of previously defined
+-- things, which subsumes the occurs check)
+occursCheck : Name -> Term vars -> Bool
+occursCheck hole (Ref nt var)
+    = hole /= var
+occursCheck hole (Bind n (Let val ty) sc)
+      = occursCheck hole val && occursCheck hole ty && occursCheck hole sc
+occursCheck hole (Bind n b sc)
+      = occursCheck hole (binderType b) && occursCheck hole sc
+occursCheck hole tm with (unapply tm)
+  occursCheck hole (apply f []) | ArgsList = True -- won't be Ref, matched above
+  occursCheck hole (apply f args) | ArgsList 
+      = occursCheck hole f && and (map (\a => occursCheck hole a) args)
 
 mutual
   -- Find holes which are applied to environments which are too big, and
@@ -225,15 +241,15 @@ mutual
       = case newHoleType sofar holetype of
              Nothing => ufail $ "Can't shrink hole"
              Just defty =>
-                do -- Makse smaller hole
-                   let hole = MkGlobalDef defty Public Hole
+                do -- Make smaller hole
+                   let hole = newDef defty Public Hole
                    addHoleName ustate newhole
                    addDef ctxt newhole hole
                    -- Solve old hole with it
                    case mkOldHoleDef holetype newhole sofar (sofar ++ args) of
                         Nothing => ufail $ "Can't shrink hole"
                         Just olddef =>
-                           do let soln = MkGlobalDef defty Public
+                           do let soln = newDef defty Public
                                               (PMDef [] (STerm olddef))
                               addDef ctxt oldhole soln
                               removeHoleName ustate oldhole
@@ -295,8 +311,21 @@ mutual
                                            (NApp (NRef nt var) args)) ++
                                    " and "
                                    ++ show (quote empty env tm)
-                        Just tm' => do instantiate ctxt ustate var submv tm'
-                                       pure []
+                        Just tm' => 
+                            -- if the terms are the same, this isn't a solution
+                            -- but they are already unifying, so just return
+                            if convert gam env (NApp (NRef nt var) args) tm
+                               then pure []
+                               else
+                                -- otherwise, instantiate the hole
+                                   if not (occursCheck var tm')
+                                      then ufail $ "Occurs check failed when unifying " ++
+                                              show (quote empty env (NApp (NRef nt var) args)) ++
+                                              " and " ++
+                                              show (quote empty env tm)
+                                      else do
+                                         instantiate ctxt ustate var submv tm'
+                                         pure []
            Nothing => postpone ctxt ustate env 
                          (quote empty env (NApp (NRef nt var) args))
                          (quote empty env tm)
@@ -313,7 +342,7 @@ mutual
               then pure []
               else postpone ctxt ustate env
                          (quote empty env (NApp hd args)) (quote empty env tm)
-
+  
   export
   Unify Closure where
     unify ctxt ustate env x y 

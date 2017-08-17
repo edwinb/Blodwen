@@ -52,12 +52,16 @@ data Def : Type where
 public export
 data Visibility = Public | Export | Private
 
-public export
+export
 record GlobalDef where
      constructor MkGlobalDef
      type : ClosedTerm
      visibility : Visibility
      definition : Def
+
+export
+newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
+newDef ty vis def = MkGlobalDef ty vis def
 
 -- A context of global definitions
 public export
@@ -237,7 +241,7 @@ addFnDef ctxt vis (MkFn n ty clauses)
     = do let cs = map toClosed clauses
          (args ** tree) <- simpleCase ctxt n (Unmatched "Unmatched case") cs
          -- putStrLn $ "Case tree: " ++ show args ++ " " ++ show tree
-         let def = MkGlobalDef ty vis (PMDef args tree)
+         let def = newDef ty vis (PMDef args tree)
          addDef ctxt n def
   where
     close : Int -> Env Term vars -> Term vars -> ClosedTerm
@@ -256,7 +260,7 @@ addData : CtxtManage m =>
 addData ctxt vis (MkData (MkCon tyn arity tycon) datacons)
     = do gam <- getCtxt ctxt
          tag <- getNextTypeTag ctxt
-         let tydef = MkGlobalDef tycon vis (TCon tag arity (map name datacons))
+         let tydef = newDef tycon vis (TCon tag arity (map name datacons))
          let gam' = addCtxt tyn tydef gam
          setCtxt ctxt (addDataConstructors 0 datacons gam')
   where
@@ -268,7 +272,7 @@ addData ctxt vis (MkData (MkCon tyn arity tycon) datacons)
                           List Constructor -> Gamma -> Gamma
     addDataConstructors tag [] gam = gam
     addDataConstructors tag (MkCon n a ty :: cs) gam
-        = do let condef = MkGlobalDef ty (conVisibility vis) (DCon tag a)
+        = do let condef = newDef ty (conVisibility vis) (DCon tag a)
              let gam' = addCtxt n condef gam
              addDataConstructors tag cs gam'
 
@@ -281,16 +285,16 @@ runWithCtxt prog = ioe_run (run prog)
 --- Some test entries
 export
 plusDef : GlobalDef
-plusDef = MkGlobalDef TType Public
+plusDef = newDef TType Public
            (PMDef [UN "x", UN "y"]
                   (testPlus (UN "plus")))
 
 zDef : GlobalDef
-zDef = MkGlobalDef TType Public
+zDef = newDef TType Public
            (DCon 0 0)
 
 sDef : GlobalDef
-sDef = MkGlobalDef TType Public
+sDef = newDef TType Public
            (DCon 1 1)
 
 export

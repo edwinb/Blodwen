@@ -53,6 +53,7 @@ initEState = MkElabState [] []
 EState : List Name -> Type
 EState vs = State (ElabState vs)
 
+-- weaken the unbound implicits which have not yet been bound
 weakenEState : (estate : Var) ->
                ST m () [estate ::: EState vs :-> EState (n :: vs)]
 weakenEState estate
@@ -68,17 +69,45 @@ clearEState : (estate : Var) ->
               ST m () [estate ::: EState (n :: vs) :-> EState vs]
 clearEState estate = write estate initEState
 
+-- remove the outermost variable from the unbound implicits which have not
+-- yet been bound. If it turns out to depend on it, that means it can't
+-- be bound at the top level, which is an error.
+strengthenEState : CtxtManage m =>
+                   (estate : Var) ->
+                   (top : Bool) ->
+                   ST m () [estate ::: EState (n :: vs) :-> EState vs]
+strengthenEState {m} estate True = clearEState estate
+strengthenEState {m} estate False
+    = do est <- read estate
+         bns <- mapST strTms (boundNames est)
+         todo <- mapST strTms (toBind est)
+         write estate (MkElabState bns todo)
+  where
+    strTms : (Name, (Term (n :: vs), Term (n :: vs))) -> 
+             ST m (Name, (Term vs, Term vs))
+                  [estate ::: EState (n :: vs)]
+    strTms (f, (x, y))
+        = case (shrinkTerm x (DropCons SubRefl),
+                  shrinkTerm y (DropCons SubRefl)) of
+               (Just x', Just y') => pure (f, (x', y'))
+               _ => throw (GenericMsg ("Invalid unbound implicit " ++ show f))
+
 clearToBind : (estate : Var) ->
               ST m () [estate ::: EState vs :-> EState vs]
 clearToBind estate = 
     do est <- read estate
        write estate (record { toBind = [] } est)
-    
+   
+dropSnd : List (a, (b, c)) -> List (a, c)
+dropSnd = map (\ (n, (_, t)) => (n, t))
+
+-- TODO: Needs to return the type, and deal with pattern implicits
+-- differently because that affects the type
 bindImplicits : Int -> 
-                List (Name, (Term vars, Term vars)) ->
+                List (Name, Term vars) ->
                 Term vars -> Term vars
 bindImplicits i [] scope = scope
-bindImplicits i ((n, (tm, ty)) :: imps) scope
+bindImplicits i ((n, ty) :: imps) scope
     = let scope' = bindImplicits (i + 1) imps scope
           tmpN = MN "unb" i
           repName = repName (Ref Bound tmpN) scope' in
@@ -105,6 +134,13 @@ bindImplicits i ((n, (tm, ty)) :: imps) scope
     repName new Erased = Erased
     repName new TType = TType
 
+bindTopImplicits : List (Name, ClosedTerm) -> Term vars -> Term vars
+bindTopImplicits {vars} hs tm
+    = bindImplicits 0 (map weakenVars hs) tm
+  where
+    weakenVars : (Name, ClosedTerm) -> (Name, Term vars)
+    weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
+                                     weakenNs vars tm)
 
 parameters (ctxt : Var, ustate : Var, estate : Var)
   convert : CtxtManage m => 
@@ -150,11 +186,12 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
 
   mutual
     check : CtxtManage m =>
+            (top : Bool) -> -- top level, unbound implicits bound here
             Env Term vars ->
             (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
             ST m (Term vars, Term vars) 
                  [ctxt ::: Defs, ustate ::: UState, estate ::: EState vars]
-    check env tm exp = checkImp env (insertImpLam env tm exp) exp
+    check top env tm exp = checkImp top env (insertImpLam env tm exp) exp
 
     insertImpLam : Env Term vars ->
                    (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
@@ -163,32 +200,33 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
     insertImpLam env tm (Just ty) = tm -- TODO
 
     checkImp : CtxtManage m =>
+               (top : Bool) -> -- top level, unbound implicits bound here
                Env Term vars ->
                (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
                ST m (Term vars, Term vars) 
                     [ctxt ::: Defs, ustate ::: UState, estate ::: EState vars]
-    checkImp env (IVar loc x) expected 
+    checkImp top env (IVar loc x) expected 
         = do (x', varty) <- infer ctxt env (RVar x)
              gam <- getCtxt ctxt
              -- If the variable has an implicit binder in its type, add
              -- the implicits here
              (ty, imps) <- getImps loc env (nf gam env varty) []
              checkExp loc env (apply x' imps) (quote empty env ty) expected
-    checkImp env (IPi loc plicity n ty retTy) expected 
-        = checkPi loc env plicity n ty retTy expected
-    checkImp env (ILam loc n ty scope) expected
-        = checkLam loc env n ty scope expected
-    checkImp env (ILet loc n nTy nVal scope) expected 
-        = checkLet loc env n nTy nVal scope expected
-    checkImp env (IApp loc fn arg) expected 
-        = do (fntm, fnty) <- check env fn Nothing
+    checkImp top env (IPi loc plicity n ty retTy) expected 
+        = checkPi top loc env plicity n ty retTy expected
+    checkImp top env (ILam loc n ty scope) expected
+        = checkLam top loc env n ty scope expected
+    checkImp top env (ILet loc n nTy nVal scope) expected 
+        = checkLet top loc env n nTy nVal scope expected
+    checkImp top env (IApp loc fn arg) expected 
+        = do (fntm, fnty) <- check top env fn Nothing
              gam <- getCtxt ctxt
              -- If the function has an implicit binder in its type, add
              -- the implicits here
              (scopeTy, impArgs) <- getImps loc env (nf gam env fnty) []
              case scopeTy of
                   NBind _ (Pi _ ty) scdone =>
-                    do (argtm, argty) <- check env arg (Just (quote empty env ty))
+                    do (argtm, argty) <- check top env arg (Just (quote empty env ty))
                        let sc' = scdone (toClosure env argtm)
                        checkExp loc env (App (apply fntm impArgs) argtm)
                                     (quote gam env sc') expected
@@ -196,15 +234,15 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
                     do bn <- genName ustate "aTy"
                        (expty, scty) <- inventFnType env bn
                        (argtm, argty) <- 
-                           check env arg (Just (Bind bn (Pi Explicit expty) scty))
+                           check top env arg (Just (Bind bn (Pi Explicit expty) scty))
                        checkExp loc env (App fntm argtm)
                                     (Bind bn (Let argtm argty) scty) expected
-    checkImp env (IPrimVal loc x) expected 
+    checkImp top env (IPrimVal loc x) expected 
         = do (x', ty) <- infer ctxt env (RPrimVal x)
              checkExp loc env x' ty expected
-    checkImp env (IType loc) exp
+    checkImp top env (IType loc) exp
         = checkExp loc env TType TType exp
-    checkImp env (IBindVar loc n) Nothing
+    checkImp top env (IBindVar loc n) Nothing
         = do t <- addHole ctxt ustate env TType
              let hty = mkConstantApp t env
              est <- read estate
@@ -217,23 +255,24 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
                        pure (tm, hty)
                   Just (tm, ty) =>
                        pure (tm, ty)
-    checkImp env (IBindVar loc n) (Just expected) 
+    checkImp top env (IBindVar loc n) (Just expected) 
         = do est <- read estate
              case lookup n (boundNames est) of
                   Nothing =>
                     do tm <- addBoundName ctxt ustate n env expected
+--                        putStrLn $ "ADDED BOUND IMPLICIT " ++ show (n, (tm, expected))
                        write estate 
                            (record { boundNames $= ((n, (tm, expected)) ::),
                                      toBind $= ((n, (tm, expected)) :: ) } est)
                        pure (tm, expected)
                   Just (tm, ty) =>
                        checkExp loc env tm ty (Just expected)
-    checkImp env (Implicit loc) Nothing
+    checkImp top env (Implicit loc) Nothing
         = do t <- addHole ctxt ustate env TType
              let hty = mkConstantApp t env
              n <- addHole ctxt ustate env hty
              pure (mkConstantApp n env, hty)
-    checkImp env (Implicit loc) (Just expected) 
+    checkImp top env (Implicit loc) (Just expected) 
         = do n <- addHole ctxt ustate env expected
              pure (mkConstantApp n env, expected)
    
@@ -254,79 +293,141 @@ parameters (ctxt : Var, ustate : Var, estate : Var)
     getImps loc env ty imps = pure (ty, reverse imps)
 
     checkPi : CtxtManage m =>
+              (top : Bool) -> -- top level, unbound implicits bound here
               annot -> Env Term vars ->
               PiInfo -> Name -> 
               (argty : RawImp annot) -> (retty : RawImp annot) ->
               Maybe (Term vars) ->
               ST m (Term vars, Term vars) 
                    [ctxt ::: Defs, ustate ::: UState, estate ::: EState vars]
-    checkPi loc env info n argty retty expected
-        = do (tyv, tyt) <- Elab.check env argty (Just TType)
+    checkPi top loc env info n argty retty expected
+        = do (tyv, tyt) <- check False env argty (Just TType)
              let env' : Env Term (n :: _) = Pi info tyv :: env
              est <- read estate
              let argImps = reverse $ toBind est
              clearToBind estate
              weakenEState estate
-             (scopev, scopet) <- check env' retty (Just TType)
+             (scopev, scopet) <- check top env' retty (Just TType)
              est <- read estate
              let scopeImps = reverse $ toBind est
-             clearEState estate
+             strengthenEState estate top
              -- Bind implicits which were first used in
              -- the argument type 'tyv'
-             -- TODO: Also bind the necessary holes for the implicits...
-             -- Remember to sort the holes...
-             -- This is only in 'PI' implicit mode - it's an error to
+             -- TODO: This is only in 'PI' implicit mode - it's an error to
              -- have implicits at this level in 'PATT' implicit mode
-             let scopev' = bindImplicits 0 scopeImps scopev
-             let binder = bindImplicits 0 argImps 
-                             (Bind n (Pi info tyv) scopev')
---              putStrLn "CONSTRAINTS AFTER SCOPE"
---              dumpConstraints ctxt ustate
-
-             checkExp loc env binder TType expected
+             if top
+                then do let scopev' = bindImplicits 0 (dropSnd scopeImps) scopev
+                        let binder = bindImplicits 0 (dropSnd argImps)
+                                        (Bind n (Pi info tyv) scopev')
+                        checkExp loc env binder TType expected
+                else checkExp loc env (Bind n (Pi info tyv) scopev)
+                                      TType expected
 
     checkLam : CtxtManage m =>
+               (top : Bool) -> -- top level, unbound implicits bound here
                annot -> Env Term vars ->
                Name -> (ty : RawImp annot) -> (scope : RawImp annot) ->
                Maybe (Term vars) ->
                ST m (Term vars, Term vars) 
                     [ctxt ::: Defs, ustate ::: UState, estate ::: EState vars]
-    checkLam loc env n ty scope (Just (Bind bn (Pi Explicit pty) psc))
-        = do (tyv, tyt) <- check env ty (Just TType)
+    checkLam top loc env n ty scope (Just (Bind bn (Pi Explicit pty) psc))
+        = do (tyv, tyt) <- check top env ty (Just TType)
              weakenEState estate
-             (scopev, scopet) <- check (Pi Explicit pty :: env) scope (Just psc)
-             clearEState estate
+             (scopev, scopet) <- check top (Pi Explicit pty :: env) scope (Just psc)
+             strengthenEState estate top
              checkExp loc env (Bind bn (Lam tyv) scopev)
                           (Bind bn (Pi Explicit tyv) scopet)
                           (Just (Bind bn (Pi Explicit pty) psc))
-    checkLam loc env n ty scope expected
-        = do (tyv, tyt) <- check env ty (Just TType)
+    checkLam top loc env n ty scope expected
+        = do (tyv, tyt) <- check top env ty (Just TType)
              let env' : Env Term (n :: _) = Pi Explicit tyv :: env
              weakenEState estate
-             (scopev, scopet) <- check env' scope Nothing
-             clearEState estate
+             (scopev, scopet) <- check top env' scope Nothing
+             strengthenEState estate top
              checkExp loc env (Bind n (Lam tyv) scopev)
                           (Bind n (Pi Explicit tyv) scopet)
                           expected
     
     checkLet : CtxtManage m =>
+               (top : Bool) -> -- top level, unbound implicits bound here
                annot -> Env Term vars ->
                Name -> (val : RawImp annot) -> 
                (ty : RawImp annot) -> (scope : RawImp annot) ->
                Maybe (Term vars) ->
                ST m (Term vars, Term vars) 
                     [ctxt ::: Defs, ustate ::: UState, estate ::: EState vars]
-    checkLet loc env n val ty scope expected
-        = do (tyv, tyt) <- check env ty (Just TType)
-             (valv, valt) <- check env val (Just tyv)
+    checkLet top loc env n val ty scope expected
+        = do (tyv, tyt) <- check top env ty (Just TType)
+             (valv, valt) <- check top env val (Just tyv)
              let env' : Env Term (n :: _) = Let valv tyv :: env
              weakenEState estate
-             (scopev, scopet) <- check env' scope (map weaken expected)
-             clearEState estate
+             (scopev, scopet) <- check top env' scope (map weaken expected)
+             strengthenEState estate top
              checkExp loc env (Bind n (Let valv tyv) scopev)
                               (Bind n (Let valv tyv) scopet)
                               expected
- 
+
+-- Find any holes in the resulting expression, and implicitly bind them
+-- at the top level (i.e. they can't depend on any explicitly given
+-- arguments).
+findHoles : CtxtManage m =>
+            (ctxt : Var) -> (ustate : Var) ->
+            Term vars ->
+            ST m (Term vars) [ctxt ::: Defs, ustate ::: UState]
+findHoles ctxt ustate tm
+    = do hvar <- new []
+         tm <- holes hvar tm
+         hs <- read hvar
+         delete hvar
+         pure (bindTopImplicits (reverse hs) tm)
+  where
+    mkType : (vars : List Name) -> Term hs -> Maybe (Term hs)
+    mkType (v :: vs) (Bind tm (Pi _ ty) sc) 
+        = do sc' <- mkType vs sc
+             shrinkTerm sc' (DropCons SubRefl)
+    mkType _ tm = pure tm
+
+    processHole : CtxtManage m =>
+                  (hvar : Var) -> Name -> (vars : List Name) -> ClosedTerm ->
+                  ST m () [hvar ::: State (List (Name, ClosedTerm)),
+                           ctxt ::: Defs, ustate ::: UState]
+    processHole hvar n vars ty
+       = do hs <- read hvar
+--             putStrLn $ "IMPLICIT: " ++ show (n, vars, ty)
+            case mkType vars ty of
+                 Nothing => pure ()
+                 Just impTy =>
+                    case lookup n hs of
+                         Just _ => pure ()
+                         Nothing => write hvar ((n, impTy) :: hs)
+
+    holes : CtxtManage m =>
+            (hvar : Var) -> Term vars -> 
+            ST m (Term vars) [hvar ::: State (List (Name, ClosedTerm)),
+                     ctxt ::: Defs, ustate ::: UState]
+    holes {vars} hvar (Ref nt fn) 
+        = do gam <- getCtxt ctxt
+             case lookupDefTy fn gam of
+                  Just (Hole, ty) =>
+                       do processHole hvar fn vars ty
+                          pure (Ref nt fn)
+                  _ => pure (Ref nt fn)
+    holes hvar (App fn arg)
+        = do fn' <- holes hvar fn
+             arg' <- holes hvar arg
+             pure (App fn' arg')
+    -- Allow implicits under 'Pi' and 'PVar' only
+    holes hvar (Bind y (Pi imp ty) sc)
+        = do ty' <- holes hvar ty
+             sc' <- holes hvar sc
+             pure (Bind y (Pi imp ty') sc')
+    holes hvar (Bind y (PVar ty) sc)
+        = do ty' <- holes hvar ty
+             sc' <- holes hvar sc
+             pure (Bind y (PVar ty') sc')
+    holes hvar tm = pure tm
+                                      
+
 export
 inferTerm : CtxtManage m => 
             (ctxt : Var) -> (ustate : Var) -> 
@@ -337,15 +438,20 @@ inferTerm : CtxtManage m =>
 inferTerm ctxt ustate env tm
     = do resetHoles ustate
          estate <- new initEState
-         (chktm, ty) <- call $ check ctxt ustate estate env tm Nothing
+         (chktm, ty) <- call $ check ctxt ustate estate True env tm Nothing
          est <- read estate
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'
          let fullImps = reverse $ toBind est
          delete estate
---          putStrLn "--- CONSTRAINTS AND HOLES ---"
---          dumpConstraints ctxt ustate
-         pure (bindImplicits 0 fullImps chktm, ty)
+         putStrLn "--- CONSTRAINTS AND HOLES ---"
+         dumpConstraints ctxt ustate
+         let restm = bindImplicits 0 (dropSnd fullImps) chktm
+         gam <- getCtxt ctxt
+         -- TODO: Only in implicits mode, and normalise only the hole names
+         hs <- findHoles ctxt ustate (normalise gam env restm)
+--          putStrLn $ "Extra implicits: " ++ show hs
+         pure (restm, ty)
 
 export
 checkTerm : CtxtManage m => 
@@ -356,7 +462,7 @@ checkTerm : CtxtManage m =>
 checkTerm ctxt ustate env tm ty
     = do resetHoles ustate
          est <- new initEState
-         (chktm, ty) <- call $ check ctxt ustate est env tm (Just ty)
+         (chktm, ty) <- call $ check ctxt ustate est True env tm (Just ty)
          delete est
          dumpConstraints ctxt ustate
          pure chktm

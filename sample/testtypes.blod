@@ -1,0 +1,21 @@
+(append (Cons 1 (Cons 2 Nil)) (Cons 3 (Cons 4 Nil)))
+
+(%pi (env (Env $xs)) (Env $xs))
+(%pi (env (Env (Cons 5 $xs))) (Env $xs))
+(%pi (env (Env (Cons 5 $xs))) (Env (Cons 5 $xs)))
+
+(%pi (xs (Vect _ Int)) (%pi (env (Env (Cons 5 xs))) (Env xs)))
+
+(Eq $xs (Cons 5 $xs)) -- should fail with a cycle
+
+(%pi (envx (Env $xs)) (%pi (q (Eq $xs $xs)) Nat))
+(%pi (foo Int) (%pi (x _) (%pi (q (Eq x x)) (Vect x Int))))
+(%pi (x _) (%pi (q (Eq x x)) Nat))
+(%pi (foo Int) (%pi (x _) (%pi (q (Eq x x)) Nat)))
+
+(%pi (s (Silly $env)) (Silly $env))
+(%pi (bar Int) (%pi (s (Silly $env)) (Silly $env)))
+
+(%pi (f (%pi (x $a) $b)) $a)
+
+

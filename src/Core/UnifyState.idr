@@ -147,7 +147,7 @@ addConstant : CtxtManage m =>
 addConstant ctxt ustate env tm ty constrs
     = do let def = mkConstant env tm
          let defty = mkConstantTy env ty
-         let guess = MkGlobalDef defty Public (Guess def constrs)
+         let guess = newDef defty Public (Guess def constrs)
          cn <- genName ustate "p"
          addHoleName ustate cn
          addDef ctxt cn guess
@@ -162,8 +162,9 @@ addNamedHole : CtxtManage m =>
                ST m () [ctxt ::: Defs, ustate ::: UState]
 addNamedHole ctxt ustate cn env ty
     = do let defty = mkConstantTy env ty
-         let hole = MkGlobalDef defty Public Hole
+         let hole = newDef defty Public Hole
          addHoleName ustate cn
+         putStrLn $ "Added hole " ++ show cn ++ " : " ++ show defty
          addDef ctxt cn hole
 
 -- Given a type, add a new global metavariable and return its name
