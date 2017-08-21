@@ -2,7 +2,7 @@ module Core.CaseTree
 
 import Core.TT
 
-import Control.Monad.State
+import Control.Monad.State -- TODO: Use StateE for consistency?
 import Data.List
 
 %default total

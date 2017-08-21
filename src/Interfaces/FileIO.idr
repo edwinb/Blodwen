@@ -1,15 +1,15 @@
-module Control.ST.FileIO
+module Interfaces.FileIO
 
-import Control.ST
+import Control.Monad.StateE
 import Control.IOExcept
 import Core.Context
 
 public export
 interface FileIO (m : Type -> Type) where
   readFile : (fname : String) -> 
-             STrans m (Either FileError String) xs (const xs)
+             SE s err m (Either FileError String)
   writeFile : (fname : String) -> (content : String) ->
-              STrans m (Either FileError ()) xs (const xs)
+              SE s err m (Either FileError ())
 
 export
 FileIO IO where
@@ -17,6 +17,6 @@ FileIO IO where
   writeFile f c = lift (writeFile f c)
 
 export
-FileIO (IOExcept Error) where
+FileIO (IOExcept (Error annot)) where
   readFile f = lift (ioe_lift (readFile f))
   writeFile f c = lift (ioe_lift (writeFile f c))

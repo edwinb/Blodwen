@@ -10,6 +10,8 @@ modules = Core.CaseTree,
           Core.Unify,
           Core.UnifyState,
 
+          Control.Monad.StateE,
+
           Interfaces.FileIO,
           Interfaces.SystemIO,
 

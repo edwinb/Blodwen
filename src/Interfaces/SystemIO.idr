@@ -1,17 +1,17 @@
-module Control.ST.SystemIO
+module Interfaces.SystemIO
 
-import Control.ST
+import Control.Monad.StateE
 import Control.IOExcept
 import Core.Context
 
 public export
 interface SystemIO (m : Type -> Type) where
-  getArgs : STrans m (List String) xs (const xs)
+  getArgs : SE s err m (List String)
 
 export
 SystemIO IO where
   getArgs = lift getArgs
 
 export
-SystemIO (IOExcept Error) where
+SystemIO (IOExcept (Error annot)) where
   getArgs = lift (ioe_lift getArgs)

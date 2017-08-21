@@ -8,48 +8,41 @@ import public Core.UnifyState
 
 import Data.List
 import Data.List.Views
-import Control.ST
-import Control.ST.ImplicitCall
 
 %default covering
 
 public export
 interface Unify (tm : List Name -> Type) where
   -- Unify returns a list of names referring to newly added constraints
-  unify : CtxtManage m =>
-          (ctxt : Var) -> (ustate : Var) ->
-          Env Term vars ->
+  unify : annot -> Env Term vars ->
           tm vars -> tm vars -> 
-          ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
+          Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
 
-ufail : CtxtManage m => String -> ST m a []
-ufail msg = throw (GenericMsg msg)
+ufail : annot -> String -> Core annot [] a
+ufail loc msg = throw (GenericMsg loc msg)
 
-unifyArgs : (CtxtManage m, Unify tm, Quote tm) =>
-            (ctxt : Var) -> (ustate : Var) ->
-            Env Term vars ->
+unifyArgs : (Unify tm, Quote tm) =>
+            annot -> Env Term vars ->
             List (tm vars) -> List (tm vars) ->
-            ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-unifyArgs ctxt ustate env [] [] = pure []
-unifyArgs ctxt ustate env (cx :: cxs) (cy :: cys)
-    = do constr <- unify ctxt ustate env cx cy
+            Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+unifyArgs loc env [] [] = pure []
+unifyArgs loc env (cx :: cxs) (cy :: cys)
+    = do constr <- unify loc env cx cy
          case constr of
-              [] => unifyArgs ctxt ustate env cxs cys
-              _ => do gam <- getCtxt ctxt
-                      c <- addConstraint ctxt ustate
-                               (MkSeqConstraint env 
+              [] => unifyArgs loc env cxs cys
+              _ => do gam <- getCtxt 
+                      c <- addConstraint 
+                               (MkSeqConstraint loc env 
                                    (map (quote gam env) (cx :: cxs))
                                    (map (quote gam env) (cy :: cys)))
                       pure [c]
-unifyArgs ctxt ustate env _ _ = ufail ""
+unifyArgs loc env _ _ = ufail loc ""
 
-postpone : (ctxt : Var) -> (ustate : Var) ->
-           Env Term vars ->
+postpone : annot -> Env Term vars ->
            Term vars -> Term vars ->
-           ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-postpone ctxt ustate env x y
-    = do c <- addConstraint ctxt ustate
-                   (MkConstraint env x y)
+           Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+postpone loc env x y
+    = do c <- addConstraint (MkConstraint loc env x y)
          pure [c]
 
 -- Get the variables in an application argument list; fail if any arguments 
@@ -109,12 +102,11 @@ toSubVars (n :: ns) xs
    to check the term we're unifying with, and that term doesn't use the
    metavariable name, we can safely apply the rule.
 -}
-patternEnv : (ctxt : Var) -> (ustate : Var) ->
-            Env Term vars -> List (Closure vars) -> 
-            ST m (Maybe (newvars ** SubVars newvars vars))
-                 [ctxt ::: Defs, ustate ::: UState]
-patternEnv ctxt ustate env args
-    = do gam <- getCtxt ctxt
+patternEnv : Env Term vars -> List (Closure vars) -> 
+             Core annot [Ctxt ::: Defs, UST ::: UState annot]
+                  (Maybe (newvars ** SubVars newvars vars))
+patternEnv env args
+    = do gam <- getCtxt
          let args' = map (evalClosure gam) args
          case getVars args' of
               Nothing => pure Nothing
@@ -124,23 +116,22 @@ patternEnv ctxt ustate env args
 -- and returning the term
 -- If the type of the metavariable doesn't have enough arguments, fail, because
 -- this wasn't valid for pattern unification
-instantiate : CtxtManage m =>
-              (ctxt : Var) -> (ustate : Var) ->
+instantiate : annot ->
               (metavar : Name) -> SubVars newvars vars -> Term newvars ->
-              ST m () [ctxt ::: Defs, ustate ::: UState]
-instantiate ctxt ustate metavar smvs tm {newvars}
-     = do gam <- getCtxt ctxt
+              Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+instantiate loc metavar smvs tm {newvars}
+     = do gam <- getCtxt
           case lookupDefTy metavar gam of
-               Nothing => ufail $ "No such metavariable " ++ show metavar
+               Nothing => ufail loc $ "No such metavariable " ++ show metavar
                Just (_, ty) => 
                     case mkRHS [] newvars CompatPre ty 
                              (rewrite appendNilRightNeutral newvars in tm) of
-                         Nothing => ufail $ "Can't make solution for " ++ show metavar
+                         Nothing => ufail loc $ "Can't make solution for " ++ show metavar
                          Just rhs => 
                             do let soln = newDef ty Public 
                                                (PMDef [] (STerm rhs))
-                               addDef ctxt metavar soln
-                               removeHoleName ustate metavar
+                               addDef metavar soln
+                               removeHoleName metavar
   where
     mkRHS : (got : List Name) -> (newvars : List Name) ->
             CompatibleVars got rest ->
@@ -176,38 +167,36 @@ mutual
   -- Essentially what this achieves is moving a hole to an outer scope where
   -- it solution is now usable
   export
-  shrinkHoles : CtxtManage m =>
-                (ctxt : Var) -> (ustate : Var) ->
-                Env Term vars ->
+  shrinkHoles : annot -> Env Term vars ->
                 List (Term vars) -> Term vars ->
-                ST m (Term vars) [ctxt ::: Defs, ustate ::: UState]
-  shrinkHoles ctxt ustate env args (Bind x (Let val ty) sc) 
-      = do val' <- shrinkHoles ctxt ustate env args val
-           ty' <- shrinkHoles ctxt ustate env args ty
-           sc' <- shrinkHoles ctxt ustate (Let val ty :: env) (map weaken args) sc
+                Core annot [Ctxt ::: Defs, UST ::: UState annot] (Term vars)
+  shrinkHoles loc env args (Bind x (Let val ty) sc) 
+      = do val' <- shrinkHoles loc env args val
+           ty' <- shrinkHoles loc env args ty
+           sc' <- shrinkHoles loc (Let val ty :: env) (map weaken args) sc
            pure (Bind x (Let val' ty') sc')
-  shrinkHoles ctxt ustate env args (Bind x b sc) 
+  shrinkHoles loc env args (Bind x b sc) 
       = do let bty = binderType b
-           bty' <- shrinkHoles ctxt ustate env args bty
-           sc' <- shrinkHoles ctxt ustate (b :: env) (map weaken args) sc
+           bty' <- shrinkHoles loc env args bty
+           sc' <- shrinkHoles loc (b :: env) (map weaken args) sc
            pure (Bind x (setType b bty') sc')
-  shrinkHoles ctxt ustate env args tm with (unapply tm)
-    shrinkHoles ctxt ustate env args (apply (Ref Func h) as) | ArgsList 
-         = do gam <- getCtxt ctxt
+  shrinkHoles loc env args tm with (unapply tm)
+    shrinkHoles loc env args (apply (Ref Func h) as) | ArgsList 
+         = do gam <- getCtxt
               -- If the hole we're trying to solve (in the call to 'shrinkHoles')
               -- doesn't have enough arguments to be able to pass them to
               -- 'h' here, make a new hole 'sh' which only uses the available
               -- arguments, and solve h with it.
               case lookupDefTy h gam of
                    Just (Hole, ty) => 
-                        do sn <- genName ustate "sh"
-                           mkSmallerHole ctxt ustate [] ty h as sn args
+                        do sn <- genName "sh"
+                           mkSmallerHole loc [] ty h as sn args
                    _ => pure (apply (Ref Func h) as)
-    shrinkHoles ctxt ustate env args (apply f []) | ArgsList 
+    shrinkHoles loc env args (apply f []) | ArgsList 
          = pure f
-    shrinkHoles ctxt ustate env args (apply f as) | ArgsList 
-         = do f' <- shrinkHoles ctxt ustate env args f
-              as' <- mapST (shrinkHoles ctxt ustate env args) as
+    shrinkHoles loc env args (apply f as) | ArgsList 
+         = do f' <- shrinkHoles loc env args f
+              as' <- traverse (\x => shrinkHoles loc env args x) as
               pure (apply f' as')
 
   -- if 'argPrefix' is a complete valid prefix of 'args', and all the arguments
@@ -215,47 +204,46 @@ mutual
   -- used in the goal type, then create a new hole 'newhole' which takes that
   -- prefix as arguments. 
   -- Then, solve 'oldhole' by applying 'newhole' to 'argPrefix'
-  mkSmallerHole : CtxtManage m =>
-                  (ctxt : Var) -> (ustate : Var) ->
+  mkSmallerHole : annot ->
                   (eqsofar : List (Term vars)) ->
                   (holetype : ClosedTerm) ->
                   (oldhole : Name) ->
                   (args : List (Term vars)) ->
                   (newhole : Name) ->
                   (argPrefix : List (Term vars)) ->
-                  ST m (Term vars) [ctxt ::: Defs, ustate ::: UState]
-  mkSmallerHole ctxt ustate sofar holetype oldhole 
+                  Core annot [Ctxt ::: Defs, UST ::: UState annot] (Term vars)
+  mkSmallerHole loc sofar holetype oldhole 
                               (Local arg :: args) newhole (Local a :: as)
       = if sameVar arg a
-           then mkSmallerHole ctxt ustate (sofar ++ [Local a]) holetype oldhole
+           then mkSmallerHole loc (sofar ++ [Local a]) holetype oldhole
                               args newhole as
            else pure (apply (Ref Func oldhole) (sofar ++ args))
   -- We have the right number of arguments, so the hole is usable in this
   -- context.
-  mkSmallerHole ctxt ustate sofar holetype oldhole [] newhole []
+  mkSmallerHole loc sofar holetype oldhole [] newhole []
       = pure (apply (Ref Func oldhole) sofar)
-  mkSmallerHole ctxt ustate sofar holetype oldhole args newhole []
+  mkSmallerHole loc sofar holetype oldhole args newhole []
   -- Reached a prefix of the arguments, so make a new hole applied to 'sofar'
   -- and use it to solve 'oldhole', as long as the omitted arguments aren't
   -- needed for it.
       = case newHoleType sofar holetype of
-             Nothing => ufail $ "Can't shrink hole"
+             Nothing => ufail loc $ "Can't shrink hole"
              Just defty =>
                 do -- Make smaller hole
                    let hole = newDef defty Public Hole
-                   addHoleName ustate newhole
-                   addDef ctxt newhole hole
+                   addHoleName newhole
+                   addDef newhole hole
                    -- Solve old hole with it
                    case mkOldHoleDef holetype newhole sofar (sofar ++ args) of
-                        Nothing => ufail $ "Can't shrink hole"
+                        Nothing => ufail loc $ "Can't shrink hole"
                         Just olddef =>
                            do let soln = newDef defty Public
                                               (PMDef [] (STerm olddef))
-                              addDef ctxt oldhole soln
-                              removeHoleName ustate oldhole
+                              addDef oldhole soln
+                              removeHoleName oldhole
                               pure (apply (Ref Func newhole) sofar)
   -- Default case, leave the hole application as it is
-  mkSmallerHole ctxt ustate sofar holetype oldhole args _ _
+  mkSmallerHole loc sofar holetype oldhole args _ _
       = pure (apply (Ref Func oldhole) (sofar ++ args))
 
   -- Drop the pi binders from the front of a term. This is only valid if
@@ -284,18 +272,16 @@ mutual
            let newargs = map (renameVars compat) sofar
            pure (apply (Ref Func newh) newargs)
 
-  unifyApp : CtxtManage m =>
-             (ctxt : Var) -> (ustate : Var) ->
-             Env Term vars ->
+  unifyApp : annot -> Env Term vars ->
              NHead vars -> List (Closure vars) -> NF vars ->
-             ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-  unifyApp ctxt ustate {vars} env (NRef nt var) args tm 
-      = case !(patternEnv ctxt ustate env args) of
+             Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+  unifyApp {vars} loc env (NRef nt var) args tm 
+      = case !(patternEnv env args) of
            Just (newvars ** submv) =>
-                do gam <- getCtxt ctxt
-                   tm' <- shrinkHoles ctxt ustate env (map (quote gam env) args) 
-                                                      (quote gam env tm)
-                   gam <- getCtxt ctxt
+                do gam <- getCtxt
+                   tm' <- shrinkHoles loc env (map (quote gam env) args) 
+                                              (quote gam env tm)
+                   gam <- getCtxt
                    -- newvars and args should be the same length now, because
                    -- there's one new variable for each distinct argument.
                    -- The types don't express this, but 'submv' at least
@@ -304,7 +290,7 @@ mutual
                    -- only use those variables for success
                    case shrinkTerm tm' submv of
                         Nothing => 
-                             ufail $ "Scope error " ++
+                             ufail loc $ "Scope error " ++
                                    show (vars, newvars) ++
                                    "\nUnifying " ++
                                    show (quote empty env
@@ -319,52 +305,52 @@ mutual
                                else
                                 -- otherwise, instantiate the hole
                                    if not (occursCheck var tm')
-                                      then ufail $ "Occurs check failed when unifying " ++
+                                      then ufail loc $ "Occurs check failed when unifying " ++
                                               show (quote empty env (NApp (NRef nt var) args)) ++
                                               " and " ++
                                               show (quote empty env tm)
                                       else do
-                                         instantiate ctxt ustate var submv tm'
+                                         instantiate loc var submv tm'
                                          pure []
-           Nothing => postpone ctxt ustate env 
+           Nothing => postpone loc env 
                          (quote empty env (NApp (NRef nt var) args))
                          (quote empty env tm)
-  unifyApp ctxt ustate env hd args (NApp hd' args')
-      = postpone ctxt ustate env
+  unifyApp loc env hd args (NApp hd' args')
+      = postpone loc env
                  (quote empty env (NApp hd args)) 
                  (quote empty env (NApp hd' args'))
   -- If they're already convertible without metavariables, we're done,
   -- otherwise postpone
-  unifyApp ctxt ustate env hd args tm 
-      = do gam <- getCtxt ctxt
+  unifyApp loc env hd args tm 
+      = do gam <- getCtxt
            if convert gam env (quote empty env (NApp hd args))
                               (quote empty env tm)
               then pure []
-              else postpone ctxt ustate env
+              else postpone loc env
                          (quote empty env (NApp hd args)) (quote empty env tm)
   
   export
   Unify Closure where
-    unify ctxt ustate env x y 
-        = do gam <- getCtxt ctxt
+    unify loc env x y 
+        = do gam <- getCtxt
              -- 'quote' using an empty global context, because then function
              -- names won't reduce until they have to
              let x' = quote empty env x
              let y' = quote empty env y
-             unify ctxt ustate env x' y'
+             unify loc env x' y'
 
   export
   Unify NF where
-    unify ctxt ustate env (NBind x (Pi ix tx) scx) (NBind y (Pi iy ty) scy) 
+    unify loc env (NBind x (Pi ix tx) scx) (NBind y (Pi iy ty) scy) 
         = if ix /= iy
-             then ufail $ "Can't unify " ++ show (quote empty env
+             then ufail loc $ "Can't unify " ++ show (quote empty env
                                                      (NBind x (Pi ix tx) scx))
                                          ++ " and " ++
                                             show (quote empty env
                                                      (NBind y (Pi iy ty) scy))
              else
-               do ct <- unify ctxt ustate env tx ty
-                  xn <- genName ustate "x"
+               do ct <- unify loc env tx ty
+                  xn <- genName "x"
                   let env' : TT.Env.Env Term (x :: _)
                            = Pi ix (quote empty env tx) :: env
                   case ct of
@@ -373,11 +359,11 @@ mutual
                                 let tscy = scy (toClosure env (Ref Bound xn))
                                 let termx = refToLocal xn x (quote empty env tscx)
                                 let termy = refToLocal xn x (quote empty env tscy)
-                                unify ctxt ustate env' termx termy
+                                unify loc env' termx termy
                        cs => -- constraints, make new guarded constant
                              do let txtm = quote empty env tx
                                 let tytm = quote empty env ty
-                                c <- addConstant ctxt ustate env
+                                c <- addConstant env
                                        (Bind x (Lam txtm) (Local Here))
                                        (Bind x (Pi Explicit txtm)
                                            (weaken tytm)) cs
@@ -386,7 +372,7 @@ mutual
                                                (App (mkConstantApp c env) (Ref Bound xn)))
                                 let termx = refToLocal xn x (quote empty env tscx)
                                 let termy = refToLocal xn x (quote empty env tscy)
-                                cs' <- unify ctxt ustate env' termx termy
+                                cs' <- unify loc env' termx termy
                                 pure (union cs cs')
 {- -- probably not...
     unify ctxt ustate env (NBind x (Lam tx) scx) (NBind y (Lam ty) scy) 
@@ -404,7 +390,7 @@ mutual
                  cs => -- constraints, make new guarded constant
                        do let txtm = quote empty env tx
                           let tytm = quote empty env ty
-                          c <- addConstant ctxt ustate env
+                          c <- addConstant env
                                  (Bind x (Lam txtm) (Local Here))
                                  (Bind x (Pi Explicit txtm)
                                      (weaken tytm)) cs
@@ -413,41 +399,41 @@ mutual
                                          (App (mkConstantApp c env) (Ref Bound xn)))
                           let termx = refToLocal xn x (quote empty env tscx)
                           let termy = refToLocal xn x (quote empty env tscy)
-                          cs' <- unify ctxt ustate env' termx termy
+                          cs' <- unify env' termx termy
                           pure (union cs cs')
 -}
-    unify ctxt ustate env y (NApp hd args)
-        = unifyApp ctxt ustate env hd args y
-    unify ctxt ustate env (NApp hd args) y 
-        = unifyApp ctxt ustate env hd args y
-    unify ctxt ustate env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
+    unify loc env y (NApp hd args)
+        = unifyApp loc env hd args y
+    unify loc env (NApp hd args) y 
+        = unifyApp loc env hd args y
+    unify loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
         = if tagx == tagy
-             then unifyArgs ctxt ustate env xs ys
-             else ufail $ "Can't unify " ++ show (quote empty env
+             then unifyArgs loc env xs ys
+             else ufail loc $ "Can't unify " ++ show (quote empty env
                                                         (NDCon x tagx ax xs))
                                          ++ " and "
                                          ++ show (quote empty env
                                                         (NDCon y tagy ay ys))
-    unify ctxt ustate env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
+    unify loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
         = if tagx == tagy
-             then unifyArgs ctxt ustate env xs ys
-             else ufail $ "Can't unify " ++ show (quote empty env
+             then unifyArgs loc env xs ys
+             else ufail loc $ "Can't unify " ++ show (quote empty env
                                                         (NTCon x tagx ax xs))
                                          ++ " and "
                                          ++ show (quote empty env
                                                         (NTCon y tagy ay ys))
-    unify ctxt ustate env (NPrimVal x) (NPrimVal y) 
+    unify loc env (NPrimVal x) (NPrimVal y) 
         = if x == y 
              then pure [] 
-             else ufail $ "Can't unify " ++ show x ++ " and " ++ show y
-    unify ctxt ustate env x NErased = pure []
-    unify ctxt ustate env NErased y = pure []
-    unify ctxt ustate env NType NType = pure []
-    unify ctxt ustate env x y 
-        = do gam <- getCtxt ctxt
+             else ufail loc $ "Can't unify " ++ show x ++ " and " ++ show y
+    unify loc env x NErased = pure []
+    unify loc env NErased y = pure []
+    unify loc env NType NType = pure []
+    unify loc env x y 
+        = do gam <- getCtxt
              if convert gam env x y
                 then pure []
-                else ufail $ "Can't unify " ++ show (quote empty env x)
+                else ufail loc $ "Can't unify " ++ show (quote empty env x)
                                             ++ " and "
                                             ++ show (quote empty env y)
 
@@ -455,81 +441,73 @@ mutual
   Unify Term where
     -- TODO: Don't just go to values, try to unify the terms directly
     -- and avoid normalisation as far as possible
-    unify ctxt ustate env x y 
-          = do gam <- getCtxt ctxt
-               unify ctxt ustate env (nf gam env x) (nf gam env y)
+    unify loc env x y 
+          = do gam <- getCtxt
+               unify loc env (nf gam env x) (nf gam env y)
 
 -- Try again to solve the given named constraint, and return the list
 -- of constraint names are generated when trying to solve it.
 export
-retry : CtxtManage m =>
-        (ctxt : Var) -> (ustate : Var) ->
-        (cname : Name) -> ST m (List Name) [ctxt ::: Defs, ustate ::: UState]
-retry ctxt ustate cname
-    = do ust <- read ustate
+retry : (cname : Name) -> 
+        Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+retry cname
+    = do ust <- get UST
          case lookupCtxt cname (constraints ust) of
-              Nothing => throw (GenericMsg ("No such constraint " ++ show cname))
+              Nothing => pure []
               -- If the constraint is now resolved (i.e. unifying now leads
               -- to no new constraints) replace it with 'Resolved' in the
               -- constraint context so we don't do it again
               Just Resolved => pure []
-              Just (MkConstraint env x y) =>
-                   do cs <- unify ctxt ustate env x y
+              Just (MkConstraint loc env x y) =>
+                   do cs <- unify loc env x y
                       case cs of
-                           [] => do setConstraint ustate cname Resolved
+                           [] => do setConstraint cname Resolved
                                     pure cs
                            _ => pure cs
-              Just (MkSeqConstraint env xs ys) =>
-                   do cs <- unifyArgs ctxt ustate env xs ys
+              Just (MkSeqConstraint loc env xs ys) =>
+                   do cs <- unifyArgs loc env xs ys
                       case cs of
-                           [] => do setConstraint ustate cname Resolved
+                           [] => do setConstraint cname Resolved
                                     pure cs
                            _ => pure cs
 
-retryHole : CtxtManage m =>
-            (ctxt : Var) -> (ustate : Var) ->
-            (hole : Name) ->
-            ST m () [ctxt ::: Defs, ustate ::: UState]
-retryHole ctxt ustate hole
-    = do gam <- getCtxt ctxt
+retryHole : (hole : Name) ->
+            Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+retryHole hole
+    = do gam <- getCtxt
          case lookupDef hole gam of
-              Nothing => throw (GenericMsg ("No such hole " ++ show hole))
+              Nothing => pure ()
               Just (Guess tm constraints) => 
-                   do cs' <- mapST (retry ctxt ustate) constraints
+                   do cs' <- traverse (\x => retry x) constraints
                       case concat cs' of
                            -- All constraints resolved, so turn into a
                            -- proper definition and remove it from the
                            -- hole list
-                           [] => do updateDef ctxt hole (PMDef [] (STerm tm))
-                                    removeHoleName ustate hole
-                           newcs => updateDef ctxt hole (Guess tm newcs)
+                           [] => do updateDef hole (PMDef [] (STerm tm))
+                                    removeHoleName hole
+                           newcs => updateDef hole (Guess tm newcs)
               Just _ => pure () -- Nothing we can do
 
 -- Attempt to solve any remaining constraints in the unification context.
 -- Do this by working through the list of holes
 -- On encountering a 'Guess', try the constraints attached to it 
 export
-solveConstraints : CtxtManage m =>
-                   (ctxt : Var) -> (ustate : Var) ->
-                   ST m () [ctxt ::: Defs, ustate ::: UState]
-solveConstraints ctxt ustate 
-    = do hs <- getHoleNames ustate
-         mapST (retryHole ctxt ustate) hs
+solveConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+solveConstraints 
+    = do hs <- getHoleNames
+         traverse (\x => retryHole x) hs
          -- Question: Another iteration if any holes have been resolved?
          pure ()
 
-dumpHole : CtxtManage m =>
-           (ctxt : Var) -> (ustate : Var) ->
-           (hole : Name) ->
-           ST m () [ctxt ::: Defs, ustate ::: UState]
-dumpHole ctxt ustate hole
-    = do gam <- getCtxt ctxt
+dumpHole : (hole : Name) -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+dumpHole hole
+    = do gam <- getCtxt
          case lookupDefTy hole gam of
-              Nothing => throw (GenericMsg ("No such hole " ++ show hole))
+              Nothing => pure ()
               Just (Guess tm constraints, ty) => 
                    do putStrLn $ "!" ++ show hole ++ " : " ++ 
                                         show (normalise gam [] ty)
-                      mapST dumpConstraint constraints 
+                      traverse (\x => dumpConstraint x) constraints 
                       pure ()
               Just (PMDef args t, ty) =>
                    putStrLn $ "Solved: " ++ show hole ++ " : " ++ 
@@ -539,25 +517,23 @@ dumpHole ctxt ustate hole
                    putStrLn $ "?" ++ show hole ++ " : " ++ 
                                      show (normalise gam [] ty)
   where
-    dumpConstraint : ConsoleIO m => Name -> ST m () [ctxt ::: Defs, ustate ::: UState]
+    dumpConstraint : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
     dumpConstraint n
-        = do ust <- read ustate
-             gam <- getCtxt ctxt
+        = do ust <- get UST
+             gam <- getCtxt
              case lookupCtxt n (constraints ust) of
                   Nothing => pure ()
                   Just Resolved => putStrLn "\tResolved"
-                  Just (MkConstraint env x y) =>
+                  Just (MkConstraint _ env x y) =>
                        putStrLn $ "\t" ++ show (normalise gam env x) 
                                       ++ " =?= " ++ show (normalise gam env y)
-                  Just (MkSeqConstraint _ xs ys) =>
+                  Just (MkSeqConstraint _ _ xs ys) =>
                        putStrLn $ "\t" ++ show xs ++ " =?= " ++ show ys
 
 export
-dumpConstraints : CtxtManage m =>
-                  (ctxt : Var) -> (ustate : Var) ->
-                  ST m () [ctxt ::: Defs, ustate ::: UState]
-dumpConstraints ctxt ustate
-    = do hs <- getCurrentHoleNames ustate
-         mapST (dumpHole ctxt ustate) hs
+dumpConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+dumpConstraints 
+    = do hs <- getCurrentHoleNames
+         traverse (\x => dumpHole x) hs
          pure ()
 

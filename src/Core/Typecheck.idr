@@ -10,16 +10,17 @@ import Data.List
 %default covering
 
 export
-doConvert : (Quote tm, Convert tm) => Gamma -> Env Term outer -> 
-            tm outer -> tm outer -> Either Error ()
-doConvert gam env x y 
+doConvert : (Quote tm, Convert tm) => 
+            annot -> Gamma -> Env Term outer -> 
+            tm outer -> tm outer -> Either (Error annot) ()
+doConvert loc gam env x y 
     = if convert gam env x y 
          then pure ()
-         else error (CantConvert env (quote gam env x) (quote gam env y))
+         else error (CantConvert loc env (quote gam env x) (quote gam env y))
 
-parameters (gam : Gamma)
+parameters (loc : annot, gam : Gamma)
   mutual
-    chk : Env Term vars -> Raw -> Either Error (Term vars, Term vars)
+    chk : Env Term vars -> Raw -> Either (Error annot) (Term vars, Term vars)
     chk env (RVar x) 
         = case defined x env of
                Nothing => 
@@ -32,8 +33,8 @@ parameters (gam : Gamma)
                             pure $ (Ref (TyCon tag arity) x, embed ty)
                        Just (_, ty) => 
                             pure $ (Ref Func x, embed ty)
-                       Nothing => error (UndefinedName x)
-               Just loc => pure $ (Local loc, binderType (getBinder loc env))
+                       Nothing => error (UndefinedName loc x)
+               Just lv => pure $ (Local lv, binderType (getBinder lv env))
     chk env (RBind nm b sc) 
         = do (b', bt) <- chkBinder env b
              (sc', sct) <- chk {vars = nm :: _} (b' :: env) sc
@@ -43,36 +44,36 @@ parameters (gam : Gamma)
              case nf gam env fty of
                   NBind _ (Pi _ ty) scdone => 
                         do (a', aty) <- chk env a
-                           doConvert gam env (quote gam env ty) aty
+                           doConvert loc gam env (quote gam env ty) aty
                            let sc' = scdone (toClosure env a')
                            pure (App f' a', quote gam env sc')
-                  _ => error (NotFunctionType fty)
+                  _ => error (NotFunctionType loc fty)
     chk env (RPrimVal x) = pure $ chkConstant x
     chk env RType = pure (TType, TType)
 
     chkBinder : Env Term vars -> Binder Raw -> 
-                Either Error (Binder (Term vars), Term vars)
+                Either (Error annot) (Binder (Term vars), Term vars)
     chkBinder env (Lam ty) 
         = do (tyv, tyt) <- chk env ty
-             doConvert gam env tyt TType
+             doConvert loc gam env tyt TType
              pure (Lam tyv, tyt)
     chkBinder env (Let val ty) 
         = do (tyv, tyt) <- chk env ty
              (valv, valt) <- chk env val
-             doConvert gam env tyv valt
-             doConvert gam env tyt TType
+             doConvert loc gam env tyv valt
+             doConvert loc gam env tyt TType
              pure (Let valv tyv, tyt)
     chkBinder env (Pi x ty) 
         = do (tyv, tyt) <- chk env ty
-             doConvert gam env tyt TType
+             doConvert loc gam env tyt TType
              pure (Pi x tyv, tyt)
     chkBinder env (PVar ty) 
         = do (tyv, tyt) <- chk env ty
-             doConvert gam env tyt TType
+             doConvert loc gam env tyt TType
              pure (PVar tyv, tyt)
     chkBinder env (PVTy ty) 
         = do (tyv, tyt) <- chk env ty
-             doConvert gam env tyt TType
+             doConvert loc gam env tyt TType
              pure (PVTy tyv, tyt)
 
     discharge : (nm : Name) -> Binder (Term vars) -> Term vars ->
@@ -94,40 +95,37 @@ parameters (gam : Gamma)
     chkConstant IntType = (PrimVal IntType, TType)
 
 export
-checkHas : (gam : Gamma) -> Env Term vars ->
+checkHas : annot -> (gam : Gamma) -> Env Term vars ->
            (term : Raw) -> (expected : Term vars) -> 
-           Either Error (Term vars)
-checkHas gam env tm exp
-    = do (val, ty) <- chk gam env tm
-         doConvert gam env ty exp
+           Either (Error annot) (Term vars)
+checkHas loc gam env tm exp
+    = do (val, ty) <- chk loc gam env tm
+         doConvert loc gam env ty exp
          pure val
 
 export
-check : CtxtManage m =>
-        (ctxt : Var) -> Env Term vars ->
+check : annot -> Env Term vars ->
         (term : Raw) -> (expected : Term vars) -> 
-        ST m (Term vars) [ctxt ::: Defs]
-check ctxt env term expected 
-    = case checkHas !(getCtxt ctxt) env term expected of
+        Core annot [Ctxt ::: Defs] (Term vars)
+check loc env term expected 
+    = case checkHas loc !getCtxt env term expected of
            Left err => throw err
            Right ok => pure ok
 
 export
-infer : CtxtManage m =>
-        (ctxt : Var) -> Env Term vars ->
-        (term : Raw) -> ST m (Term vars, Term vars) [ctxt ::: Defs]
-infer ctxt env term
-    = case chk !(getCtxt ctxt) env term of
+infer : annot -> Env Term vars ->
+        (term : Raw) -> Core annot [Ctxt ::: Defs] (Term vars, Term vars)
+infer loc env term
+    = case chk loc !getCtxt env term of
            Left err => throw err
            Right ok => pure ok
 
 export
-checkConvert : CtxtManage m =>
-               (ctxt : Var) -> Env Term vars ->
+checkConvert : annot -> Env Term vars ->
                (x : Term vars) -> (y : Term vars) ->
-               ST m () [ctxt ::: Defs]
-checkConvert ctxt env x y 
-    = case doConvert !(getCtxt ctxt) env x y of
+               Core annot [Ctxt ::: Defs] ()
+checkConvert loc env x y 
+    = case doConvert loc !getCtxt env x y of
            Left err => throw err
            Right ok => pure ()
 

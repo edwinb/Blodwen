@@ -7,27 +7,27 @@ import Core.TT
 
 import Data.List
 import Data.List.Views
-import Control.ST
-import Control.ST.ImplicitCall
 
 %default covering
 
 public export
-data Constraint : Type where
+data Constraint : Type -> Type where
      -- An unsolved constraint, noting two terms which need to be convertible
      -- in a particular environment
-     MkConstraint : (env : Env Term vars) ->
+     MkConstraint : annot -> 
+                    (env : Env Term vars) ->
                     (x : Term vars) -> (y : Term vars) -> 
-                    Constraint
+                    Constraint annot
      -- An unsolved sequence of constraints, arising from arguments in an
      -- application where solving later constraints relies on solving earlier
      -- ones
-     MkSeqConstraint : (env : Env Term vars) ->
+     MkSeqConstraint : annot ->
+                       (env : Env Term vars) ->
                        (xs : List (Term vars)) ->
                        (ys : List (Term vars)) ->
-                       Constraint
+                       Constraint annot
      -- A resolved constraint
-     Resolved : Constraint
+     Resolved : Constraint annot
 
 -- union : List Name -> List Name -> List Name
 -- union cs cs' = nub (cs ++ cs') -- TODO: as a set, not list
@@ -35,71 +35,75 @@ data Constraint : Type where
 -- Currently unsolved constraints - the 'constraints' in the 'Guess'
 -- definitions in Gamma refer into this unification state
 public export
-record UnifyState where
+record UnifyState annot where
      constructor MkUnifyState
      holes : List Name -- unsolved metavariables in gamma (holes and
                        -- guarded constants)
      currentHoles : List Name -- unsolved metavariables in this session
-     constraints : Context Constraint -- metavariable constraints 
+     constraints : Context (Constraint annot) -- metavariable constraints 
      nextVar : Int -- next name for checking scopes of binders
 
-initUState : UnifyState
+initUState : UnifyState annot
 initUState = MkUnifyState [] [] empty 0
 
 public export
-UState : Type
-UState = State UnifyState
+UState : Type -> Type
+UState = UnifyState
+
+-- A label for unifiation state in the global state
+export
+data UST : Type where
 
 export
-setupUnify : ST m Var [add UState]
-setupUnify = new initUState
+setupUnify : CoreM annot [] [UST ::: UState annot] ()
+setupUnify = new UST initUState
 
 export
-doneUnify : (ustate : Var) -> ST m () [remove ustate UState]
-doneUnify ustate = delete ustate
+doneUnify : CoreM annot [UST ::: UState annot] [] ()
+doneUnify = delete UST
 
 export
-isHole : (ustate : Var) -> Name -> ST m Bool [ustate ::: UState]
-isHole ustate n 
-    = do ust <- read ustate
+isHole : Name -> Core annot [UST ::: UState annot] Bool
+isHole n 
+    = do ust <- get UST
          pure (n `elem` holes ust)
 
 export
-getHoleNames : (ustate : Var) -> ST m (List Name) [ustate ::: UState]
-getHoleNames ustate
-    = do ust <- read ustate
+getHoleNames : Core annot [UST ::: UState annot] (List Name)
+getHoleNames 
+    = do ust <- get UST
          pure (holes ust)
 
 export
-getCurrentHoleNames : (ustate : Var) -> ST m (List Name) [ustate ::: UState]
-getCurrentHoleNames ustate
-    = do ust <- read ustate
+getCurrentHoleNames : Core annot [UST ::: UState annot] (List Name)
+getCurrentHoleNames 
+    = do ust <- get UST
          pure (currentHoles ust)
 
 export
-resetHoles : (ustate : Var) -> ST m () [ustate ::: UState]
-resetHoles ustate
-    = do ust <- read ustate
-         write ustate (record { currentHoles = [] } ust)
+resetHoles : Core annot [UST ::: UState annot] ()
+resetHoles 
+    = do ust <- get UST
+         put UST (record { currentHoles = [] } ust)
 
 export
-addHoleName : (ustate : Var) -> Name -> ST m () [ustate ::: UState]
-addHoleName ustate n
-    = do ust <- read ustate
-         write ustate (record { holes $= (n ::),
-                                currentHoles $= (n ::) } ust)
+addHoleName : Name -> Core annot [UST ::: UState annot] ()
+addHoleName n
+    = do ust <- get UST
+         put UST (record { holes $= (n ::),
+                             currentHoles $= (n ::) } ust)
 
 export
-removeHoleName : (ustate : Var) -> Name -> ST m () [ustate ::: UState]
-removeHoleName ustate n
-    = do ust <- read ustate
-         write ustate (record { holes $= filter (/= n) } ust)
+removeHoleName : Name -> Core annot [UST ::: UState annot] ()
+removeHoleName n
+    = do ust <- get UST
+         put UST (record { holes $= filter (/= n) } ust)
 
 export
-genName : (ustate : Var) -> String -> ST m Name [ustate ::: UState]
-genName ustate root
-    = do ust <- read ustate
-         write ustate (record { nextVar $= (+1) } ust)
+genName : String -> Core annot [UST ::: UState annot] Name
+genName root
+    = do ust <- get UST
+         put UST (record { nextVar $= (+1) } ust)
          pure (MN root (nextVar ust))
 
 -- Make a new constant by applying a term to everything in the current
@@ -138,71 +142,60 @@ mkConstantApp {vars} cn env
 -- by applying the term to the current environment
 -- Return its name
 export
-addConstant : CtxtManage m =>
-              (ctxt : Var) -> (ustate : Var) ->
-              Env Term vars -> 
+addConstant : Env Term vars -> 
               (tm : Term vars) -> (ty : Term vars) ->
               (constrs : List Name) ->
-              ST m Name [ctxt ::: Defs, ustate ::: UState]
-addConstant ctxt ustate env tm ty constrs
+              Core annot [Ctxt ::: Defs, UST ::: UState annot] Name
+addConstant env tm ty constrs
     = do let def = mkConstant env tm
          let defty = mkConstantTy env ty
          let guess = newDef defty Public (Guess def constrs)
-         cn <- genName ustate "p"
-         addHoleName ustate cn
-         addDef ctxt cn guess
+         cn <- genName "p"
+         addHoleName cn
+         addDef cn guess
          pure cn
 
 -- Given a type, add a new global metavariable and return its name
-addNamedHole : CtxtManage m =>
-               (ctxt : Var) -> (ustate : Var) ->
-               Name ->
-               Env Term vars ->
+addNamedHole : Name -> Env Term vars ->
                (ty : Term vars) ->
-               ST m () [ctxt ::: Defs, ustate ::: UState]
-addNamedHole ctxt ustate cn env ty
+               Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+addNamedHole cn env ty
     = do let defty = mkConstantTy env ty
          let hole = newDef defty Public Hole
-         addHoleName ustate cn
+         addHoleName cn
          putStrLn $ "Added hole " ++ show cn ++ " : " ++ show defty
-         addDef ctxt cn hole
+         addDef cn hole
 
 -- Given a type, add a new global metavariable and return its name
 export
-addHole : CtxtManage m =>
-          (ctxt : Var) -> (ustate : Var) ->
-          Env Term vars ->
+addHole : Env Term vars ->
           (ty : Term vars) ->
-          ST m Name [ctxt ::: Defs, ustate ::: UState]
-addHole ctxt ustate env ty
-    = do cn <- genName ustate "h"
-         addNamedHole ctxt ustate cn env ty
+          Core annot [Ctxt ::: Defs, UST ::: UState annot] Name
+addHole env ty
+    = do cn <- genName "h"
+         addNamedHole cn env ty
          pure cn
 
 export
-addBoundName : CtxtManage m =>
-               (ctxt : Var) -> (ustate : Var) ->
-               Name -> Env Term vars ->
+addBoundName : Name -> Env Term vars ->
                (ty : Term vars) ->
-               ST m (Term vars) [ctxt ::: Defs, ustate ::: UState]
-addBoundName ctxt ustate n env exp
-    = do addNamedHole ctxt ustate n env exp
+               Core annot [Ctxt ::: Defs, UST ::: UState annot] (Term vars)
+addBoundName n env exp
+    = do addNamedHole n env exp
          pure (mkConstantApp n env)
 
 export
-setConstraint : (ustate : Var) -> Name -> Constraint ->
-                ST m () [ustate ::: UState]
-setConstraint ustate cname c
-    = do ust <- read ustate
-         write ustate (record { constraints $= addCtxt cname c } ust)
+setConstraint : Name -> Constraint annot ->
+                Core annot [UST ::: UState annot] ()
+setConstraint cname c
+    = do ust <- get UST
+         put UST (record { constraints $= addCtxt cname c } ust)
 
 export
-addConstraint : (ctxt : Var) -> (ustate : Var) ->
-                Constraint ->        
-                ST m Name [ctxt ::: Defs, ustate ::: UState]
-addConstraint ctxt ustate constr
-    = do c_id <- getNextHole ctxt
+addConstraint : Constraint annot ->        
+                Core annot [Ctxt ::: Defs, UST ::: UState annot] Name
+addConstraint constr
+    = do c_id <- getNextHole
          let cn = MN "constraint" c_id
-         setConstraint ustate cn constr
+         setConstraint cn constr
          pure cn
-

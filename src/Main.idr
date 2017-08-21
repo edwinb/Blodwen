@@ -12,75 +12,73 @@ import TTImp.Elab
 import Parser.RawImp
 import Parser.Raw
 
-import Control.ST
-import Control.ST.Exception
-import Control.IOExcept
+import Control.Catchable
+import Control.Monad.StateE
 import Interfaces.FileIO
 import Interfaces.SystemIO
 
 %default covering
 
-using (CtxtManage m, FileIO m)
-  processDecls : (ctxt : Var) -> List RawDecl -> ST m () [ctxt ::: Defs]
-  processDecls ctxt decls
+using (FileIO m)
+  processDecls : List RawDecl -> CoreI () m [Ctxt ::: Defs] ()
+  processDecls decls
       = do -- putStrLn "Parsed OK"
            -- putStrLn (showSep "\n" (map show decls))
-           xs <- mapST (addDecl ctxt) decls
+           xs <- traverse (\x => addDecl () x) decls
            pure ()
 
-  process : (ctxt : Var) -> String -> ST m () [ctxt ::: Defs]
-  process ctxt file
+  process : String -> CoreI () m [Ctxt ::: Defs] ()
+  process file
       = do Right res <- readFile file
                  | Left err => putStrLn ("File error: " ++ show err)
            case runParser res prog of
                 Left err => putStrLn ("Parse error: " ++ show err)
                 Right decls => 
-                     catch (processDecls ctxt decls)
+                     catch (processDecls decls)
                            (\err => printLn err)
 
-  runMain : (ctxt : Var) -> ST m () [ctxt ::: Defs]
-  runMain ctxt
+  runMain : CoreI () m [Ctxt ::: Defs] ()
+  runMain
       = case runParser "main" raw of
              Left err => printLn "Can't happen, error parsing 'main'"
              Right raw => do
-               (ptm, pty) <- infer ctxt [] raw
+               (ptm, pty) <- infer () [] raw
                putStr "Evaluating main: "
-               gam <- getCtxt ctxt
+               gam <- getCtxt
                printLn (normalise gam [] ptm) 
 
-  tryTTImp : (ctxt : Var) -> (ustate : Var) -> 
-             ST m () [ctxt ::: Defs, ustate ::: UState]
-  tryTTImp ctxt ustate
+  tryTTImp : CoreI () m [Ctxt ::: Defs, UST ::: UState ()] ()
+  tryTTImp
       = do putStr "Blodwen> "
            inp <- getStr
            case runParser inp expr of
                 Left err => do printLn err
-                               tryTTImp ctxt ustate
+                               tryTTImp
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
-                       (tm, ty) <- inferTerm ctxt ustate [] ttimp 
+                       (tm, ty) <- inferTerm [] ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
-                       gam <- getCtxt ctxt
+                       gam <- getCtxt
                        putStrLn (show (normalise gam [] tm) ++ " : " ++
                                  show (normalise gam [] ty))
-                       tryTTImp ctxt ustate
+                       tryTTImp
 
-  usageMsg : ST m () []
+  usageMsg : Core () [] ()
   usageMsg = putStrLn "Usage: blodwen [source file]"
 
-  stMain : SystemIO m => ST m () []
+  stMain : SystemIO m => CoreI () m [] ()
   stMain 
-      = do ctxt <- newCtxt
-           [_, fname] <- getArgs | _ => do usageMsg; deleteCtxt ctxt
+      = do newCtxt
+           [_, fname] <- getArgs | _ => do usageMsg; deleteCtxt
            putStrLn $ "Loading " ++ fname
-           process ctxt fname
+           process fname
            ustate <- setupUnify
-           tryTTImp ctxt ustate
-           doneUnify ustate
-           deleteCtxt ctxt
+           tryTTImp
+           doneUnify
+           deleteCtxt
 
 main : IO ()
 main = do putStrLn "Welcome to Blodwen. Good luck."
-          ioe_run (run stMain)
-               (\err : Error => putStrLn ("Uncaught error: " ++ show err))
+          ioe_run (runSTE stMain [])
+               (\err : Error () => putStrLn ("Uncaught error: " ++ show err))
                (\res => pure ())

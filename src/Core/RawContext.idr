@@ -29,55 +29,53 @@ public export
 data RawDecl = FnDecl RawFnDef
              | DataDecl RawData
 
-using (CtxtManage m)
-  addTyDecl : (ctxt : Var) -> (ty : RawTy) -> 
-              ST m (Name, ClosedTerm) [ctxt ::: Defs]
-  addTyDecl ctxt (MkRawTy n ty)
-      = do tyc <- check ctxt [] ty TType
-           addDef ctxt n (newDef tyc Public None)
-           pure (n, tyc)
+addTyDecl : annot -> (ty : RawTy) -> Core annot [Ctxt ::: Defs] (Name, ClosedTerm)
+addTyDecl loc (MkRawTy n ty)
+    = do tyc <- check loc [] ty TType
+         addDef n (newDef tyc Public None)
+         pure (n, tyc)
 
-  checkClause : (ctxt : Var) -> RawClause -> ST m Clause [ctxt ::: Defs]
-  checkClause ctxt (MkRawClause pvars lhs rhs)
-  -- Plan: Check the LHS, extract the environment, use that to check the RHS,
-  -- then make sure the types of each side are convertible.
-      = do let lhs_in = bind pvars lhs
-           -- TODO: Logging here instead
-           -- putStrLn ("Checking LHS " ++ show lhs_in)
-           (lhsc, lhsty) <- infer ctxt [] lhs_in
-           let (patvars ** (lhsenv, lhsbound, lhsboundty)) 
-                = getPatternEnv [] lhsc lhsty
-           -- putStrLn ("Checking RHS " ++ show rhs)
-           (rhsc, rhsty) <- infer ctxt lhsenv rhs
-           checkConvert ctxt lhsenv lhsboundty rhsty
-           pure (MkClause lhsenv lhsbound rhsc)
-    where
-      bind : List (Name, Raw) -> Raw -> Raw
-      bind [] tm = tm
-      bind ((n, ty) :: ps) tm = RBind n (PVar ty) (bind ps tm)
+checkClause : annot -> RawClause -> Core annot [Ctxt ::: Defs] Clause
+checkClause loc (MkRawClause pvars lhs rhs)
+-- Plan: Check the LHS, extract the environment, use that to check the RHS,
+-- then make sure the types of each side are convertible.
+    = do let lhs_in = bind pvars lhs
+         -- TODO: Logging here instead
+         -- putStrLn ("Checking LHS " ++ show lhs_in)
+         (lhsc, lhsty) <- infer loc [] lhs_in
+         let (patvars ** (lhsenv, lhsbound, lhsboundty)) 
+              = getPatternEnv [] lhsc lhsty
+         -- putStrLn ("Checking RHS " ++ show rhs)
+         (rhsc, rhsty) <- infer loc lhsenv rhs
+         checkConvert loc lhsenv lhsboundty rhsty
+         pure (MkClause lhsenv lhsbound rhsc)
+  where
+    bind : List (Name, Raw) -> Raw -> Raw
+    bind [] tm = tm
+    bind ((n, ty) :: ps) tm = RBind n (PVar ty) (bind ps tm)
 
-  addFn : (ctxt : Var) -> (def : RawFnDef) -> ST m () [ctxt ::: Defs]
-  addFn ctxt (MkRawFn n ty cs)
-      = do tyc <- check ctxt [] ty TType
-           addDef ctxt n (newDef tyc Public None)
-           csc <- mapST (checkClause ctxt) cs
-           addFnDef ctxt Public (MkFn n tyc csc)
+addFn : annot -> (def : RawFnDef) -> Core annot [Ctxt ::: Defs] ()
+addFn loc (MkRawFn n ty cs)
+    = do tyc <- check loc [] ty TType
+         addDef n (newDef tyc Public None)
+         csc <- traverse (\x => checkClause loc x) cs
+         addFnDef loc Public (MkFn n tyc csc)
 
-  addData : (ctxt : Var) -> (def : RawData) -> ST m () [ctxt ::: Defs]
-  addData ctxt (MkRawData tycon datacons)
-      = do (tn, tty) <- addTyDecl ctxt tycon
-           cons <- mapST checkCon datacons
-           gam <- getCtxt ctxt
-           let def = MkData (MkCon tn (getArity gam [] tty) tty) cons
-           addData ctxt Public def
-    where
-      checkCon : RawTy -> ST m Constructor [ctxt ::: Defs]
-      checkCon (MkRawTy n ty) 
-          = do tyc <- check ctxt [] ty TType
-               gam <- getCtxt ctxt
-               pure (MkCon n (getArity gam [] tyc) tyc)
+addData : annot -> (def : RawData) -> Core annot [Ctxt ::: Defs] ()
+addData loc (MkRawData tycon datacons)
+    = do (tn, tty) <- addTyDecl loc tycon
+         cons <- traverse (\x => checkCon x) datacons
+         gam <- getCtxt 
+         let def = MkData (MkCon tn (getArity gam [] tty) tty) cons
+         addData Public def
+  where
+    checkCon : RawTy -> Core annot [Ctxt ::: Defs] Constructor
+    checkCon (MkRawTy n ty) 
+        = do tyc <- check loc [] ty TType
+             gam <- getCtxt 
+             pure (MkCon n (getArity gam [] tyc) tyc)
 
-  export
-  addDecl : (ctxt : Var) -> (def : RawDecl) -> ST m () [ctxt ::: Defs]
-  addDecl ctxt (FnDecl f) = addFn ctxt f
-  addDecl ctxt (DataDecl d) = addData ctxt d
+export
+addDecl : annot -> (def : RawDecl) -> Core annot [Ctxt ::: Defs] ()
+addDecl loc (FnDecl f) = addFn loc f
+addDecl loc (DataDecl d) = addData loc d

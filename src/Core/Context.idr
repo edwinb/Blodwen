@@ -3,10 +3,7 @@ module Core.Context
 import Core.TT
 import Core.CaseTree
 
-import public Control.ST
-import public Control.ST.Exception
-
-import Control.IOExcept
+import public Control.Monad.StateE
 import Data.SortedMap
 import Data.List
 
@@ -15,15 +12,6 @@ import Data.List
 export
 data Context : Type -> Type where
      MkContext : SortedMap Name a -> Context a
-
-export
-mapST : (a -> STrans m b cs (const cs)) -> List a ->
-        STrans m (List b) cs (const cs)
-mapST f [] = pure []
-mapST f (x :: xs) 
-    = do x' <- f x
-         xs' <- mapST f xs
-         pure (x' :: xs')
 
 export
 empty : Context a
@@ -112,91 +100,115 @@ data FnDef : Type where
             FnDef
 
 -- All possible errors
+-- 'annot' is an annotation provided by the thing which called the
+-- function which had an error; it's intended to provide any useful information
+-- a high level language might need, e.g. file/line number
 public export
-data Error = CantConvert (Env Term vars) (Term vars) (Term vars)
-           | UndefinedName Name
-           | NotFunctionType (Term vars)
-           | CaseCompile Name CaseError 
-           | GenericMsg String
+data Error annot
+    = CantConvert annot (Env Term vars) (Term vars) (Term vars)
+	  | UndefinedName annot Name
+	  | NotFunctionType annot (Term vars)
+	  | CaseCompile annot Name CaseError 
+	  | GenericMsg annot String
+    | InternalError String
 
 export
-Show Error where
-  show (CantConvert env x y) 
+Show (Error annot) where
+  show (CantConvert _ env x y) 
       = "Type mismatch: " ++ show x ++ " and " ++ show y
-  show (UndefinedName x) = "Undefined name " ++ show x
-  show (NotFunctionType tm) = "Not a function type: " ++ show tm
-  show (CaseCompile n DifferingArgNumbers) 
+  show (UndefinedName _ x) = "Undefined name " ++ show x
+  show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
+  show (CaseCompile _ n DifferingArgNumbers) 
       = "Patterns for " ++ show n ++ " have different numbers of arguments"
-  show (GenericMsg str) = str
+  show (GenericMsg _ str) = str
+  show (InternalError str) = "INTERNAL ERROR: " ++ str
 
 export
-error : Error -> Either Error a
+error : Error annot -> Either (Error annot) a
 error = Left
 
 -- When we're manipulating contexts, we can throw exceptions and log errors
 -- TODO: Maybe ConsoleIO should be a logging interface, therefore?
 export
-interface (Exception m Error, ConsoleIO m) =>
-          CtxtManage (m : Type -> Type) where
+interface (Catchable m (Error annot), ConsoleIO m) =>
+          CtxtManage (m : Type -> Type) annot | m where
 
 export
-(Exception m Error, ConsoleIO m) => CtxtManage m where
+(Catchable m (Error annot), ConsoleIO m) => CtxtManage m annot where
 
 export
 Defs : Type
-Defs = State ContextDefs
+Defs = ContextDefs
+
+-- A label for the context in the global state
+export
+data Ctxt : Type where
+
+public export
+Core : Type -> StateInfo -> Type -> Type
+Core annot s t 
+    = {m : Type -> Type} -> (Monad m, CtxtManage m annot) => 
+      SE s (Error annot) m t
+
+public export
+CoreI : Type -> (m : Type -> Type) -> StateInfo -> Type -> Type
+CoreI annot m s t = ((Monad m, CtxtManage m annot) => SE s (Error annot) m t)
+
+public export
+CoreM : Type -> StateInfo -> StateInfo -> Type -> Type
+CoreM annot s s' t 
+    = {m : Type -> Type} -> 
+	    (Monad m, CtxtManage m annot) => StatesE s s' (Error annot) m t
 
 export
-getCtxt : (ctxt : Var) -> ST m Gamma [ctxt ::: Defs]
-getCtxt ctxt = pure (gamma !(read ctxt))
+getCtxt : Core annot [Ctxt ::: Defs] Gamma
+getCtxt = pure (gamma !(get Ctxt))
 
 export
-getNextTypeTag : (ctxt : Var) -> ST m Int [ctxt ::: Defs]
-getNextTypeTag ctxt 
-    = do defs <- read ctxt
+getNextTypeTag : Core annot [Ctxt ::: Defs] Int
+getNextTypeTag 
+    = do defs <- get Ctxt
          let t = nextTag defs
-         write ctxt (record { nextTag = t + 1 } defs)
+         put Ctxt (record { nextTag = t + 1 } defs)
          pure t
 
 export
-getNextHole : (ctxt : Var) -> ST m Int [ctxt ::: Defs]
-getNextHole ctxt 
-    = do defs <- read ctxt
+getNextHole : Core annot [Ctxt ::: Defs] Int
+getNextHole 
+    = do defs <- get Ctxt
          let t = nextHole defs
-         write ctxt (record { nextHole = t + 1 } defs)
+         put Ctxt (record { nextHole = t + 1 } defs)
          pure t
 
 export
-setCtxt : (ctxt : Var) -> Gamma -> ST m () [ctxt ::: Defs]
-setCtxt ctxt gam 
-    = do st <- read ctxt
-         write ctxt (record { gamma = gam } st)
+setCtxt : Gamma -> Core annot [Ctxt ::: Defs] ()
+setCtxt gam 
+    = do st <- get Ctxt
+         put Ctxt (record { gamma = gam } st)
 
 export
-newCtxt : ST m Var [add Defs]
-newCtxt = new initCtxt
+newCtxt : CoreM annot [] [Ctxt ::: Defs] ()
+newCtxt = new Ctxt initCtxt
 
 export
-deleteCtxt : (ctxt : Var) -> ST m () [remove ctxt Defs]
-deleteCtxt ctxt = delete ctxt
+deleteCtxt : CoreM annot [Ctxt ::: Defs] [] ()
+deleteCtxt = delete Ctxt
 
 export
-addDef : CtxtManage m => (ctxt : Var) -> Name -> GlobalDef -> 
-                         ST m () [ctxt ::: Defs]
-addDef ctxt n def 
-    = do g <- getCtxt ctxt
-         setCtxt ctxt (addCtxt n def g)
+addDef : Name -> GlobalDef -> Core annot [Ctxt ::: Defs] ()
+addDef n def 
+    = do g <- getCtxt 
+         setCtxt (addCtxt n def g)
 
 export
-updateDef : CtxtManage m => (ctxt : Var) -> Name -> Def -> 
-                            ST m () [ctxt ::: Defs]
-updateDef ctxt n def 
-    = do g <- getCtxt ctxt
+updateDef : Name -> Def -> Core annot [Ctxt ::: Defs] ()
+updateDef n def 
+    = do g <- getCtxt
          case lookupCtxt n g of
-              Nothing => throw (UndefinedName n)
+              Nothing => throw (InternalError ("No such name to update " ++ show n))
               Just odef => 
                    let gdef = record { definition = def } odef in
-                       setCtxt ctxt (addCtxt n gdef g)
+                       setCtxt (addCtxt n gdef g)
  
 
 argToPat : ClosedTerm -> Pat
@@ -207,42 +219,40 @@ argToPat tm with (unapply tm)
   argToPat (apply (PrimVal c) []) | ArgsList = PConst c
   argToPat (apply f args) | ArgsList = PAny
 
-toPatClause : CtxtManage m =>
-              (ctxt : Var) -> Name -> (ClosedTerm, ClosedTerm) ->
-              ST m (List Pat, ClosedTerm) [ctxt ::: Defs]
-toPatClause ctxt n (lhs, rhs) with (unapply lhs)
-  toPatClause ctxt n (apply (Ref Func fn) args, rhs) | ArgsList 
+toPatClause : annot -> Name -> (ClosedTerm, ClosedTerm) ->
+              Core annot [Ctxt ::: Defs] (List Pat, ClosedTerm)
+toPatClause loc n (lhs, rhs) with (unapply lhs)
+  toPatClause loc n (apply (Ref Func fn) args, rhs) | ArgsList 
       = case nameEq n fn of
-             Nothing => throw (GenericMsg "Wrong function name in pattern LHS")
+             Nothing => throw (GenericMsg loc "Wrong function name in pattern LHS")
              Just Refl => do -- putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
                              pure (map argToPat args, rhs)
-  toPatClause ctxt n (apply f args, rhs) | ArgsList 
-      = throw (GenericMsg "Not a function name in pattern LHS")
+  toPatClause loc n (apply f args, rhs) | ArgsList 
+      = throw (GenericMsg loc "Not a function name in pattern LHS")
 
 -- Assumption (given 'ClosedTerm') is that the pattern variables are
 -- explicitly named. We'll assign de Bruijn indices when we're done, and
 -- the names of the top level variables we created are returned in 'args'
 export
-simpleCase : CtxtManage m =>
-             (ctxt : Var) -> Name -> (def : CaseTree []) ->
+simpleCase : annot -> Name -> (def : CaseTree []) ->
              (clauses : List (ClosedTerm, ClosedTerm)) ->
-             ST m (args ** CaseTree args) [ctxt ::: Defs]
-simpleCase ctxt fn def clauses 
-    = do ps <- mapST (toPatClause ctxt fn) clauses
+             Core annot [Ctxt ::: Defs] (args ** CaseTree args)
+simpleCase loc fn def clauses 
+      -- \x is needed below due to scoped implicits being weird...
+    = do ps <- traverse (\x => toPatClause loc fn x) clauses
          case patCompile ps def of
-              Left err => throw (CaseCompile fn err)
+              Left err => throw (CaseCompile loc fn err)
               Right ok => pure ok
 
 export
-addFnDef : CtxtManage m =>
-           (ctxt : Var) -> Visibility ->
-           FnDef -> ST m () [ctxt ::: Defs]
-addFnDef ctxt vis (MkFn n ty clauses) 
+addFnDef : annot -> Visibility ->
+           FnDef -> Core annot [Ctxt ::: Defs] ()
+addFnDef loc vis (MkFn n ty clauses) 
     = do let cs = map toClosed clauses
-         (args ** tree) <- simpleCase ctxt n (Unmatched "Unmatched case") cs
+         (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
          -- putStrLn $ "Case tree: " ++ show args ++ " " ++ show tree
          let def = newDef ty vis (PMDef args tree)
-         addDef ctxt n def
+         addDef n def
   where
     close : Int -> Env Term vars -> Term vars -> ClosedTerm
     close i [] tm = tm
@@ -254,15 +264,13 @@ addFnDef ctxt vis (MkFn n ty clauses)
           = (close 0 env lhs, close 0 env rhs)
 
 export
-addData : CtxtManage m =>
-          (ctxt : Var) -> Visibility ->
-          DataDef -> ST m () [ctxt ::: Defs]
-addData ctxt vis (MkData (MkCon tyn arity tycon) datacons)
-    = do gam <- getCtxt ctxt
-         tag <- getNextTypeTag ctxt
+addData : Visibility -> DataDef -> Core annot [Ctxt ::: Defs] ()
+addData vis (MkData (MkCon tyn arity tycon) datacons)
+    = do gam <- getCtxt 
+         tag <- getNextTypeTag 
          let tydef = newDef tycon vis (TCon tag arity (map name datacons))
          let gam' = addCtxt tyn tydef gam
-         setCtxt ctxt (addDataConstructors 0 datacons gam')
+         setCtxt (addDataConstructors 0 datacons gam')
   where
     conVisibility : Visibility -> Visibility
     conVisibility Export = Private
@@ -277,8 +285,8 @@ addData ctxt vis (MkData (MkCon tyn arity tycon) datacons)
              addDataConstructors tag cs gam'
 
 export
-runWithCtxt : ST (IOExcept Error) () [] -> IO ()
-runWithCtxt prog = ioe_run (run prog) 
+runWithCtxt : Core annot [] () -> IO ()
+runWithCtxt prog = ioe_run (runSTE prog []) 
                            (\err => printLn err)
                            (\ok => pure ())
 
