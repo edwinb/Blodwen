@@ -131,8 +131,10 @@ convert loc env x y
     = catch (do vs <- unify loc env x y
                 solveConstraints
                 pure vs)
-            (\_ => do putStrLn "CATCH"
-                      throw (CantConvert loc env x y))
+            (\err => do gam <- getCtxt 
+                        throw (WhenUnifying loc (normaliseHoles gam env x)
+                                                (normaliseHoles gam env y)
+                                  err))
 
 checkExp : annot ->
            Env Term vars ->

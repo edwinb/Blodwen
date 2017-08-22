@@ -28,7 +28,7 @@ addCtxt n val (MkContext dict) = MkContext (insert n val dict)
 public export
 data Def : Type where
      None  : Def -- Not yet defined
-     PMDef : (args : List Name) -> CaseTree args -> Def
+     PMDef : (ishole : Bool) -> (args : List Name) -> CaseTree args -> Def
      DCon  : (tag : Int) -> (arity : Nat) -> Def
      TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
 
@@ -106,6 +106,8 @@ data FnDef : Type where
 public export
 data Error annot
     = CantConvert annot (Env Term vars) (Term vars) (Term vars)
+    | Cycle annot (Env Term vars) (Term vars) (Term vars)
+    | WhenUnifying annot (Term vars) (Term vars) (Error annot)
 	  | UndefinedName annot Name
 	  | NotFunctionType annot (Term vars)
 	  | CaseCompile annot Name CaseError 
@@ -116,6 +118,11 @@ export
 Show (Error annot) where
   show (CantConvert _ env x y) 
       = "Type mismatch: " ++ show x ++ " and " ++ show y
+  show (Cycle _ env x y) 
+      = "Occurs check failed: " ++ show x ++ " and " ++ show y
+  show (WhenUnifying _ x y err)
+      = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++
+        show err
   show (UndefinedName _ x) = "Undefined name " ++ show x
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
   show (CaseCompile _ n DifferingArgNumbers) 
@@ -251,7 +258,7 @@ addFnDef loc vis (MkFn n ty clauses)
     = do let cs = map toClosed clauses
          (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
          -- putStrLn $ "Case tree: " ++ show args ++ " " ++ show tree
-         let def = newDef ty vis (PMDef args tree)
+         let def = newDef ty vis (PMDef False args tree)
          addDef n def
   where
     close : Int -> Env Term vars -> Term vars -> ClosedTerm
@@ -289,51 +296,3 @@ runWithCtxt : Core annot [] () -> IO ()
 runWithCtxt prog = ioe_run (runSTE prog []) 
                            (\err => printLn err)
                            (\ok => pure ())
-
---- Some test entries
-export
-plusDef : GlobalDef
-plusDef = newDef TType Public
-           (PMDef [UN "x", UN "y"]
-                  (testPlus (UN "plus")))
-
-zDef : GlobalDef
-zDef = newDef TType Public
-           (DCon 0 0)
-
-sDef : GlobalDef
-sDef = newDef TType Public
-           (DCon 1 1)
-
-export
-testGam : Gamma
-testGam = addCtxt (UN "plus") plusDef $
-          addCtxt (UN "Z") zDef $
-          addCtxt (UN "S") sDef $
-          empty
-
-export
-zero : Term sc
-zero = Ref (DataCon 0 0) (UN "Z")
-
-export
-succ : Term sc
-succ = Ref (DataCon 1 1) (UN "S")
-
-export
-one : Term sc
-one = App succ zero
-
-export
-two : Term sc
-two = App succ one
-
-export
-lam : (x : String) -> Term sc -> Term (UN x :: sc) -> Term sc
-lam x ty tm = Bind (UN x) (Lam ty) tm
-
-var : (x : String) -> {auto prf : Elem (UN x) sc} -> Term sc
-var x {prf} = Local prf
-
-idFn : Term []
-idFn = lam "X" TType (lam "x" (var "X") (var "X"))

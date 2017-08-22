@@ -25,7 +25,7 @@ parameters (loc : annot, gam : Gamma)
         = case defined x env of
                Nothing => 
                   case lookupDefTy x gam of
-                       Just (PMDef _ _, ty) => 
+                       Just (PMDef _ _ _, ty) => 
                             pure $ (Ref Func x, embed ty)
                        Just (DCon tag arity, ty) => 
                             pure $ (Ref (DataCon tag arity) x, embed ty)

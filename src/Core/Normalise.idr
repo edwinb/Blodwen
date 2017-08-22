@@ -51,7 +51,7 @@ data NF : List Name -> Type where
 Stack : List Name -> Type
 Stack vars = List (Closure vars)
 
-parameters (gam : Gamma)
+parameters (gam : Gamma, holesonly : Bool)
   mutual
     eval : Env Term free -> LocalEnv free vars -> Stack free ->
            Term (vars ++ free) -> NF free
@@ -71,11 +71,6 @@ parameters (gam : Gamma)
     eval env loc stk Erased = NErased
     eval env loc stk TType = NType
 
-    export
-    evalClosure : Closure free -> NF free
-    evalClosure (MkClosure loc env tm)
-        = eval env loc [] tm
-    
     evalLocal : Env Term free -> LocalEnv free vars -> Stack free -> 
                 Elem x (vars ++ free) -> NF free
     evalLocal {vars = []} env loc stk p 
@@ -92,7 +87,8 @@ parameters (gam : Gamma)
               NameType -> Name -> NF free
     evalRef env loc stk nt fn
         = case lookupDef fn gam of
-               Just (PMDef args tree) =>
+               Just (PMDef h args tree) =>
+                 if h || not holesonly then
                     case extendFromStack args loc stk of
                          Nothing => NApp (NRef nt fn) stk
                          Just (loc', stk') => 
@@ -100,6 +96,7 @@ parameters (gam : Gamma)
                                    Nothing => 
                                         NApp (NRef nt fn) stk
                                    Just val => val
+                    else NApp (NRef nt fn) stk
                Just (DCon tag arity) => 
                     case takeFromStack arity stk of
                          Nothing => NApp (NRef nt fn) stk
@@ -191,10 +188,21 @@ parameters (gam : Gamma)
             Just (eval env loc stk tm')
     evalTree env loc stk (Unmatched msg) = Nothing
     evalTree env loc stk Impossible = Nothing
+    
+export
+evalClosure : Gamma -> Closure free -> NF free
+evalClosure gam (MkClosure loc env tm)
+    = eval gam False env loc [] tm
+    
 
 export
 nf : Gamma -> Env Term free -> Term free -> NF free
-nf gam env tm = eval gam env [] [] tm
+nf gam env tm = eval gam False env [] [] tm
+
+-- Only evaluate names which stand for solved holes
+export
+nfHoles : Gamma -> Env Term free -> Term free -> NF free
+nfHoles gam env tm = eval gam True env [] [] tm
 
 genName : String -> State Int Name
 genName root 
@@ -272,6 +280,10 @@ Quote Closure where
 export
 normalise : Gamma -> Env Term free -> Term free -> Term free
 normalise gam env tm = quote gam env (nf gam env tm)
+
+export
+normaliseHoles : Gamma -> Env Term free -> Term free -> Term free
+normaliseHoles gam env tm = quote gam env (nfHoles gam env tm)
 
 export
 getValArity : Gamma -> Env Term vars -> NF vars -> Nat

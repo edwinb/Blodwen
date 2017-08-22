@@ -129,7 +129,7 @@ instantiate loc metavar smvs tm {newvars}
                          Nothing => ufail loc $ "Can't make solution for " ++ show metavar
                          Just rhs => 
                             do let soln = newDef ty Public 
-                                               (PMDef [] (STerm rhs))
+                                               (PMDef True [] (STerm rhs))
                                addDef metavar soln
                                removeHoleName metavar
   where
@@ -238,7 +238,7 @@ mutual
                         Nothing => ufail loc $ "Can't shrink hole"
                         Just olddef =>
                            do let soln = newDef defty Public
-                                              (PMDef [] (STerm olddef))
+                                              (PMDef True [] (STerm olddef))
                               addDef oldhole soln
                               removeHoleName oldhole
                               pure (apply (Ref Func newhole) sofar)
@@ -305,10 +305,9 @@ mutual
                                else
                                 -- otherwise, instantiate the hole
                                    if not (occursCheck var tm')
-                                      then ufail loc $ "Occurs check failed when unifying " ++
-                                              show (quote empty env (NApp (NRef nt var) args)) ++
-                                              " and " ++
-                                              show (quote empty env tm)
+                                      then throw (Cycle loc env
+                                                   (quote empty env (NApp (NRef nt var) args))
+                                                   (quote empty env tm))
                                       else do
                                          instantiate loc var submv tm'
                                          pure []
@@ -483,7 +482,7 @@ retryHole hole
                            -- All constraints resolved, so turn into a
                            -- proper definition and remove it from the
                            -- hole list
-                           [] => do updateDef hole (PMDef [] (STerm tm))
+                           [] => do updateDef hole (PMDef True [] (STerm tm))
                                     removeHoleName hole
                            newcs => updateDef hole (Guess tm newcs)
               Just _ => pure () -- Nothing we can do
@@ -509,7 +508,7 @@ dumpHole hole
                                         show (normalise gam [] ty)
                       traverse (\x => dumpConstraint x) constraints 
                       pure ()
-              Just (PMDef args t, ty) =>
+              Just (PMDef _ args t, ty) =>
                    putStrLn $ "Solved: " ++ show hole ++ " : " ++ 
                                  show (normalise gam [] ty) ++
                                  " = " ++ show t
