@@ -99,6 +99,10 @@ namespace_ : Rule (List String)
 namespace_ = sepBy1 (symbol ".") identPart
 
 export
+unqualifiedName : Rule String
+unqualifiedName = identPart
+
+export
 name : Rule Name
 name 
     = do ns <- namespace_ 

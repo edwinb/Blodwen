@@ -15,10 +15,12 @@ import Data.List
 
 -- How the elaborator should deal with IBindVar:
 -- * NONE: IBindVar is not valid (rhs of an definition, top level expression)
--- * PI: Bind implicits as Pi, in the appropriate scope
+-- * PI True: Bind implicits as Pi, in the appropriate scope, and bind
+--            any additional holes
+-- * PI False: As above, but don't bind additional holes
 -- * PATT: Bind implicits as PVar, but only at the top level
 public export
-data ImplicitMode = NONE | PI | PATTERN
+data ImplicitMode = NONE | PI Bool | PATTERN
 
 record ElabState (vars : List Name) where
   constructor MkElabState
@@ -64,11 +66,36 @@ strengthenEState False loc
          todo <- traverse (\x => strTms x) (toBind est)
          putM EST (MkElabState bns todo)
   where
+    -- Remove any instance of the top level local variable from an
+    -- application. Fail if it turns out to be necessary.
+    -- NOTE: While this isn't strictly correct given the type of the hole
+    -- which stands for the unbound implicits, it's harmless because we
+    -- never actualy *use* that hole - this process is only to ensure that the
+    -- unbound implicit doesn't depend on any variables it doesn't have
+    -- in scope.
+    removeArgVars : List (Term (n :: vs)) -> Maybe (List (Term vs))
+    removeArgVars [] = pure []
+    removeArgVars (Local (There p) :: args) 
+        = do args' <- removeArgVars args
+             pure (Local p :: args')
+    removeArgVars (Local Here :: args) 
+        = removeArgVars args
+    removeArgVars (a :: args)
+        = do a' <- shrinkTerm a (DropCons SubRefl)
+             args' <- removeArgVars args
+             pure (a' :: args')
+
+    removeArg : Term (n :: vs) -> Maybe (Term vs)
+    removeArg tm with (unapply tm)
+      removeArg (apply f args) | ArgsList 
+          = do args' <- removeArgVars args
+               f' <- shrinkTerm f (DropCons SubRefl)
+               pure (apply f' args')
+
     strTms : (Name, (Term (n :: vs), Term (n :: vs))) -> 
              Core annot [EST ::: EState (n :: vs)] (Name, (Term vs, Term vs))
-    strTms (f, (x, y))
-        = case (shrinkTerm x (DropCons SubRefl),
-                  shrinkTerm y (DropCons SubRefl)) of
+    strTms {vs} (f, (x, y))
+        = case (removeArg x, shrinkTerm y (DropCons SubRefl)) of
                (Just x', Just y') => pure (f, (x', y'))
                _ => throw (GenericMsg loc ("Invalid unbound implicit " ++ show f))
 
@@ -219,8 +246,9 @@ mutual
            checkExp loc env x' ty expected
   checkImp top env (IType loc) exp
       = checkExp loc env TType TType exp
-  checkImp top env (IBindVar loc n) Nothing
-      = do t <- addHole env TType
+  checkImp top env (IBindVar loc str) Nothing
+      = do let n = PV str
+           t <- addHole env TType
            let hty = mkConstantApp t env
            est <- get EST
            case lookup n (boundNames est) of
@@ -232,8 +260,9 @@ mutual
                      pure (tm, hty)
                 Just (tm, ty) =>
                      pure (tm, ty)
-  checkImp top env (IBindVar loc n) (Just expected) 
-      = do est <- get EST
+  checkImp top env (IBindVar loc str) (Just expected) 
+      = do let n = PV str
+           est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
                   do tm <- addBoundName n env expected
@@ -279,8 +308,8 @@ mutual
       = do (tyv, tyt) <- check False env argty (Just TType)
            let env' : Env Term (n :: _) = Pi info tyv :: env
            est <- get EST
-           let argImps = reverse $ toBind est
-           clearToBind 
+           let argImps = if top then (reverse $ toBind est) else []
+           when top $ clearToBind 
            weakenEState 
            (scopev, scopet) <- check top env' retty (Just TType)
            est <- get EST
@@ -291,7 +320,9 @@ mutual
            -- TODO: This is only in 'PI' implicit mode - it's an error to
            -- have implicits at this level in 'PATT' implicit mode
            if top
-              then do let scopev' = bindImplicits 0 (dropSnd scopeImps) scopev
+              then do putStrLn $ "Binding implicits " ++ show (dropSnd argImps)
+                                                      ++ show (dropSnd scopeImps)
+                      let scopev' = bindImplicits 0 (dropSnd scopeImps) scopev
                       let binder = bindImplicits 0 (dropSnd argImps)
                                       (Bind n (Pi info tyv) scopev')
                       checkExp loc env binder TType expected
@@ -420,9 +451,9 @@ inferTerm env tm
          dumpConstraints 
          let restm = bindImplicits 0 (dropSnd fullImps) chktm
          gam <- getCtxt
-         -- TODO: Only in implicits mode, and normalise only the hole names
-         hs <- findHoles (normalise gam env restm)
---          putStrLn $ "Extra implicits: " ++ show hs
+         -- TODO: Only in implicits mode
+         hs <- findHoles (normaliseHoles gam env restm)
+         putStrLn $ "Extra implicits: " ++ show hs
          pure (restm, ty)
 
 export

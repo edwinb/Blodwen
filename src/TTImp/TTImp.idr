@@ -31,7 +31,7 @@ data RawImp : (annotation : Type) -> Type where
             (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
      IPrimVal : annot -> Constant -> RawImp annot
      IType : annot -> RawImp annot
-     IBindVar : annot -> Name -> RawImp annot -- a name to be implicitly bound
+     IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
      Implicit : annot -> RawImp annot
 -- TODO: IDotted (things which must be solved by inference and checked
 -- against what's given)

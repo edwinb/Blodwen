@@ -10,6 +10,7 @@ data Name = UN String -- user given name
           | MN String Int -- machine generated name
           | NS (List String) Name -- a name in a hierarchical namespace 
           | HN String Int -- machine generated metavariable name
+          | PV String -- implicitly bound pattern variable name
 
 %hide Raw -- from Reflection in the Prelude
 %hide Binder
@@ -28,6 +29,7 @@ Show Name where
   show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
   show (NS ns n) = showSep "." ns ++ "." ++ show n
   show (HN str int) = "?" ++ str ++ "_" ++ show int
+  show (PV str) = "{P:" ++ str ++ "}"
 
 export
 Eq Name where
@@ -35,6 +37,7 @@ Eq Name where
   (==) (MN x y) (MN x' y') = x == x' && y == y'
   (==) (NS xs x) (NS xs' x') = xs == xs' && x == x'
   (==) (HN x y) (HN x' y') = x == x' && y == y'
+  (==) (PV x) (PV y) = x == y
   (==) _ _ = False
 
 -- There's no way I'm maintaining a DecEq instance for this without
@@ -64,6 +67,9 @@ nameEq (HN x t) (HN x' t') with (decEq x x')
     nameEq (HN x t) (HN x t) | (Yes Refl) | (Yes Refl) = Just Refl
     nameEq (HN x t) (HN x t') | (Yes Refl) | (No contra) = Nothing
   nameEq (HN x t) (HN x' t') | (No contra) = Nothing
+nameEq (PV x) (PV y) with (decEq x y)
+  nameEq (PV y) (PV y) | (Yes Refl) = Just Refl
+  nameEq (PV x) (PV y) | (No contra) = Nothing
 nameEq _ _ = Nothing
 
 export
@@ -71,16 +77,30 @@ Ord Name where
   compare (UN _) (MN _ _) = LT
   compare (UN _) (NS _ _) = LT
   compare (UN _) (HN _ _) = LT
+  compare (UN _) (PV _) = LT
+
   compare (MN _ _) (NS _ _) = LT
   compare (MN _ _) (HN _ _) = LT
+  compare (MN _ _) (PV _) = LT
+
   compare (NS _ _) (HN _ _) = LT
+  compare (NS _ _) (PV _) = LT
+
+  compare (HN _ _) (PV _) = LT
 
   compare (MN _ _) (UN _) = GT
   compare (NS _ _) (UN _) = GT
   compare (HN _ _) (UN _) = GT
+  compare (PV _) (UN _) = GT
+
   compare (NS _ _) (MN _ _) = GT
   compare (HN _ _) (MN _ _) = GT
+  compare (PV _) (MN _ _) = GT
+
   compare (HN _ _) (NS _ _) = GT
+  compare (PV _) (NS _ _) = GT
+
+  compare (PV _) (HN _ _) = GT
 
   compare (UN x) (UN y) = compare x y
   compare (MN x y) (MN x' y') = case compare x x' of
@@ -92,6 +112,7 @@ Ord Name where
   compare (HN x y) (HN x' y') = case compare x x' of
                                      EQ => compare y y'
                                      t => t
+  compare (PV x) (PV y) = compare x y
 
 public export
 data NameType : Type where
@@ -591,6 +612,10 @@ Show (Term vars) where
         showApp (App f args) [] = "Can't happen!"
         showApp (PrimVal x) [] = show x
         showApp TType [] = "Type"
+        showApp Erased [] = "[__]"
+        showApp f [] = "[unknown thing]"
+        -- below is only total because 'args' must be non-empty, so the
+        -- totality checker won't see it
         showApp f args = "(" ++ assert_total (show f) ++ " " ++
                                 assert_total (showSep " " (map show args))
                              ++ ")"

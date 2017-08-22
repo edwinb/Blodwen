@@ -1,3 +1,4 @@
+(%pi (xs (Vect $n $a)) (%pi (ys (Vect $m $a)) (Vect (plus $n $m) $a)))
 (append (Cons 1 (Cons 2 Nil)) (Cons 3 (Cons 4 Nil)))
 
 (%pi (env (Env $xs)) (Env $xs))
