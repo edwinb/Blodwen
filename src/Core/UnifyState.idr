@@ -50,7 +50,7 @@ public export
 UState : Type -> Type
 UState = UnifyState
 
--- A label for unifiation state in the global state
+-- A label for unification state in the global state
 export
 data UST : Type where
 
@@ -85,6 +85,11 @@ resetHoles : Core annot [UST ::: UState annot] ()
 resetHoles 
     = do ust <- get UST
          put UST (record { currentHoles = [] } ust)
+
+-- Delete the given hole names from the global unification state and the
+-- context. (Typically, these will be holes that are unused because we've
+-- bound them as implicits/patterns).
+clearHoles : List Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
 
 export
 addHoleName : Name -> Core annot [UST ::: UState annot] ()
@@ -164,7 +169,6 @@ addNamedHole cn env ty
     = do let defty = mkConstantTy env ty
          let hole = newDef defty Public Hole
          addHoleName cn
-         putStrLn $ "Added hole " ++ show cn ++ " : " ++ show defty
          addDef cn hole
 
 -- Given a type, add a new global metavariable and return its name

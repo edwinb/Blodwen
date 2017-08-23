@@ -264,6 +264,11 @@ namespace Env
   extend : (x : Name) -> Binder (tm vars) -> Env tm vars -> Env tm (x :: vars)
   extend x = (::) {x} 
 
+  export
+  length : Env tm xs -> Nat
+  length [] = 0
+  length (x :: xs) = S (length xs)
+
 %name Env env
 
 export
