@@ -548,6 +548,10 @@ renameVars prf Erased = Erased
 renameVars prf TType = TType
 
 export
+renameTop : (m : Name) -> Term (n :: vars) -> Term (m :: vars)
+renameTop m tm = renameVars (CompatExt CompatPre) tm
+
+export
 apply : Term vars -> List (Term vars) -> Term vars
 apply fn [] = fn
 apply fn (arg :: args) = apply (App fn arg) args

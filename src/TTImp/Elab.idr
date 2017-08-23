@@ -194,8 +194,8 @@ inventFnType : Env Term vars ->
 inventFnType env bname
     = do an <- genName "argh"
          scn <- genName "sch"
-         let argTy = mkConstantApp an env
-         let scTy = mkConstantApp scn (Pi Explicit argTy :: env)
+         argTy <- addBoundName an env TType
+         scTy <- addBoundName scn (Pi Explicit argTy :: env) TType
          pure (argTy, scTy)
 
 mutual
@@ -247,10 +247,17 @@ mutual
                                   (quote gam env sc') expected
                 _ => 
                   do bn <- genName "aTy"
+                     -- invent names for the argument and return types
                      (expty, scty) <- inventFnType env bn
+                     -- Check the argument type against the invented arg type
                      (argtm, argty) <- 
-                         check top impmode env arg (Just (Bind bn (Pi Explicit expty) scty))
-                     checkExp loc env (App fntm argtm)
+                         check top impmode env arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
+                     -- Check the type of 'fn' is an actual function type
+                     (fnchk, _) <-
+                         checkExp loc env fntm 
+                                  (Bind bn (Pi Explicit expty) scty) 
+                                  (Just (quote gam env scopeTy))
+                     checkExp loc env (App fnchk argtm)
                                   (Bind bn (Let argtm argty) scty) expected
   checkImp top impmode env (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
@@ -454,6 +461,12 @@ findHoles mode tm exp
              pure (Bind y (PVar ty') sc')
     holes tm = pure tm
                                       
+renameImplicits : Term vars -> Term vars
+renameImplicits (Bind (PV n) b sc) 
+    = Bind (UN n) b (renameImplicits (renameTop (UN n) sc))
+renameImplicits (Bind n b sc) 
+    = Bind n b (renameImplicits sc)
+renameImplicits t = t
 
 export
 inferTerm : Env Term vars ->
@@ -474,9 +487,13 @@ inferTerm env impmode tm
          dumpConstraints 
          let (restm, resty) = bindImplicits 0 impmode (dropSnd fullImps) chktm ty
          gam <- getCtxt
-         hs <- findHoles impmode (normaliseHoles gam env restm) resty
-         putStrLn $ "Extra implicits: " ++ show hs
-         pure hs
+         (ptm, pty) <- findHoles impmode (normaliseHoles gam env restm) resty
+         -- Give implicit bindings their proper names, as UNs not PVs
+         let ptm' = renameImplicits ptm
+         let pty' = renameImplicits pty
+         -- Drop any holes we created which aren't used in the resulting
+         -- term
+         pure (ptm', pty')
 
 export
 checkTerm : Env Term vars ->
