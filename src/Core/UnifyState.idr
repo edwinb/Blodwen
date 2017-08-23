@@ -86,11 +86,6 @@ resetHoles
     = do ust <- get UST
          put UST (record { currentHoles = [] } ust)
 
--- Delete the given hole names from the global unification state and the
--- context. (Typically, these will be holes that are unused because we've
--- bound them as implicits/patterns).
-clearHoles : List Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
-
 export
 addHoleName : Name -> Core annot [UST ::: UState annot] ()
 addHoleName n

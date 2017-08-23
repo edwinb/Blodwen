@@ -145,6 +145,10 @@ instantiate loc metavar smvs tm {newvars}
       -- Run out of variables to bind
       mkRHS got (ns ++ [n]) cvs ty tm | (Snoc rec) = Nothing
 
+export
+implicitBind : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+implicitBind n = updateDef n ImpBind
+
 -- Check that the references in the term are defined before the given
 -- creation time (essentially this checks that there's no cycles in hole
 -- solutions, i.e. that holes are defined in terms of previously defined
@@ -512,6 +516,9 @@ dumpHole hole
                    putStrLn $ "Solved: " ++ show hole ++ " : " ++ 
                                  show (normalise gam [] ty) ++
                                  " = " ++ show t
+              Just (ImpBind, ty) =>
+                   putStrLn $ "Bound: " ++ show hole ++ " : " ++ 
+                                 show (normalise gam [] ty)
               Just (_, ty) =>
                    putStrLn $ "?" ++ show hole ++ " : " ++ 
                                      show (normalise gam [] ty)

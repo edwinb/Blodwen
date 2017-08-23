@@ -32,7 +32,9 @@ data Def : Type where
      DCon  : (tag : Int) -> (arity : Nat) -> Def
      TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
 
-     Hole : Def
+     Hole : Def -- Unsolved hole
+     ImpBind : Def -- Hole turned into an implicitly bound variable
+                   -- (which will be deleted after elaboration)
      -- The constraint names refer into a context of constraints,
      -- defined in Core.Unify
      Guess : (guess : ClosedTerm) -> (constraints : List Name) -> Def

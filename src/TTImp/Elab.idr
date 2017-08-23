@@ -355,6 +355,8 @@ mutual
                           = bindImplicits 0 impmode (dropTmIn argImps)
                                             (Bind n (Pi info tyv) scopev')
                                             TType
+                      traverse (\n => implicitBind n) (map fst scopeImps)
+                      traverse (\n => implicitBind n) (map fst argImps)
                       checkExp loc env binder bindert expected
                 _ => checkExp loc env (Bind n (Pi info tyv) scopev)
                                       TType expected
@@ -491,9 +493,8 @@ inferTerm env impmode tm
          let fullImps = reverse $ toBind est
          clearToBind -- remove the bound holes
          delete EST
-         putStrLn "--- CONSTRAINTS AND HOLES ---"
-         dumpConstraints 
          let (restm, resty) = bindImplicits 0 impmode (dropTmIn fullImps) chktm ty
+         traverse (\n => implicitBind n) (map fst fullImps)
          gam <- getCtxt
          (ptm, pty, bound) <- findHoles impmode (normaliseHoles gam env restm) resty
          -- Give implicit bindings their proper names, as UNs not PVs
@@ -501,7 +502,9 @@ inferTerm env impmode tm
          let pty' = renameImplicits pty
          -- Drop any holes we created which aren't used in the resulting
          -- term
-         putStrLn $ "Removable holes: " ++ show bound
+         traverse (\n => implicitBind n) bound
+         putStrLn "--- CONSTRAINTS AND HOLES ---"
+         dumpConstraints 
          pure (ptm', pty')
 
 export
