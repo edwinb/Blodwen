@@ -56,7 +56,7 @@ using (FileIO m)
                                tryTTImp
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
-                       (tm, ty) <- inferTerm [] ttimp 
+                       (tm, ty) <- inferTerm [] (PI True) ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
                        gam <- getCtxt
                        putStrLn (show (normalise gam [] tm) ++ " : " ++

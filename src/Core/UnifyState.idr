@@ -156,6 +156,7 @@ addConstant env tm ty constrs
          pure cn
 
 -- Given a type, add a new global metavariable and return its name
+export
 addNamedHole : Name -> Env Term vars ->
                (ty : Term vars) ->
                Core annot [Ctxt ::: Defs, UST ::: UState annot] ()

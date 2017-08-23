@@ -18,6 +18,14 @@ data Name = UN String -- user given name
 %hide Case
 
 export
+nameRoot : Name -> String
+nameRoot (UN x) = x
+nameRoot (MN x y) = x
+nameRoot (NS xs x) = nameRoot x
+nameRoot (HN x y) = x
+nameRoot (PV x) = x
+
+export
 showSep : String -> List String -> String
 showSep sep [] = ""
 showSep sep [x] = x
