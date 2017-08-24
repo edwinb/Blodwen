@@ -112,3 +112,74 @@ mutual
   export
   expr : Rule (RawImp ())
   expr = typeExpr
+
+tyDecl : Rule (ImpTy ())
+tyDecl
+    = do n <- name
+         symbol ":"
+         ty <- expr
+         symbol ";"
+         pure (MkImpTy () n ty)
+
+clause : Rule (Name, ImpClause ())
+clause
+    = do lhs <- expr
+         symbol "="
+         rhs <- expr
+         symbol ";"
+         fn <- getFn lhs
+         pure (fn, MkImpClause () lhs rhs)
+  where
+    getFn : RawImp annot -> EmptyRule Name
+    getFn (IVar _ n) = pure n
+    getFn (IApp _ f a) = getFn f
+    getFn _ = fail "Not a function application" 
+
+dataDecl : Rule (ImpData ())
+dataDecl
+    = do keyword "data"
+         n <- name
+         symbol ":"
+         ty <- expr
+         keyword "where"
+         symbol "{"
+         cs <- many tyDecl
+         symbol "}"
+         pure (MkImpData () n ty cs)
+
+topDecl : Rule (ImpDecl ())
+topDecl
+    = do dat <- dataDecl
+         pure (IData () dat)
+  <|> do claim <- tyDecl
+         pure (IClaim () claim)
+  <|> do nd <- clause
+         pure (IDef () (fst nd) [snd nd])
+
+-- All the clauses get parsed as one-clause definitions. Collect any
+-- neighbouring clauses with the same function name into one definition
+collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
+collectDefs [] = []
+collectDefs (IDef annot fn cs :: ds)
+    = let (cs', rest) = spanMap (isClause fn) ds in
+          IDef annot fn (cs ++ cs') :: assert_total (collectDefs rest)
+  where
+    spanMap : (a -> Maybe (List b)) -> List a -> (List b, List a)
+    spanMap f [] = ([], [])
+    spanMap f (x :: xs) = case f x of
+                               Nothing => ([], x :: xs)
+                               Just y => case spanMap f xs of
+                                              (ys, zs) => (y ++ ys, zs)
+
+    isClause : Name -> ImpDecl () -> Maybe (List (ImpClause ()))
+    isClause n (IDef annot n' cs) 
+        = if n == n' then Just cs else Nothing
+    isClause n _ = Nothing
+collectDefs (d :: ds)
+    = d :: collectDefs ds
+
+export
+prog : Rule (List (ImpDecl ()))
+prog 
+    = do ds <- some topDecl
+         pure (collectDefs ds)

@@ -78,21 +78,43 @@ apply f (x :: xs) = apply (IApp (getAnnot f) f x) xs
 -- Top level declarations: types, clauses and data
 
 public export
-data ImpTy : annot -> Type where
-     MkImpTy : (n : Name) -> (ty : RawImp annot) -> ImpTy annot
+data ImpTy : Type -> Type where
+     MkImpTy : annot -> (n : Name) -> (ty : RawImp annot) -> ImpTy annot
+
+export
+Show (ImpTy annot) where
+  show (MkImpTy _ n ty) = show n ++ " : " ++ show ty
 
 public export
-data ImpClause : annot -> Type where
-     MkImpClause : (lhs : RawImp annot) -> (rhs : RawImp annot) ->
+data ImpClause : Type -> Type where
+     MkImpClause : annot -> (lhs : RawImp annot) -> (rhs : RawImp annot) ->
                    ImpClause annot
 
-public export
-data ImpData : annot -> Type where
-     MkImpData : (tycon : RawImp annot) ->
-                 (datacons : List (ImpTy annot)) -> ImpData annot
+export
+Show (ImpClause annot) where
+  show (MkImpClause _ lhs rhs) = show lhs ++ " = " ++ show rhs
 
 public export
-data ImpDecl : annot -> Type where
-     IClaim : ImpTy annot -> ImpDecl annot
-     IDef : List (ImpClause annot) -> ImpDecl annot
-     IData : ImpData annot -> ImpDecl annot
+data ImpData : Type -> Type where
+     MkImpData : annot -> (n : Name) -> (tycon : RawImp annot) ->
+                 (datacons : List (ImpTy annot)) -> ImpData annot
+
+export
+Show (ImpData annot) where
+  show (MkImpData _ n tycon dcons)
+      = "data " ++ show n ++ " : " ++ show tycon ++ " where {\n\t" ++
+        showSep "\n\t" (map show dcons) ++ "\n}"
+
+public export
+data ImpDecl : Type -> Type where
+     IClaim : annot -> ImpTy annot -> ImpDecl annot
+     IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
+     IData : annot -> ImpData annot -> ImpDecl annot
+
+export
+Show (ImpDecl annot) where
+  show (IClaim _ ty) = show ty
+  show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
+                       showSep "\n\t" (map show cs)
+  show (IData _ d) = show d
+

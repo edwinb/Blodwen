@@ -10,7 +10,6 @@ import Core.Unify
 import Core.Context
 import Core.RawContext
 
-import Parser.RawImp
 import Parser.Raw
 
 import Control.Catchable
