@@ -19,7 +19,7 @@ import Data.List
 public export
 data RawImp : (annotation : Type) -> Type where
      IVar : annot -> Name -> RawImp annot
-     IPi : annot -> PiInfo -> Name -> 
+     IPi : annot -> PiInfo -> Maybe Name -> 
            (argTy : RawImp annot) -> (retTy : RawImp annot) -> RawImp annot
      ILam : annot -> Name -> 
             (argTy : RawImp annot) -> (scope : RawImp annot) -> RawImp annot
@@ -75,3 +75,24 @@ apply : RawImp a -> List (RawImp a) -> RawImp a
 apply f [] = f
 apply f (x :: xs) = apply (IApp (getAnnot f) f x) xs
 
+-- Top level declarations: types, clauses and data
+
+public export
+data ImpTy : annot -> Type where
+     MkImpTy : (n : Name) -> (ty : RawImp annot) -> ImpTy annot
+
+public export
+data ImpClause : annot -> Type where
+     MkImpClause : (lhs : RawImp annot) -> (rhs : RawImp annot) ->
+                   ImpClause annot
+
+public export
+data ImpData : annot -> Type where
+     MkImpData : (tycon : RawImp annot) ->
+                 (datacons : List (ImpTy annot)) -> ImpData annot
+
+public export
+data ImpDecl : annot -> Type where
+     IClaim : ImpTy annot -> ImpDecl annot
+     IDef : List (ImpClause annot) -> ImpDecl annot
+     IData : ImpData annot -> ImpDecl annot

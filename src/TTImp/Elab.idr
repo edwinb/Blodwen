@@ -232,7 +232,10 @@ mutual
            -- the implicits here
            (ty, imps) <- getImps loc env (nf gam env varty) []
            checkExp loc env (apply x' imps) (quote empty env ty) expected
-  checkImp top impmode env (IPi loc plicity n ty retTy) expected 
+  checkImp top impmode env (IPi loc plicity Nothing ty retTy) expected 
+      = do n <- genName "pi"
+           checkPi top impmode loc env plicity n ty retTy expected
+  checkImp top impmode env (IPi loc plicity (Just n) ty retTy) expected 
       = checkPi top impmode loc env plicity n ty retTy expected
   checkImp top impmode env (ILam loc n ty scope) expected
       = checkLam top impmode loc env n ty scope expected

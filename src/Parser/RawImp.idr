@@ -25,50 +25,76 @@ atom
          pure (IVar () x)
 
 mutual
-  bracketed : Rule (RawImp ())
-  bracketed
-      = do keyword "%pi"
-           commit
-           b <- binder
-           scope <- expr
-           pure (IPi () Explicit (fst b) (snd b) scope)
-    <|> do keyword "%imppi"
-           commit
-           b <- binder
-           scope <- expr
-           pure (IPi () Implicit (fst b) (snd b) scope)
-    <|> do keyword "%lam"
-           commit
-           b <- binder
-           scope <- expr
-           pure (ILam () (fst b) (snd b) scope)
-    <|> do keyword "%let"
-           commit
-           symbol "("
-           n <- name
-           ty <- expr
-           val <- expr
-           symbol ")"
-           scope <- expr
-           pure (ILet () n ty val scope)
-    <|> do f <- expr
-           args <- some expr
+  appExpr : Rule (RawImp ())
+  appExpr
+      = do f <- simpleExpr
+           args <- many simpleExpr
            pure (apply f args)
 
-  binder : Rule (Name, RawImp ())
-  binder
+  simpleExpr : Rule (RawImp ())
+  simpleExpr
+      = atom
+    <|> binder
+    <|> do symbol "("
+           e <- expr
+           symbol ")"
+           pure e
+
+  explicitPi : Rule (RawImp ())
+  explicitPi
       = do symbol "("
            n <- name
-           t <- expr
+           symbol ":"
+           commit
+           ty <- expr
            symbol ")"
-           pure (n, t)
+           symbol "->"
+           scope <- typeExpr
+           pure (IPi () Explicit (Just n) ty scope)
+
+  implicitPi : Rule (RawImp ())
+  implicitPi
+      = do symbol "{"
+           n <- name
+           symbol ":"
+           commit
+           ty <- expr
+           symbol "}"
+           symbol "->"
+           scope <- typeExpr
+           pure (IPi () Implicit (Just n) ty scope)
+
+  lam : Rule (RawImp ())
+  lam
+      = do symbol "\\"
+           n <- name
+           ty <- optional 
+                    (do symbol ":"
+                        expr)
+                    (Implicit ())
+           symbol "=>"
+           scope <- typeExpr
+           pure (ILam () n ty scope)
+
+  binder : Rule (RawImp ())
+  binder
+      = implicitPi
+    <|> explicitPi
+    <|> lam
+
+  typeExpr : Rule (RawImp ())
+  typeExpr
+      = do arg <- appExpr
+           (do symbol "->"
+               rest <- sepBy (symbol "->") appExpr
+               pure (mkPi arg rest))
+             <|> pure arg
+    where
+      mkPi : RawImp () -> List (RawImp ()) -> RawImp ()
+      mkPi arg [] = arg
+      mkPi arg (a :: as) = IPi () Explicit Nothing arg (mkPi a as)
 
   export
   expr : Rule (RawImp ())
-  expr
-      = atom
-    <|> do symbol "("
-           e <- bracketed
-           symbol ")"
-           pure e
+  expr = typeExpr
 
