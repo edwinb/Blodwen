@@ -76,11 +76,26 @@ mutual
            scope <- typeExpr
            pure (ILam () n ty scope)
 
+  let_ : Rule (RawImp ())
+  let_
+      = do keyword "let"
+           n <- name
+           ty <- optional 
+                    (do symbol ":"
+                        expr)
+                    (Implicit ())
+           symbol "="
+           val <- expr
+           keyword "in"
+           scope <- typeExpr
+           pure (ILet () n ty val scope)
+
   binder : Rule (RawImp ())
   binder
       = implicitPi
     <|> explicitPi
     <|> lam
+    <|> let_
 
   typeExpr : Rule (RawImp ())
   typeExpr

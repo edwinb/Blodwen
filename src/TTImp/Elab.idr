@@ -105,7 +105,7 @@ strengthenEState False loc
 clearToBind : CoreM annot [EST ::: EState vs] [EST ::: EState vs] ()
 clearToBind = 
     do est <- get EST
-       putStrLn $ "Clearing holes: " ++ show (map fst (toBind est))
+--        putStrLn $ "Clearing holes: " ++ show (map fst (toBind est))
        putM EST (record { toBind = [] } est)
    
 dropTmIn : List (a, (locs, c, d)) -> List (a, (locs, d))
@@ -392,12 +392,14 @@ mutual
   checkLet : (top : Bool) -> -- top level, unbound implicits bound here
              ImplicitMode ->
              annot -> Env Term vars ->
-             Name -> (val : RawImp annot) -> 
-             (ty : RawImp annot) -> (scope : RawImp annot) ->
+             Name -> 
+             (ty : RawImp annot) -> 
+             (val : RawImp annot) -> 
+             (scope : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                   (Term vars, Term vars) 
-  checkLet top impmode loc env n val ty scope expected
+  checkLet top impmode loc env n ty val scope expected
       = do (tyv, tyt) <- check top impmode env ty (Just TType)
            (valv, valt) <- check top impmode env val (Just tyv)
            let env' : Env Term (n :: _) = Let valv tyv :: env

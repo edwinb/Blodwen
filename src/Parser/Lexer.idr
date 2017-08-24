@@ -47,7 +47,7 @@ keywords = ["data", "module", "where", "let", "in", "Type", "Int"]
 special : List String
 special = ["%lam", "%pi", "%imppi", "%let"]
 
--- Reserved symbols
+-- Reserved symbols (thing which can't be used a a prefix of other symbols)
 symbols : List String
 symbols = [".(", -- for things such as Foo.Bar.(+)
            ".", "%",
@@ -59,13 +59,12 @@ validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
 
 rawTokens : TokenMap Token
 rawTokens = 
-   map (\x => (exact x, Keyword)) keywords ++
    map (\x => (exact x, Keyword)) special ++
    map (\x => (exact x, Symbol)) symbols ++
     [(intLit, \x => Literal (cast x)),
      (stringLit, StrLit),
      (charLit, CharLit),
-     (ident, Ident),
+     (ident, \x => if x `elem` keywords then Keyword x else Ident x),
      (space, Comment),
      (comment, Comment),
      (validSymbol, Symbol),
