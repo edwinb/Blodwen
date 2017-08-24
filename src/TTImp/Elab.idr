@@ -24,15 +24,12 @@ data ImplicitMode = NONE | PI Bool | PATTERN
 
 record ElabState (vars : List Name) where
   constructor MkElabState
-  boundNames : List (Name, (Nat, Term vars, Term vars))
+  boundNames : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variable bindings and the 
-                  -- term/type they elaborated to, and the number of local
-                  -- variables in scope when first encountered
-  toBind : List (Name, (Nat, Term vars, Term vars))
+                  -- term/type they elaborated to
+  toBind : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variables which haven't been
-                  -- bound yet. Counts the number of local variables in
-                  -- scope (so they can be dropped from the hole application
-                  -- when implictly binding)
+                  -- bound yet. 
 
 -- A label for the internal elaborator state
 data EST : Type where
@@ -50,9 +47,9 @@ weakenEState
          putM EST (MkElabState (map wknTms (boundNames est))
                                (map wknTms (toBind est)))
   where
-    wknTms : (Name, (a, Term vs, Term vs)) -> 
-             (Name, (a, Term (n :: vs), Term (n :: vs)))
-    wknTms (f, (w, x, y)) = (f, (w, weaken x, weaken y))
+    wknTms : (Name, (Term vs, Term vs)) -> 
+             (Name, (Term (n :: vs), Term (n :: vs)))
+    wknTms (f, (x, y)) = (f, (weaken x, weaken y))
 
 clearEState : CoreM annot [EST ::: EState (n :: vs)] [EST ::: EState vs] ()
 clearEState = putM EST initEState
@@ -95,11 +92,11 @@ strengthenEState False loc
                f' <- shrinkTerm f (DropCons SubRefl)
                pure (apply f' args')
 
-    strTms : (Name, (Nat, Term (n :: vs), Term (n :: vs))) -> 
-             Core annot [EST ::: EState (n :: vs)] (Name, (Nat, Term vs, Term vs))
-    strTms {vs} (f, (locs, x, y))
+    strTms : (Name, (Term (n :: vs), Term (n :: vs))) -> 
+             Core annot [EST ::: EState (n :: vs)] (Name, (Term vs, Term vs))
+    strTms {vs} (f, (x, y))
         = case (removeArg x, shrinkTerm y (DropCons SubRefl)) of
-               (Just x', Just y') => pure (f, (locs, x', y'))
+               (Just x', Just y') => pure (f, (x', y'))
                _ => throw (GenericMsg loc ("Invalid unbound implicit " ++ show f))
 
 clearToBind : CoreM annot [EST ::: EState vs] [EST ::: EState vs] ()
@@ -108,18 +105,19 @@ clearToBind =
 --        putStrLn $ "Clearing holes: " ++ show (map fst (toBind est))
        putM EST (record { toBind = [] } est)
    
-dropTmIn : List (a, (locs, c, d)) -> List (a, (locs, d))
-dropTmIn = map (\ (n, (locs, _, t)) => (n, (locs, t)))
+dropTmIn : List (a, (c, d)) -> List (a, d)
+dropTmIn = map (\ (n, (_, t)) => (n, t))
 
 -- Bind implicit arguments, returning the new term and its updated type
 bindImplicits : Int -> 
                 ImplicitMode ->
-                List (Name, (Nat, Term vars)) ->
+                Gamma ->
+                List (Name, Term vars) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
-bindImplicits i NONE args scope scty = (scope, scty)
-bindImplicits i mode [] scope scty = (scope, scty)
-bindImplicits i mode ((n, (locs, ty)) :: imps) scope scty
-    = let (scope', ty') = bindImplicits (i + 1) mode imps scope scty
+bindImplicits i NONE gam args scope scty = (scope, scty)
+bindImplicits i mode gam [] scope scty = (scope, scty)
+bindImplicits i mode gam ((n, ty) :: imps) scope scty
+    = let (scope', ty') = bindImplicits (i + 1) mode gam imps scope scty
           tmpN = MN "unb" i
           repNameTm = repName (Ref Bound tmpN) scope' 
           repNameTy = repName (Ref Bound tmpN) ty' in
@@ -145,21 +143,26 @@ bindImplicits i mode ((n, (locs, ty)) :: imps) scope scty
                Ref nt fn' =>
                    case nameEq n fn' of
                         Nothing => App (repName new fn) (repName new arg)
-                        Just Refl => apply new (drop locs (getArgs (App fn arg)))
+                        Just Refl => 
+                           let locs = case lookupDef fn' gam of
+                                           Just (Hole i) => i
+                                           _ => 0
+                                        in
+                               apply new (drop locs (getArgs (App fn arg)))
                _ => App (repName new fn) (repName new arg)
     repName new (PrimVal y) = PrimVal y
     repName new Erased = Erased
     repName new TType = TType
 
-bindTopImplicits : ImplicitMode ->
+bindTopImplicits : ImplicitMode -> Gamma ->
                    List (Name, ClosedTerm) -> Term vars -> Term vars ->
                    (Term vars, Term vars)
-bindTopImplicits {vars} mode hs tm ty
-    = bindImplicits 0 mode (map weakenVars hs) tm ty
+bindTopImplicits {vars} mode gam hs tm ty
+    = bindImplicits 0 mode gam (map weakenVars hs) tm ty
   where
-    weakenVars : (Name, ClosedTerm) -> (Name, (Nat, Term vars))
-    weakenVars (n, tm) = (n, (Z, rewrite sym (appendNilRightNeutral vars) in
-                                     weakenNs vars tm))
+    weakenVars : (Name, ClosedTerm) -> (Name, Term vars)
+    weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
+                                     weakenNs vars tm)
 
 convert : annot ->
           Env Term vars ->
@@ -281,10 +284,10 @@ mutual
                 Nothing =>
                   do tm <- addBoundName n env hty
                      put EST 
-                         (record { boundNames $= ((n, (length env, tm, hty)) ::),
-                                   toBind $= ((n, (length env, tm, hty)) ::) } est)
+                         (record { boundNames $= ((n, (tm, hty)) ::),
+                                   toBind $= ((n, (tm, hty)) ::) } est)
                      pure (tm, hty)
-                Just (_, tm, ty) =>
+                Just (tm, ty) =>
                      pure (tm, ty)
   checkImp top impmode env (IBindVar loc str) (Just expected) 
       = do let n = PV str
@@ -294,10 +297,10 @@ mutual
                   do tm <- addBoundName n env expected
 --                      putStrLn $ "ADDED BOUND IMPLICIT " ++ show (n, (tm, expected))
                      put EST 
-                         (record { boundNames $= ((n, (length env, tm, expected)) ::),
-                                   toBind $= ((n, (length env, tm, expected)) :: ) } est)
+                         (record { boundNames $= ((n, (tm, expected)) ::),
+                                   toBind $= ((n, (tm, expected)) :: ) } est)
                      pure (tm, expected)
-                Just (_, tm, ty) =>
+                Just (tm, ty) =>
                      checkExp loc env tm ty (Just expected)
   checkImp top impmode env (Implicit loc) Nothing
       = do t <- addHole env TType
@@ -351,11 +354,13 @@ mutual
                 (True, PI _) =>
                    do -- putStrLn $ "Binding implicits " ++ show (dropTmIn argImps)
                       --                                 ++ show (dropTmIn scopeImps)
+                      gam <- getCtxt
                       let (scopev', scopet')
-                          = bindImplicits 0 impmode (dropTmIn scopeImps) 
-                                                    scopev scopet
+                          = bindImplicits 0 impmode gam 
+                                          (dropTmIn scopeImps) scopev scopet
                       let (binder, bindert)
-                          = bindImplicits 0 impmode (dropTmIn argImps)
+                          = bindImplicits 0 impmode gam 
+                                            (dropTmIn argImps)
                                             (Bind n (Pi info tyv) scopev')
                                             TType
                       traverse (\n => implicitBind n) (map fst scopeImps)
@@ -424,7 +429,8 @@ findHoles mode tm exp
          tm <- holes tm
          hs <- get HVar
          delete HVar
-         let (tm, ty) = bindTopImplicits mode (reverse hs) tm exp
+         gam <- getCtxt
+         let (tm, ty) = bindTopImplicits mode gam (reverse hs) tm exp
          pure (tm, ty, map fst hs)
   where
     data HVar : Type where -- empty type to label the local state
@@ -456,7 +462,7 @@ findHoles mode tm exp
     holes {vars} (Ref nt fn) 
         = do gam <- getCtxt
              case lookupDefTy fn gam of
-                  Just (Hole, ty) =>
+                  Just (Hole _, ty) =>
                        do processHole fn vars ty
                           pure (Ref nt fn)
                   _ => pure (Ref nt fn)
@@ -498,7 +504,9 @@ inferTerm env impmode tm
          let fullImps = reverse $ toBind est
          clearToBind -- remove the bound holes
          delete EST
-         let (restm, resty) = bindImplicits 0 impmode (dropTmIn fullImps) chktm ty
+         gam <- getCtxt
+         let (restm, resty) = bindImplicits 0 impmode gam 
+                                            (dropTmIn fullImps) chktm ty
          traverse (\n => implicitBind n) (map fst fullImps)
          gam <- getCtxt
          (ptm, pty, bound) <- findHoles impmode (normaliseHoles gam env restm) resty

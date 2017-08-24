@@ -234,7 +234,7 @@ mutual
              Nothing => ufail loc $ "Can't shrink hole"
              Just defty =>
                 do -- Make smaller hole
-                   let hole = newDef defty Public Hole
+                   let hole = newDef defty Public (Hole (length sofar))
                    addHoleName newhole
                    addDef newhole hole
                    -- Solve old hole with it

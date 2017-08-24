@@ -112,4 +112,3 @@ mutual
   export
   expr : Rule (RawImp ())
   expr = typeExpr
-

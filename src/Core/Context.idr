@@ -32,7 +32,7 @@ data Def : Type where
      DCon  : (tag : Int) -> (arity : Nat) -> Def
      TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
 
-     Hole : Def -- Unsolved hole
+     Hole : (numlocs : Nat) -> Def -- Unsolved hole, under 'numlocs' locals
      ImpBind : Def -- Hole turned into an implicitly bound variable
                    -- (which will be deleted after elaboration)
      -- The constraint names refer into a context of constraints,

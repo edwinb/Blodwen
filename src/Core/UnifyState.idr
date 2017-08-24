@@ -162,7 +162,7 @@ addNamedHole : Name -> Env Term vars ->
                Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
 addNamedHole cn env ty
     = do let defty = mkConstantTy env ty
-         let hole = newDef defty Public Hole
+         let hole = newDef defty Public (Hole (length env))
          addHoleName cn
          addDef cn hole
 
