@@ -1,0 +1,44 @@
+-- Some small sample definitions to illustrate TTImp, a dependent type
+-- theory with implicit arguments and implicit name binding in patterns/types.
+-- This elaborates to TT, which is also the core type theory of Idris.
+
+-- A simple type, defined by a type constructor and a set of data
+-- constructors
+data Nat : Type where {
+  Z : Nat;
+  S : Nat -> Nat;
+}
+
+-- A function definition, defined by a type declaration and a list of
+-- pattern clauses.
+
+-- The '$' indicates that the name should be implicitly bound in the pattern
+-- clause. On the right hand side, things are in scope which were implicitly
+-- bound on the left
+
+plus : Nat -> Nat -> Nat;
+plus Z      $y = y;
+plus (S $k) $y = S (plus k y);
+
+-- A dependent type. Again, the '$' indicates that names should be implicitly
+-- bound (like unbound implicits in Idris, but since this is an intermediate
+-- language they get explicitly marked). The names are bound in the scope in
+-- which they are first encountered.
+
+data Vect : Nat -> Type -> Type where {
+     Nil  : Vect Z $a;
+     Cons : $a -> Vect $k $a -> Vect (S $k) $a;
+}
+
+-- A function with a dependent type
+
+append : Vect $n $a -> Vect $m $a -> Vect (plus $m $n) $a;
+append Nil           $ys = ys;
+append (Cons $x $xs) $ys = Cons x (append xs ys);
+
+-- A main function. The implicit arguments in the type of 'main' are inferred
+-- from its definition.
+
+main : Vect _ _;
+main = append (Cons 1 (Cons 2 Nil)) (Cons 3 (Cons 4 Nil));
+
