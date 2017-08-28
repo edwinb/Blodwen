@@ -92,9 +92,23 @@ data Pat = PCon Name Int (List Pat)
          | PVar Name
          | PAny
 
+Show Pat where
+  show (PCon n i args) = show n ++ " " ++ show i ++ " " ++ assert_total (show args)
+  show (PConst c) = show c
+  show (PVar n) = show n
+  show PAny = "_"
+
 data NamedPats : List Name -> Type where
      Nil : NamedPats []
      (::) : Pat -> NamedPats ns -> NamedPats (n :: ns)
+
+Show (NamedPats todo) where
+  show xs = "[" ++ showAll xs ++ "]"
+    where
+      showAll : NamedPats ts -> String
+      showAll [] = ""
+      showAll [x] = show x
+      showAll (x :: xs) = show x ++ ", " ++ showAll xs
 
 (++) : NamedPats ms -> NamedPats ns -> NamedPats (ms ++ ns)
 (++) [] ys = ys
@@ -110,12 +124,20 @@ take (x :: xs) (p :: ps) = p :: take xs ps
 data PatClause : (todo : List Name) -> (done : List Name) -> Type where
      MkPatClause : NamedPats todo -> (rhs : Term done) -> PatClause todo done
 
+Show (PatClause todo done) where
+  show (MkPatClause ps rhs) = show ps ++ " => " ++ show rhs
+
 data Partitions : List (PatClause todo done) -> Type where
      ConClauses : (cs : List (PatClause todo done)) ->
                   Partitions ps -> Partitions (cs ++ ps)
      VarClauses : (vs : List (PatClause todo done)) ->
                   Partitions ps -> Partitions (vs ++ ps)
      NoClauses : Partitions []
+
+Show (Partitions ps) where
+  show (ConClauses cs rest) = "CON " ++ show cs ++ ", " ++ show rest
+  show (VarClauses vs rest) = "VAR " ++ show vs ++ ", " ++ show rest
+  show NoClauses = "NONE"
 
 thinClause : PatClause todo done -> PatClause todo (done ++ [a])
 thinClause {a} {done} (MkPatClause ps rhs) 
@@ -145,7 +167,7 @@ partition (x :: xs) with (partition xs)
                VarClause => VarClauses [x] (ConClauses cs rest)
   partition (x :: (vs ++ ps)) | (VarClauses vs rest) 
         = case clauseType x of
-               ConClause => VarClauses [x] (ConClauses vs rest)
+               ConClause => ConClauses [x] (VarClauses vs rest)
                VarClause => VarClauses (x :: vs) rest
   partition (x :: []) | NoClauses
         = case clauseType x of
@@ -327,7 +349,9 @@ mutual
   match {todo = []} [] err = pure err
   match {todo = []} {done} ((MkPatClause [] rhs) :: _) err 
        = pure $ STerm (rewrite appendNilRightNeutral done in rhs)
-  match {todo = (_ :: _)} clauses err = mixture (partition clauses) err
+  match {todo = (_ :: _)} clauses err 
+      = let ps = partition clauses in
+            mixture (partition clauses) err
 
   caseGroups : List (Group todo (a :: done)) -> CaseTree (done ++ a :: todo) ->
                State Int (CaseTree (done ++ a :: todo))

@@ -2,6 +2,7 @@ module TTImp.TTImp
 
 import Core.TT
 import Core.Context
+import Core.UnifyState
 
 import Data.List
 
@@ -117,4 +118,3 @@ Show (ImpDecl annot) where
   show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                        showSep "\n\t" (map show cs)
   show (IData _ d) = show d
-

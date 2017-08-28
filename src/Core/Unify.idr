@@ -31,11 +31,13 @@ unifyArgs loc env (cx :: cxs) (cy :: cys)
          case constr of
               [] => unifyArgs loc env cxs cys
               _ => do gam <- getCtxt 
-                      c <- addConstraint 
-                               (MkSeqConstraint loc env 
-                                   (map (quote gam env) (cx :: cxs))
-                                   (map (quote gam env) (cy :: cys)))
-                      pure [c]
+                      cs <- unifyArgs loc env cxs cys
+                      -- TODO: Fix this bit! See p59 Ulf's thesis
+--                       c <- addConstraint 
+--                                (MkSeqConstraint loc env 
+--                                    (map (quote gam env) (cx :: cxs))
+--                                    (map (quote gam env) (cy :: cys)))
+                      pure (union constr cs) -- [c]
 unifyArgs loc env _ _ = ufail loc ""
 
 postpone : annot -> Env Term vars ->
@@ -275,32 +277,41 @@ mutual
       = do compat <- areVarsCompatible vars hargs
            let newargs = map (renameVars compat) sofar
            pure (apply (Ref Func newh) newargs)
+  
+  isHoleNF : Gamma -> Name -> Bool
+  isHoleNF gam n
+      = case lookupDef n gam of
+             Just (Hole _) => True
+             _ => False
 
-  unifyApp : annot -> Env Term vars ->
-             NHead vars -> List (Closure vars) -> NF vars ->
-             Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
-  unifyApp {vars} loc env (NRef nt var) args tm 
+  unifyHole : annot -> Env Term vars ->
+              NameType -> Name -> List (Closure vars) -> NF vars ->
+              Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+  unifyHole loc env nt var args tm
       = case !(patternEnv env args) of
            Just (newvars ** submv) =>
                 do gam <- getCtxt
-                   tm' <- shrinkHoles loc env (map (quote gam env) args) 
-                                              (quote gam env tm)
-                   gam <- getCtxt
+--                    tm' <- shrinkHoles loc env (map (quote gam env) args) 
+--                                               (quote gam env tm)
+--                    gam <- getCtxt
                    -- newvars and args should be the same length now, because
                    -- there's one new variable for each distinct argument.
                    -- The types don't express this, but 'submv' at least
                    -- tells us that 'newvars' are the subset of 'vars'
                    -- being applied to the metavariable, and so 'tm' must
                    -- only use those variables for success
-                   case shrinkTerm tm' submv of
-                        Nothing => 
-                             ufail loc $ "Scope error " ++
-                                   show (vars, newvars) ++
-                                   "\nUnifying " ++
-                                   show (quote empty env
-                                           (NApp (NRef nt var) args)) ++
-                                   " and "
-                                   ++ show (quote empty env tm)
+                   case shrinkTerm (quote gam env tm) submv of
+                        Nothing => do
+                           postpone loc env 
+                             (quote empty env (NApp (NRef nt var) args))
+                             (quote empty env tm)
+--                              ufail loc $ "Scope error " ++
+--                                    show (vars, newvars) ++
+--                                    "\nUnifying " ++
+--                                    show (quote gam env
+--                                            (NApp (NRef nt var) args)) ++
+--                                    " and "
+--                                    ++ show (quote gam env tm)
                         Just tm' => 
                             -- if the terms are the same, this isn't a solution
                             -- but they are already unifying, so just return
@@ -310,14 +321,27 @@ mutual
                                 -- otherwise, instantiate the hole
                                    if not (occursCheck var tm')
                                       then throw (Cycle loc env
-                                                   (quote empty env (NApp (NRef nt var) args))
-                                                   (quote empty env tm))
-                                      else do
-                                         instantiate loc var submv tm'
-                                         pure []
+                                                 (quote empty env (NApp (NRef nt var) args))
+                                                 (quote empty env tm))
+                                      else do instantiate loc var submv tm'
+                                              pure []
            Nothing => postpone loc env 
-                         (quote empty env (NApp (NRef nt var) args))
-                         (quote empty env tm)
+                           (quote empty env (NApp (NRef nt var) args))
+                           (quote empty env tm)
+
+  unifyApp : annot -> Env Term vars ->
+             NHead vars -> List (Closure vars) -> NF vars ->
+             Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+  unifyApp loc env (NRef nt var) args tm 
+      = do gam <- getCtxt
+           if isHoleNF gam var
+              then unifyHole loc env nt var args tm
+              else unifyIfEq True loc env (NApp (NRef nt var) args) tm
+  unifyApp loc env (NLocal x) [] (NApp (NLocal y) [])
+      = if sameVar x y then pure []
+           else postpone loc env
+                     (quote empty env (NApp (NLocal x) [])) 
+                     (quote empty env (NApp (NLocal y) []))
   unifyApp loc env hd args (NApp hd' args')
       = postpone loc env
                  (quote empty env (NApp hd args)) 
@@ -341,6 +365,19 @@ mutual
              let x' = quote empty env x
              let y' = quote empty env y
              unify loc env x' y'
+
+  unifyIfEq : (postpone : Bool) ->
+              annot -> Env Term vars -> NF vars -> NF vars -> 
+                  Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+  unifyIfEq post loc env x y 
+        = do gam <- getCtxt
+             if convert gam env x y
+                then pure []
+                else if post 
+                        then postpone loc env (quote empty env x) (quote empty env y)
+                        else ufail loc $ "Can't unify " ++ show (quote empty env x)
+                                            ++ " and "
+                                            ++ show (quote empty env y)
 
   export
   Unify NF where
@@ -405,6 +442,23 @@ mutual
                           cs' <- unify env' termx termy
                           pure (union cs cs')
 -}
+    -- If they're both holes, solve the one with the bigger context with
+    -- the other
+    unify loc env (NApp (NRef xt hdx) argsx) (NApp (NRef yt hdy) argsy)
+        = do gam <- getCtxt
+             if isHoleNF gam hdx && isHoleNF gam hdy
+                then
+                   (if length argsx > length argsy
+                       then unifyApp loc env (NRef xt hdx) argsx 
+                                             (NApp (NRef yt hdy) argsy)
+                       else unifyApp loc env (NRef yt hdy) argsy 
+                                             (NApp (NRef xt hdx) argsx))
+                else 
+                   (if isHoleNF gam hdx
+                       then unifyApp loc env (NRef xt hdx) argsx
+                                             (NApp (NRef yt hdy) argsy)
+                       else unifyApp loc env (NRef yt hdy) argsy 
+                                             (NApp (NRef xt hdx) argsx))
     unify loc env y (NApp hd args)
         = unifyApp loc env hd args y
     unify loc env (NApp hd args) y 
@@ -432,13 +486,7 @@ mutual
     unify loc env x NErased = pure []
     unify loc env NErased y = pure []
     unify loc env NType NType = pure []
-    unify loc env x y 
-        = do gam <- getCtxt
-             if convert gam env x y
-                then pure []
-                else ufail loc $ "Can't unify " ++ show (quote empty env x)
-                                            ++ " and "
-                                            ++ show (quote empty env y)
+    unify loc env x y = unifyIfEq False loc env x y
 
   export
   Unify Term where
@@ -465,13 +513,13 @@ retry cname
                    do cs <- unify loc env x y
                       case cs of
                            [] => do setConstraint cname Resolved
-                                    pure cs
+                                    pure []
                            _ => pure cs
               Just (MkSeqConstraint loc env xs ys) =>
                    do cs <- unifyArgs loc env xs ys
                       case cs of
                            [] => do setConstraint cname Resolved
-                                    pure cs
+                                    pure []
                            _ => pure cs
 
 retryHole : (hole : Name) ->
@@ -500,46 +548,5 @@ solveConstraints
     = do hs <- getHoleNames
          traverse (\x => retryHole x) hs
          -- Question: Another iteration if any holes have been resolved?
-         pure ()
-
-dumpHole : (hole : Name) -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
-dumpHole hole
-    = do gam <- getCtxt
-         case lookupDefTy hole gam of
-              Nothing => pure ()
-              Just (Guess tm constraints, ty) => 
-                   do putStrLn $ "!" ++ show hole ++ " : " ++ 
-                                        show (normalise gam [] ty)
-                      traverse (\x => dumpConstraint x) constraints 
-                      pure ()
-              Just (PMDef _ args t, ty) =>
-                   putStrLn $ "Solved: " ++ show hole ++ " : " ++ 
-                                 show (normalise gam [] ty) ++
-                                 " = " ++ show t
-              Just (ImpBind, ty) =>
-                   putStrLn $ "Bound: " ++ show hole ++ " : " ++ 
-                                 show (normalise gam [] ty)
-              Just (_, ty) =>
-                   putStrLn $ "?" ++ show hole ++ " : " ++ 
-                                     show (normalise gam [] ty)
-  where
-    dumpConstraint : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
-    dumpConstraint n
-        = do ust <- get UST
-             gam <- getCtxt
-             case lookupCtxt n (constraints ust) of
-                  Nothing => pure ()
-                  Just Resolved => putStrLn "\tResolved"
-                  Just (MkConstraint _ env x y) =>
-                       putStrLn $ "\t" ++ show (normalise gam env x) 
-                                      ++ " =?= " ++ show (normalise gam env y)
-                  Just (MkSeqConstraint _ _ xs ys) =>
-                       putStrLn $ "\t" ++ show xs ++ " =?= " ++ show ys
-
-export
-dumpConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
-dumpConstraints 
-    = do hs <- getCurrentHoleNames
-         traverse (\x => dumpHole x) hs
          pure ()
 

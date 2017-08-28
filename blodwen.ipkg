@@ -5,6 +5,7 @@ pkgs = contrib, pruviloj
 modules = Core.CaseTree,
           Core.Context, 
           Core.Normalise,
+          Core.ProcessTT,
           Core.TT,
           Core.Typecheck,
           Core.Unify,
@@ -21,6 +22,10 @@ modules = Core.CaseTree,
           Parser.RawImp,
 
           TTImp.Elab,
+          TTImp.ProcessData,
+          TTImp.ProcessDef,
+          TTImp.ProcessType,
+          TTImp.ProcessTTImp,
           TTImp.TTImp
 
 sourcedir = src

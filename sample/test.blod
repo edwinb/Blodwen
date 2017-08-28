@@ -5,8 +5,8 @@
 -- A simple type, defined by a type constructor and a set of data
 -- constructors
 data Nat : Type where {
-  Z : Nat;
-  S : Nat -> Nat;
+     Z : Nat;
+     S : Nat -> Nat;
 }
 
 -- A function definition, defined by a type declaration and a list of
@@ -32,7 +32,7 @@ data Vect : Nat -> Type -> Type where {
 
 -- A function with a dependent type
 
-append : Vect $n $a -> Vect $m $a -> Vect (plus $m $n) $a;
+append : Vect $n $a -> Vect $m $a -> Vect (plus $n $m) $a;
 append Nil           $ys = ys;
 append (Cons $x $xs) $ys = Cons x (append xs ys);
 

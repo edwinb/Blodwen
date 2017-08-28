@@ -16,6 +16,10 @@ mutual
        Nil  : LocalEnv free []
        (::) : Closure free -> LocalEnv free vars -> LocalEnv free (x :: vars)
 
+  length : LocalEnv free vars -> Nat
+  length Nil = 0
+  length (x :: xs) = S (length xs)
+
   public export
   data Closure : List Name -> Type where
        MkClosure : LocalEnv free vars -> 
@@ -76,7 +80,7 @@ parameters (gam : Gamma, holesonly : Bool)
     evalLocal {vars = []} env loc stk p 
         = case getBinder p env of
                Let val ty => eval env [] stk val
-               b => NApp (NLocal p) []
+               b => NApp (NLocal p) stk
     evalLocal {vars = (x :: xs)} 
               env ((MkClosure loc' env' tm') :: locs) stk Here 
         = eval env' loc' stk tm'
@@ -179,7 +183,7 @@ parameters (gam : Gamma, holesonly : Bool)
       = let x' : List.Elem _ ((args ++ vars) ++ free) 
                = rewrite sym (appendAssociative args vars free) in
                          elemExtend x
-            xval = evalLocal env loc stk x' in
+            xval = evalLocal env loc [] x' in
                    findAlt env loc stk xval alts
     evalTree {args} {vars} {free} env loc stk (STerm tm) 
           = let tm' : Term ((args ++ vars) ++ free) 

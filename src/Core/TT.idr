@@ -280,6 +280,14 @@ defined {vars = x :: xs} n (b :: env) with (nameEq x n)
   defined {vars = x :: xs} n (b :: env) | Nothing 
       = Just (There !(defined n env))
 
+-- Make a type which abstracts over an environment
+export
+abstractEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
+abstractEnvType [] tm = tm
+abstractEnvType (b :: env) tm 
+    = abstractEnvType env (Bind _ (Pi Explicit (binderType b)) tm)
+
+
 {- Some ugly mangling to allow us to extend the scope of a term - a
    term is always valid in a bigger scope than it needs. -}
 insertElem : Elem x (outer ++ inner) -> Elem x (outer ++ n :: inner)

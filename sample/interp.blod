@@ -1,0 +1,98 @@
+-- Some small sample definitions to illustrate TTImp, a dependent type
+-- theory with implicit arguments and implicit name binding in patterns/types.
+-- This elaborates to TT, which is also the core type theory of Idris.
+
+-- A simple type, defined by a type constructor and a set of data
+-- constructors
+data Nat : Type where {
+     Z : Nat;
+     S : Nat -> Nat;
+}
+
+-- A function definition, defined by a type declaration and a list of
+-- pattern clauses.
+
+-- The '$' indicates that the name should be implicitly bound in the pattern
+-- clause. On the right hand side, things are in scope which were implicitly
+-- bound on the left
+
+plus : Nat -> Nat -> Nat;
+plus Z      $y = y;
+plus (S $k) $y = S (plus k y);
+
+-- A dependent type. Again, the '$' indicates that names should be implicitly
+-- bound (like unbound implicits in Idris, but since this is an intermediate
+-- language they get explicitly marked). The names are bound in the scope in
+-- which they are first encountered.
+
+data Vect : Nat -> Type -> Type where {
+     Nil  : Vect Z $a;
+     Cons : $a -> Vect $k $a -> Vect (S $k) $a;
+}
+
+data Ty : Type where {
+     Base : Type -> Ty;
+     Arrow : Ty -> Ty -> Ty;
+}
+
+interpTy : Ty -> Type;
+interpTy (Base $t) = t;
+interpTy (Arrow $s $t) = interpTy s -> interpTy t;
+
+data Env : Vect $n Ty -> Type where {
+     ENil : Env Nil;
+     ECons : {xs : Vect $n Ty} -> 
+             (x : interpTy $a) -> Env xs -> Env (Cons $a xs);
+}
+
+data Fin : Nat -> Type where {
+     FZ : Fin (S $k);
+     FS : Fin $k -> Fin (S $k);
+}
+
+lookup : Fin $i -> Vect $i $ty -> $ty;
+lookup FZ (Cons $t $ts) = t;
+lookup (FS $i) (Cons $t $ts) = lookup i ts;
+
+data HasType : Fin $k -> Ty -> Vect $k Ty -> Type where {
+     Stop : {ts : Vect $k Ty} ->
+            HasType FZ $t (Cons $t ts);
+     Pop  : {ts : Vect $k Ty} ->
+            HasType $i $t ts -> {u : Ty} -> HasType (FS $i) $t (Cons u ts);
+}
+
+lookupEnv : {k : Nat} -> {i : Fin k} ->
+            {gam : Vect k Ty} ->
+            HasType i $t gam -> Env gam -> interpTy $t;
+lookupEnv Stop (ECons $x $xs) = x;
+lookupEnv (Pop $var) (ECons $x $xs) = lookupEnv var xs;
+
+data Lang : Vect $k Ty -> Ty -> Type where {
+     Var : {i : Fin $k} -> {gam : Vect $k Ty} ->
+           HasType i $t gam -> Lang gam $t;
+     Val : {gam : Vect $k Ty} ->
+           (x : interpTy $a) -> Lang gam $a;
+     Lam : {gam : Vect $k Ty} ->
+           (scope : Lang (Cons $s gam) $t) ->
+           Lang gam (Arrow $s $t);
+     App : {gam : Vect $k Ty} ->
+           Lang gam (Arrow $s $t) -> Lang gam $s -> Lang gam $t;
+     Op : {gam : Vect $k Ty} ->
+          (interpTy $a -> interpTy $b -> interpTy $c) ->
+          Lang gam $a -> Lang gam $b -> Lang gam $c;
+}
+
+interp : {gam : Vect $k Ty} -> Env gam -> Lang gam $t -> interpTy $t;
+interp $env (Var $i) = lookupEnv i env;
+interp $env (Val $x) = x;
+interp $env (App $f $a) = interp env f (interp env a);
+interp $env (Lam $scope) = \var => interp (ECons var env) scope;
+interp $env (Op $fn $x $y) = fn (interp env x) (interp env y);
+
+testId : Lang Nil (Arrow (Base Nat) (Base Nat));
+testId = Lam (Var Stop);
+
+testAdd : -- {gam : Vect $k Ty} -> -- Env gam -> -- implicit lambda not quite ready
+          Lang Nil (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)));
+testAdd = Lam (Lam (Op plus (Var Stop) (Var (Pop Stop))));
+

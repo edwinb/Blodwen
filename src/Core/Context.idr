@@ -65,9 +65,10 @@ record ContextDefs where
       gamma : Gamma -- All the definitions
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
+      nextVar	: Int
 
 initCtxt : ContextDefs
-initCtxt = MkAllDefs empty 100 0
+initCtxt = MkAllDefs empty 100 0 0
 
 export
 lookupDef : Name -> Gamma -> Maybe Def
@@ -111,6 +112,8 @@ data Error annot
     | Cycle annot (Env Term vars) (Term vars) (Term vars)
     | WhenUnifying annot (Term vars) (Term vars) (Error annot)
 	  | UndefinedName annot Name
+	  | NoDeclaration annot Name
+	  | AlreadyDefined annot Name
 	  | NotFunctionType annot (Term vars)
 	  | CaseCompile annot Name CaseError 
 	  | GenericMsg annot String
@@ -126,6 +129,8 @@ Show (Error annot) where
       = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++
         show err
   show (UndefinedName _ x) = "Undefined name " ++ show x
+  show (NoDeclaration _ x) = "No type declaration for " ++ show x
+  show (AlreadyDefined _ x) = show x ++ " is already defined"
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
   show (CaseCompile _ n DifferingArgNumbers) 
       = "Patterns for " ++ show n ++ " have different numbers of arguments"
@@ -188,6 +193,13 @@ getNextHole
          let t = nextHole defs
          put Ctxt (record { nextHole = t + 1 } defs)
          pure t
+
+export
+genName : String -> Core annot [Ctxt ::: Defs] Name
+genName root
+    = do ust <- get Ctxt
+         put Ctxt (record { nextVar $= (+1) } ust)
+         pure (MN root (nextVar ust))
 
 export
 setCtxt : Gamma -> Core annot [Ctxt ::: Defs] ()
@@ -259,7 +271,8 @@ addFnDef : annot -> Visibility ->
 addFnDef loc vis (MkFn n ty clauses) 
     = do let cs = map toClosed clauses
          (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
-         -- putStrLn $ "Case tree: " ++ show args ++ " " ++ show tree
+--          putStrLn $ "Case tree for " ++ show n ++ ": " 
+-- 				             ++ show args ++ "\n" ++ show cs ++ "\n" ++ show tree
          let def = newDef ty vis (PMDef False args tree)
          addDef n def
   where
@@ -291,7 +304,7 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
     addDataConstructors tag (MkCon n a ty :: cs) gam
         = do let condef = newDef ty (conVisibility vis) (DCon tag a)
              let gam' = addCtxt n condef gam
-             addDataConstructors tag cs gam'
+             addDataConstructors (tag + 1) cs gam'
 
 export
 runWithCtxt : Core annot [] () -> IO ()

@@ -2,16 +2,16 @@ module Main
 
 import Core.TT
 import Core.Normalise
-import Core.ProcessTT
 import Core.Typecheck
 import Core.Unify
 import Core.Context
 import Core.RawContext
-import TTImp.TTImp
+
 import TTImp.Elab
+import TTImp.ProcessTTImp
+import TTImp.TTImp
 
 import Parser.RawImp
-import Parser.Raw
 
 import Control.Catchable
 import Control.Monad.StateE
@@ -28,7 +28,7 @@ using (FileIO m)
                                tryTTImp
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
-                       (tm, ty) <- inferTerm [] (PI True) ttimp 
+                       (tm, ty) <- inferTerm [] PATTERN ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
                        gam <- getCtxt
                        putStrLn (show (normalise gam [] tm) ++ " : " ++
@@ -43,8 +43,8 @@ using (FileIO m)
       = do newCtxt
            [_, fname] <- getArgs | _ => do usageMsg; deleteCtxt
            putStrLn $ "Loading " ++ fname
+           setupUnify
            process fname
-           ustate <- setupUnify
            tryTTImp
            doneUnify
            deleteCtxt

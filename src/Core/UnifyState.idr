@@ -41,10 +41,9 @@ record UnifyState annot where
                        -- guarded constants)
      currentHoles : List Name -- unsolved metavariables in this session
      constraints : Context (Constraint annot) -- metavariable constraints 
-     nextVar : Int -- next name for checking scopes of binders
 
 initUState : UnifyState annot
-initUState = MkUnifyState [] [] empty 0
+initUState = MkUnifyState [] [] empty
 
 public export
 UState : Type -> Type
@@ -99,13 +98,6 @@ removeHoleName n
     = do ust <- get UST
          put UST (record { holes $= filter (/= n) } ust)
 
-export
-genName : String -> Core annot [UST ::: UState annot] Name
-genName root
-    = do ust <- get UST
-         put UST (record { nextVar $= (+1) } ust)
-         pure (MN root (nextVar ust))
-
 -- Make a new constant by applying a term to everything in the current
 -- environment
 mkConstant : Env Term vars -> Term vars -> ClosedTerm
@@ -117,10 +109,7 @@ mkConstant {vars = x :: _} (b :: env) tm
 -- Make the type of a new constant which applies a term to everything in
 -- the current environment
 mkConstantTy : Env Term vars -> Term vars -> ClosedTerm
-mkConstantTy [] tm = tm
-mkConstantTy {vars = x :: _} (b :: env) tm 
-    = let ty = binderType b in
-          mkConstantTy env (Bind x (Pi Explicit ty) tm)
+mkConstantTy = abstractEnvType
 
 mkConstantAppArgs : Env Term vars -> 
                     List (Term done) -> List (Term (vars ++ done))
@@ -199,3 +188,47 @@ addConstraint constr
          let cn = MN "constraint" c_id
          setConstraint cn constr
          pure cn
+
+export
+dumpHole : (hole : Name) -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+dumpHole hole
+    = do gam <- getCtxt
+         case lookupDefTy hole gam of
+              Nothing => pure ()
+              Just (Guess tm constraints, ty) => 
+                   do putStrLn $ "!" ++ show hole ++ " : " ++ 
+                                        show (normalise gam [] ty)
+                      traverse (\x => dumpConstraint x) constraints 
+                      pure ()
+              Just (Hole _, ty) =>
+                   putStrLn $ "?" ++ show hole ++ " : " ++ 
+                                     show (normalise gam [] ty)
+--               Just (PMDef _ args t, ty) =>
+--                    putStrLn $ "Solved: " ++ show hole ++ " : " ++ 
+--                                  show (normalise gam [] ty) ++
+--                                  " = " ++ show t
+--               Just (ImpBind, ty) =>
+--                    putStrLn $ "Bound: " ++ show hole ++ " : " ++ 
+--                                  show (normalise gam [] ty)
+              _ => pure ()
+  where
+    dumpConstraint : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+    dumpConstraint n
+        = do ust <- get UST
+             gam <- getCtxt
+             case lookupCtxt n (constraints ust) of
+                  Nothing => pure ()
+                  Just Resolved => putStrLn "\tResolved"
+                  Just (MkConstraint _ env x y) =>
+                       putStrLn $ "\t" ++ show (normalise gam env x) 
+                                      ++ " =?= " ++ show (normalise gam env y)
+                  Just (MkSeqConstraint _ _ xs ys) =>
+                       putStrLn $ "\t" ++ show xs ++ " =?= " ++ show ys
+
+export
+dumpConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+dumpConstraints 
+    = do hs <- getCurrentHoleNames
+         traverse (\x => dumpHole x) hs
+         pure ()
+

@@ -109,15 +109,15 @@ dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))
 
 -- Bind implicit arguments, returning the new term and its updated type
-bindImplicits : Int -> 
-                ImplicitMode ->
-                Gamma ->
-                List (Name, Term vars) ->
-                Term vars -> Term vars -> (Term vars, Term vars)
-bindImplicits i NONE gam args scope scty = (scope, scty)
-bindImplicits i mode gam [] scope scty = (scope, scty)
-bindImplicits i mode gam ((n, ty) :: imps) scope scty
-    = let (scope', ty') = bindImplicits (i + 1) mode gam imps scope scty
+bindImplVars : Int -> 
+               ImplicitMode ->
+               Gamma ->
+               List (Name, Term vars) ->
+               Term vars -> Term vars -> (Term vars, Term vars)
+bindImplVars i NONE gam args scope scty = (scope, scty)
+bindImplVars i mode gam [] scope scty = (scope, scty)
+bindImplVars i mode gam ((n, ty) :: imps) scope scty
+    = let (scope', ty') = bindImplVars (i + 1) mode gam imps scope scty
           tmpN = MN "unb" i
           repNameTm = repName (Ref Bound tmpN) scope' 
           repNameTy = repName (Ref Bound tmpN) ty' in
@@ -154,11 +154,19 @@ bindImplicits i mode gam ((n, ty) :: imps) scope scty
     repName new Erased = Erased
     repName new TType = TType
 
-bindTopImplicits : ImplicitMode -> Gamma ->
+bindImplicits : ImplicitMode ->
+                Gamma -> Env Term vars ->
+                List (Name, Term vars) ->
+                Term vars -> Term vars -> (Term vars, Term vars)
+bindImplicits mode gam env hs tm ty 
+   = bindImplVars 0 mode gam hs (normaliseHoles gam env tm)
+                                (normaliseHoles gam env ty)
+
+bindTopImplicits : ImplicitMode -> Gamma -> Env Term vars ->
                    List (Name, ClosedTerm) -> Term vars -> Term vars ->
                    (Term vars, Term vars)
-bindTopImplicits {vars} mode gam hs tm ty
-    = bindImplicits 0 mode gam (map weakenVars hs) tm ty
+bindTopImplicits {vars} mode gam env hs tm ty
+    = bindImplicits mode gam env (map weakenVars hs) tm ty
   where
     weakenVars : (Name, ClosedTerm) -> (Name, Term vars)
     weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
@@ -166,18 +174,51 @@ bindTopImplicits {vars} mode gam hs tm ty
 
 convert : annot ->
           Env Term vars ->
-          Term vars -> Term vars -> 
+          NF vars -> NF vars -> 
           Core annot 
                [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                (List Name)
 convert loc env x y 
-    = catch (do vs <- unify loc env x y
+    = catch (do solveConstraints
+                vs <- unify loc env x y
                 solveConstraints
                 pure vs)
             (\err => do gam <- getCtxt 
-                        throw (WhenUnifying loc (normaliseHoles gam env x)
-                                                (normaliseHoles gam env y)
+                        throw (WhenUnifying loc (quote empty env x) -- (normaliseHoles gam env x)
+                                                (quote empty env y) -- (normaliseHoles gam env y)
                                   err))
+  
+-- Get the implicit arguments that need to be inserted at this point
+-- in a function application. Do this by reading off implicit Pis
+-- in the expected type ('ty') and adding new holes for each.
+-- Return the (normalised) remainder of the type, and the list of
+-- implicits added
+getImps : annot -> Env Term vars ->
+          (ty : NF vars) -> List (Term vars) ->
+          Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
+               (NF vars, List (Term vars)) 
+getImps loc env (NBind bn (Pi Implicit ty) sc) imps
+    = do hn <- genName (nameRoot bn)
+         addNamedHole hn env (quote empty env ty)
+         let arg = mkConstantApp hn env
+         getImps loc env (sc (toClosure env arg)) (arg :: imps)
+getImps loc env ty imps = pure (ty, reverse imps)
+
+  
+-- When converting, add implicits until we've applied enough for the
+-- expected type
+convertImps : annot -> Env Term vars ->
+              (got : NF vars) -> (exp : NF vars) -> List (Term vars) ->
+              Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
+                         (NF vars, List (Term vars))
+convertImps loc env (NBind bn (Pi Implicit ty) sc) (NBind bn' (Pi Implicit ty') sc') imps
+    = pure (NBind bn (Pi Implicit ty) sc, reverse imps)
+convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
+    = do hn <- genName (nameRoot bn)
+         addNamedHole hn env (quote empty env ty)
+         let arg = mkConstantApp hn env
+         convertImps loc env (sc (toClosure env arg)) exp (arg :: imps)
+convertImps loc env got exp imps = pure (got, reverse imps)
 
 checkExp : annot ->
            Env Term vars ->
@@ -188,12 +229,15 @@ checkExp : annot ->
 checkExp loc env tm got Nothing
     = pure (tm, got)
 checkExp loc env tm got (Just exp) 
-    = do constr <- convert loc env got exp
+    = do gam <- getCtxt
+         let expnf = nf gam env exp
+         (got', imps) <- convertImps loc env (nf gam env got) expnf []
+         constr <- convert loc env got' expnf
          case constr of
-              [] => pure (tm, got)
+              [] => pure (apply tm imps, quote empty env got')
               cs => do gam <- getCtxt
-                       c <- addConstant env tm exp cs
-                       pure (mkConstantApp c env, got)
+                       c <- addConstant env (apply tm imps) exp cs
+                       pure (mkConstantApp c env, quote empty env got')
 
 inventFnType : Env Term vars ->
                (bname : Name) ->
@@ -214,13 +258,7 @@ mutual
           Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                (Term vars, Term vars) 
   check top impmode env tm exp 
-      = checkImp top impmode env (insertImpLam env tm exp) exp
-
-  insertImpLam : Env Term vars ->
-                 (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
-                 RawImp annot
-  insertImpLam env tm Nothing = tm
-  insertImpLam env tm (Just ty) = tm -- TODO
+      = checkImp top impmode env tm exp
 
   checkImp : (top : Bool) -> -- top level, unbound implicits bound here
              ImplicitMode ->
@@ -231,10 +269,7 @@ mutual
   checkImp top impmode env (IVar loc x) expected 
       = do (x', varty) <- infer loc env (RVar x)
            gam <- getCtxt
-           -- If the variable has an implicit binder in its type, add
-           -- the implicits here
-           (ty, imps) <- getImps loc env (nf gam env varty) []
-           checkExp loc env (apply x' imps) (quote empty env ty) expected
+           checkExp loc env x' varty expected
   checkImp top impmode env (IPi loc plicity Nothing ty retTy) expected 
       = do n <- genName "pi"
            checkPi top impmode loc env plicity n ty retTy expected
@@ -311,22 +346,6 @@ mutual
       = do n <- addHole env expected
            pure (mkConstantApp n env, expected)
  
-  -- Get the implicit arguments that need to be inserted at this point
-  -- in a function application. Do this by reading off implicit Pis
-  -- in the expected type ('ty') and adding new holes for each.
-  -- Return the (normalised) remainder of the type, and the list of
-  -- implicits added
-  getImps : annot -> Env Term vars ->
-            (ty : NF vars) -> List (Term vars) ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                 (NF vars, List (Term vars)) 
-  getImps loc env (NBind bn (Pi Implicit ty) sc) imps
-      = do hn <- genName (nameRoot bn)
-           addNamedHole hn env (quote empty env ty)
-           let arg = mkConstantApp hn env
-           getImps loc env (sc (toClosure env arg)) (arg :: imps)
-  getImps loc env ty imps = pure (ty, reverse imps)
-
   checkPi : (top : Bool) -> -- top level, unbound implicits bound here
             ImplicitMode ->
             annot -> Env Term vars ->
@@ -356,13 +375,13 @@ mutual
                       --                                 ++ show (dropTmIn scopeImps)
                       gam <- getCtxt
                       let (scopev', scopet')
-                          = bindImplicits 0 impmode gam 
+                          = bindImplicits impmode gam env'
                                           (dropTmIn scopeImps) scopev scopet
                       let (binder, bindert)
-                          = bindImplicits 0 impmode gam 
-                                            (dropTmIn argImps)
-                                            (Bind n (Pi info tyv) scopev')
-                                            TType
+                          = bindImplicits impmode gam env
+                                          (dropTmIn argImps)
+                                          (Bind n (Pi info tyv) scopev')
+                                          TType
                       traverse (\n => implicitBind n) (map fst scopeImps)
                       traverse (\n => implicitBind n) (map fst argImps)
                       checkExp loc env binder bindert expected
@@ -379,10 +398,11 @@ mutual
   checkLam top impmode loc env n ty scope (Just (Bind bn (Pi Explicit pty) psc))
       = do (tyv, tyt) <- check top impmode env ty (Just TType)
            weakenEState
-           (scopev, scopet) <- check top impmode (Pi Explicit pty :: env) scope (Just psc)
+           (scopev, scopet) <- check top impmode (Pi Explicit pty :: env) scope 
+                                     (Just (renameTop n psc))
            strengthenEState top loc
-           checkExp loc env (Bind bn (Lam tyv) scopev)
-                        (Bind bn (Pi Explicit tyv) scopet)
+           checkExp loc env (Bind n (Lam tyv) scopev)
+                        (Bind n (Pi Explicit tyv) scopet)
                         (Just (Bind bn (Pi Explicit pty) psc))
   checkLam top impmode loc env n ty scope expected
       = do (tyv, tyt) <- check top impmode env ty (Just TType)
@@ -419,18 +439,18 @@ mutual
 -- at the top level (i.e. they can't depend on any explicitly given
 -- arguments).
 -- Return the updated term and type, and the names of holes which occur
-findHoles : ImplicitMode -> Term vars -> Term vars ->
+findHoles : ImplicitMode -> Env Term vars -> Term vars -> Term vars ->
             Core annot [Ctxt ::: Defs, UST ::: UState annot]
                  (Term vars, Term vars, List Name) 
-findHoles NONE tm exp = pure (tm, exp, [])
-findHoles (PI False) tm exp = pure (tm, exp, [])
-findHoles mode tm exp
+findHoles NONE env tm exp = pure (tm, exp, [])
+findHoles (PI False) env tm exp = pure (tm, exp, [])
+findHoles mode env tm exp
     = do new HVar []
          tm <- holes tm
          hs <- get HVar
          delete HVar
          gam <- getCtxt
-         let (tm, ty) = bindTopImplicits mode gam (reverse hs) tm exp
+         let (tm, ty) = bindTopImplicits mode gam env (reverse hs) tm exp
          pure (tm, ty, map fst hs)
   where
     data HVar : Type where -- empty type to label the local state
@@ -488,16 +508,17 @@ renameImplicits (Bind n b sc)
     = Bind n b (renameImplicits sc)
 renameImplicits t = t
 
-export
-inferTerm : Env Term vars ->
-            ImplicitMode ->
-            (term : RawImp annot) ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot]
+elabTerm : Env Term vars ->
+           ImplicitMode ->
+           (term : RawImp annot) ->
+           (tyin : Maybe (Term vars)) ->
+           Core annot [Ctxt ::: Defs, UST ::: UState annot]
                  (Term vars, Term vars) 
-inferTerm env impmode tm
+elabTerm env impmode tm tyin
     = do resetHoles
          new EST initEState
-         (chktm, ty) <- call $ check True impmode env tm Nothing
+         (chktm, ty) <- call $ check True impmode env tm tyin
+         solveConstraints
          est <- get EST
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'
@@ -505,31 +526,36 @@ inferTerm env impmode tm
          clearToBind -- remove the bound holes
          delete EST
          gam <- getCtxt
-         let (restm, resty) = bindImplicits 0 impmode gam 
+         let (restm, resty) = bindImplicits impmode gam env
                                             (dropTmIn fullImps) chktm ty
          traverse (\n => implicitBind n) (map fst fullImps)
          gam <- getCtxt
-         (ptm, pty, bound) <- findHoles impmode (normaliseHoles gam env restm) resty
+         (ptm, pty, bound) <- findHoles impmode env (normaliseHoles gam env restm) resty
          -- Give implicit bindings their proper names, as UNs not PVs
          let ptm' = renameImplicits ptm
          let pty' = renameImplicits pty
          -- Drop any holes we created which aren't used in the resulting
          -- term
          traverse (\n => implicitBind n) bound
-         putStrLn "--- CONSTRAINTS AND HOLES ---"
-         dumpConstraints 
+--          putStrLn "--- CONSTRAINTS AND HOLES ---"
+--          dumpConstraints 
          pure (ptm', pty')
 
 export
+inferTerm : Env Term vars ->
+            ImplicitMode ->
+            (term : RawImp annot) ->
+            Core annot [Ctxt ::: Defs, UST ::: UState annot]
+                 (Term vars, Term vars) 
+inferTerm env impmode tm = elabTerm env impmode tm Nothing
+
+export
 checkTerm : Env Term vars ->
+            ImplicitMode ->
             (term : RawImp annot) -> (ty : Term vars) ->
             Core annot [Ctxt ::: Defs, UST ::: UState annot]
                  (Term vars) 
-checkTerm env tm ty
-    = do resetHoles
-         new EST initEState
-         (chktm, ty) <- call $ check True NONE env tm (Just ty)
-         delete EST
-         dumpConstraints
-         pure chktm
+checkTerm env impmode tm ty 
+    = do (tm_elab, _) <- elabTerm env impmode tm (Just ty)
+         pure tm_elab
 
