@@ -30,42 +30,44 @@ data Vect : Nat -> Type -> Type where {
      Cons : $a -> Vect $k $a -> Vect (S $k) $a;
 }
 
-data Ty : Type where {
-     Base : Type -> Ty;
-     Arrow : Ty -> Ty -> Ty;
-}
-
-interpTy : Ty -> Type;
-interpTy (Base $t) = t;
-interpTy (Arrow $s $t) = interpTy s -> interpTy t;
-
-data Env : Vect $n Ty -> Type where {
-     ENil : Env Nil;
-     ECons : {xs : Vect $n Ty} -> 
-             (x : interpTy $a) -> Env xs -> Env (Cons $a xs);
-}
+-- Finite sets
 
 data Fin : Nat -> Type where {
      FZ : Fin (S $k);
      FS : Fin $k -> Fin (S $k);
 }
 
+-- Lookup an element by position in a vector.
+
 lookup : Fin $i -> Vect $i $ty -> $ty;
 lookup FZ (Cons $t $ts) = t;
 lookup (FS $i) (Cons $t $ts) = lookup i ts;
+
+-- As a larger example, we'll implement the well-typed interpreter.
+-- So we'll need to represent the types of our expression language:
+
+data Ty : Type where {
+     Base : Type -> Ty;
+     Arrow : Ty -> Ty -> Ty;
+}
+
+-- Ty can be translated to a host language type
+
+interpTy : Ty -> Type;
+interpTy (Base $t) = t;
+interpTy (Arrow $s $t) = interpTy s -> interpTy t;
+
+-- 'HasType i t gam' says that the variable at position i has type t
+-- in context gam:
 
 data HasType : Fin $k -> Ty -> Vect $k Ty -> Type where {
      Stop : {ts : Vect $k Ty} ->
             HasType FZ $t (Cons $t ts);
      Pop  : {ts : Vect $k Ty} ->
-            HasType $i $t ts -> {u : Ty} -> HasType (FS $i) $t (Cons u ts);
+            HasType $i $t ts -> HasType (FS $i) $t (Cons $u ts);
 }
 
-lookupEnv : {k : Nat} -> {i : Fin k} ->
-            {gam : Vect k Ty} ->
-            HasType i $t gam -> Env gam -> interpTy $t;
-lookupEnv Stop (ECons $x $xs) = x;
-lookupEnv (Pop $var) (ECons $x $xs) = lookupEnv var xs;
+-- Expressions in our language, indexed by their contexts and types:
 
 data Lang : Vect $k Ty -> Ty -> Type where {
      Var : {i : Fin $k} -> {gam : Vect $k Ty} ->
@@ -82,12 +84,33 @@ data Lang : Vect $k Ty -> Ty -> Type where {
           Lang gam $a -> Lang gam $b -> Lang gam $c;
 }
 
+-- To evaluate expressions, we'll need an environment to keep track of
+-- the value of each variable:
+
+data Env : Vect $n Ty -> Type where {
+     ENil : Env Nil;
+     ECons : {xs : Vect $n Ty} -> 
+             (x : interpTy $a) -> Env xs -> Env (Cons $a xs);
+}
+
+-- Find a value in an environment
+
+lookupEnv : {k : Nat} -> {i : Fin k} ->
+            {gam : Vect k Ty} ->
+            HasType i $t gam -> Env gam -> interpTy $t;
+lookupEnv Stop (ECons $x $xs) = x;
+lookupEnv (Pop $var) (ECons $x $xs) = lookupEnv var xs;
+
+-- Finally, interpret Lang expressions as host language expressions.
+
 interp : {gam : Vect $k Ty} -> Env gam -> Lang gam $t -> interpTy $t;
 interp $env (Var $i) = lookupEnv i env;
 interp $env (Val $x) = x;
 interp $env (App $f $a) = interp env f (interp env a);
 interp $env (Lam $scope) = \var => interp (ECons var env) scope;
 interp $env (Op $fn $x $y) = fn (interp env x) (interp env y);
+
+-- A couple of tests:
 
 testId : Lang Nil (Arrow (Base Nat) (Base Nat));
 testId = Lam (Var Stop);
