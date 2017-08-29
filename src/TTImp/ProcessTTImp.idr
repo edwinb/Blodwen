@@ -23,17 +23,23 @@ import Interfaces.FileIO
 %default covering
 
 using (FileIO m)
-  processDecl : ImpDecl annot -> CoreI annot m 
-                                 [Ctxt ::: Defs, UST ::: UState annot] ()
+  processDecl : ImpDecl annot -> 
+                CoreI annot m [Ctxt ::: Defs, UST ::: UState annot,
+                               ImpST ::: ImpState annot] ()
   processDecl (IClaim loc ty) = processType [] ty
   processDecl (IDef loc n cs) = processDef [] loc n cs
   processDecl (IData loc d) = processData [] d
+  processDecl (ImplicitNames loc ns) 
+      = do traverse (\ x => addImp (fst x) (snd x)) ns
+           pure ()
 
   export
   processDecls : List (ImpDecl annot) -> 
                  CoreI annot m [Ctxt ::: Defs, UST ::: UState annot] ()
   processDecls decls
-      = do xs <- traverse (\x => processDecl x) decls
+      = do setupImpState
+           xs <- traverse (\x => processDecl x) decls
+           deleteImpState
            pure ()
 
   export

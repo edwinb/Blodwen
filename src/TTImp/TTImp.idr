@@ -111,6 +111,7 @@ data ImpDecl : Type -> Type where
      IClaim : annot -> ImpTy annot -> ImpDecl annot
      IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
      IData : annot -> ImpData annot -> ImpDecl annot
+     ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
 
 export
 Show (ImpDecl annot) where
@@ -118,3 +119,32 @@ Show (ImpDecl annot) where
   show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                        showSep "\n\t" (map show cs)
   show (IData _ d) = show d
+  show (ImplicitNames _ ns) = "implicit " ++ show ns
+
+-- State which is useful to preserve throughout elaborating a file
+public export
+record ImpState annot where
+  constructor MkImpState
+  impNames : List (String, RawImp annot) -- names which can be implicitly bound
+
+initImpState : ImpState annot
+initImpState = MkImpState []
+
+-- A label for TTImp state in the global state
+export
+data ImpST : Type where
+
+export
+setupImpState : CoreM annot [] [ImpST ::: ImpState annot] ()
+setupImpState = new ImpST initImpState
+
+export
+deleteImpState : CoreM annot [ImpST ::: ImpState annot] [] ()
+deleteImpState = delete ImpST
+
+export
+addImp : String -> RawImp annot -> Core annot [ImpST ::: ImpState annot] ()
+addImp str ty
+    = do ist <- get ImpST
+         put ImpST (record { impNames $= ((str, ty) ::) } ist)
+

@@ -116,6 +116,7 @@ data Error annot
 	  | AlreadyDefined annot Name
 	  | NotFunctionType annot (Term vars)
 	  | CaseCompile annot Name CaseError 
+		| BadImplicit annot String
 	  | GenericMsg annot String
     | InternalError String
 
@@ -126,14 +127,14 @@ Show (Error annot) where
   show (Cycle _ env x y) 
       = "Occurs check failed: " ++ show x ++ " and " ++ show y
   show (WhenUnifying _ x y err)
-      = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++
-        show err
+      = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++ show err
   show (UndefinedName _ x) = "Undefined name " ++ show x
   show (NoDeclaration _ x) = "No type declaration for " ++ show x
   show (AlreadyDefined _ x) = show x ++ " is already defined"
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
   show (CaseCompile _ n DifferingArgNumbers) 
       = "Patterns for " ++ show n ++ " have different numbers of arguments"
+  show (BadImplicit _ str) = str ++ " can't be bound here"
   show (GenericMsg _ str) = str
   show (InternalError str) = "INTERNAL ERROR: " ++ str
 

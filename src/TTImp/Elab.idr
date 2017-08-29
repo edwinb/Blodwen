@@ -22,6 +22,9 @@ import Data.List
 public export
 data ImplicitMode = NONE | PI Bool | PATTERN
 
+public export
+data ElabMode = InType | InLHS | InExpr
+
 record ElabState (vars : List Name) where
   constructor MkElabState
   boundNames : List (Name, (Term vars, Term vars))
@@ -204,9 +207,8 @@ getImps loc env (NBind bn (Pi Implicit ty) sc) imps
          getImps loc env (sc (toClosure env arg)) (arg :: imps)
 getImps loc env ty imps = pure (ty, reverse imps)
 
-  
--- When converting, add implicits until we've applied enough for the
--- expected type
+--- When converting, add implicits until we've applied enough for the
+--- expected type
 convertImps : annot -> Env Term vars ->
               (got : NF vars) -> (exp : NF vars) -> List (Term vars) ->
               Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
@@ -236,8 +238,8 @@ checkExp loc env tm got (Just exp)
          case constr of
               [] => pure (apply tm imps, quote empty env got')
               cs => do gam <- getCtxt
-                       c <- addConstant env (apply tm imps) exp cs
-                       pure (mkConstantApp c env, quote empty env got')
+                       c <- addConstant env tm exp cs
+                       pure (mkConstantApp c env, got)
 
 inventFnType : Env Term vars ->
                (bname : Name) ->
@@ -252,14 +254,16 @@ inventFnType env bname
 
 mutual
   check : (top : Bool) -> -- top level, unbound implicits bound here
-          ImplicitMode ->
+          ImplicitMode -> ElabMode ->
           Env Term vars ->
           (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
           Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                (Term vars, Term vars) 
-  check top impmode env tm exp 
+  check top impmode InLHS env tm exp -- don't expand implicit lambda on LHS
+      = checkImp top impmode InLHS env tm exp
+  check top impmode elabmode env tm exp 
       = let tm' = insertImpLam env tm exp in
-            checkImp top impmode env tm' exp
+            checkImp top impmode elabmode env tm' exp
 
   insertImpLam : Env Term vars ->
                  (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
@@ -274,33 +278,36 @@ mutual
       bindLam tm sc = tm
 
   checkImp : (top : Bool) -> -- top level, unbound implicits bound here
-             ImplicitMode ->
+             ImplicitMode -> ElabMode ->
              Env Term vars ->
              (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
              Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                   (Term vars, Term vars) 
-  checkImp top impmode env (IVar loc x) expected 
+  checkImp top impmode elabmode env (IVar loc x) expected 
       = do (x', varty) <- infer loc env (RVar x)
            gam <- getCtxt
-           checkExp loc env x' varty expected
-  checkImp top impmode env (IPi loc plicity Nothing ty retTy) expected 
+           -- If the variable has an implicit binder in its type, add
+           -- the implicits here
+           (ty, imps) <- getImps loc env (nf gam env varty) []
+           checkExp loc env (apply x' imps) (quote empty env ty) expected
+  checkImp top impmode elabmode env (IPi loc plicity Nothing ty retTy) expected 
       = do n <- genName "pi"
-           checkPi top impmode loc env plicity n ty retTy expected
-  checkImp top impmode env (IPi loc plicity (Just n) ty retTy) expected 
-      = checkPi top impmode loc env plicity n ty retTy expected
-  checkImp top impmode env (ILam loc plicity n ty scope) expected
-      = checkLam top impmode loc env plicity n ty scope expected
-  checkImp top impmode env (ILet loc n nTy nVal scope) expected 
-      = checkLet top impmode loc env n nTy nVal scope expected
-  checkImp top impmode env (IApp loc fn arg) expected 
-      = do (fntm, fnty) <- check top impmode env fn Nothing
+           checkPi top impmode elabmode loc env plicity n ty retTy expected
+  checkImp top impmode elabmode env (IPi loc plicity (Just n) ty retTy) expected 
+      = checkPi top impmode elabmode loc env plicity n ty retTy expected
+  checkImp top impmode elabmode env (ILam loc plicity n ty scope) expected
+      = checkLam top impmode elabmode loc env plicity n ty scope expected
+  checkImp top impmode elabmode env (ILet loc n nTy nVal scope) expected 
+      = checkLet top impmode elabmode loc env n nTy nVal scope expected
+  checkImp top impmode elabmode env (IApp loc fn arg) expected 
+      = do (fntm, fnty) <- check top impmode elabmode env fn Nothing
            gam <- getCtxt
            -- If the function has an implicit binder in its type, add
            -- the implicits here
            (scopeTy, impArgs) <- getImps loc env (nf gam env fnty) []
            case scopeTy of
                 NBind _ (Pi _ ty) scdone =>
-                  do (argtm, argty) <- check top impmode env arg (Just (quote empty env ty))
+                  do (argtm, argty) <- check top impmode elabmode env arg (Just (quote empty env ty))
                      let sc' = scdone (toClosure env argtm)
                      checkExp loc env (App (apply fntm impArgs) argtm)
                                   (quote gam env sc') expected
@@ -310,7 +317,7 @@ mutual
                      (expty, scty) <- inventFnType env bn
                      -- Check the argument type against the invented arg type
                      (argtm, argty) <- 
-                         check top impmode env arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
+                         check top impmode elabmode env arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
                      -- Check the type of 'fn' is an actual function type
                      (fnchk, _) <-
                          checkExp loc env fntm 
@@ -318,12 +325,14 @@ mutual
                                   (Just (quote gam env scopeTy))
                      checkExp loc env (App fnchk argtm)
                                   (Bind bn (Let argtm argty) scty) expected
-  checkImp top impmode env (IPrimVal loc x) expected 
+  checkImp top impmode elabmode env (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp loc env x' ty expected
-  checkImp top impmode env (IType loc) exp
+  checkImp top impmode elabmode env (IType loc) exp
       = checkExp loc env TType TType exp
-  checkImp top impmode env (IBindVar loc str) Nothing
+  checkImp top impmode InExpr env (IBindVar loc str) exp
+      = throw (BadImplicit loc str)
+  checkImp top impmode elabmode env (IBindVar loc str) Nothing
       = do let n = PV str
            t <- addHole env TType
            let hty = mkConstantApp t env
@@ -337,7 +346,7 @@ mutual
                      pure (tm, hty)
                 Just (tm, ty) =>
                      pure (tm, ty)
-  checkImp top impmode env (IBindVar loc str) (Just expected) 
+  checkImp top impmode elabmode env (IBindVar loc str) (Just expected) 
       = do let n = PV str
            est <- get EST
            case lookup n (boundNames est) of
@@ -350,30 +359,30 @@ mutual
                      pure (tm, expected)
                 Just (tm, ty) =>
                      checkExp loc env tm ty (Just expected)
-  checkImp top impmode env (Implicit loc) Nothing
+  checkImp top impmode elabmode env (Implicit loc) Nothing
       = do t <- addHole env TType
            let hty = mkConstantApp t env
            n <- addHole env hty
            pure (mkConstantApp n env, hty)
-  checkImp top impmode env (Implicit loc) (Just expected) 
+  checkImp top impmode elabmode env (Implicit loc) (Just expected) 
       = do n <- addHole env expected
            pure (mkConstantApp n env, expected)
  
   checkPi : (top : Bool) -> -- top level, unbound implicits bound here
-            ImplicitMode ->
+            ImplicitMode -> ElabMode ->
             annot -> Env Term vars -> PiInfo -> Name -> 
             (argty : RawImp annot) -> (retty : RawImp annot) ->
             Maybe (Term vars) ->
             Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                  (Term vars, Term vars) 
-  checkPi top impmode loc env info n argty retty expected
-      = do (tyv, tyt) <- check False impmode env argty (Just TType)
+  checkPi top impmode elabmode loc env info n argty retty expected
+      = do (tyv, tyt) <- check False impmode elabmode env argty (Just TType)
            let env' : Env Term (n :: _) = Pi info tyv :: env
            est <- get EST
            let argImps = if top then (reverse $ toBind est) else []
            when top $ clearToBind 
            weakenEState 
-           (scopev, scopet) <- check top impmode env' retty (Just TType)
+           (scopev, scopet) <- check top impmode elabmode env' retty (Just TType)
            est <- get EST
            let scopeImps = reverse $ toBind est
            strengthenEState top loc
@@ -401,33 +410,33 @@ mutual
                                       TType expected
 
   checkLam : (top : Bool) -> -- top level, unbound implicits bound here
-             ImplicitMode ->
+             ImplicitMode -> ElabMode ->
              annot -> Env Term vars -> PiInfo -> Name ->
              (ty : RawImp annot) -> (scope : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                   (Term vars, Term vars) 
-  checkLam top impmode loc env plicity n ty scope (Just (Bind bn (Pi Explicit pty) psc))
-      = do (tyv, tyt) <- check top impmode env ty (Just TType)
+  checkLam top impmode elabmode loc env plicity n ty scope (Just (Bind bn (Pi Explicit pty) psc))
+      = do (tyv, tyt) <- check top impmode elabmode env ty (Just TType)
            weakenEState
-           (scopev, scopet) <- check top impmode (Pi plicity pty :: env) scope 
+           (scopev, scopet) <- check top impmode elabmode (Pi plicity pty :: env) scope 
                                      (Just (renameTop n psc))
            strengthenEState top loc
            checkExp loc env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         (Just (Bind bn (Pi plicity pty) psc))
-  checkLam top impmode loc env plicity n ty scope expected
-      = do (tyv, tyt) <- check top impmode env ty (Just TType)
+  checkLam top impmode elabmode loc env plicity n ty scope expected
+      = do (tyv, tyt) <- check top impmode elabmode env ty (Just TType)
            let env' : Env Term (n :: _) = Pi Explicit tyv :: env
            weakenEState
-           (scopev, scopet) <- check top impmode env' scope Nothing
+           (scopev, scopet) <- check top impmode elabmode env' scope Nothing
            strengthenEState top loc
            checkExp loc env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         expected
   
   checkLet : (top : Bool) -> -- top level, unbound implicits bound here
-             ImplicitMode ->
+             ImplicitMode -> ElabMode ->
              annot -> Env Term vars ->
              Name -> 
              (ty : RawImp annot) -> 
@@ -436,12 +445,12 @@ mutual
              Maybe (Term vars) ->
              Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                   (Term vars, Term vars) 
-  checkLet top impmode loc env n ty val scope expected
-      = do (tyv, tyt) <- check top impmode env ty (Just TType)
-           (valv, valt) <- check top impmode env val (Just tyv)
+  checkLet top impmode elabmode loc env n ty val scope expected
+      = do (tyv, tyt) <- check top impmode elabmode env ty (Just TType)
+           (valv, valt) <- check top impmode elabmode env val (Just tyv)
            let env' : Env Term (n :: _) = Let valv tyv :: env
            weakenEState
-           (scopev, scopet) <- check top impmode env' scope (map weaken expected)
+           (scopev, scopet) <- check top impmode elabmode env' scope (map weaken expected)
            strengthenEState top loc
            checkExp loc env (Bind n (Let valv tyv) scopev)
                             (Bind n (Let valv tyv) scopet)
@@ -521,15 +530,15 @@ renameImplicits (Bind n b sc)
 renameImplicits t = t
 
 elabTerm : Env Term vars ->
-           ImplicitMode ->
+           ImplicitMode -> ElabMode ->
            (term : RawImp annot) ->
            (tyin : Maybe (Term vars)) ->
            Core annot [Ctxt ::: Defs, UST ::: UState annot]
                  (Term vars, Term vars) 
-elabTerm env impmode tm tyin
+elabTerm env impmode elabmode tm tyin
     = do resetHoles
          new EST initEState
-         (chktm, ty) <- call $ check True impmode env tm tyin
+         (chktm, ty) <- call $ check True impmode elabmode env tm tyin
          solveConstraints
          est <- get EST
          -- Bind the implicits and any unsolved holes they refer to
@@ -555,19 +564,19 @@ elabTerm env impmode tm tyin
 
 export
 inferTerm : Env Term vars ->
-            ImplicitMode ->
+            ImplicitMode -> ElabMode ->
             (term : RawImp annot) ->
             Core annot [Ctxt ::: Defs, UST ::: UState annot]
                  (Term vars, Term vars) 
-inferTerm env impmode tm = elabTerm env impmode tm Nothing
+inferTerm env impmode elabmode tm = elabTerm env impmode elabmode tm Nothing
 
 export
 checkTerm : Env Term vars ->
-            ImplicitMode ->
+            ImplicitMode -> ElabMode ->
             (term : RawImp annot) -> (ty : Term vars) ->
             Core annot [Ctxt ::: Defs, UST ::: UState annot]
                  (Term vars) 
-checkTerm env impmode tm ty 
-    = do (tm_elab, _) <- elabTerm env impmode tm (Just ty)
+checkTerm env impmode elabmode tm ty 
+    = do (tm_elab, _) <- elabTerm env impmode elabmode tm (Just ty)
          pure tm_elab
 

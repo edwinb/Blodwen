@@ -28,7 +28,7 @@ using (FileIO m)
                                tryTTImp
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
-                       (tm, ty) <- inferTerm [] PATTERN ttimp 
+                       (tm, ty) <- inferTerm [] PATTERN InExpr ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
                        gam <- getCtxt
                        putStrLn (show (normalise gam [] tm) ++ " : " ++

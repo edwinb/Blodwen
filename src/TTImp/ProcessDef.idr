@@ -15,14 +15,14 @@ checkClause : Env Term vars -> ImpClause annot ->
               Core annot [Ctxt ::: Defs, UST ::: UState annot] Clause
 checkClause env (MkImpClause loc lhs_raw rhs_raw)
     = do -- putStrLn $ "CHECKING " ++ show lhs_raw ++ " = " ++ show rhs_raw
-         (lhs_in, lhsty_in) <- inferTerm env PATTERN lhs_raw
+         (lhs_in, lhsty_in) <- inferTerm env PATTERN InLHS lhs_raw
          gam <- getCtxt
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          (vs ** (env', lhspat, reqty)) <- extend env lhs lhsty
-         -- putStrLn (show lhs ++ " : " ++ show reqty)
-         rhs <- checkTerm env' NONE rhs_raw reqty
-         -- putStrLn (show lhs ++ " = " ++ show rhs)
+--          putStrLn (show lhs ++ " : " ++ show reqty)
+         rhs <- checkTerm env' NONE InExpr rhs_raw reqty
+--          putStrLn (show lhs ++ " = " ++ show rhs)
          pure (MkClause env' lhspat rhs)
   where
     extend : Env Term vars -> Term vars -> Term vars ->
@@ -38,7 +38,8 @@ checkClause env (MkImpClause loc lhs_raw rhs_raw)
 export
 processDef : Env Term vars -> annot ->
              Name -> List (ImpClause annot) -> 
-             Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+             Core annot [Ctxt ::: Defs, UST ::: UState annot,
+                         ImpST ::: ImpState annot] ()
 processDef env loc n cs_raw
     = do gam <- getCtxt
          case lookupDefTy n gam of
