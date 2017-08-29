@@ -74,7 +74,7 @@ mutual
                     (Implicit ())
            symbol "=>"
            scope <- typeExpr
-           pure (ILam () n ty scope)
+           pure (ILam () Explicit n ty scope)
 
   let_ : Rule (RawImp ())
   let_

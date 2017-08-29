@@ -167,7 +167,7 @@ Eq PiInfo where
 
 public export
 data Binder : Type -> Type where
-     Lam : (ty : type) -> Binder type
+     Lam : PiInfo -> (ty : type) -> Binder type
      Let : (val : type) -> (ty : type) -> Binder type
      Pi : PiInfo -> (ty : type) -> Binder type
      PVar : (ty : type) -> Binder type
@@ -175,7 +175,7 @@ data Binder : Type -> Type where
 
 export
 binderType : Binder tm -> tm
-binderType (Lam ty) = ty
+binderType (Lam x ty) = ty
 binderType (Let val ty) = ty
 binderType (Pi x ty) = ty
 binderType (PVar ty) = ty
@@ -183,7 +183,7 @@ binderType (PVTy ty) = ty
 
 export
 setType : Binder tm -> tm -> Binder tm
-setType (Lam _) ty = Lam ty
+setType (Lam x _) ty = Lam x ty
 setType (Let val _) ty = Let val ty
 setType (Pi x _) ty = Pi x ty
 setType (PVar _) ty = PVar ty
@@ -191,7 +191,7 @@ setType (PVTy _) ty = PVTy ty
 
 export
 Functor Binder where
-  map func (Lam ty) = Lam (func ty)
+  map func (Lam x ty) = Lam x (func ty)
   map func (Let val ty) = Let (func val) (func ty)
   map func (Pi x ty) = Pi x (func ty)
   map func (PVar ty) = PVar (func ty)
@@ -239,12 +239,6 @@ sameVar : Elem x xs -> Elem y xs -> Bool
 sameVar p1 p2 = case sameElem p1 p2 of
                      Yes prf => True
                      No contra => False
-
-export
-tm_id : Term []
-tm_id = Bind (UN "ty") (Lam TType) $
-        Bind (UN "x") (Lam (Local {x = UN "ty"} Here)) $
-        Local {x = UN "x"} Here
 
 %name TT.Binder b, b' 
 %name TT.Term tm 
@@ -493,8 +487,8 @@ subElem (There later) (KeepCons ds)
 mutual
   shrinkBinder : Binder (Term vars) -> SubVars newvars vars -> 
                  Maybe (Binder (Term newvars))
-  shrinkBinder (Lam ty) subprf 
-      = Just (Lam !(shrinkTerm ty subprf))
+  shrinkBinder (Lam x ty) subprf 
+      = Just (Lam x !(shrinkTerm ty subprf))
   shrinkBinder (Let val ty) subprf 
       = Just (Let !(shrinkTerm val subprf)
                   !(shrinkTerm ty subprf))
@@ -624,7 +618,7 @@ Show (Term vars) where
         showApp : Term vars -> List (Term vars) -> String
         showApp (Local {x} y) [] = show x
         showApp (Ref x fn) [] = show fn
-        showApp (Bind n (Lam ty) sc) [] 
+        showApp (Bind n (Lam x ty) sc) [] 
             = assert_total ("\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
         showApp (Bind n (Pi Explicit ty) sc) [] 
             = assert_total ("(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
@@ -657,7 +651,7 @@ data Raw : Type where
 export
 Show Raw where
   show (RVar n) = show n
-  show (RBind n (Lam ty) sc)
+  show (RBind n (Lam x ty) sc)
        = "(\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc ++ ")"
   show (RBind n (Pi _ ty) sc)
        = "(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc

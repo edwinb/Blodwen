@@ -258,7 +258,20 @@ mutual
           Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                (Term vars, Term vars) 
   check top impmode env tm exp 
-      = checkImp top impmode env tm exp
+      = let tm' = insertImpLam env tm exp in
+            checkImp top impmode env tm' exp
+
+  insertImpLam : Env Term vars ->
+                 (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
+                 RawImp annot
+  insertImpLam env tm Nothing = tm
+  insertImpLam env tm (Just ty) = bindLam tm ty
+    where
+      bindLam : RawImp annot -> Term vars -> RawImp annot
+      bindLam tm (Bind n (Pi Implicit ty) sc)
+          = let loc = getAnnot tm in
+                ILam loc Implicit n (Implicit loc) (bindLam tm sc)
+      bindLam tm sc = tm
 
   checkImp : (top : Bool) -> -- top level, unbound implicits bound here
              ImplicitMode ->
@@ -275,8 +288,8 @@ mutual
            checkPi top impmode loc env plicity n ty retTy expected
   checkImp top impmode env (IPi loc plicity (Just n) ty retTy) expected 
       = checkPi top impmode loc env plicity n ty retTy expected
-  checkImp top impmode env (ILam loc n ty scope) expected
-      = checkLam top impmode loc env n ty scope expected
+  checkImp top impmode env (ILam loc plicity n ty scope) expected
+      = checkLam top impmode loc env plicity n ty scope expected
   checkImp top impmode env (ILet loc n nTy nVal scope) expected 
       = checkLet top impmode loc env n nTy nVal scope expected
   checkImp top impmode env (IApp loc fn arg) expected 
@@ -348,8 +361,7 @@ mutual
  
   checkPi : (top : Bool) -> -- top level, unbound implicits bound here
             ImplicitMode ->
-            annot -> Env Term vars ->
-            PiInfo -> Name -> 
+            annot -> Env Term vars -> PiInfo -> Name -> 
             (argty : RawImp annot) -> (retty : RawImp annot) ->
             Maybe (Term vars) ->
             Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
@@ -390,28 +402,28 @@ mutual
 
   checkLam : (top : Bool) -> -- top level, unbound implicits bound here
              ImplicitMode ->
-             annot -> Env Term vars ->
-             Name -> (ty : RawImp annot) -> (scope : RawImp annot) ->
+             annot -> Env Term vars -> PiInfo -> Name ->
+             (ty : RawImp annot) -> (scope : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                   (Term vars, Term vars) 
-  checkLam top impmode loc env n ty scope (Just (Bind bn (Pi Explicit pty) psc))
+  checkLam top impmode loc env plicity n ty scope (Just (Bind bn (Pi Explicit pty) psc))
       = do (tyv, tyt) <- check top impmode env ty (Just TType)
            weakenEState
-           (scopev, scopet) <- check top impmode (Pi Explicit pty :: env) scope 
+           (scopev, scopet) <- check top impmode (Pi plicity pty :: env) scope 
                                      (Just (renameTop n psc))
            strengthenEState top loc
-           checkExp loc env (Bind n (Lam tyv) scopev)
-                        (Bind n (Pi Explicit tyv) scopet)
-                        (Just (Bind bn (Pi Explicit pty) psc))
-  checkLam top impmode loc env n ty scope expected
+           checkExp loc env (Bind n (Lam plicity tyv) scopev)
+                        (Bind n (Pi plicity tyv) scopet)
+                        (Just (Bind bn (Pi plicity pty) psc))
+  checkLam top impmode loc env plicity n ty scope expected
       = do (tyv, tyt) <- check top impmode env ty (Just TType)
            let env' : Env Term (n :: _) = Pi Explicit tyv :: env
            weakenEState
            (scopev, scopet) <- check top impmode env' scope Nothing
            strengthenEState top loc
-           checkExp loc env (Bind n (Lam tyv) scopev)
-                        (Bind n (Pi Explicit tyv) scopet)
+           checkExp loc env (Bind n (Lam plicity tyv) scopev)
+                        (Bind n (Pi plicity tyv) scopet)
                         expected
   
   checkLet : (top : Bool) -> -- top level, unbound implicits bound here

@@ -62,7 +62,7 @@ parameters (gam : Gamma, holesonly : Bool)
     eval env loc stk (Local p) = evalLocal env loc stk p
     eval env loc stk (Ref nt fn)
          = evalRef env loc stk nt fn
-    eval env loc (closure :: stk) (Bind x (Lam ty) sc) 
+    eval env loc (closure :: stk) (Bind x (Lam _ ty) sc) 
          = eval env (closure :: loc) stk sc
     eval env loc stk (Bind x (Let val ty) sc) 
          = eval env (MkClosure loc env val :: loc) stk sc
@@ -235,9 +235,9 @@ mutual
 
   quoteBinder :  Gamma ->Env Term free -> Binder (NF free) -> 
                 State Int (Binder (Term free))
-  quoteBinder gam env (Lam ty) 
+  quoteBinder gam env (Lam x ty) 
       = do ty' <- quoteGen gam env ty
-           pure (Lam ty')
+           pure (Lam x ty')
   quoteBinder gam env (Let val ty) 
       = do val' <- quoteGen gam env val
            ty' <- quoteGen gam env ty

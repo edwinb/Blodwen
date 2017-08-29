@@ -143,7 +143,7 @@ instantiate loc metavar smvs tm {newvars}
       mkRHS got (ns ++ [n]) cvs (Bind x (Pi _ ty) sc) tm | (Snoc rec) 
            = do sc' <- mkRHS (n :: got) ns (CompatExt cvs) sc 
                            (rewrite appendAssociative ns [n] got in tm)
-                pure (Bind x (Lam ty) sc')
+                pure (Bind x (Lam Explicit ty) sc')
       -- Run out of variables to bind
       mkRHS got (ns ++ [n]) cvs ty tm | (Snoc rec) = Nothing
 
@@ -272,7 +272,7 @@ mutual
                  Maybe (Term hargs)
   mkOldHoleDef (Bind x (Pi _ ty) sc) newh sofar (a :: args)
       = do sc' <- mkOldHoleDef sc newh sofar args
-           pure (Bind x (Lam ty) sc')
+           pure (Bind x (Lam Explicit ty) sc')
   mkOldHoleDef {hargs} {vars} ty newh sofar args
       = do compat <- areVarsCompatible vars hargs
            let newargs = map (renameVars compat) sofar
@@ -404,7 +404,7 @@ mutual
                              do let txtm = quote empty env tx
                                 let tytm = quote empty env ty
                                 c <- addConstant env
-                                       (Bind x (Lam txtm) (Local Here))
+                                       (Bind x (Lam Explicit txtm) (Local Here))
                                        (Bind x (Pi Explicit txtm)
                                            (weaken tytm)) cs
                                 let tscx = scx (toClosure env (Ref Bound xn))

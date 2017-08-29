@@ -34,7 +34,7 @@ mutual
   rawAtom 
       = do symbol "\\"; n <- name; symbol ":"; commit
            ty <- raw; symbol "=>"; sc <- raw
-           pure (RBind n (Lam ty) sc)
+           pure (RBind n (Lam Explicit ty) sc)
     <|> do symbol "("; n <- name; symbol ":"; commit; 
            ty <- raw; symbol ")"
            symbol "->"; sc <- raw

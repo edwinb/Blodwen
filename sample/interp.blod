@@ -115,7 +115,7 @@ interp $env (Op $fn $x $y) = fn (interp env x) (interp env y);
 testId : Lang Nil (Arrow (Base Nat) (Base Nat));
 testId = Lam (Var Stop);
 
-testAdd : -- {gam : Vect $k Ty} -> -- Env gam -> -- implicit lambda not quite ready
-          Lang Nil (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)));
+testAdd : {gam : Vect $k Ty} ->
+          Lang gam (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)));
 testAdd = Lam (Lam (Op plus (Var Stop) (Var (Pop Stop))));
 

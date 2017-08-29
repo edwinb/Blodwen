@@ -53,10 +53,10 @@ parameters (loc : annot, gam : Gamma)
 
     chkBinder : Env Term vars -> Binder Raw -> 
                 Either (Error annot) (Binder (Term vars), Term vars)
-    chkBinder env (Lam ty) 
+    chkBinder env (Lam x ty) 
         = do (tyv, tyt) <- chk env ty
              doConvert loc gam env tyt TType
-             pure (Lam tyv, tyt)
+             pure (Lam x tyv, tyt)
     chkBinder env (Let val ty) 
         = do (tyv, tyt) <- chk env ty
              (valv, valt) <- chk env val
@@ -79,8 +79,8 @@ parameters (loc : annot, gam : Gamma)
     discharge : (nm : Name) -> Binder (Term vars) -> Term vars ->
                 Term (nm :: vars) -> Term (nm :: vars) -> 
                 (Term vars, Term vars)
-    discharge nm (Lam ty) bindty scope scopety 
-         = (Bind nm (Lam ty) scope, Bind nm (Pi Explicit ty) scopety)
+    discharge nm (Lam x ty) bindty scope scopety 
+         = (Bind nm (Lam x ty) scope, Bind nm (Pi x ty) scopety)
     discharge nm (Let val ty) bindty scope scopety 
          = (Bind nm (Let val ty) scope, Bind nm (Let val ty) scopety)
     discharge nm (Pi x ty) bindty scope scopety 

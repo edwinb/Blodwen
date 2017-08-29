@@ -22,7 +22,7 @@ data RawImp : (annotation : Type) -> Type where
      IVar : annot -> Name -> RawImp annot
      IPi : annot -> PiInfo -> Maybe Name -> 
            (argTy : RawImp annot) -> (retTy : RawImp annot) -> RawImp annot
-     ILam : annot -> Name -> 
+     ILam : annot -> PiInfo -> Name -> 
             (argTy : RawImp annot) -> (scope : RawImp annot) -> RawImp annot
      ILet : annot -> Name -> 
             (nTy : RawImp annot) -> (nVal : RawImp annot) -> 
@@ -46,7 +46,7 @@ Show (RawImp annot) where
   show (IPi _ _ n argTy retTy)
       = "(%pi (" ++ show n ++ " " ++ show argTy ++ ") " 
              ++ show retTy ++ ")"
-  show (ILam _ n argTy scope) 
+  show (ILam _ _ n argTy scope) 
       = "(%lam (" ++ show n ++ " " ++ show argTy ++ ") " 
              ++ show scope ++ ")"
   show (ILet _ n nTy nVal scope)
@@ -63,7 +63,7 @@ export
 getAnnot : RawImp a -> a
 getAnnot (IVar x _) = x
 getAnnot (IPi x _ _ _ _) = x
-getAnnot (ILam x _ _ _) = x
+getAnnot (ILam x _ _ _ _) = x
 getAnnot (ILet x _ _ _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IPrimVal x _) = x
