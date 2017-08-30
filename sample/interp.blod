@@ -12,18 +12,12 @@ data Nat : Type where {
 -- A function definition, defined by a type declaration and a list of
 -- pattern clauses.
 
--- The '$' indicates that the name should be implicitly bound in the pattern
--- clause. On the right hand side, things are in scope which were implicitly
--- bound on the left
-
 plus : Nat -> Nat -> Nat;
 plus Z     y = y;
 plus (S k) y = S (plus k y);
 
--- A dependent type. Again, the '$' indicates that names should be implicitly
--- bound (like unbound implicits in Idris, but since this is an intermediate
--- language they get explicitly marked). The names are bound in the scope in
--- which they are first encountered.
+-- We need to declare which names can be used as implicit arguments. This
+-- avoids any possibility of confusion with function names.
 
 implicit n, a, b, c, k, i, ty;
 
@@ -59,10 +53,13 @@ interpTy : Ty -> Type;
 interpTy (Base t) = t;
 interpTy (Arrow s t) = interpTy s -> interpTy t;
 
--- 'HasType i t gam' says that the variable at position i has type t
--- in context gam:
+-- Declare some more implicits. We also give the type for 'gam', since it
+-- uses more implicit names itself.
 
 implicit s, t, u, gam : Vect k Ty;
+
+-- 'HasType i t gam' says that the variable at position i has type t
+-- in context gam:
 
 data HasType : Fin k -> Ty -> Vect k Ty -> Type where {
      Stop : HasType FZ t (Cons t gam);
