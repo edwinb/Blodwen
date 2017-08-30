@@ -15,7 +15,8 @@ checkCon : Env Term vars -> ImpTy annot ->
            Core annot [Ctxt ::: Defs, UST ::: UState annot,
                        ImpST ::: ImpState annot] Constructor
 checkCon env (MkImpTy annot cn ty_raw)
-    = do ty <- checkTerm env (PI False) InType ty_raw TType
+    = do ty_imp <- mkBindImps ty_raw
+         ty <- checkTerm env (PI False) InType ty_imp TType
          let ty' = abstractEnvType env ty
          -- TODO: Check 'ty' returns something in the right family
          gam <- getCtxt
@@ -26,7 +27,8 @@ processData : Env Term vars -> ImpData annot ->
               Core annot [Ctxt ::: Defs, UST ::: UState annot,
                           ImpST ::: ImpState annot] ()
 processData env (MkImpData annot n ty_raw cons_raw)
-    = do ty <- checkTerm env (PI False) InType ty_raw TType
+    = do ty_imp <- mkBindImps ty_raw
+         ty <- checkTerm env (PI False) InType ty_imp TType
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty
          addDef n (newDef ty' Public None)

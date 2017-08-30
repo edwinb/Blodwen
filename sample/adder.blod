@@ -4,13 +4,13 @@ data Nat : Type where {
 }
 
 plus : Nat -> Nat -> Nat;
-plus Z      $y = y;
-plus (S $k) $y = S (plus k y);
+plus Z     y = y;
+plus (S k) y = S (plus k y);
 
 adderTy : Nat -> Type;
 adderTy Z = Nat;
 adderTy (S $k) = (val : Nat) -> adderTy k;
 
 adder : (k : Nat) -> Nat -> adderTy k;
-adder Z $acc = acc;
-adder (S $k) $acc = \num => adder k (plus num acc);
+adder Z acc = acc;
+adder (S k) acc = \num => adder k (plus num acc);

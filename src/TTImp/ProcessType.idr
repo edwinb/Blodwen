@@ -16,7 +16,8 @@ processType : Env Term vars ->
               Core annot [Ctxt ::: Defs, UST ::: UState annot,
                           ImpST ::: ImpState annot] ()
 processType env (MkImpTy annot n ty_raw)
-    = do ty <- checkTerm env (PI False) InType ty_raw TType
+    = do ty_imp <- mkBindImps ty_raw
+         ty <- checkTerm env (PI False) InType ty_imp TType
          -- putStrLn $ show n ++ " : " ++ show ty
          addDef n (newDef (abstractEnvType env ty) Public None)
 

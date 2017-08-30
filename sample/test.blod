@@ -12,29 +12,25 @@ data Nat : Type where {
 -- A function definition, defined by a type declaration and a list of
 -- pattern clauses.
 
--- The '$' indicates that the name should be implicitly bound in the pattern
--- clause. On the right hand side, things are in scope which were implicitly
--- bound on the left
-
 plus : Nat -> Nat -> Nat;
-plus Z      $y = y;
-plus (S $k) $y = S (plus k y);
+plus Z     y = y;
+plus (S k) y = S (plus k y);
 
--- A dependent type. Again, the '$' indicates that names should be implicitly
--- bound (like unbound implicits in Idris, but since this is an intermediate
--- language they get explicitly marked). The names are bound in the scope in
--- which they are first encountered.
+-- Unlike Idris, we need to say which names are valid as implicit arguments,
+-- which avoids any confusion with existing names.
+
+implicit n, m, k, a;
 
 data Vect : Nat -> Type -> Type where {
-     Nil  : Vect Z $a;
-     Cons : $a -> Vect $k $a -> Vect (S $k) $a;
+     Nil  : Vect Z a;
+     Cons : a -> Vect k a -> Vect (S k) a;
 }
 
 -- A function with a dependent type
 
-append : Vect $n $a -> Vect $m $a -> Vect (plus $n $m) $a;
-append Nil           $ys = ys;
-append (Cons $x $xs) $ys = Cons x (append xs ys);
+append : Vect n a -> Vect m a -> Vect (plus n m) a;
+append Nil         ys = ys;
+append (Cons x xs) ys = Cons x (append xs ys);
 
 -- A main function. The implicit arguments in the type of 'main' are inferred
 -- from its definition.

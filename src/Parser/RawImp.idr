@@ -128,7 +128,9 @@ clause
          rhs <- expr
          symbol ";"
          fn <- getFn lhs
-         pure (fn, MkImpClause () lhs rhs)
+         -- Turn lower case names on lhs into IBindVar pattern variables
+         -- before returning
+         pure (fn, MkImpClause () (mkLCPatVars lhs) rhs)
   where
     getFn : RawImp annot -> EmptyRule Name
     getFn (IVar _ n) = pure n
@@ -147,10 +149,28 @@ dataDecl
          symbol "}"
          pure (MkImpData () n ty cs)
 
+implicitsDecl : Rule (List (String, RawImp ()))
+implicitsDecl
+    = do keyword "implicit"
+         commit
+         ns <- sepBy1 (symbol ",") impDecl
+         symbol ";"
+         pure ns
+  where
+    impDecl : Rule (String, RawImp ())
+    impDecl 
+        = do x <- unqualifiedName
+             ty <- optional (do symbol ":"
+                                expr)
+                            (Implicit ())
+             pure (x, ty)
+
 topDecl : Rule (ImpDecl ())
 topDecl
     = do dat <- dataDecl
          pure (IData () dat)
+  <|> do ns <- implicitsDecl
+         pure (ImplicitNames () ns)
   <|> do claim <- tyDecl
          pure (IClaim () claim)
   <|> do nd <- clause

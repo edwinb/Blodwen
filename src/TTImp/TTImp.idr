@@ -148,3 +148,90 @@ addImp str ty
     = do ist <- get ImpST
          put ImpST (record { impNames $= ((str, ty) ::) } ist)
 
+remove : Maybe Name -> List (String, a) -> List (String, a)
+remove (Just (UN n)) xs = removeN n xs
+  where
+    removeN : String -> List (String, a) -> List (String, a)
+    removeN str [] = []
+    removeN str ((n, ty) :: ns) 
+        = if str == n 
+             then ns
+             else (n, ty) :: removeN str ns
+remove _ xs = xs
+
+addBindImps : List (String, RawImp annot) -> 
+              (used : List (String, RawImp annot)) ->
+              RawImp annot -> (RawImp annot, List (String, RawImp annot))
+addBindImps is used (IVar x (UN n)) 
+    = case lookup n is of
+           Nothing => (IVar x (UN n), used)
+           Just (Implicit _) => (IBindVar x n, used)
+           -- if it's in 'used' with a type, use that again, otherwise
+           -- bind names in the type and add to 'used'
+           Just ty => maybe
+                         (let (ty', used1) = addBindImps is used ty in
+                              (IVar x (UN n), (n, ty') :: used))
+                         (\_ => (IVar x (UN n), used))
+                         (lookup n used)
+addBindImps is used (IVar x n) = (IVar x n, used)
+addBindImps is used (IPi x y n argTy retTy) 
+    = let (arg', used1) = addBindImps is used argTy
+          (ret', used2) = addBindImps (remove n is) used1 retTy in
+          (IPi x y n arg' ret', used2)
+addBindImps is used (ILam x y n argTy scope) 
+    = let (arg', used1) = addBindImps is used argTy
+          (scope', used2) = addBindImps (remove (Just n) is) used1 scope in
+          (ILam x y n arg' scope', used2)
+addBindImps is used (ILet x n nTy nVal scope) 
+    = let (ty', used1) = addBindImps is used nTy
+          (val', used2) = addBindImps is used1 nVal 
+          (scope', used3) = addBindImps (remove (Just n) is) used2 scope in
+          (ILet x n ty' val' scope', used3)
+addBindImps is used (IApp x fn arg) 
+    = let (fn', used1) = addBindImps is used fn
+          (arg', used2) = addBindImps is used1 arg in
+          (IApp x fn' arg', used2)
+addBindImps is used tm = (tm, used)
+
+bindWith : annot ->
+           List (String, RawImp annot) -> List (String, RawImp annot) ->
+           RawImp annot -> RawImp annot
+bindWith loc is [] tm = tm
+bindWith loc [] used tm = tm
+bindWith loc ((n, _) :: ns) used tm
+    = case lookup n used of
+           Nothing => bindWith loc ns used tm
+           Just ty => bindWith loc ns used 
+                         (IPi loc Implicit (Just (UN n)) ty tm)
+
+-- convert any 'impName' without a type to an IBindVar, so that it gets
+-- bound when it's first used.
+-- Any name which occurs in impNames *with* a type gets an IPi Implicit binder
+-- at the front
+export
+mkBindImps : RawImp annot -> 
+             Core annot [ImpST ::: ImpState annot] (RawImp annot)
+mkBindImps tm 
+    = do ist <- get ImpST
+         let (btm, ns) = addBindImps (impNames ist) [] tm
+         pure (bindWith (getAnnot tm) (impNames ist) ns btm)
+
+-- Turn names into pattern variables as IBindVar
+-- This considers a name a pattern variable if it begins with a lower case
+-- letter, and isn't applied to any arguments
+export
+mkLCPatVars : RawImp annot -> RawImp annot
+mkLCPatVars tm = mkPatVars True tm
+  where
+    implicitName : List Char -> Bool
+    implicitName (c :: cs) = isLower c
+    implicitName _ = False
+
+    mkPatVars : (notfn : Bool) -> RawImp annot -> RawImp annot
+    mkPatVars False (IVar loc (UN n))
+        = if implicitName (unpack n) 
+             then IBindVar loc n
+             else IVar loc (UN n)
+    mkPatVars notfn (IApp loc f arg) 
+        = IApp loc (mkPatVars notfn f) (mkPatVars False arg)
+    mkPatVars notfn tm = tm
