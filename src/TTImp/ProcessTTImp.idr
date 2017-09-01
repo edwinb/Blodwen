@@ -48,7 +48,7 @@ using (FileIO m)
       = do Right res <- readFile file
                  | Left err => putStrLn ("File error: " ++ show err)
            case runParser res prog of
-                Left err => putStrLn ("Parse error: " ++ show err)
+                Left err => putStrLn ("TTImp Parse error: " ++ show err)
                 Right decls => 
                      catch (processDecls decls)
                            (\err => printLn err)

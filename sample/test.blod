@@ -4,6 +4,7 @@
 
 -- A simple type, defined by a type constructor and a set of data
 -- constructors
+
 data Nat : Type where {
      Z : Nat;
      S : Nat -> Nat;

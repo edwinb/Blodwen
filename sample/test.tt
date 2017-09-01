@@ -33,6 +33,14 @@ append : {a : Type} -> {n : Nat} -> {m : Nat} ->
    append a (S k) m (Cons a k x xs) ys 
        = Cons a (plus k m) x (append a k m xs ys);
 
+vadd : {n : Nat} ->
+       (xs : Vect n Nat) -> (ys : Vect n Nat) -> Vect n Nat;
+[]
+  vadd Z (Nil Nat) (Nil Nat) = Nil Nat;
+[k : Nat, x : Nat, xs : Vect k Nat, y : Nat, ys : Vect k Nat]
+  vadd (S k) (Cons Nat k x xs) (Cons Nat k y ys) 
+       = Cons Nat k (plus x y) (vadd k xs ys);
+
 one : Nat;
 [] one = S Z;
 
@@ -53,7 +61,4 @@ vec_ys : Vect two Nat;
 
 main : Vect four Nat;
 [] main = append Nat two two vec_xs vec_ys;
-
--- main : (x : Nat) -> Nat;
--- [] main = \x : Nat => plus (S (S x)) (S (S Z));
 

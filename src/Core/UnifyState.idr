@@ -90,13 +90,14 @@ addHoleName : Name -> Core annot [UST ::: UState annot] ()
 addHoleName n
     = do ust <- get UST
          put UST (record { holes $= (n ::),
-                             currentHoles $= (n ::) } ust)
+                           currentHoles $= (n ::) } ust)
 
 export
 removeHoleName : Name -> Core annot [UST ::: UState annot] ()
 removeHoleName n
     = do ust <- get UST
-         put UST (record { holes $= filter (/= n) } ust)
+         put UST (record { holes $= filter (/= n),
+                           currentHoles $= filter (/= n) } ust)
 
 -- Make a new constant by applying a term to everything in the current
 -- environment
@@ -229,6 +230,9 @@ export
 dumpConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
 dumpConstraints 
     = do hs <- getCurrentHoleNames
-         traverse (\x => dumpHole x) hs
-         pure ()
+         case hs of
+              [] => pure ()
+              _ => do -- putStrLn "--- CONSTRAINTS AND HOLES ---"
+                      traverse (\x => dumpHole x) hs
+                      pure ()
 

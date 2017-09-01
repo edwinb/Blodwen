@@ -558,8 +558,7 @@ elabTerm env impmode elabmode tm tyin
          -- Drop any holes we created which aren't used in the resulting
          -- term
          traverse (\n => implicitBind n) bound
---          putStrLn "--- CONSTRAINTS AND HOLES ---"
---          dumpConstraints 
+         dumpConstraints 
          pure (ptm', pty')
 
 export

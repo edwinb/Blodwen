@@ -5,6 +5,7 @@ import Core.Normalise
 import Core.Typecheck
 import Core.Unify
 import Core.Context
+import Core.ProcessTT
 import Core.RawContext
 
 import TTImp.Elab
@@ -44,7 +45,11 @@ using (FileIO m)
            [_, fname] <- getArgs | _ => do usageMsg; deleteCtxt
            putStrLn $ "Loading " ++ fname
            setupUnify
-           process fname
+           case span (/= '.') fname of
+                (_, ".tt") => do putStrLn "Processing as TT"
+                                 ProcessTT.process fname
+                _ => do putStrLn "Processing as TTImp"
+                        ProcessTTImp.process fname
            tryTTImp
            doneUnify
            deleteCtxt

@@ -1,4 +1,4 @@
-module Parser.Raw
+module Parser.RawImp
 
 import Core.TT
 import Core.RawContext
