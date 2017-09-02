@@ -204,7 +204,7 @@ getImps loc env (NBind bn (Pi Implicit ty) sc) imps
     = do hn <- genName (nameRoot bn)
          addNamedHole hn env (quote empty env ty)
          let arg = mkConstantApp hn env
-         getImps loc env (sc (toClosure env arg)) (arg :: imps)
+         getImps loc env (sc (toClosure True env arg)) (arg :: imps)
 getImps loc env ty imps = pure (ty, reverse imps)
 
 --- When converting, add implicits until we've applied enough for the
@@ -219,7 +219,7 @@ convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
     = do hn <- genName (nameRoot bn)
          addNamedHole hn env (quote empty env ty)
          let arg = mkConstantApp hn env
-         convertImps loc env (sc (toClosure env arg)) exp (arg :: imps)
+         convertImps loc env (sc (toClosure False env arg)) exp (arg :: imps)
 convertImps loc env got exp imps = pure (got, reverse imps)
 
 checkExp : annot ->
@@ -308,7 +308,7 @@ mutual
            case scopeTy of
                 NBind _ (Pi _ ty) scdone =>
                   do (argtm, argty) <- check top impmode elabmode env arg (Just (quote empty env ty))
-                     let sc' = scdone (toClosure env argtm)
+                     let sc' = scdone (toClosure False env argtm)
                      checkExp loc env (App (apply fntm impArgs) argtm)
                                   (quote gam env sc') expected
                 _ => 
@@ -521,7 +521,7 @@ findHoles mode env tm exp
              sc' <- holes sc
              pure (Bind y (PVar ty') sc')
     holes tm = pure tm
-                                      
+
 renameImplicits : Term vars -> Term vars
 renameImplicits (Bind (PV n) b sc) 
     = Bind (UN n) b (renameImplicits (renameTop (UN n) sc))

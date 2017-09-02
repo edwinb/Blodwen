@@ -97,7 +97,7 @@ toSubVars (n :: ns) xs
    * The metavariable name doesn't appear in the unifying term
    * The local variables which appear in the term are all arguments to
      the metavariable application (not checked here, checked with the
-     result of `patternEnv`
+     result of `patternEnv`)
 
    Return the subset of the environment used in the arguments
    to which the metavariable is applied. If this environment is enough
@@ -109,7 +109,7 @@ patternEnv : Env Term vars -> List (Closure vars) ->
                   (Maybe (newvars ** SubVars newvars vars))
 patternEnv env args
     = do gam <- getCtxt
-         let args' = map (evalClosure gam) args
+         let args' = map (evalClosure empty) args
          case getVars args' of
               Nothing => pure Nothing
               Just vs => pure (Just (toSubVars _ vs))
@@ -300,7 +300,7 @@ mutual
                    -- tells us that 'newvars' are the subset of 'vars'
                    -- being applied to the metavariable, and so 'tm' must
                    -- only use those variables for success
-                   case shrinkTerm (quote gam env tm) submv of
+                   case shrinkTerm (quote empty env tm) submv of
                         Nothing => do
                            postpone loc env 
                              (quote empty env (NApp (NRef nt var) args))
@@ -315,7 +315,7 @@ mutual
                         Just tm' => 
                             -- if the terms are the same, this isn't a solution
                             -- but they are already unifying, so just return
-                            if convert gam env (NApp (NRef nt var) args) tm
+                            if convert empty env (NApp (NRef nt var) args) tm
                                then pure []
                                else
                                 -- otherwise, instantiate the hole
@@ -395,8 +395,8 @@ mutual
                            = Pi ix (quote empty env tx) :: env
                   case ct of
                        [] => -- no constraints, check the scope
-                             do let tscx = scx (toClosure env (Ref Bound xn))
-                                let tscy = scy (toClosure env (Ref Bound xn))
+                             do let tscx = scx (toClosure False env (Ref Bound xn))
+                                let tscy = scy (toClosure False env (Ref Bound xn))
                                 let termx = refToLocal xn x (quote empty env tscx)
                                 let termy = refToLocal xn x (quote empty env tscy)
                                 unify loc env' termx termy
@@ -407,8 +407,8 @@ mutual
                                        (Bind x (Lam Explicit txtm) (Local Here))
                                        (Bind x (Pi Explicit txtm)
                                            (weaken tytm)) cs
-                                let tscx = scx (toClosure env (Ref Bound xn))
-                                let tscy = scy (toClosure env 
+                                let tscx = scx (toClosure False env (Ref Bound xn))
+                                let tscy = scy (toClosure False env 
                                                (App (mkConstantApp c env) (Ref Bound xn)))
                                 let termx = refToLocal xn x (quote empty env tscx)
                                 let termy = refToLocal xn x (quote empty env tscy)

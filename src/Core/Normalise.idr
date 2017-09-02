@@ -22,13 +22,14 @@ mutual
 
   public export
   data Closure : List Name -> Type where
-       MkClosure : LocalEnv free vars -> 
+       MkClosure : (holesonly : Bool) ->
+                   LocalEnv free vars -> 
                    Env Term free ->
                    Term (vars ++ free) -> Closure free
 
 export
-toClosure : Env Term outer -> Term outer -> Closure outer
-toClosure env tm = MkClosure [] env tm
+toClosure : Bool -> Env Term outer -> Term outer -> Closure outer
+toClosure h env tm = MkClosure h [] env tm
 
 %name LocalEnv loc, loc1
 %name Closure thunk, thunk1
@@ -65,12 +66,12 @@ parameters (gam : Gamma, holesonly : Bool)
     eval env loc (closure :: stk) (Bind x (Lam _ ty) sc) 
          = eval env (closure :: loc) stk sc
     eval env loc stk (Bind x (Let val ty) sc) 
-         = eval env (MkClosure loc env val :: loc) stk sc
+         = eval env (MkClosure holesonly loc env val :: loc) stk sc
     eval env loc stk (Bind x b sc) 
          = NBind x (map (eval env loc stk) b)
                (\arg => eval env (arg :: loc) stk sc)
     eval env loc stk (App fn arg) 
-         = eval env loc (MkClosure loc env arg :: stk) fn
+         = eval env loc (MkClosure holesonly loc env arg :: stk) fn
     eval env loc stk (PrimVal x) = NPrimVal x
     eval env loc stk Erased = NErased
     eval env loc stk TType = NType
@@ -82,7 +83,7 @@ parameters (gam : Gamma, holesonly : Bool)
                Let val ty => eval env [] stk val
                b => NApp (NLocal p) stk
     evalLocal {vars = (x :: xs)} 
-              env ((MkClosure loc' env' tm') :: locs) stk Here 
+              env ((MkClosure _ loc' env' tm') :: locs) stk Here 
         = eval env' loc' stk tm'
     evalLocal {vars = (x :: xs)} env (_ :: loc) stk (There later) 
         = evalLocal env loc stk later
@@ -195,8 +196,8 @@ parameters (gam : Gamma, holesonly : Bool)
     
 export
 evalClosure : Gamma -> Closure free -> NF free
-evalClosure gam (MkClosure loc env tm)
-    = eval gam False env loc [] tm
+evalClosure gam (MkClosure h loc env tm)
+    = eval gam h env loc [] tm
     
 
 export
@@ -256,7 +257,7 @@ mutual
   Quote NF where
     quoteGen gam env (NBind n b sc) 
         = do var <- genName "qv"
-             sc' <- quoteGen gam env (sc (toClosure env (Ref Bound var)))
+             sc' <- quoteGen gam env (sc (toClosure False env (Ref Bound var)))
              b' <- quoteBinder gam env b
              pure (Bind n b' (refToLocal var n sc'))
     quoteGen gam env (NApp f args) 
@@ -292,7 +293,7 @@ normaliseHoles gam env tm = quote gam env (nfHoles gam env tm)
 export
 getValArity : Gamma -> Env Term vars -> NF vars -> Nat
 getValArity gam env (NBind x (Pi _ _) sc) 
-    = S (getValArity gam env (sc (MkClosure [] env Erased)))
+    = S (getValArity gam env (sc (MkClosure False [] env Erased)))
 getValArity gam env val = 0
 
 export
@@ -324,7 +325,7 @@ mutual
   Convert NF where
     convGen gam env (NBind x b scope) (NBind x' b' scope') 
         = do var <- genName "convVar"
-             let c = MkClosure [] env (Ref Bound var)
+             let c = MkClosure False [] env (Ref Bound var)
              convGen gam env (scope c) (scope' c)
     convGen gam env (NApp val args) (NApp val' args') 
         = do hs <- chkConvHead gam env val val'

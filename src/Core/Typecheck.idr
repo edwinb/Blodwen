@@ -45,7 +45,7 @@ parameters (loc : annot, gam : Gamma)
                   NBind _ (Pi _ ty) scdone => 
                         do (a', aty) <- chk env a
                            doConvert loc gam env (quote gam env ty) aty
-                           let sc' = scdone (toClosure env a')
+                           let sc' = scdone (toClosure False env a')
                            pure (App f' a', quote gam env sc')
                   _ => error (NotFunctionType loc fty)
     chk env (RPrimVal x) = pure $ chkConstant x
