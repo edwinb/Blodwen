@@ -68,6 +68,13 @@ constant
                            _ => Nothing)
 
 export
+intLit : Rule Integer
+intLit 
+    = terminal (\x => case tok x of
+                           Literal i => Just i
+                           _ => Nothing)
+
+export
 symbol : String -> Rule ()
 symbol req
     = terminal (\x => case tok x of
@@ -81,6 +88,14 @@ keyword req
     = terminal (\x => case tok x of
                            Keyword s => if s == req then Just ()
                                                     else Nothing
+                           _ => Nothing)
+
+export
+exactIdent : String -> Rule ()
+exactIdent req
+    = terminal (\x => case tok x of
+                           Ident s => if s == req then Just ()
+                                                  else Nothing
                            _ => Nothing)
 
 operator : Rule String

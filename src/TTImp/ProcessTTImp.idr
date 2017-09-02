@@ -32,6 +32,7 @@ using (FileIO m)
   processDecl (ImplicitNames loc ns) 
       = do traverse (\ x => addImp (fst x) (snd x)) ns
            pure ()
+  processDecl (ILog lvl) = setLogLevel lvl
 
   export
   processDecls : List (ImpDecl annot) -> 

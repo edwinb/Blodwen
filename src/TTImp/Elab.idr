@@ -183,6 +183,8 @@ convert : annot ->
                (List Name)
 convert loc env x y 
     = catch (do solveConstraints
+                log 10 $ "Unifying " ++ show (quote empty env x) ++ " and " 
+                                     ++ show (quote empty env y)
                 vs <- unify loc env x y
                 solveConstraints
                 pure vs)

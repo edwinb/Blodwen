@@ -165,12 +165,21 @@ implicitsDecl
                             (Implicit ())
              pure (x, ty)
 
+directive : Rule (ImpDecl ())
+directive
+    = do exactIdent "logging"
+         lvl <- intLit
+         symbol ";"
+         pure (ILog (cast lvl))
+
 topDecl : Rule (ImpDecl ())
 topDecl
     = do dat <- dataDecl
          pure (IData () dat)
   <|> do ns <- implicitsDecl
          pure (ImplicitNames () ns)
+  <|> do symbol "%"; commit
+         directive
   <|> do claim <- tyDecl
          pure (IClaim () claim)
   <|> do nd <- clause

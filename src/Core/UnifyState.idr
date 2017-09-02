@@ -37,13 +37,14 @@ data Constraint : Type -> Type where
 public export
 record UnifyState annot where
      constructor MkUnifyState
+     logLevel : Nat
      holes : List Name -- unsolved metavariables in gamma (holes and
                        -- guarded constants)
      currentHoles : List Name -- unsolved metavariables in this session
      constraints : Context (Constraint annot) -- metavariable constraints 
 
 initUState : UnifyState annot
-initUState = MkUnifyState [] [] empty
+initUState = MkUnifyState 0 [] [] empty
 
 public export
 UState : Type -> Type
@@ -60,6 +61,20 @@ setupUnify = new UST initUState
 export
 doneUnify : CoreM annot [UST ::: UState annot] [] ()
 doneUnify = delete UST
+
+export
+setLogLevel : Nat -> Core annot [UST ::: UState annot] ()
+setLogLevel n
+    = do ust <- get UST
+         put UST (record { logLevel = n } ust)
+
+export
+log : Nat -> String -> Core annot [UST ::: UState annot] ()
+log lvl str
+    = do ust <- get UST
+         if logLevel ust >= lvl
+            then putStrLn $ "LOG " ++ show lvl ++ ": " ++ str
+            else pure ()
 
 export
 isHole : Name -> Core annot [UST ::: UState annot] Bool
@@ -193,25 +208,29 @@ addConstraint constr
 export
 dumpHole : (hole : Name) -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
 dumpHole hole
-    = do gam <- getCtxt
-         case lookupDefTy hole gam of
-              Nothing => pure ()
-              Just (Guess tm constraints, ty) => 
-                   do putStrLn $ "!" ++ show hole ++ " : " ++ 
-                                        show (normalise gam [] ty)
-                      traverse (\x => dumpConstraint x) constraints 
-                      pure ()
-              Just (Hole _, ty) =>
-                   putStrLn $ "?" ++ show hole ++ " : " ++ 
-                                     show (normalise gam [] ty)
---               Just (PMDef _ args t, ty) =>
---                    putStrLn $ "Solved: " ++ show hole ++ " : " ++ 
---                                  show (normalise gam [] ty) ++
---                                  " = " ++ show t
---               Just (ImpBind, ty) =>
---                    putStrLn $ "Bound: " ++ show hole ++ " : " ++ 
---                                  show (normalise gam [] ty)
-              _ => pure ()
+    = do ust <- get UST
+         if logLevel ust == 0
+            then pure ()
+            else do
+               gam <- getCtxt
+               case lookupDefTy hole gam of
+                    Nothing => pure ()
+                    Just (Guess tm constraints, ty) => 
+                         do log 1 $ "!" ++ show hole ++ " : " ++ 
+                                              show (normalise gam [] ty)
+                            traverse (\x => dumpConstraint x) constraints 
+                            pure ()
+                    Just (Hole _, ty) =>
+                         log 1 $ "?" ++ show hole ++ " : " ++ 
+                                           show (normalise gam [] ty)
+                    Just (PMDef _ args t, ty) =>
+                         log 2 $ "Solved: " ++ show hole ++ " : " ++ 
+                                       show (normalise gam [] ty) ++
+                                       " = " ++ show t
+                    Just (ImpBind, ty) =>
+                         log 2 $ "Bound: " ++ show hole ++ " : " ++ 
+                                       show (normalise gam [] ty)
+                    _ => pure ()
   where
     dumpConstraint : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
     dumpConstraint n
@@ -219,12 +238,12 @@ dumpHole hole
              gam <- getCtxt
              case lookupCtxt n (constraints ust) of
                   Nothing => pure ()
-                  Just Resolved => putStrLn "\tResolved"
+                  Just Resolved => log 1 "\tResolved"
                   Just (MkConstraint _ env x y) =>
-                       putStrLn $ "\t" ++ show (normalise gam env x) 
+                       log 1 $ "\t" ++ show (normalise gam env x) 
                                       ++ " =?= " ++ show (normalise gam env y)
                   Just (MkSeqConstraint _ _ xs ys) =>
-                       putStrLn $ "\t" ++ show xs ++ " =?= " ++ show ys
+                       log 1 $ "\t" ++ show xs ++ " =?= " ++ show ys
 
 export
 dumpConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
@@ -232,7 +251,7 @@ dumpConstraints
     = do hs <- getCurrentHoleNames
          case hs of
               [] => pure ()
-              _ => do -- putStrLn "--- CONSTRAINTS AND HOLES ---"
+              _ => do log 1 "--- CONSTRAINTS AND HOLES ---"
                       traverse (\x => dumpHole x) hs
                       pure ()
 

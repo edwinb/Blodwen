@@ -132,6 +132,8 @@ instantiate loc metavar smvs tm {newvars}
                          Just rhs => 
                             do let soln = newDef ty Public 
                                                (PMDef True [] (STerm rhs))
+                               log 5 $ "Instantiate: " ++ show metavar ++
+                                            " = " ++ show rhs
                                addDef metavar soln
                                removeHoleName metavar
   where
@@ -465,7 +467,9 @@ mutual
         = unifyApp loc env hd args y
     unify loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
         = if tagx == tagy
-             then unifyArgs loc env xs ys
+             then do log 5 ("Constructor " ++ show (quote empty env (NDCon x tagx ax xs))
+                                ++ " and " ++ show (quote empty env (NDCon y tagy ay ys)))
+                     unifyArgs loc env xs ys
              else ufail loc $ "Can't unify " ++ show (quote empty env
                                                         (NDCon x tagx ax xs))
                                          ++ " and "

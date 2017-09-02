@@ -18,6 +18,6 @@ processType : Env Term vars ->
 processType env (MkImpTy annot n ty_raw)
     = do ty_imp <- mkBindImps ty_raw
          ty <- checkTerm env (PI False) InType ty_imp TType
-         -- putStrLn $ show n ++ " : " ++ show ty
+         log 1 $ show n ++ " : " ++ show ty
          addDef n (newDef (abstractEnvType env ty) Public None)
 

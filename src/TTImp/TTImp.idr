@@ -112,6 +112,7 @@ data ImpDecl : Type -> Type where
      IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
      IData : annot -> ImpData annot -> ImpDecl annot
      ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
+     ILog : Nat -> ImpDecl annot
 
 export
 Show (ImpDecl annot) where
@@ -120,6 +121,7 @@ Show (ImpDecl annot) where
                        showSep "\n\t" (map show cs)
   show (IData _ d) = show d
   show (ImplicitNames _ ns) = "implicit " ++ show ns
+  show (ILog lvl) = "logging " ++ show lvl
 
 -- State which is useful to preserve throughout elaborating a file
 public export
