@@ -35,6 +35,6 @@ data IsSuc : Nat -> Type where {
      Yes : IsSuc (S k);
 }
 
-nonZero : IsSuc thousand;
+nonZero : IsSuc hundredthousand;
 nonZero = Yes;
 
