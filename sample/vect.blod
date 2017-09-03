@@ -1,0 +1,29 @@
+data Nat : Type where {
+     Z : Nat;
+     S : Nat -> Nat;
+}
+
+plus : Nat -> Nat -> Nat;
+plus Z     y = y;
+plus (S k) y = S (plus k y);
+
+data Vect : Nat -> Type -> Type where {
+     Nil  : Vect Z $a;
+     Cons : $a -> Vect $k $a -> Vect (S $k) $a;
+}
+
+
+implicit a, n, m;
+
+foldl : -- {a : Type} -> (b : Nat -> Type) -> {m : Nat} ->
+        (b : Nat -> Type) ->
+        ({k : Nat} -> b k -> a -> b (S k)) ->
+        b Z ->
+        Vect m a -> b m;
+foldl b g z Nil = z;
+foldl b g z (Cons x xs) = foldl (\i => b (S i)) g (g z x) xs;
+
+reverse : Vect n a -> Vect n a;
+reverse = foldl (\n => Vect n _)
+                (\rev => \x => Cons x rev) Nil;
+
