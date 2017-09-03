@@ -15,8 +15,7 @@ data Vect : Nat -> Type -> Type where {
 
 implicit a, n, m;
 
-foldl : -- {a : Type} -> (b : Nat -> Type) -> {m : Nat} ->
-        (b : Nat -> Type) ->
+foldl : (b : Nat -> Type) ->
         ({k : Nat} -> b k -> a -> b (S k)) ->
         b Z ->
         Vect m a -> b m;
