@@ -3,6 +3,7 @@ module Core.CaseTree
 import Core.TT
 
 import Control.Monad.State -- TODO: Use StateE for consistency?
+import Data.SortedSet
 import Data.List
 
 %default total
@@ -25,6 +26,27 @@ mutual
        DefaultCase : CaseTree vars -> CaseAlt vars
   
   %name CaseAlt alt
+
+export
+getRefs : CaseTree vars_in -> List Name
+getRefs sc = SortedSet.toList (getSet empty sc)
+  where
+    mutual
+      getAltSet : SortedSet Name -> CaseAlt vars -> SortedSet Name
+      getAltSet ns (ConCase n t args sc) = getSet ns sc
+      getAltSet ns (ConstCase i sc) = getSet ns sc
+      getAltSet ns (DefaultCase sc) = getSet ns sc
+
+      getAltSets : SortedSet Name -> List (CaseAlt vars) -> SortedSet Name
+      getAltSets ns [] = ns
+      getAltSets ns (a :: as) 
+          = assert_total $ getAltSets (getAltSet ns a) as
+
+      getSet : SortedSet Name -> CaseTree vars -> SortedSet Name
+      getSet ns (Case x xs) = getAltSets ns xs
+      getSet ns (STerm tm) = assert_total $ union ns (getRefs tm)
+      getSet ns (Unmatched msg) = ns
+      getSet ns Impossible = ns
 
 mutual
   export

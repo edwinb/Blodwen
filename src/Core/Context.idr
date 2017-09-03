@@ -5,6 +5,7 @@ import Core.CaseTree
 
 import public Control.Monad.StateE
 import Data.SortedMap
+import Data.SortedSet
 import Data.List
 
 %default total
@@ -48,10 +49,20 @@ record GlobalDef where
      type : ClosedTerm
      visibility : Visibility
      definition : Def
+     refersTo : List Name
+
+getRefs : Def -> List Name
+getRefs None = []
+getRefs (PMDef ishole args sc) = getRefs sc
+getRefs (DCon tag arity) = []
+getRefs (TCon tag arity datacons) = []
+getRefs (Hole numlocs) = []
+getRefs ImpBind = []
+getRefs (Guess guess constraints) = SortedSet.toList (getRefs guess)
 
 export
 newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
-newDef ty vis def = MkGlobalDef ty vis def
+newDef ty vis def = MkGlobalDef ty vis def (getRefs def)
 
 -- A context of global definitions
 public export
@@ -70,14 +81,17 @@ record ContextDefs where
 initCtxt : ContextDefs
 initCtxt = MkAllDefs empty 100 0 0
 
+lookupGlobal : Name -> Gamma -> Maybe GlobalDef
+lookupGlobal n gam = lookupCtxt n gam
+
 export
 lookupDef : Name -> Gamma -> Maybe Def
-lookupDef n gam = do def <- lookupCtxt n gam
+lookupDef n gam = do def <- lookupGlobal n gam
                      pure (definition def)
 
 export
 lookupDefTy : Name -> Gamma -> Maybe (Def, ClosedTerm)
-lookupDefTy n gam = do def <- lookupCtxt n gam
+lookupDefTy n gam = do def <- lookupGlobal n gam
                        pure (definition def, type def)
 
 public export
@@ -181,7 +195,7 @@ getCtxt = pure (gamma !(get Ctxt))
 
 export
 getNextTypeTag : Core annot [Ctxt ::: Defs] Int
-getNextTypeTag 
+getNextTypeTag
     = do defs <- get Ctxt
          let t = nextTag defs
          put Ctxt (record { nextTag = t + 1 } defs)
@@ -189,7 +203,7 @@ getNextTypeTag
 
 export
 getNextHole : Core annot [Ctxt ::: Defs] Int
-getNextHole 
+getNextHole
     = do defs <- get Ctxt
          let t = nextHole defs
          put Ctxt (record { nextHole = t + 1 } defs)
@@ -204,7 +218,7 @@ genName root
 
 export
 setCtxt : Gamma -> Core annot [Ctxt ::: Defs] ()
-setCtxt gam 
+setCtxt gam
     = do st <- get Ctxt
          put Ctxt (record { gamma = gam } st)
 
@@ -217,8 +231,28 @@ deleteCtxt : CoreM annot [Ctxt ::: Defs] [] ()
 deleteCtxt = delete Ctxt
 
 export
+getDescendents : Name -> Core annot [Ctxt ::: Defs] (List Name)
+getDescendents n
+    = do g <- getCtxt
+         ns <- getAllDesc [n] empty g
+         pure (SortedSet.toList ns)
+  where
+    getAllDesc : List Name -> SortedSet Name -> Gamma ->
+                 Core annot [Ctxt ::: Defs] (SortedSet Name)
+    getAllDesc [] ns g = pure ns
+    getAllDesc (n :: rest) ns g
+      = if contains n ns
+           then getAllDesc rest ns g
+           else case lookupGlobal n g of
+                     Nothing => pure ns
+                     Just def => assert_total $
+											 let refs = refersTo def in
+												 getAllDesc (rest ++ refs)
+						                        (union ns (fromList refs)) g
+
+export
 addDef : Name -> GlobalDef -> Core annot [Ctxt ::: Defs] ()
-addDef n def 
+addDef n def
     = do g <- getCtxt 
          setCtxt (addCtxt n def g)
 
@@ -229,7 +263,8 @@ updateDef n def
          case lookupCtxt n g of
               Nothing => throw (InternalError ("No such name to update " ++ show n))
               Just odef => 
-                   let gdef = record { definition = def } odef in
+                   let gdef = record { definition = def,
+																		   refersTo = getRefs def } odef in
                        setCtxt (addCtxt n gdef g)
  
 

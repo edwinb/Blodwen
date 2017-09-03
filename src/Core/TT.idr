@@ -1,6 +1,7 @@
 module Core.TT
 
 import Data.List
+import Data.SortedSet
 import Language.Reflection
 
 %default total
@@ -591,6 +592,23 @@ export
 getArgs : (tm : Term vars) -> List (Term vars)
 getArgs tm with (unapply tm)
   getArgs (apply f args) | ArgsList = args
+
+export
+getRefs : Term vars -> SortedSet Name
+getRefs tm = getSet empty tm
+  where
+    getSet : SortedSet Name -> Term vars -> SortedSet Name
+    getSet ns (Local y) = ns
+    getSet ns (Ref nt fn) = insert fn ns
+    getSet ns (Bind x (Let val ty) tm) 
+		   = assert_total $ getSet (getSet (getSet ns val) ty) tm
+    getSet ns (Bind x b tm) 
+		   = assert_total $ getSet (getSet ns (binderType b)) tm
+    getSet ns (App tm arg) 
+		   = assert_total $ getSet (getSet ns tm) arg
+    getSet ns (PrimVal x) = ns
+    getSet ns Erased = ns
+    getSet ns TType = ns
 
 export
 getPatternEnv : Env Term vars -> 

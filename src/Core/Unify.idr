@@ -153,10 +153,8 @@ export
 implicitBind : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
 implicitBind n = updateDef n ImpBind
 
--- Check that the references in the term are defined before the given
--- creation time (essentially this checks that there's no cycles in hole
--- solutions, i.e. that holes are defined in terms of previously defined
--- things, which subsumes the occurs check)
+-- Check that the references in the term don't refer to the hole name as
+-- part of their definition
 occursCheck : Name -> Term vars -> Bool
 occursCheck hole (Ref nt var)
     = hole /= var
@@ -320,7 +318,9 @@ mutual
                             if convert empty env (NApp (NRef nt var) args) tm
                                then pure []
                                else
-                                -- otherwise, instantiate the hole
+                                -- otherwise, instantiate the hole as long as
+                                -- the solution doesn't refer to the hole
+                                -- name
                                    if not (occursCheck var tm')
                                       then throw (Cycle loc env
                                                  (quote empty env (NApp (NRef nt var) args))

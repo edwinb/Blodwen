@@ -216,19 +216,21 @@ dumpHole hole
                case lookupDefTy hole gam of
                     Nothing => pure ()
                     Just (Guess tm constraints, ty) => 
-                         do log 1 $ "!" ++ show hole ++ " : " ++ 
+                         do log 2 $ "!" ++ show hole ++ " : " ++ 
                                               show (normalise gam [] ty)
+                            log 2 $ "\t  = " ++ show (normalise gam [] tm)
+                                            ++ "\n\twhen"
                             traverse (\x => dumpConstraint x) constraints 
                             pure ()
                     Just (Hole _, ty) =>
-                         log 1 $ "?" ++ show hole ++ " : " ++ 
+                         log 2 $ "?" ++ show hole ++ " : " ++ 
                                            show (normalise gam [] ty)
                     Just (PMDef _ args t, ty) =>
-                         log 2 $ "Solved: " ++ show hole ++ " : " ++ 
+                         log 4 $ "Solved: " ++ show hole ++ " : " ++ 
                                        show (normalise gam [] ty) ++
                                        " = " ++ show t
                     Just (ImpBind, ty) =>
-                         log 2 $ "Bound: " ++ show hole ++ " : " ++ 
+                         log 4 $ "Bound: " ++ show hole ++ " : " ++ 
                                        show (normalise gam [] ty)
                     _ => pure ()
   where
@@ -238,12 +240,14 @@ dumpHole hole
              gam <- getCtxt
              case lookupCtxt n (constraints ust) of
                   Nothing => pure ()
-                  Just Resolved => log 1 "\tResolved"
+                  Just Resolved => log 2 "\tResolved"
                   Just (MkConstraint _ env x y) =>
-                       log 1 $ "\t" ++ show (normalise gam env x) 
+                    do log 2 $ "\t  " ++ show (normalise gam env x) 
                                       ++ " =?= " ++ show (normalise gam env y)
+                       log 5 $ "\t    from " ++ show x 
+                                      ++ " =?= " ++ show y
                   Just (MkSeqConstraint _ _ xs ys) =>
-                       log 1 $ "\t" ++ show xs ++ " =?= " ++ show ys
+                       log 2 $ "\t\t" ++ show xs ++ " =?= " ++ show ys
 
 export
 dumpConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
@@ -251,7 +255,7 @@ dumpConstraints
     = do hs <- getCurrentHoleNames
          case hs of
               [] => pure ()
-              _ => do log 1 "--- CONSTRAINTS AND HOLES ---"
+              _ => do log 2 "--- CONSTRAINTS AND HOLES ---"
                       traverse (\x => dumpHole x) hs
                       pure ()
 
