@@ -8,6 +8,7 @@ import public Core.UnifyState
 
 import Data.List
 import Data.List.Views
+import Data.SortedSet
 
 %default covering
 
@@ -155,17 +156,36 @@ implicitBind n = updateDef n ImpBind
 
 -- Check that the references in the term don't refer to the hole name as
 -- part of their definition
-occursCheck : Name -> Term vars -> Bool
-occursCheck hole (Ref nt var)
-    = hole /= var
-occursCheck hole (Bind n (Let val ty) sc)
-      = occursCheck hole val && occursCheck hole ty && occursCheck hole sc
-occursCheck hole (Bind n b sc)
-      = occursCheck hole (binderType b) && occursCheck hole sc
-occursCheck hole tm with (unapply tm)
-  occursCheck hole (apply f []) | ArgsList = True -- won't be Ref, matched above
-  occursCheck hole (apply f args) | ArgsList 
-      = occursCheck hole f && and (map (\a => occursCheck hole a) args)
+occursCheck : Gamma -> Name -> Term vars -> Bool
+occursCheck gam n tm 
+    = case oc empty tm of
+           Nothing => False
+           Just _ => True
+  where
+    -- Remember the ones we've checked as okay already, to save repeating work
+    oc : (checked : SortedSet Name) -> Term vars -> Maybe (SortedSet Name)
+    oc chk (Ref nt var)
+        -- if 'var' or one of its descendents is 'n' we fail the check
+        -- otherwise add it to the set of checked things
+        = if contains var chk 
+             then Just chk
+             else if var == n 
+               then Nothing
+               else let ns = getDescendents var gam in
+                        if n `elem` ns
+                           then Nothing
+                           else Just (insert var chk)
+    oc chk (Bind n (Let val ty) sc)
+        = do vchk <- oc chk val
+             tchk <- oc vchk ty
+             oc tchk sc
+    oc chk (Bind n b sc)
+        = do bchk <- oc chk (binderType b)
+             oc bchk sc
+    oc chk (App f a)
+        = do fchk <- oc chk f
+             oc fchk a
+    oc chk tm = Just chk
 
 mutual
   -- Find holes which are applied to environments which are too big, and
@@ -300,8 +320,12 @@ mutual
                    -- tells us that 'newvars' are the subset of 'vars'
                    -- being applied to the metavariable, and so 'tm' must
                    -- only use those variables for success
-                   case shrinkTerm (quote empty env tm) submv of
+                   case shrinkTerm (normaliseHoles gam env (quote empty env tm)) submv of
                         Nothing => do
+                           log 10 $ "Postponing constraint " ++
+                                      show (quote empty env (NApp (NRef nt var) args))
+                                       ++ " =?= " ++
+                                      show (quote empty env tm)
                            postpone loc env 
                              (quote empty env (NApp (NRef nt var) args))
                              (quote empty env tm)
@@ -321,10 +345,12 @@ mutual
                                 -- otherwise, instantiate the hole as long as
                                 -- the solution doesn't refer to the hole
                                 -- name
-                                   if not (occursCheck var tm')
+                                   if not (occursCheck gam var tm')
                                       then throw (Cycle loc env
-                                                 (quote empty env (NApp (NRef nt var) args))
-                                                 (quote empty env tm))
+                                                 (normaliseHoles gam env
+                                                     (quote empty env (NApp (NRef nt var) args)))
+                                                 (normaliseHoles gam env
+                                                     (quote empty env tm)))
                                       else do instantiate loc var submv tm'
                                               pure []
            Nothing => postpone loc env 

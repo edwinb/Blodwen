@@ -231,20 +231,17 @@ deleteCtxt : CoreM annot [Ctxt ::: Defs] [] ()
 deleteCtxt = delete Ctxt
 
 export
-getDescendents : Name -> Core annot [Ctxt ::: Defs] (List Name)
-getDescendents n
-    = do g <- getCtxt
-         ns <- getAllDesc [n] empty g
-         pure (SortedSet.toList ns)
+getDescendents : Name -> Gamma -> List Name
+getDescendents n g
+    = SortedSet.toList $ getAllDesc [n] empty g
   where
-    getAllDesc : List Name -> SortedSet Name -> Gamma ->
-                 Core annot [Ctxt ::: Defs] (SortedSet Name)
-    getAllDesc [] ns g = pure ns
+    getAllDesc : List Name -> SortedSet Name -> Gamma -> SortedSet Name
+    getAllDesc [] ns g = ns
     getAllDesc (n :: rest) ns g
       = if contains n ns
            then getAllDesc rest ns g
            else case lookupGlobal n g of
-                     Nothing => pure ns
+                     Nothing => ns
                      Just def => assert_total $
 											 let refs = refersTo def in
 												 getAllDesc (rest ++ refs)

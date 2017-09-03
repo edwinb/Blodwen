@@ -189,8 +189,8 @@ convert loc env x y
                 solveConstraints
                 pure vs)
             (\err => do gam <- getCtxt 
-                        throw (WhenUnifying loc (quote empty env x) -- (normaliseHoles gam env x)
-                                                (quote empty env y) -- (normaliseHoles gam env y)
+                        throw (WhenUnifying loc (normaliseHoles gam env (quote empty env x))
+                                                (normaliseHoles gam env (quote empty env y))
                                   err))
   
 -- Get the implicit arguments that need to be inserted at this point
