@@ -7,13 +7,12 @@ plus : Nat -> Nat -> Nat;
 plus Z     y = y;
 plus (S k) y = S (plus k y);
 
+implicit a, k, n, m;
+
 data Vect : Nat -> Type -> Type where {
-     Nil  : Vect Z $a;
-     Cons : $a -> Vect $k $a -> Vect (S $k) $a;
+     Nil  : Vect Z a;
+     Cons : a -> Vect k a -> Vect (S k) a;
 }
-
-
-implicit a, n, m;
 
 foldl : (b : Nat -> Type) ->
         ({k : Nat} -> b k -> a -> b (S k)) ->
