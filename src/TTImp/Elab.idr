@@ -182,11 +182,11 @@ convert : annot ->
                [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
                (List Name)
 convert loc env x y 
-    = catch (do solveConstraints
+    = catch (do solveConstraints Exact
                 log 10 $ "Unifying " ++ show (quote empty env x) ++ " and " 
                                      ++ show (quote empty env y)
-                vs <- unify loc env x y
-                solveConstraints
+                vs <- unify Exact loc env x y
+                solveConstraints Exact
                 pure vs)
             (\err => do gam <- getCtxt 
                         throw (WhenUnifying loc (normaliseHoles gam env (quote empty env x))
@@ -240,7 +240,7 @@ checkExp loc env tm got (Just exp)
          case constr of
               [] => pure (apply tm imps, quote empty env got')
               cs => do gam <- getCtxt
-                       c <- addConstant env tm exp cs
+                       c <- addConstant env (apply tm imps) exp cs
                        pure (mkConstantApp c env, got)
 
 inventFnType : Env Term vars ->
@@ -541,7 +541,10 @@ elabTerm env impmode elabmode tm tyin
     = do resetHoles
          new EST initEState
          (chktm, ty) <- call $ check True impmode elabmode env tm tyin
-         solveConstraints
+         solveConstraints Exact
+         solveConstraints (case elabmode of
+                                InLHS => Exact
+                                _ => Approx)
          est <- get EST
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'

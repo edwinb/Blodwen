@@ -22,7 +22,7 @@ checkClause env (MkImpClause loc lhs_raw rhs_raw)
          (vs ** (env', lhspat, reqty)) <- extend env lhs lhsty
          log 5 (show lhs ++ " : " ++ show reqty)
          rhs <- checkTerm env' NONE InExpr rhs_raw reqty
-         log 2 (show lhs ++ " = " ++ show rhs)
+         log 3 (show lhs ++ " = " ++ show rhs)
          pure (MkClause env' lhspat rhs)
   where
     extend : Env Term vars -> Term vars -> Term vars ->
