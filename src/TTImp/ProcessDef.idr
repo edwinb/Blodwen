@@ -3,6 +3,7 @@ module TTImp.ProcessDef
 import Core.TT
 import Core.Unify
 import Core.Context
+import Core.CaseTree
 import Core.Normalise
 
 import TTImp.Elab
@@ -47,4 +48,11 @@ processDef env loc n cs_raw
               Just (None, ty) =>
                 do cs <- traverse (\x => checkClause env x) cs_raw
                    addFnDef loc Public (MkFn n ty cs)
+                   gam <- getCtxt
+                   log 3 $
+                      case lookupDef n gam of
+                           Just (PMDef _ args t) =>
+                              "Case tree for " ++ show n ++ "\n\t" ++
+                              show args ++ " " ++ show t
+                           _ => "No case tree for " ++ show n
               Just (_, ty) => throw (AlreadyDefined loc n)

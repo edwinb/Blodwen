@@ -98,8 +98,7 @@ parameters (gam : Gamma, holesonly : Bool)
                          Nothing => NApp (NRef nt fn) stk
                          Just (loc', stk') => 
                               case evalTree env loc' stk' tree of
-                                   Nothing => 
-                                        NApp (NRef nt fn) stk
+                                   Nothing => NApp (NRef nt fn) stk
                                    Just val => val
                     else NApp (NRef nt fn) stk
                Just (DCon tag arity) => 
@@ -174,7 +173,7 @@ parameters (gam : Gamma, holesonly : Bool)
     findAlt env loc stk val (x :: xs) 
          = case tryAlt env loc stk val x of
                 Nothing => findAlt env loc stk val xs
-                res => res
+                Just x => Just x
 
     evalTree : Env Term free ->
                LocalEnv free (args ++ vars) -> Stack free -> 

@@ -69,7 +69,7 @@ setLogLevel n
          put UST (record { logLevel = n } ust)
 
 export
-log : Nat -> String -> Core annot [UST ::: UState annot] ()
+log : Nat -> Lazy String -> Core annot [UST ::: UState annot] ()
 log lvl str
     = do ust <- get UST
          if logLevel ust >= lvl
