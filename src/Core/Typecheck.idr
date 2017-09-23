@@ -104,26 +104,29 @@ checkHas loc gam env tm exp
          pure val
 
 export
-check : annot -> Env Term vars ->
+check : {auto c : Ref Ctxt Defs} ->
+        annot -> Env Term vars ->
         (term : Raw) -> (expected : Term vars) -> 
-        Core annot [Ctxt ::: Defs] (Term vars)
+        Core annot (Term vars)
 check loc env term expected 
     = case checkHas loc !getCtxt env term expected of
            Left err => throw err
            Right ok => pure ok
 
 export
-infer : annot -> Env Term vars ->
-        (term : Raw) -> Core annot [Ctxt ::: Defs] (Term vars, Term vars)
+infer : {auto c : Ref Ctxt Defs} ->
+        annot -> Env Term vars ->
+        (term : Raw) -> Core annot (Term vars, Term vars)
 infer loc env term
     = case chk loc !getCtxt env term of
            Left err => throw err
            Right ok => pure ok
 
 export
-checkConvert : annot -> Env Term vars ->
+checkConvert : {auto c : Ref Ctxt Defs} ->
+               annot -> Env Term vars ->
                (x : Term vars) -> (y : Term vars) ->
-               Core annot [Ctxt ::: Defs] ()
+               Core annot ()
 checkConvert loc env x y 
     = case doConvert loc !getCtxt env x y of
            Left err => throw err

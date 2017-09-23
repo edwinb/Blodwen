@@ -19,7 +19,7 @@ import Interfaces.FileIO
 %default covering
 
 using (FileIO m)
-  processDecls : List RawDecl -> CoreI () m [Ctxt ::: Defs] ()
+  processDecls : {auto c : Ref Ctxt Defs} -> List RawDecl -> Core () ()
   processDecls decls
       = do -- putStrLn "Parsed OK"
            -- putStrLn (showSep "\n" (map show decls))
@@ -27,24 +27,25 @@ using (FileIO m)
            pure ()
 
   export
-  runMain : CoreI () m [Ctxt ::: Defs] ()
+  runMain : {auto c : Ref Ctxt Defs} -> Core () ()
   runMain
       = case runParser "main" raw of
-             Left err => printLn "Can't happen, error parsing 'main'"
+             Left err => ioe_lift (printLn "Can't happen, error parsing 'main'")
              Right raw => do
                (ptm, pty) <- infer () [] raw
-               putStr "Evaluating main: "
+               ioe_lift (putStr "Evaluating main: ")
                gam <- getCtxt
-               printLn (normalise gam [] ptm) 
+               ioe_lift (printLn (normalise gam [] ptm))
 
   export
-  process : String -> CoreI () m [Ctxt ::: Defs] ()
+  process : {auto c : Ref Ctxt Defs} ->
+            String -> Core () ()
   process file
-      = do Right res <- readFile file
-                 | Left err => putStrLn ("File error: " ++ show err)
+      = do Right res <- ioe_lift (readFile file)
+                 | Left err => ioe_lift (putStrLn ("File error: " ++ show err))
            case runParser res prog of
-                Left err => putStrLn ("TT Parse error: " ++ show err)
+                Left err => ioe_lift (putStrLn ("TT Parse error: " ++ show err))
                 Right decls => 
                      catch (processDecls decls)
-                           (\err => printLn err)
+                           (\err => ioe_lift (printLn err))
 

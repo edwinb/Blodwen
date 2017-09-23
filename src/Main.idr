@@ -20,42 +20,42 @@ import Interfaces.FileIO
 import Interfaces.SystemIO
 
 using (FileIO m)
-  tryTTImp : CoreI () m [Ctxt ::: Defs, UST ::: UState ()] ()
+  tryTTImp : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState ())} ->
+             Core () ()
   tryTTImp
-      = do putStr "Blodwen> "
-           inp <- getStr
+      = do ioe_lift (putStr "Blodwen> ")
+           inp <- ioe_lift getLine
            case runParser inp expr of
-                Left err => do printLn err
+                Left err => do ioe_lift (printLn err)
                                tryTTImp
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
                        (tm, ty) <- inferTerm [] PATTERN InExpr ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
                        gam <- getCtxt
-                       putStrLn (show (normalise gam [] tm) ++ " : " ++
-                                 show (normalise gam [] ty))
+                       ioe_lift (putStrLn (show (normalise gam [] tm) ++ " : " ++
+                                           show (normalise gam [] ty)))
                        tryTTImp
 
-  usageMsg : Core () [] ()
-  usageMsg = putStrLn "Usage: blodwen [source file]"
+  usageMsg : Core () ()
+  usageMsg = ioe_lift $ putStrLn "Usage: blodwen [source file]"
 
-  stMain : SystemIO m => CoreI () m [] ()
+  stMain : Core () ()
   stMain 
-      = do newCtxt
-           [_, fname] <- getArgs | _ => do usageMsg; deleteCtxt
-           putStrLn $ "Loading " ++ fname
-           setupUnify
+      = do c <- newRef Ctxt initCtxt
+           [_, fname] <- ioe_lift getArgs | _ => usageMsg
+           ioe_lift $ putStrLn $ "Loading " ++ fname
+           u <- newRef UST initUState
            case span (/= '.') fname of
-                (_, ".tt") => do putStrLn "Processing as TT"
+                (_, ".tt") => do ioe_lift $ putStrLn "Processing as TT"
                                  ProcessTT.process fname
-                _ => do putStrLn "Processing as TTImp"
+                _ => do ioe_lift $ putStrLn "Processing as TTImp"
                         ProcessTTImp.process fname
-           tryTTImp
-           doneUnify
-           deleteCtxt
+           tryTTImp {c} {u}
 
 main : IO ()
 main = do putStrLn "Welcome to Blodwen. Good luck."
-          ioe_run (runSTE stMain [])
+          ioe_run stMain
                (\err : Error () => putStrLn ("Uncaught error: " ++ show err))
                (\res => pure ())

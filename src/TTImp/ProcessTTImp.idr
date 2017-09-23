@@ -23,9 +23,11 @@ import Interfaces.FileIO
 %default covering
 
 using (FileIO m)
-  processDecl : ImpDecl annot -> 
-                CoreI annot m [Ctxt ::: Defs, UST ::: UState annot,
-                               ImpST ::: ImpState annot] ()
+  processDecl : {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState annot)} ->
+                {auto i : Ref ImpST (ImpState annot)} ->
+                ImpDecl annot -> 
+                Core annot ()
   processDecl (IClaim loc ty) = processType [] ty
   processDecl (IDef loc n cs) = processDef [] loc n cs
   processDecl (IData loc d) = processData [] d
@@ -35,22 +37,25 @@ using (FileIO m)
   processDecl (ILog lvl) = setLogLevel lvl
 
   export
-  processDecls : List (ImpDecl annot) -> 
-                 CoreI annot m [Ctxt ::: Defs, UST ::: UState annot] ()
+  processDecls : {auto c : Ref Ctxt Defs} ->
+                 {auto u : Ref UST (UState annot)} ->
+                 List (ImpDecl annot) -> 
+                 Core annot ()
   processDecls decls
-      = do setupImpState
+      = do i <- newRef ImpST (initImpState {annot})
            xs <- traverse (\x => processDecl x) decls
-           deleteImpState
            pure ()
 
   export
-  process : String -> CoreI () m [Ctxt ::: Defs, UST ::: UState ()] ()
+  process : {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState ())} ->
+            String -> Core () ()
   process file
-      = do Right res <- readFile file
-                 | Left err => putStrLn ("File error: " ++ show err)
+      = do Right res <- ioe_lift (readFile file)
+                 | Left err => ioe_lift (putStrLn ("File error: " ++ show err))
            case runParser res prog of
-                Left err => putStrLn ("TTImp Parse error: " ++ show err)
+                Left err => ioe_lift (putStrLn ("TTImp Parse error: " ++ show err))
                 Right decls => 
                      catch (processDecls decls)
-                           (\err => printLn err)
+                           (\err => ioe_lift (printLn err))
 

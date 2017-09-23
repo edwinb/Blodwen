@@ -29,13 +29,15 @@ public export
 data RawDecl = FnDecl RawFnDef
              | DataDecl RawData
 
-addTyDecl : annot -> (ty : RawTy) -> Core annot [Ctxt ::: Defs] (Name, ClosedTerm)
+addTyDecl : {auto c : Ref Ctxt Defs} ->
+            annot -> (ty : RawTy) -> Core annot (Name, ClosedTerm)
 addTyDecl loc (MkRawTy n ty)
     = do tyc <- check loc [] ty TType
          addDef n (newDef tyc Public None)
          pure (n, tyc)
 
-checkClause : annot -> RawClause -> Core annot [Ctxt ::: Defs] Clause
+checkClause : {auto c : Ref Ctxt Defs} ->
+              annot -> RawClause -> Core annot Clause
 checkClause loc (MkRawClause pvars lhs rhs)
 -- Plan: Check the LHS, extract the environment, use that to check the RHS,
 -- then make sure the types of each side are convertible.
@@ -54,14 +56,16 @@ checkClause loc (MkRawClause pvars lhs rhs)
     bind [] tm = tm
     bind ((n, ty) :: ps) tm = RBind n (PVar ty) (bind ps tm)
 
-addFn : annot -> (def : RawFnDef) -> Core annot [Ctxt ::: Defs] ()
+addFn : {auto c : Ref Ctxt Defs} ->
+        annot -> (def : RawFnDef) -> Core annot ()
 addFn loc (MkRawFn n ty cs)
     = do tyc <- check loc [] ty TType
          addDef n (newDef tyc Public None)
          csc <- traverse (\x => checkClause loc x) cs
          addFnDef loc Public (MkFn n tyc csc)
 
-addData : annot -> (def : RawData) -> Core annot [Ctxt ::: Defs] ()
+addData : {auto c : Ref Ctxt Defs} ->
+          annot -> (def : RawData) -> Core annot ()
 addData loc (MkRawData tycon datacons)
     = do (tn, tty) <- addTyDecl loc tycon
          cons <- traverse (\x => checkCon x) datacons
@@ -69,13 +73,14 @@ addData loc (MkRawData tycon datacons)
          let def = MkData (MkCon tn (getArity gam [] tty) tty) cons
          addData Public def
   where
-    checkCon : RawTy -> Core annot [Ctxt ::: Defs] Constructor
+    checkCon : RawTy -> Core annot Constructor
     checkCon (MkRawTy n ty) 
         = do tyc <- check loc [] ty TType
              gam <- getCtxt 
              pure (MkCon n (getArity gam [] tyc) tyc)
 
 export
-addDecl : annot -> (def : RawDecl) -> Core annot [Ctxt ::: Defs] ()
+addDecl : {auto c : Ref Ctxt Defs} ->
+          annot -> (def : RawDecl) -> Core annot ()
 addDecl loc (FnDecl f) = addFn loc f
 addDecl loc (DataDecl d) = addData loc d

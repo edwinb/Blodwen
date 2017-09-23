@@ -43,6 +43,7 @@ record UnifyState annot where
      currentHoles : List Name -- unsolved metavariables in this session
      constraints : Context (Constraint annot) -- metavariable constraints 
 
+export
 initUState : UnifyState annot
 initUState = MkUnifyState 0 [] [] empty
 
@@ -55,60 +56,60 @@ export
 data UST : Type where
 
 export
-setupUnify : CoreM annot [] [UST ::: UState annot] ()
-setupUnify = new UST initUState
-
-export
-doneUnify : CoreM annot [UST ::: UState annot] [] ()
-doneUnify = delete UST
-
-export
-setLogLevel : Nat -> Core annot [UST ::: UState annot] ()
+setLogLevel : {auto u : Ref UST (UState annot)} ->
+              Nat -> Core annot ()
 setLogLevel n
     = do ust <- get UST
          put UST (record { logLevel = n } ust)
 
 export
-log : Nat -> Lazy String -> Core annot [UST ::: UState annot] ()
+log : {auto u : Ref UST (UState annot)} ->
+      Nat -> Lazy String -> Core annot ()
 log lvl str
     = do ust <- get UST
          if logLevel ust >= lvl
-            then putStrLn $ "LOG " ++ show lvl ++ ": " ++ str
+            then ioe_lift $ putStrLn $ "LOG " ++ show lvl ++ ": " ++ str
             else pure ()
 
 export
-isHole : Name -> Core annot [UST ::: UState annot] Bool
+isHole : {auto u : Ref UST (UState annot)} ->
+         Name -> Core annot Bool
 isHole n 
     = do ust <- get UST
          pure (n `elem` holes ust)
 
 export
-getHoleNames : Core annot [UST ::: UState annot] (List Name)
+getHoleNames : {auto u : Ref UST (UState annot)} ->
+               Core annot (List Name)
 getHoleNames 
     = do ust <- get UST
          pure (holes ust)
 
 export
-getCurrentHoleNames : Core annot [UST ::: UState annot] (List Name)
+getCurrentHoleNames : {auto u : Ref UST (UState annot)} ->
+                      Core annot (List Name)
 getCurrentHoleNames 
     = do ust <- get UST
          pure (currentHoles ust)
 
 export
-resetHoles : Core annot [UST ::: UState annot] ()
+resetHoles : {auto u : Ref UST (UState annot)} ->
+             Core annot ()
 resetHoles 
     = do ust <- get UST
          put UST (record { currentHoles = [] } ust)
 
 export
-addHoleName : Name -> Core annot [UST ::: UState annot] ()
+addHoleName : {auto u : Ref UST (UState annot)} ->
+              Name -> Core annot ()
 addHoleName n
     = do ust <- get UST
          put UST (record { holes $= (n ::),
                            currentHoles $= (n ::) } ust)
 
 export
-removeHoleName : Name -> Core annot [UST ::: UState annot] ()
+removeHoleName : {auto u : Ref UST (UState annot)} ->
+                 Name -> Core annot ()
 removeHoleName n
     = do ust <- get UST
          put UST (record { holes $= filter (/= n),
@@ -147,10 +148,12 @@ mkConstantApp {vars} cn env
 -- by applying the term to the current environment
 -- Return its name
 export
-addConstant : Env Term vars -> 
+addConstant : {auto u : Ref UST (UState annot)} ->
+              {auto c : Ref Ctxt Defs} ->
+              Env Term vars -> 
               (tm : Term vars) -> (ty : Term vars) ->
               (constrs : List Name) ->
-              Core annot [Ctxt ::: Defs, UST ::: UState annot] Name
+              Core annot Name
 addConstant env tm ty constrs
     = do let def = mkConstant env tm
          let defty = mkConstantTy env ty
@@ -162,9 +165,10 @@ addConstant env tm ty constrs
 
 -- Given a type, add a new global metavariable and return its name
 export
-addNamedHole : Name -> Env Term vars ->
-               (ty : Term vars) ->
-               Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+addNamedHole : {auto u : Ref UST (UState annot)} ->
+               {auto c : Ref Ctxt Defs} ->
+               Name -> Env Term vars ->
+               (ty : Term vars) -> Core annot ()
 addNamedHole cn env ty
     = do let defty = mkConstantTy env ty
          let hole = newDef defty Public (Hole (length env))
@@ -173,32 +177,36 @@ addNamedHole cn env ty
 
 -- Given a type, add a new global metavariable and return its name
 export
-addHole : Env Term vars ->
-          (ty : Term vars) ->
-          Core annot [Ctxt ::: Defs, UST ::: UState annot] Name
+addHole : {auto u : Ref UST (UState annot)} ->
+          {auto c : Ref Ctxt Defs} ->       
+          Env Term vars ->
+          (ty : Term vars) -> Core annot Name
 addHole env ty
     = do cn <- genName "h"
          addNamedHole cn env ty
          pure cn
 
 export
-addBoundName : Name -> Env Term vars ->
-               (ty : Term vars) ->
-               Core annot [Ctxt ::: Defs, UST ::: UState annot] (Term vars)
+addBoundName : {auto u : Ref UST (UState annot)} ->
+               {auto c : Ref Ctxt Defs} ->
+               Name -> Env Term vars ->
+               (ty : Term vars) -> Core annot (Term vars)
 addBoundName n env exp
     = do addNamedHole n env exp
          pure (mkConstantApp n env)
 
 export
-setConstraint : Name -> Constraint annot ->
-                Core annot [UST ::: UState annot] ()
+setConstraint : {auto u : Ref UST (UState annot)} ->
+                Name -> Constraint annot ->
+                Core annot ()
 setConstraint cname c
     = do ust <- get UST
          put UST (record { constraints $= addCtxt cname c } ust)
 
 export
-addConstraint : Constraint annot ->        
-                Core annot [Ctxt ::: Defs, UST ::: UState annot] Name
+addConstraint : {auto u : Ref UST (UState annot)} ->
+                {auto c : Ref Ctxt Defs} ->
+                Constraint annot -> Core annot Name
 addConstraint constr
     = do c_id <- getNextHole
          let cn = MN "constraint" c_id
@@ -206,7 +214,9 @@ addConstraint constr
          pure cn
 
 export
-dumpHole : (hole : Name) -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+dumpHole : {auto u : Ref UST (UState annot)} ->
+           {auto c : Ref Ctxt Defs} ->
+           (hole : Name) -> Core annot ()
 dumpHole hole
     = do ust <- get UST
          if logLevel ust == 0
@@ -234,7 +244,7 @@ dumpHole hole
                                        show (normalise gam [] ty)
                     _ => pure ()
   where
-    dumpConstraint : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+    dumpConstraint : Name -> Core annot ()
     dumpConstraint n
         = do ust <- get UST
              gam <- getCtxt
@@ -250,7 +260,9 @@ dumpHole hole
                        log 2 $ "\t\t" ++ show xs ++ " =?= " ++ show ys
 
 export
-dumpConstraints : Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+dumpConstraints : {auto u : Ref UST (UState annot)} -> 
+                  {auto c : Ref Ctxt Defs} ->
+                  Core annot ()
 dumpConstraints 
     = do hs <- getCurrentHoleNames
          case hs of

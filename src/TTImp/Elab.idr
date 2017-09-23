@@ -8,7 +8,6 @@ import Core.TT
 import Core.Typecheck
 import Core.Unify
 
-import Control.Monad.StateE
 import Data.List
 
 %default covering
@@ -44,30 +43,40 @@ EState : List Name -> Type
 EState = ElabState
 
 -- weaken the unbound implicits which have not yet been bound
-weakenEState : CoreM annot [EST ::: EState vs] [EST ::: EState (n :: vs)] ()
-weakenEState 
+-- weakenEState : CoreM annot [EST ::: EState vs] [EST ::: EState (n :: vs)] ()
+-- weakenEState 
+--     = do est <- get EST
+--          putM EST (MkElabState (map wknTms (boundNames est))
+--                                (map wknTms (toBind est)))
+--   where
+--     wknTms : (Name, (Term vs, Term vs)) -> 
+--              (Name, (Term (n :: vs), Term (n :: vs)))
+--     wknTms (f, (x, y)) = (f, (weaken x, weaken y))
+
+weakenedEState : {auto e : Ref EST (EState vs)} ->
+                 Core annot (Ref EST (EState (n :: vs)))
+weakenedEState
     = do est <- get EST
-         putM EST (MkElabState (map wknTms (boundNames est))
-                               (map wknTms (toBind est)))
+         e' <- newRef EST (MkElabState (map wknTms (boundNames est))
+                                       (map wknTms (toBind est)))
+         pure e'
   where
     wknTms : (Name, (Term vs, Term vs)) -> 
              (Name, (Term (n :: vs), Term (n :: vs)))
     wknTms (f, (x, y)) = (f, (weaken x, weaken y))
 
-clearEState : CoreM annot [EST ::: EState (n :: vs)] [EST ::: EState vs] ()
-clearEState = putM EST initEState
-
 -- remove the outermost variable from the unbound implicits which have not
 -- yet been bound. If it turns out to depend on it, that means it can't
 -- be bound at the top level, which is an error.
-strengthenEState : (top : Bool) -> annot ->
-                   CoreM annot [EST ::: EState (n :: vs)] [EST ::: EState vs] ()
-strengthenEState True loc = clearEState
-strengthenEState False loc
+strengthenedEState : {auto e : Ref EST (EState (n :: vs))} ->
+                     (top : Bool) -> annot ->
+                     Core annot (EState vs)
+strengthenedEState True loc = pure initEState
+strengthenedEState False loc 
     = do est <- get EST
          bns <- traverse (\x => strTms x) (boundNames est)
          todo <- traverse (\x => strTms x) (toBind est)
-         putM EST (MkElabState bns todo)
+         pure (MkElabState bns todo)
   where
     -- Remove any instance of the top level local variable from an
     -- application. Fail if it turns out to be necessary.
@@ -96,17 +105,22 @@ strengthenEState False loc
                pure (apply f' args')
 
     strTms : (Name, (Term (n :: vs), Term (n :: vs))) -> 
-             Core annot [EST ::: EState (n :: vs)] (Name, (Term vs, Term vs))
+             Core annot (Name, (Term vs, Term vs))
     strTms {vs} (f, (x, y))
         = case (removeArg x, shrinkTerm y (DropCons SubRefl)) of
                (Just x', Just y') => pure (f, (x', y'))
                _ => throw (GenericMsg loc ("Invalid unbound implicit " ++ show f))
 
-clearToBind : CoreM annot [EST ::: EState vs] [EST ::: EState vs] ()
-clearToBind = 
-    do est <- get EST
---        putStrLn $ "Clearing holes: " ++ show (map fst (toBind est))
-       putM EST (record { toBind = [] } est)
+clearEState : {auto e : Ref EST (EState vs)} ->
+              Core annot ()
+clearEState = put EST initEState
+
+clearToBind : {auto e : Ref EST (EState vs)} ->
+              Core annot ()
+clearToBind
+    = do est <- get EST
+--          putStrLn $ "Clearing holes: " ++ show (map fst (toBind est))
+         put EST (record { toBind = [] } est)
    
 dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))
@@ -175,12 +189,10 @@ bindTopImplicits {vars} mode gam env hs tm ty
     weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
                                      weakenNs vars tm)
 
-convert : annot ->
-          Env Term vars ->
-          NF vars -> NF vars -> 
-          Core annot 
-               [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-               (List Name)
+convert : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> Env Term vars -> NF vars -> NF vars -> 
+          Core annot (List Name)
 convert loc env x y 
     = catch (do solveConstraints Exact
                 log 10 $ "Unifying " ++ show (quote empty env x) ++ " and " 
@@ -198,10 +210,11 @@ convert loc env x y
 -- in the expected type ('ty') and adding new holes for each.
 -- Return the (normalised) remainder of the type, and the list of
 -- implicits added
-getImps : annot -> Env Term vars ->
+getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> Env Term vars ->
           (ty : NF vars) -> List (Term vars) ->
-          Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-               (NF vars, List (Term vars)) 
+          Core annot (NF vars, List (Term vars)) 
 getImps loc env (NBind bn (Pi Implicit ty) sc) imps
     = do hn <- genName (nameRoot bn)
          addNamedHole hn env (quote empty env ty)
@@ -211,10 +224,11 @@ getImps loc env ty imps = pure (ty, reverse imps)
 
 --- When converting, add implicits until we've applied enough for the
 --- expected type
-convertImps : annot -> Env Term vars ->
+convertImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+              {auto e : Ref EST (EState vars)} ->
+              annot -> Env Term vars ->
               (got : NF vars) -> (exp : NF vars) -> List (Term vars) ->
-              Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                         (NF vars, List (Term vars))
+              Core annot (NF vars, List (Term vars))
 convertImps loc env (NBind bn (Pi Implicit ty) sc) (NBind bn' (Pi Implicit ty') sc') imps
     = pure (NBind bn (Pi Implicit ty) sc, reverse imps)
 convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
@@ -224,12 +238,13 @@ convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
          convertImps loc env (sc (toClosure False env arg)) exp (arg :: imps)
 convertImps loc env got exp imps = pure (got, reverse imps)
 
-checkExp : annot ->
+checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+           {auto e : Ref EST (EState vars)} ->
+           annot ->
            Env Term vars ->
            (term : Term vars) -> (got : Term vars) -> 
            (exp : Maybe (Term vars)) ->
-           Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                (Term vars, Term vars) 
+           Core annot (Term vars, Term vars) 
 checkExp loc env tm got Nothing
     = pure (tm, got)
 checkExp loc env tm got (Just exp) 
@@ -243,10 +258,11 @@ checkExp loc env tm got (Just exp)
                        c <- addConstant env (apply tm imps) exp cs
                        pure (mkConstantApp c env, got)
 
-inventFnType : Env Term vars ->
+inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+               {auto e : Ref EST (EState vars)} ->
+               Env Term vars ->
                (bname : Name) ->
-               Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                    (Term vars, Term (bname :: vars))
+               Core annot (Term vars, Term (bname :: vars))
 inventFnType env bname
     = do an <- genName "argh"
          scn <- genName "sch"
@@ -255,12 +271,13 @@ inventFnType env bname
          pure (argTy, scTy)
 
 mutual
-  check : (top : Bool) -> -- top level, unbound implicits bound here
+  check : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          (top : Bool) -> -- top level, unbound implicits bound here
           ImplicitMode -> ElabMode ->
           Env Term vars ->
           (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
-          Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-               (Term vars, Term vars) 
+          Core annot (Term vars, Term vars) 
   check top impmode InLHS env tm exp -- don't expand implicit lambda on LHS
       = checkImp top impmode InLHS env tm exp
   check top impmode elabmode env tm exp 
@@ -279,12 +296,13 @@ mutual
                 ILam loc Implicit n (Implicit loc) (bindLam tm sc)
       bindLam tm sc = tm
 
-  checkImp : (top : Bool) -> -- top level, unbound implicits bound here
+  checkImp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+             {auto e : Ref EST (EState vars)} ->
+             (top : Bool) -> -- top level, unbound implicits bound here
              ImplicitMode -> ElabMode ->
              Env Term vars ->
              (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
-             Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                  (Term vars, Term vars) 
+             Core annot (Term vars, Term vars) 
   checkImp top impmode elabmode env (IVar loc x) expected 
       = do (x', varty) <- infer loc env (RVar x)
            gam <- getCtxt
@@ -370,24 +388,26 @@ mutual
       = do n <- addHole env expected
            pure (mkConstantApp n env, expected)
  
-  checkPi : (top : Bool) -> -- top level, unbound implicits bound here
+  checkPi : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+            {auto e : Ref EST (EState vars)} ->
+            (top : Bool) -> -- top level, unbound implicits bound here
             ImplicitMode -> ElabMode ->
             annot -> Env Term vars -> PiInfo -> Name -> 
             (argty : RawImp annot) -> (retty : RawImp annot) ->
             Maybe (Term vars) ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                 (Term vars, Term vars) 
+            Core annot (Term vars, Term vars) 
   checkPi top impmode elabmode loc env info n argty retty expected
       = do (tyv, tyt) <- check False impmode elabmode env argty (Just TType)
            let env' : Env Term (n :: _) = Pi info tyv :: env
            est <- get EST
            let argImps = if top then (reverse $ toBind est) else []
            when top $ clearToBind 
-           weakenEState 
-           (scopev, scopet) <- check top impmode elabmode env' retty (Just TType)
-           est <- get EST
+           e' <- weakenedEState 
+           (scopev, scopet) <- check {e=e'} top impmode elabmode env' retty (Just TType)
+           est <- get {ref=e'} EST
            let scopeImps = reverse $ toBind est
-           strengthenEState top loc
+           st' <- strengthenedEState {e=e'} top loc
+           put EST st'
            -- Bind implicits which were first used in
            -- the argument type 'tyv'
            -- This is only in 'PI' implicit mode - it's an error to
@@ -411,33 +431,38 @@ mutual
                 _ => checkExp loc env (Bind n (Pi info tyv) scopev)
                                       TType expected
 
-  checkLam : (top : Bool) -> -- top level, unbound implicits bound here
+  checkLam : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+             {auto e : Ref EST (EState vars)} ->
+             (top : Bool) -> -- top level, unbound implicits bound here
              ImplicitMode -> ElabMode ->
              annot -> Env Term vars -> PiInfo -> Name ->
              (ty : RawImp annot) -> (scope : RawImp annot) ->
              Maybe (Term vars) ->
-             Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                  (Term vars, Term vars) 
+             Core annot (Term vars, Term vars) 
   checkLam top impmode elabmode loc env plicity n ty scope (Just (Bind bn (Pi Explicit pty) psc))
       = do (tyv, tyt) <- check top impmode elabmode env ty (Just TType)
-           weakenEState
-           (scopev, scopet) <- check top impmode elabmode (Pi plicity pty :: env) scope 
+           e' <- weakenedEState
+           (scopev, scopet) <- check {e=e'} top impmode elabmode (Pi plicity pty :: env) scope 
                                      (Just (renameTop n psc))
-           strengthenEState top loc
+           st' <- strengthenedEState top loc
+           put EST st'
            checkExp loc env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         (Just (Bind bn (Pi plicity pty) psc))
   checkLam top impmode elabmode loc env plicity n ty scope expected
       = do (tyv, tyt) <- check top impmode elabmode env ty (Just TType)
            let env' : Env Term (n :: _) = Pi Explicit tyv :: env
-           weakenEState
-           (scopev, scopet) <- check top impmode elabmode env' scope Nothing
-           strengthenEState top loc
+           e' <- weakenedEState
+           (scopev, scopet) <- check {e=e'} top impmode elabmode env' scope Nothing
+           st' <- strengthenedEState top loc
+           put EST st'
            checkExp loc env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         expected
   
-  checkLet : (top : Bool) -> -- top level, unbound implicits bound here
+  checkLet : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+             {auto e : Ref EST (EState vars)} ->
+             (top : Bool) -> -- top level, unbound implicits bound here
              ImplicitMode -> ElabMode ->
              annot -> Env Term vars ->
              Name -> 
@@ -445,15 +470,15 @@ mutual
              (val : RawImp annot) -> 
              (scope : RawImp annot) ->
              Maybe (Term vars) ->
-             Core annot [Ctxt ::: Defs, UST ::: UState annot, EST ::: EState vars]
-                  (Term vars, Term vars) 
+             Core annot (Term vars, Term vars) 
   checkLet top impmode elabmode loc env n ty val scope expected
       = do (tyv, tyt) <- check top impmode elabmode env ty (Just TType)
            (valv, valt) <- check top impmode elabmode env val (Just tyv)
            let env' : Env Term (n :: _) = Let valv tyv :: env
-           weakenEState
-           (scopev, scopet) <- check top impmode elabmode env' scope (map weaken expected)
-           strengthenEState top loc
+           e' <- weakenedEState
+           (scopev, scopet) <- check {e=e'} top impmode elabmode env' scope (map weaken expected)
+           st' <- strengthenedEState top loc
+           put EST st'
            checkExp loc env (Bind n (Let valv tyv) scopev)
                             (Bind n (Let valv tyv) scopet)
                             expected
@@ -462,19 +487,18 @@ mutual
 -- at the top level (i.e. they can't depend on any explicitly given
 -- arguments).
 -- Return the updated term and type, and the names of holes which occur
-findHoles : ImplicitMode -> Env Term vars -> Term vars -> Term vars ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot]
-                 (Term vars, Term vars, List Name) 
+findHoles : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+            ImplicitMode -> Env Term vars -> Term vars -> Term vars ->
+            Core annot (Term vars, Term vars, List Name) 
 findHoles NONE env tm exp = pure (tm, exp, [])
 findHoles (PI False) env tm exp = pure (tm, exp, [])
 findHoles mode env tm exp
-    = do new HVar []
-         tm <- holes tm
+    = do h <- newRef HVar []
+         tm <- holes h tm
          hs <- get HVar
-         delete HVar
          gam <- getCtxt
-         let (tm, ty) = bindTopImplicits mode gam env (reverse hs) tm exp
-         pure (tm, ty, map fst hs)
+         let (tm', ty) = bindTopImplicits mode gam env (reverse hs) tm exp
+         pure (tm', ty, map fst hs)
   where
     data HVar : Type where -- empty type to label the local state
 
@@ -484,11 +508,10 @@ findHoles mode env tm exp
              shrinkTerm sc' (DropCons SubRefl)
     mkType _ tm = pure tm
 
-    processHole : Name -> (vars : List Name) -> ClosedTerm ->
-                  Core annot [HVar ::: List (Name, ClosedTerm),
-                        Ctxt ::: Defs, UST ::: UState annot]
-                       ()
-    processHole n vars ty
+    processHole : Ref HVar (List (Name, ClosedTerm)) ->
+                  Name -> (vars : List Name) -> ClosedTerm ->
+                  Core annot ()
+    processHole h n vars ty
        = do hs <- get HVar
 --             putStrLn $ "IMPLICIT: " ++ show (n, vars, ty)
             case mkType vars ty of
@@ -498,31 +521,30 @@ findHoles mode env tm exp
                          Just _ => pure ()
                          Nothing => put HVar ((n, impTy) :: hs)
 
-    holes : Term vars -> 
-            Core annot [HVar ::: List (Name, ClosedTerm),
-                  Ctxt ::: Defs, UST ::: UState annot]
-                 (Term vars)
-    holes {vars} (Ref nt fn) 
+    holes : Ref HVar (List (Name, ClosedTerm)) ->
+            Term vars -> 
+            Core annot (Term vars)
+    holes h {vars} (Ref nt fn) 
         = do gam <- getCtxt
              case lookupDefTy fn gam of
                   Just (Hole _, ty) =>
-                       do processHole fn vars ty
+                       do processHole h fn vars ty
                           pure (Ref nt fn)
                   _ => pure (Ref nt fn)
-    holes (App fn arg)
-        = do fn' <- holes fn
-             arg' <- holes arg
+    holes h (App fn arg)
+        = do fn' <- holes h fn
+             arg' <- holes h arg
              pure (App fn' arg')
     -- Allow implicits under 'Pi' and 'PVar' only
-    holes (Bind y (Pi imp ty) sc)
-        = do ty' <- holes ty
-             sc' <- holes sc
+    holes h (Bind y (Pi imp ty) sc)
+        = do ty' <- holes h ty
+             sc' <- holes h sc
              pure (Bind y (Pi imp ty') sc')
-    holes (Bind y (PVar ty) sc)
-        = do ty' <- holes ty
-             sc' <- holes sc
+    holes h (Bind y (PVar ty) sc)
+        = do ty' <- holes h ty
+             sc' <- holes h sc
              pure (Bind y (PVar ty') sc')
-    holes tm = pure tm
+    holes h tm = pure tm
 
 renameImplicits : Term vars -> Term vars
 renameImplicits (Bind (PV n) b sc) 
@@ -531,16 +553,17 @@ renameImplicits (Bind n b sc)
     = Bind n b (renameImplicits sc)
 renameImplicits t = t
 
-elabTerm : Env Term vars ->
+elabTerm : {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
+           Env Term vars ->
            ImplicitMode -> ElabMode ->
            (term : RawImp annot) ->
            (tyin : Maybe (Term vars)) ->
-           Core annot [Ctxt ::: Defs, UST ::: UState annot]
-                 (Term vars, Term vars) 
+           Core annot (Term vars, Term vars) 
 elabTerm env impmode elabmode tm tyin
     = do resetHoles
-         new EST initEState
-         (chktm, ty) <- call $ check True impmode elabmode env tm tyin
+         e <- newRef EST initEState
+         (chktm, ty) <- Elab.check {e} True impmode elabmode env tm tyin
          solveConstraints Exact
          solveConstraints (case elabmode of
                                 InLHS => Exact
@@ -550,7 +573,6 @@ elabTerm env impmode elabmode tm tyin
          -- This is in implicit mode 'PATTERN' and 'PI'
          let fullImps = reverse $ toBind est
          clearToBind -- remove the bound holes
-         delete EST
          gam <- getCtxt
          let (restm, resty) = bindImplicits impmode gam env
                                             (dropTmIn fullImps) chktm ty
@@ -567,19 +589,21 @@ elabTerm env impmode elabmode tm tyin
          pure (ptm', pty')
 
 export
-inferTerm : Env Term vars ->
+inferTerm : {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState annot)} ->
+            Env Term vars ->
             ImplicitMode -> ElabMode ->
             (term : RawImp annot) ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot]
-                 (Term vars, Term vars) 
+            Core annot (Term vars, Term vars) 
 inferTerm env impmode elabmode tm = elabTerm env impmode elabmode tm Nothing
 
 export
-checkTerm : Env Term vars ->
+checkTerm : {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState annot)} ->
+            Env Term vars ->
             ImplicitMode -> ElabMode ->
             (term : RawImp annot) -> (ty : Term vars) ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot]
-                 (Term vars) 
+            Core annot (Term vars) 
 checkTerm env impmode elabmode tm ty 
     = do (tm_elab, _) <- elabTerm env impmode elabmode tm (Just ty)
          pure tm_elab

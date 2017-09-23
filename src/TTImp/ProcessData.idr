@@ -9,11 +9,12 @@ import TTImp.Elab
 import TTImp.TTImp
 
 import Control.Catchable
-import Control.Monad.StateE
 
-checkCon : Env Term vars -> ImpTy annot ->
-           Core annot [Ctxt ::: Defs, UST ::: UState annot,
-                       ImpST ::: ImpState annot] Constructor
+checkCon : {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
+           {auto i : Ref ImpST (ImpState annot)} ->
+           Env Term vars -> ImpTy annot ->
+           Core annot Constructor
 checkCon env (MkImpTy annot cn ty_raw)
     = do ty_imp <- mkBindImps ty_raw
          ty <- checkTerm env (PI False) InType ty_imp TType
@@ -23,9 +24,11 @@ checkCon env (MkImpTy annot cn ty_raw)
          pure (MkCon cn (getArity gam [] ty') ty')
 
 export
-processData : Env Term vars -> ImpData annot -> 
-              Core annot [Ctxt ::: Defs, UST ::: UState annot,
-                          ImpST ::: ImpState annot] ()
+processData : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState annot)} ->
+              {auto i : Ref ImpST (ImpState annot)} ->
+              Env Term vars -> ImpData annot -> 
+              Core annot ()
 processData env (MkImpData annot n ty_raw cons_raw)
     = do ty_imp <- mkBindImps ty_raw
          ty <- checkTerm env (PI False) InType ty_imp TType

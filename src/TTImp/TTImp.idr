@@ -129,6 +129,7 @@ record ImpState annot where
   constructor MkImpState
   impNames : List (String, RawImp annot) -- names which can be implicitly bound
 
+export
 initImpState : ImpState annot
 initImpState = MkImpState []
 
@@ -137,15 +138,8 @@ export
 data ImpST : Type where
 
 export
-setupImpState : CoreM annot [] [ImpST ::: ImpState annot] ()
-setupImpState = new ImpST initImpState
-
-export
-deleteImpState : CoreM annot [ImpST ::: ImpState annot] [] ()
-deleteImpState = delete ImpST
-
-export
-addImp : String -> RawImp annot -> Core annot [ImpST ::: ImpState annot] ()
+addImp : {auto i : Ref ImpST (ImpState annot)} ->
+         String -> RawImp annot -> Core annot ()
 addImp str ty
     = do ist <- get ImpST
          put ImpST (record { impNames $= ((str, ty) ::) } ist)
@@ -211,8 +205,9 @@ bindWith loc ((n, _) :: ns) used tm
 -- Any name which occurs in impNames *with* a type gets an IPi Implicit binder
 -- at the front
 export
-mkBindImps : RawImp annot -> 
-             Core annot [ImpST ::: ImpState annot] (RawImp annot)
+mkBindImps : {auto i : Ref ImpST (ImpState annot)} ->
+             RawImp annot -> 
+             Core annot (RawImp annot)
 mkBindImps tm 
     = do ist <- get ImpST
          let (btm, ns) = addBindImps (impNames ist) [] tm

@@ -10,10 +10,11 @@ import TTImp.Elab
 import TTImp.TTImp
 
 import Control.Catchable
-import Control.Monad.StateE
 
-checkClause : Env Term vars -> ImpClause annot ->
-              Core annot [Ctxt ::: Defs, UST ::: UState annot] Clause
+checkClause : {auto c : Ref Ctxt Defs} ->
+              {auto e : Ref UST (UState annot)} ->
+              Env Term vars -> ImpClause annot ->
+              Core annot Clause
 checkClause env (MkImpClause loc lhs_raw rhs_raw)
     = do -- putStrLn $ "CHECKING " ++ show lhs_raw ++ " = " ++ show rhs_raw
          (lhs_in, lhsty_in) <- inferTerm env PATTERN InLHS lhs_raw
@@ -27,8 +28,7 @@ checkClause env (MkImpClause loc lhs_raw rhs_raw)
          pure (MkClause env' lhspat rhs)
   where
     extend : Env Term vars -> Term vars -> Term vars ->
-             Core annot [Ctxt ::: Defs, UST ::: UState annot] 
-                  (vars' ** (Env Term vars', Term vars', Term vars'))
+             Core annot (vars' ** (Env Term vars', Term vars', Term vars'))
     extend env (Bind n (PVar tmsc) sc) (Bind n' (PVTy _) tysc) with (nameEq n n')
       extend env (Bind n (PVar tmsc) sc) (Bind n' (PVTy _) tysc) | Nothing 
             = throw (InternalError "Names don't match in pattern type")
@@ -37,10 +37,12 @@ checkClause env (MkImpClause loc lhs_raw rhs_raw)
     extend env tm ty = pure (_ ** (env, tm, ty))
 
 export
-processDef : Env Term vars -> annot ->
+processDef : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState annot)} ->
+             {auto i : Ref ImpST (ImpState annot)} ->
+             Env Term vars -> annot ->
              Name -> List (ImpClause annot) -> 
-             Core annot [Ctxt ::: Defs, UST ::: UState annot,
-                         ImpST ::: ImpState annot] ()
+             Core annot ()
 processDef env loc n cs_raw
     = do gam <- getCtxt
          case lookupDefTy n gam of

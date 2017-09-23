@@ -3,7 +3,10 @@ module Core.Context
 import Core.TT
 import Core.CaseTree
 
-import public Control.Monad.StateE
+import public Data.IORef
+import public Control.IOExcept
+import public Control.Catchable
+
 import Data.SortedMap
 import Data.SortedSet
 import Data.List
@@ -71,14 +74,15 @@ Gamma = Context GlobalDef
 
 -- Everything needed to typecheck data types/functions
 export
-record ContextDefs where
+record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
 
-initCtxt : ContextDefs
+export
+initCtxt : Defs
 initCtxt = MkAllDefs empty 100 0 0
 
 lookupGlobal : Name -> Gamma -> Maybe GlobalDef
@@ -156,45 +160,41 @@ export
 error : Error annot -> Either (Error annot) a
 error = Left
 
--- When we're manipulating contexts, we can throw exceptions and log errors
--- TODO: Maybe ConsoleIO should be a logging interface, therefore?
-export
-interface (Catchable m (Error annot), ConsoleIO m) =>
-          CtxtManage (m : Type -> Type) annot | m where
-
-export
-(Catchable m (Error annot), ConsoleIO m) => CtxtManage m annot where
-
-export
-Defs : Type
-Defs = ContextDefs
-
 -- A label for the context in the global state
 export
 data Ctxt : Type where
 
 public export
-Core : Type -> StateInfo -> Type -> Type
-Core annot s t 
-    = {m : Type -> Type} -> (Monad m, CtxtManage m annot) => 
-      SE s (Error annot) m t
-
-public export
-CoreI : Type -> (m : Type -> Type) -> StateInfo -> Type -> Type
-CoreI annot m s t = ((Monad m, CtxtManage m annot) => SE s (Error annot) m t)
-
-public export
-CoreM : Type -> StateInfo -> StateInfo -> Type -> Type
-CoreM annot s s' t 
-    = {m : Type -> Type} -> 
-	    (Monad m, CtxtManage m annot) => StatesE s s' (Error annot) m t
+Core : Type -> Type -> Type
+Core annot t 
+    = IOExcept (Error annot) t
 
 export
-getCtxt : Core annot [Ctxt ::: Defs] Gamma
+data Ref : label -> Type -> Type where
+	   MkRef : IORef a -> Ref x a
+
+export
+newRef : (x : label) -> t -> Core annot (Ref x t)
+newRef x val 
+    = do ref <- ioe_lift (newIORef val)
+         pure (MkRef ref)
+
+export
+get : (x : label) -> {auto ref : Ref x a} -> Core annot a
+get x {ref = MkRef io} = ioe_lift (readIORef io)
+
+export
+put : (x : label) -> {auto ref : Ref x a} -> a -> Core annot ()
+put x {ref = MkRef io} val = ioe_lift (writeIORef io val)
+
+export
+getCtxt : {auto x : Ref Ctxt Defs} ->
+					Core annot Gamma
 getCtxt = pure (gamma !(get Ctxt))
 
 export
-getNextTypeTag : Core annot [Ctxt ::: Defs] Int
+getNextTypeTag : {auto x : Ref Ctxt Defs} ->
+								 Core annot Int
 getNextTypeTag
     = do defs <- get Ctxt
          let t = nextTag defs
@@ -202,7 +202,7 @@ getNextTypeTag
          pure t
 
 export
-getNextHole : Core annot [Ctxt ::: Defs] Int
+getNextHole : {auto x : Ref Ctxt Defs} -> Core annot Int
 getNextHole
     = do defs <- get Ctxt
          let t = nextHole defs
@@ -210,25 +210,18 @@ getNextHole
          pure t
 
 export
-genName : String -> Core annot [Ctxt ::: Defs] Name
+genName : {auto x : Ref Ctxt Defs} ->
+					String -> Core annot Name
 genName root
     = do ust <- get Ctxt
          put Ctxt (record { nextVar $= (+1) } ust)
          pure (MN root (nextVar ust))
 
 export
-setCtxt : Gamma -> Core annot [Ctxt ::: Defs] ()
+setCtxt : {auto x : Ref Ctxt Defs} -> Gamma -> Core annot ()
 setCtxt gam
     = do st <- get Ctxt
          put Ctxt (record { gamma = gam } st)
-
-export
-newCtxt : CoreM annot [] [Ctxt ::: Defs] ()
-newCtxt = new Ctxt initCtxt
-
-export
-deleteCtxt : CoreM annot [Ctxt ::: Defs] [] ()
-deleteCtxt = delete Ctxt
 
 export
 getDescendents : Name -> Gamma -> List Name
@@ -248,13 +241,14 @@ getDescendents n g
 						                        (union ns (fromList refs)) g
 
 export
-addDef : Name -> GlobalDef -> Core annot [Ctxt ::: Defs] ()
+addDef : {auto x : Ref Ctxt Defs} -> Name -> GlobalDef -> Core annot ()
 addDef n def
     = do g <- getCtxt 
          setCtxt (addCtxt n def g)
 
 export
-updateDef : Name -> Def -> Core annot [Ctxt ::: Defs] ()
+updateDef : {auto x : Ref Ctxt Defs} ->
+						Name -> Def -> Core annot ()
 updateDef n def 
     = do g <- getCtxt
          case lookupCtxt n g of
@@ -273,8 +267,9 @@ argToPat tm with (unapply tm)
   argToPat (apply (PrimVal c) []) | ArgsList = PConst c
   argToPat (apply f args) | ArgsList = PAny
 
-toPatClause : annot -> Name -> (ClosedTerm, ClosedTerm) ->
-              Core annot [Ctxt ::: Defs] (List Pat, ClosedTerm)
+toPatClause : {auto x : Ref Ctxt Defs} ->
+							annot -> Name -> (ClosedTerm, ClosedTerm) ->
+              Core annot (List Pat, ClosedTerm)
 toPatClause loc n (lhs, rhs) with (unapply lhs)
   toPatClause loc n (apply (Ref Func fn) args, rhs) | ArgsList 
       = case nameEq n fn of
@@ -288,9 +283,10 @@ toPatClause loc n (lhs, rhs) with (unapply lhs)
 -- explicitly named. We'll assign de Bruijn indices when we're done, and
 -- the names of the top level variables we created are returned in 'args'
 export
-simpleCase : annot -> Name -> (def : CaseTree []) ->
+simpleCase : {auto x : Ref Ctxt Defs} ->
+						 annot -> Name -> (def : CaseTree []) ->
              (clauses : List (ClosedTerm, ClosedTerm)) ->
-             Core annot [Ctxt ::: Defs] (args ** CaseTree args)
+             Core annot (args ** CaseTree args)
 simpleCase loc fn def clauses 
       -- \x is needed below due to scoped implicits being weird...
     = do ps <- traverse (\x => toPatClause loc fn x) clauses
@@ -299,8 +295,9 @@ simpleCase loc fn def clauses
               Right ok => pure ok
 
 export
-addFnDef : annot -> Visibility ->
-           FnDef -> Core annot [Ctxt ::: Defs] ()
+addFnDef : {auto x : Ref Ctxt Defs} ->
+					 annot -> Visibility ->
+           FnDef -> Core annot ()
 addFnDef loc vis (MkFn n ty clauses) 
     = do let cs = map toClosed clauses
          (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
@@ -319,7 +316,8 @@ addFnDef loc vis (MkFn n ty clauses)
           = (close 0 env lhs, close 0 env rhs)
 
 export
-addData : Visibility -> DataDef -> Core annot [Ctxt ::: Defs] ()
+addData : {auto x : Ref Ctxt Defs} ->
+					Visibility -> DataDef -> Core annot ()
 addData vis (MkData (MkCon tyn arity tycon) datacons)
     = do gam <- getCtxt 
          tag <- getNextTypeTag 
@@ -340,7 +338,7 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
              addDataConstructors (tag + 1) cs gam'
 
 export
-runWithCtxt : Core annot [] () -> IO ()
-runWithCtxt prog = ioe_run (runSTE prog []) 
+runWithCtxt : Core annot () -> IO ()
+runWithCtxt prog = ioe_run prog 
                            (\err => printLn err)
                            (\ok => pure ())

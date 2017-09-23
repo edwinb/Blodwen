@@ -19,18 +19,33 @@ data UnifyMode = Exact -- must be a most general unifier
 public export
 interface Unify (tm : List Name -> Type) where
   -- Unify returns a list of names referring to newly added constraints
-  unify : UnifyMode ->
-          annot -> Env Term vars ->
-          tm vars -> tm vars -> 
-          Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+  unifyD : Ref Ctxt Defs ->
+           Ref UST (UState annot) ->
+           UnifyMode ->
+           annot -> Env Term vars ->
+           tm vars -> tm vars -> 
+           Core annot (List Name)
 
-ufail : annot -> String -> Core annot [] a
+-- Workaround for auto implicits not working in interfaces
+export
+unify : Unify tm => 
+           {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
+           UnifyMode ->
+           annot -> Env Term vars ->
+           tm vars -> tm vars -> 
+           Core annot (List Name)
+unify {c} {u} = unifyD c u
+
+ufail : annot -> String -> Core annot a
 ufail loc msg = throw (GenericMsg loc msg)
 
 unifyArgs : (Unify tm, Quote tm) =>
+            {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState annot)} ->
             UnifyMode -> annot -> Env Term vars ->
             List (tm vars) -> List (tm vars) ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+            Core annot (List Name)
 unifyArgs mode loc env [] [] = pure []
 unifyArgs mode loc env (cx :: cxs) (cy :: cys)
     = do constr <- unify mode loc env cx cy
@@ -46,9 +61,11 @@ unifyArgs mode loc env (cx :: cxs) (cy :: cys)
                       pure (union constr cs) -- [c]
 unifyArgs mode loc env _ _ = ufail loc ""
 
-postpone : annot -> Env Term vars ->
+postpone : {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
+           annot -> Env Term vars ->
            Term vars -> Term vars ->
-           Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+           Core annot (List Name)
 postpone loc env x y
     = do c <- addConstraint (MkConstraint loc env x y)
          pure [c]
@@ -110,9 +127,10 @@ toSubVars (n :: ns) xs
    to check the term we're unifying with, and that term doesn't use the
    metavariable name, we can safely apply the rule.
 -}
-patternEnv : Env Term vars -> List (Closure vars) -> 
-             Core annot [Ctxt ::: Defs, UST ::: UState annot]
-                  (Maybe (newvars ** SubVars newvars vars))
+patternEnv : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState annot)} ->
+             Env Term vars -> List (Closure vars) -> 
+             Core annot (Maybe (newvars ** SubVars newvars vars))
 patternEnv env args
     = do gam <- getCtxt
          let args' = map (evalClosure empty) args
@@ -124,9 +142,11 @@ patternEnv env args
 -- and returning the term
 -- If the type of the metavariable doesn't have enough arguments, fail, because
 -- this wasn't valid for pattern unification
-instantiate : annot ->
+instantiate : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState annot)} ->
+              annot ->
               (metavar : Name) -> SubVars newvars vars -> Term newvars ->
-              Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+              Core annot ()
 instantiate loc metavar smvs tm {newvars}
      = do gam <- getCtxt
           case lookupDefTy metavar gam of
@@ -156,7 +176,9 @@ instantiate loc metavar smvs tm {newvars}
       mkRHS got (ns ++ [n]) cvs ty tm | (Snoc rec) = Nothing
 
 export
-implicitBind : Name -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+implicitBind : {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState annot)} ->
+               Name -> Core annot ()
 implicitBind n = updateDef n ImpBind
 
 -- Check that the references in the term don't refer to the hole name as
@@ -198,9 +220,11 @@ mutual
   -- Essentially what this achieves is moving a hole to an outer scope where
   -- it solution is now usable
   export
-  shrinkHoles : annot -> Env Term vars ->
+  shrinkHoles : {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState annot)} ->
+                annot -> Env Term vars ->
                 List (Term vars) -> Term vars ->
-                Core annot [Ctxt ::: Defs, UST ::: UState annot] (Term vars)
+                Core annot (Term vars)
   shrinkHoles loc env args (Bind x (Let val ty) sc) 
       = do val' <- shrinkHoles loc env args val
            ty' <- shrinkHoles loc env args ty
@@ -235,14 +259,16 @@ mutual
   -- used in the goal type, then create a new hole 'newhole' which takes that
   -- prefix as arguments. 
   -- Then, solve 'oldhole' by applying 'newhole' to 'argPrefix'
-  mkSmallerHole : annot ->
+  mkSmallerHole : {auto c : Ref Ctxt Defs} ->
+                  {auto u : Ref UST (UState annot)} ->
+                  annot ->
                   (eqsofar : List (Term vars)) ->
                   (holetype : ClosedTerm) ->
                   (oldhole : Name) ->
                   (args : List (Term vars)) ->
                   (newhole : Name) ->
                   (argPrefix : List (Term vars)) ->
-                  Core annot [Ctxt ::: Defs, UST ::: UState annot] (Term vars)
+                  Core annot (Term vars)
   mkSmallerHole loc sofar holetype oldhole 
                               (Local arg :: args) newhole (Local a :: as)
       = if sameVar arg a
@@ -309,9 +335,11 @@ mutual
              Just (Hole _) => True
              _ => False
 
-  unifyHole : annot -> Env Term vars ->
+  unifyHole : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState annot)} ->
+              annot -> Env Term vars ->
               NameType -> Name -> List (Closure vars) -> NF vars ->
-              Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+              Core annot (List Name)
   unifyHole loc env nt var args tm
       = case !(patternEnv env args) of
            Just (newvars ** submv) =>
@@ -362,9 +390,11 @@ mutual
                            (quote empty env (NApp (NRef nt var) args))
                            (quote empty env tm)
 
-  unifyApp : annot -> Env Term vars ->
+  unifyApp : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState annot)} ->
+             annot -> Env Term vars ->
              NHead vars -> List (Closure vars) -> NF vars ->
-             Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+             Core annot (List Name)
   unifyApp loc env (NRef nt var) args tm 
       = do gam <- getCtxt
            if convert empty env (NApp (NRef nt var) args) tm
@@ -396,7 +426,7 @@ mutual
   
   export
   Unify Closure where
-    unify mode loc env x y 
+    unifyD _ _ mode loc env x y 
         = do gam <- getCtxt
              -- 'quote' using an empty global context, because then function
              -- names won't reduce until they have to
@@ -404,9 +434,11 @@ mutual
              let y' = quote empty env y
              unify mode loc env x' y'
 
-  unifyIfEq : (postpone : Bool) ->
+  unifyIfEq : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState annot)} ->
+              (postpone : Bool) ->
               annot -> Env Term vars -> NF vars -> NF vars -> 
-                  Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+                  Core annot (List Name)
   unifyIfEq post loc env x y 
         = do gam <- getCtxt
              if convert gam env x y
@@ -419,7 +451,7 @@ mutual
 
   export
   Unify NF where
-    unify mode loc env (NBind x (Pi ix tx) scx) (NBind y (Pi iy ty) scy) 
+    unifyD _ _ mode loc env (NBind x (Pi ix tx) scx) (NBind y (Pi iy ty) scy) 
         = if ix /= iy
              then ufail loc $ "Can't unify " ++ show (quote empty env
                                                      (NBind x (Pi ix tx) scx))
@@ -452,19 +484,19 @@ mutual
                                 let termy = refToLocal xn x (quote empty env tscy)
                                 cs' <- unify mode loc env' termx termy
                                 pure (union cs cs')
-    unify Approx loc env (NApp (NRef xt hdx) argsx) (NApp (NRef yt hdy) argsy)
+    unifyD _ _ Approx loc env (NApp (NRef xt hdx) argsx) (NApp (NRef yt hdy) argsy)
         = if hdx == hdy
              then unifyArgs Approx loc env argsx argsy
              else postpone loc env (quote empty env (NApp (NRef xt hdx) argsx))
                                    (quote empty env (NApp (NRef yt hdy) argsy))
-    unify Approx loc env (NApp (NLocal xv) argsx) (NApp (NLocal yv) argsy)
+    unifyD _ _ Approx loc env (NApp (NLocal xv) argsx) (NApp (NLocal yv) argsy)
         = if sameVar xv yv
              then unifyArgs Approx loc env argsx argsy
              else postpone loc env (quote empty env (NApp (NLocal xv) argsx))
                                    (quote empty env (NApp (NLocal yv) argsy))
     -- If they're both holes, solve the one with the bigger context with
     -- the other
-    unify mode loc env (NApp (NRef xt hdx) argsx) (NApp (NRef yt hdy) argsy)
+    unifyD _ _ mode loc env (NApp (NRef xt hdx) argsx) (NApp (NRef yt hdy) argsy)
         = do gam <- getCtxt
              if isHoleNF gam hdx && isHoleNF gam hdy
                 then
@@ -479,11 +511,11 @@ mutual
                                              (NApp (NRef yt hdy) argsy)
                        else unifyApp loc env (NRef yt hdy) argsy 
                                              (NApp (NRef xt hdx) argsx))
-    unify mode loc env y (NApp hd args)
+    unifyD _ _ mode loc env y (NApp hd args)
         = unifyApp loc env hd args y
-    unify mode loc env (NApp hd args) y 
+    unifyD _ _ mode loc env (NApp hd args) y 
         = unifyApp loc env hd args y
-    unify mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
+    unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
         = if tagx == tagy
              then do log 5 ("Constructor " ++ show (quote empty env (NDCon x tagx ax xs))
                                 ++ " and " ++ show (quote empty env (NDCon y tagy ay ys)))
@@ -493,7 +525,7 @@ mutual
                                          ++ " and "
                                          ++ show (quote empty env
                                                         (NDCon y tagy ay ys))
-    unify mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
+    unifyD _ _ mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
         = if tagx == tagy
              then unifyArgs mode loc env xs ys
              else ufail loc $ "Can't unify " ++ show (quote empty env
@@ -501,28 +533,30 @@ mutual
                                          ++ " and "
                                          ++ show (quote empty env
                                                         (NTCon y tagy ay ys))
-    unify mode loc env (NPrimVal x) (NPrimVal y) 
+    unifyD _ _ mode loc env (NPrimVal x) (NPrimVal y) 
         = if x == y 
              then pure [] 
              else ufail loc $ "Can't unify " ++ show x ++ " and " ++ show y
-    unify mode loc env x NErased = pure []
-    unify mode loc env NErased y = pure []
-    unify mode loc env NType NType = pure []
-    unify mode loc env x y = unifyIfEq False loc env x y
+    unifyD _ _ mode loc env x NErased = pure []
+    unifyD _ _ mode loc env NErased y = pure []
+    unifyD _ _ mode loc env NType NType = pure []
+    unifyD _ _ mode loc env x y = unifyIfEq False loc env x y
 
   export
   Unify Term where
     -- TODO: Don't just go to values, try to unify the terms directly
     -- and avoid normalisation as far as possible
-    unify mode loc env x y 
+    unifyD _ _ mode loc env x y 
           = do gam <- getCtxt
                unify mode loc env (nf gam env x) (nf gam env y)
 
 -- Try again to solve the given named constraint, and return the list
 -- of constraint names are generated when trying to solve it.
 export
-retry : UnifyMode -> (cname : Name) -> 
-        Core annot [Ctxt ::: Defs, UST ::: UState annot] (List Name)
+retry : {auto c : Ref Ctxt Defs} ->
+        {auto u : Ref UST (UState annot)} ->
+        UnifyMode -> (cname : Name) -> 
+        Core annot (List Name)
 retry mode cname
     = do ust <- get UST
          case lookupCtxt cname (constraints ust) of
@@ -544,8 +578,10 @@ retry mode cname
                                     pure []
                            _ => pure cs
 
-retryHole : UnifyMode -> (hole : Name) ->
-            Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+retryHole : {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState annot)} ->
+            UnifyMode -> (hole : Name) ->
+            Core annot ()
 retryHole mode hole
     = do gam <- getCtxt
          case lookupDef hole gam of
@@ -565,7 +601,9 @@ retryHole mode hole
 -- Do this by working through the list of holes
 -- On encountering a 'Guess', try the constraints attached to it 
 export
-solveConstraints : UnifyMode -> Core annot [Ctxt ::: Defs, UST ::: UState annot] ()
+solveConstraints : {auto c : Ref Ctxt Defs} ->
+                   {auto u : Ref UST (UState annot)} ->
+                   UnifyMode -> Core annot ()
 solveConstraints mode
     = do hs <- getHoleNames
          traverse (\x => retryHole mode x) hs
