@@ -21,9 +21,9 @@ data StateInfo : Type where
      (::) : Resource -> StateInfo -> StateInfo
 
 public export
-data Available : lbl -> StateInfo -> Type -> Type where
-     Here : Available l ((l ::: ty) :: ss) ty
-     There : Available l ss ty -> Available l (s :: ss) ty
+data Has : lbl -> Type -> StateInfo -> Type where
+     Here : Has l ty ((l ::: ty) :: ss)
+     There : Has l ty ss -> Has l ty (s :: ss)
 
 namespace Vals
   public export
@@ -31,31 +31,31 @@ namespace Vals
        Nil : Vals []
        (::) : a -> Vals xs -> Vals ((ty ::: a) :: xs)
 
-lookup : Available l ss ty -> Vals ss -> ty
+lookup : Has l ty ss -> Vals ss -> ty
 lookup Here (x :: xs) = x
 lookup (There p) (x :: xs) = lookup p xs
 
 public export
-updateTy : (ss : StateInfo) -> (p : Available l ss ty) -> Type -> StateInfo
+updateTy : (ss : StateInfo) -> (p : Has l ty ss) -> Type -> StateInfo
 updateTy ((l ::: ty) :: ss) Here newty = ((l ::: newty) :: ss)
 updateTy (s :: ss) (There p) newty = s :: updateTy ss p newty
 
 public export
-updateM : (p : Available l ss ty) -> Vals ss -> ty' -> Vals (updateTy ss p ty')
+updateM : (p : Has l ty ss) -> Vals ss -> ty' -> Vals (updateTy ss p ty')
 updateM Here (x :: xs) new = new :: xs
 updateM (There p) (x :: xs) new = x :: updateM p xs new
 
 public export
-update : (p : Available l ss ty) -> Vals ss -> ty -> Vals ss
+update : (p : Has l ty ss) -> Vals ss -> ty -> Vals ss
 update Here (x :: xs) new = new :: xs
 update (There p) (x :: xs) new = x :: update p xs new
 
 public export
-drop : (ss : StateInfo) -> (prf : Available l ss ty) -> StateInfo
+drop : (ss : StateInfo) -> (prf : Has l ty ss) -> StateInfo
 drop ((lbl ::: st) :: ss) Here = ss
 drop (s :: ss) (There p) = s :: drop ss p
 
-dropVal : (prf : Available l ss ty) -> Vals ss -> Vals (drop ss prf)
+dropVal : (prf : Has l ty ss) -> Vals ss -> Vals (drop ss prf)
 dropVal Here (x :: xs) = xs
 dropVal (There p) (x :: xs) = x :: dropVal p xs
 
@@ -105,9 +105,9 @@ Monad f => Applicative (StatesE s s err f) where
                     (b, vals'') <- a vals'
                     pure (g b, vals''))
 
-export
-Monad m => Monad (StatesE s s err m) where
-  (>>=) = bind
+-- export
+-- Monad m => Monad (StatesE s s err m) where
+--   (>>=) = bind
 
 public export
 data ElemStates : Resource -> StateInfo -> Type where
@@ -171,7 +171,7 @@ rebuildVals (e :: es) (x :: xs) (InStates el p)
     = e :: rebuildVals es (dropDups (x :: xs) el) p
 rebuildVals new (x :: xs) (Skip p) = x :: rebuildVals new xs p
 
-export
+export implicit
 call : Monad m =>
        StatesE sub new err m a ->
        {auto st_prf : SubStates sub old} ->
@@ -181,14 +181,6 @@ call (STE f) {st_prf}
               do let vals' = dropVals vals st_prf
                  (res, vals'') <- f vals'
                  pure (res, rebuildVals vals'' vals st_prf))
-
-export
-implicit
-imp_call : Monad m =>
-       StatesE sub new err m a ->
-       {auto st_prf : SubStates sub old} ->
-       StatesE old (updateWith new old st_prf) err m a
-imp_call = call
 
 export
 throw : Catchable m err => err -> StatesE s s err m b
@@ -204,19 +196,19 @@ catch (STE prog) f
 
 export
 get : Applicative m =>
-      (l : lbl) -> {auto prf : Available l s ty} ->
+      (l : lbl) -> {auto prf : Has l ty s} ->
       StatesE s s err m ty
 get l {prf} = STE (\vals => pure (lookup prf vals, vals))
 
 export
 putM : Applicative m =>
-      (l : lbl) -> (new : ty') -> {auto prf : Available l s ty} ->
+      (l : lbl) -> (new : ty') -> {auto prf : Has l ty s} ->
       StatesE s (updateTy s prf ty') err m ()
 putM l {prf} new = STE (\vals => pure ((), updateM prf vals new))
 
 export
 put : Applicative m =>
-     (l : lbl) -> (new : ty) -> {auto prf : Available l s ty} ->
+     (l : lbl) -> (new : ty) -> {auto prf : Has l ty s} ->
      StatesE s s err m ()
 put l {prf} new = STE (\vals => pure ((), update prf vals new))
 
@@ -228,7 +220,7 @@ new l val = STE (\vals => pure ((), val :: vals))
 
 export
 delete : Applicative m =>
-         (l : lbl) -> {auto prf : Available l s ty} ->
+         (l : lbl) -> {auto prf : Has l ty s} ->
          StatesE s (drop s prf) err m ()
 delete l {prf} = STE (\vals => pure ((), dropVal prf vals))
 
