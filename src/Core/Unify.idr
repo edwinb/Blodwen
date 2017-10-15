@@ -8,7 +8,7 @@ import public Core.UnifyState
 
 import Data.List
 import Data.List.Views
-import Data.SortedSet
+import Data.CSet
 
 %default covering
 
@@ -190,7 +190,7 @@ occursCheck gam n tm
            Just _ => True
   where
     -- Remember the ones we've checked as okay already, to save repeating work
-    oc : (checked : SortedSet Name) -> Term vars -> Maybe (SortedSet Name)
+    oc : (checked : SortedSet) -> Term vars -> Maybe SortedSet
     oc chk (Ref nt var)
         -- if 'var' or one of its descendents is 'n' we fail the check
         -- otherwise add it to the set of checked things
@@ -527,7 +527,15 @@ mutual
                                                         (NDCon y tagy ay ys))
     unifyD _ _ mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
         = if tagx == tagy
-             then unifyArgs mode loc env xs ys
+             then do log 5 ("Constructor " ++ show (quote empty env (NTCon x tagx ax xs))
+                                ++ " and " ++ show (quote empty env (NTCon y tagy ay ys)))
+                     unifyArgs mode loc env xs ys
+             -- TODO: Type constructors are not necessarily injective.
+             -- If we don't know it's injective, need to postpone the
+             -- constraint. But before then, we need some way to decide
+             -- what's injective...
+--              then postpone loc env (quote empty env (NTCon x tagx ax xs))
+--                                    (quote empty env (NTCon y tagy ay ys))
              else ufail loc $ "Can't unify " ++ show (quote empty env
                                                         (NTCon x tagx ax xs))
                                          ++ " and "

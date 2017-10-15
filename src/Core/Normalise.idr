@@ -4,7 +4,7 @@ import Core.TT
 import Core.Context
 import Core.CaseTree
 
-import Control.Monad.State
+-- import Control.Monad.State
 import Data.List
 
 %default covering -- total is hard here, because the things we're evaluating
@@ -208,78 +208,81 @@ export
 nfHoles : Gamma -> Env Term free -> Term free -> NF free
 nfHoles gam env tm = eval gam True env [] [] tm
 
-genName : String -> State Int Name
-genName root 
-    = do n <- get
-         put (n + 1)
+genName : IORef Int -> String -> IO Name
+genName num root 
+    = do n <- readIORef num
+         writeIORef num (n + 1)
          pure (MN root n)
 
 public export
 interface Quote (tm : List Name -> Type) where
   quote : Gamma -> Env Term vars -> tm vars -> Term vars
-  quoteGen :  Gamma -> Env Term vars -> tm vars -> State Int (Term vars)
+  quoteGen : IORef Int ->
+             Gamma -> Env Term vars -> tm vars -> IO (Term vars)
 
-  quote gam env tm = evalState (quoteGen gam env tm) 0
+  quote gam env tm 
+      = unsafePerformIO (do num <- newIORef 0
+                            quoteGen num gam env tm)
    
 mutual
-  quoteArgs : Gamma -> Env Term free -> List (Closure free) -> 
-              State Int (List (Term free))
-  quoteArgs gam env [] = pure []
-  quoteArgs gam env (thunk :: args) 
-        = pure $ !(quoteGen gam env (evalClosure gam thunk)) :: 
-                 !(quoteArgs gam env args)
+  quoteArgs : IORef Int -> Gamma -> Env Term free -> List (Closure free) -> 
+              IO (List (Term free))
+  quoteArgs num gam env [] = pure []
+  quoteArgs num gam env (thunk :: args) 
+        = pure $ !(quoteGen num gam env (evalClosure gam thunk)) :: 
+                 !(quoteArgs num gam env args)
 
-  quoteHead :  NHead free -> State Int (Term free)
+  quoteHead :  NHead free -> IO (Term free)
   quoteHead (NLocal y) = pure $ Local y
   quoteHead (NRef nt n) = pure $ Ref nt n
 
-  quoteBinder :  Gamma ->Env Term free -> Binder (NF free) -> 
-                State Int (Binder (Term free))
-  quoteBinder gam env (Lam x ty) 
-      = do ty' <- quoteGen gam env ty
+  quoteBinder : IORef Int -> Gamma -> Env Term free -> Binder (NF free) -> 
+                IO (Binder (Term free))
+  quoteBinder num gam env (Lam x ty) 
+      = do ty' <- quoteGen num gam env ty
            pure (Lam x ty')
-  quoteBinder gam env (Let val ty) 
-      = do val' <- quoteGen gam env val
-           ty' <- quoteGen gam env ty
+  quoteBinder num gam env (Let val ty) 
+      = do val' <- quoteGen num gam env val
+           ty' <- quoteGen num gam env ty
            pure (Let val' ty')
-  quoteBinder gam env (Pi x ty) 
-      = do ty' <- quoteGen gam env ty
+  quoteBinder num gam env (Pi x ty) 
+      = do ty' <- quoteGen num gam env ty
            pure (Pi x ty')
-  quoteBinder gam env (PVar ty) 
-      = do ty' <- quoteGen gam env ty
+  quoteBinder num gam env (PVar ty) 
+      = do ty' <- quoteGen num gam env ty
            pure (PVar ty')
-  quoteBinder gam env (PVTy ty) 
-      = do ty' <- quoteGen gam env ty
+  quoteBinder num gam env (PVTy ty) 
+      = do ty' <- quoteGen num gam env ty
            pure (PVTy ty')
 
   export
   Quote NF where
-    quoteGen gam env (NBind n b sc) 
-        = do var <- genName "qv"
-             sc' <- quoteGen gam env (sc (toClosure False env (Ref Bound var)))
-             b' <- quoteBinder gam env b
+    quoteGen num gam env (NBind n b sc) 
+        = do var <- genName num "qv"
+             sc' <- quoteGen num gam env (sc (toClosure False env (Ref Bound var)))
+             b' <- quoteBinder num gam env b
              pure (Bind n b' (refToLocal var n sc'))
-    quoteGen gam env (NApp f args) 
+    quoteGen num gam env (NApp f args) 
         = do f' <- quoteHead f
-             args' <- quoteArgs gam env args
+             args' <- quoteArgs num gam env args
              pure $ apply f' args'
-    quoteGen gam env (NDCon nm tag arity xs) 
-        = do xs' <- quoteArgs gam env xs
+    quoteGen num gam env (NDCon nm tag arity xs) 
+        = do xs' <- quoteArgs num gam env xs
              pure $ apply (Ref (DataCon tag arity) nm) xs'
-    quoteGen gam env (NTCon nm tag arity xs) 
-        = do xs' <- quoteArgs gam env xs
+    quoteGen num gam env (NTCon nm tag arity xs) 
+        = do xs' <- quoteArgs num gam env xs
              pure $ apply (Ref (TyCon tag arity) nm) xs'
-    quoteGen gam env (NPrimVal x) = pure $ PrimVal x
-    quoteGen gam env NErased = pure $ Erased
-    quoteGen gam env NType = pure $ TType
+    quoteGen num gam env (NPrimVal x) = pure $ PrimVal x
+    quoteGen num gam env NErased = pure $ Erased
+    quoteGen num gam env NType = pure $ TType
 
   export
   Quote Term where
-    quoteGen gam env tm = pure tm
+    quoteGen num gam env tm = pure tm
 
 export
 Quote Closure where
-  quoteGen gam env thunk = quoteGen gam env (evalClosure gam thunk)
+  quoteGen num gam env thunk = quoteGen num gam env (evalClosure gam thunk)
 
 export
 normalise : Gamma -> Env Term free -> Term free -> Term free
@@ -302,53 +305,56 @@ getArity gam env tm = getValArity gam env (nf gam env tm)
 public export
 interface Convert (tm : List Name -> Type) where
   convert : Gamma -> Env Term vars -> tm vars -> tm vars -> Bool
-  convGen : Gamma -> Env Term vars -> tm vars -> tm vars -> State Int Bool
+  convGen : IORef Int ->
+            Gamma -> Env Term vars -> tm vars -> tm vars -> IO Bool
 
-  convert gam env tm tm' = evalState (convGen gam env tm tm') 0
+  convert gam env tm tm' 
+      = unsafePerformIO (do num <- newIORef 0
+                            convGen num gam env tm tm')
 
 mutual
-  allConv : Gamma -> Env Term vars ->
-            List (Closure vars) -> List (Closure vars) -> State Int Bool
-  allConv gam env [] [] = pure True
-  allConv gam env (x :: xs) (y :: ys) 
-      = pure $ !(convGen gam env x y) && !(allConv gam env xs ys)
-  allConv gam env _ _ = pure False
+  allConv : IORef Int -> Gamma -> Env Term vars ->
+            List (Closure vars) -> List (Closure vars) -> IO Bool
+  allConv num gam env [] [] = pure True
+  allConv num gam env (x :: xs) (y :: ys) 
+      = pure $ !(convGen num gam env x y) && !(allConv num gam env xs ys)
+  allConv num gam env _ _ = pure False
   
   chkConvHead : Gamma -> Env Term vars ->
-                NHead vars -> NHead vars -> State Int Bool 
+                NHead vars -> NHead vars -> IO Bool 
   chkConvHead gam env (NLocal x) (NLocal y) = pure $ sameVar x y
   chkConvHead gam env (NRef x y) (NRef x' y') = pure $ y == y'
   chkConvHead gam env x y = pure False
 
   export
   Convert NF where
-    convGen gam env (NBind x b scope) (NBind x' b' scope') 
-        = do var <- genName "convVar"
+    convGen num gam env (NBind x b scope) (NBind x' b' scope') 
+        = do var <- genName num "convVar"
              let c = MkClosure False [] env (Ref Bound var)
-             convGen gam env (scope c) (scope' c)
-    convGen gam env (NApp val args) (NApp val' args') 
+             convGen num gam env (scope c) (scope' c)
+    convGen num gam env (NApp val args) (NApp val' args') 
         = do hs <- chkConvHead gam env val val'
-             as <- allConv gam env args args'
+             as <- allConv num gam env args args'
              pure $ hs && as
-    convGen gam env (NDCon _ tag _ xs) (NDCon _ tag' _ xs') 
-        = do as <- allConv gam env xs xs'
+    convGen num gam env (NDCon _ tag _ xs) (NDCon _ tag' _ xs') 
+        = do as <- allConv num gam env xs xs'
              pure (tag == tag' && as)
-    convGen gam env (NTCon _ tag _ xs) (NTCon _ tag' _ xs')
-        = do as <- allConv gam env xs xs'
+    convGen num gam env (NTCon _ tag _ xs) (NTCon _ tag' _ xs')
+        = do as <- allConv num gam env xs xs'
              pure (tag == tag' && as)
-    convGen gam env (NPrimVal x) (NPrimVal y) = pure (x == y)
-    convGen gam env NErased _ = pure True
-    convGen gam env _ NErased = pure True
-    convGen gam env NType NType = pure True
-    convGen gam env x y = pure False
+    convGen num gam env (NPrimVal x) (NPrimVal y) = pure (x == y)
+    convGen num gam env NErased _ = pure True
+    convGen num gam env _ NErased = pure True
+    convGen num gam env NType NType = pure True
+    convGen num gam env x y = pure False
 
   export
   Convert Term where
-    convGen gam env x y = convGen gam env (nf gam env x) (nf gam env y)
+    convGen num gam env x y = convGen num gam env (nf gam env x) (nf gam env y)
 
   export
   Convert Closure where
-    convGen gam env thunkx thunky
-        = convGen gam env (evalClosure gam thunkx)
-                          (evalClosure gam thunky)
+    convGen num gam env thunkx thunky
+        = convGen num gam env (evalClosure gam thunkx)
+                              (evalClosure gam thunky)
 

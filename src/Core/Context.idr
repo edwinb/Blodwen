@@ -7,15 +7,15 @@ import public Data.IORef
 import public Control.IOExcept
 import public Control.Catchable
 
-import Data.SortedMap
-import Data.SortedSet
+import Data.CMap
+import Data.CSet
 import Data.List
 
 %default total
 
 export
 data Context : Type -> Type where
-     MkContext : SortedMap Name a -> Context a
+     MkContext : SortedMap a -> Context a
 
 export
 empty : Context a
@@ -61,7 +61,7 @@ getRefs (DCon tag arity) = []
 getRefs (TCon tag arity datacons) = []
 getRefs (Hole numlocs) = []
 getRefs ImpBind = []
-getRefs (Guess guess constraints) = SortedSet.toList (getRefs guess)
+getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 
 export
 newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
@@ -164,6 +164,8 @@ error = Left
 export
 data Ctxt : Type where
 
+-- TODO: Hide the IOExcept behind a data type so that we can control
+-- which IO operations are allowed...
 public export
 Core : Type -> Type -> Type
 Core annot t 
@@ -226,9 +228,9 @@ setCtxt gam
 export
 getDescendents : Name -> Gamma -> List Name
 getDescendents n g
-    = SortedSet.toList $ getAllDesc [n] empty g
+    = CSet.toList $ getAllDesc [n] empty g
   where
-    getAllDesc : List Name -> SortedSet Name -> Gamma -> SortedSet Name
+    getAllDesc : List Name -> SortedSet -> Gamma -> SortedSet
     getAllDesc [] ns g = ns
     getAllDesc (n :: rest) ns g
       = if contains n ns

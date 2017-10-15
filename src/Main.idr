@@ -31,7 +31,7 @@ using (FileIO m)
                                tryTTImp
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
-                       (tm, ty) <- inferTerm [] PATTERN InExpr ttimp 
+                       (tm, ty) <- inferTerm [] NONE InExpr ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
                        gam <- getCtxt
                        ioe_lift (putStrLn (show (normalise gam [] tm) ++ " : " ++

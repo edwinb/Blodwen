@@ -107,13 +107,17 @@ addHoleName n
          put UST (record { holes $= (n ::),
                            currentHoles $= (n ::) } ust)
 
+dropFirst : Eq a => a -> List a -> List a
+dropFirst x [] = []
+dropFirst x (y :: ys) = if x == y then ys else y :: dropFirst x ys
+
 export
 removeHoleName : {auto u : Ref UST (UState annot)} ->
                  Name -> Core annot ()
 removeHoleName n
     = do ust <- get UST
-         put UST (record { holes $= filter (/= n),
-                           currentHoles $= filter (/= n) } ust)
+         put UST (record { holes $= dropFirst n,
+                           currentHoles $= dropFirst n } ust)
 
 -- Make a new constant by applying a term to everything in the current
 -- environment

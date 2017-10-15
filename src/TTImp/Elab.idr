@@ -74,8 +74,8 @@ strengthenedEState : {auto e : Ref EST (EState (n :: vs))} ->
 strengthenedEState True loc = pure initEState
 strengthenedEState False loc 
     = do est <- get EST
-         bns <- traverse (\x => strTms x) (boundNames est)
-         todo <- traverse (\x => strTms x) (toBind est)
+         bns <- traverse strTms (boundNames est)
+         todo <- traverse strTms (toBind est)
          pure (MkElabState bns todo)
   where
     -- Remove any instance of the top level local variable from an

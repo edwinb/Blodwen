@@ -1,9 +1,10 @@
 package blodwen
 
-pkgs = contrib, pruviloj 
+pkgs = contrib
 
 modules = Core.CaseTree,
           Core.Context, 
+          Core.Name,
           Core.Normalise,
           Core.ProcessTT,
           Core.TT,
@@ -12,6 +13,9 @@ modules = Core.CaseTree,
           Core.UnifyState,
 
           Control.Monad.StateE,
+
+          Data.CMap,
+          Data.CSet,
 
           Interfaces.FileIO,
           Interfaces.SystemIO,

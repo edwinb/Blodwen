@@ -20,7 +20,7 @@ plus (S k) y = S (plus k y);
 -- Unlike Idris, we need to say which names are valid as implicit arguments,
 -- which avoids any confusion with existing names.
 
-implicit n, m, k, a, x;
+implicit n, m, k, a, x, y;
 
 data Vect : Nat -> Type -> Type where {
      Nil  : Vect Z a;
@@ -30,6 +30,9 @@ data Vect : Nat -> Type -> Type where {
 data Eq : a -> a -> Type where {
      Refl : Eq x x;
 }
+
+eqSuc : Eq x y -> Eq (S x) (S y);
+eqSuc Refl = Refl;
 
 -- A function with a dependent type
 
