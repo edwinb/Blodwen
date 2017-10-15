@@ -13,8 +13,8 @@ import Data.CSet
 %default covering
 
 public export
-data UnifyMode = Exact -- must be a most general unifier
-               | Approx -- first order approximation is okay
+data UnifyMode = InLHS
+               | InTerm
 
 public export
 interface Unify (tm : List Name -> Type) where
@@ -484,14 +484,11 @@ mutual
                                 let termy = refToLocal xn x (quote empty env tscy)
                                 cs' <- unify mode loc env' termx termy
                                 pure (union cs cs')
-    unifyD _ _ Approx loc env (NApp (NRef xt hdx) argsx) (NApp (NRef yt hdy) argsy)
-        = if hdx == hdy
-             then unifyArgs Approx loc env argsx argsy
-             else postpone loc env (quote empty env (NApp (NRef xt hdx) argsx))
-                                   (quote empty env (NApp (NRef yt hdy) argsy))
-    unifyD _ _ Approx loc env (NApp (NLocal xv) argsx) (NApp (NLocal yv) argsy)
+    -- Locally bound things, in a term (not LHS). Since we have to unify
+    -- for *all* possible values, we can safely unify the arguments.
+    unifyD _ _ InTerm loc env (NApp (NLocal xv) argsx) (NApp (NLocal yv) argsy)
         = if sameVar xv yv
-             then unifyArgs Approx loc env argsx argsy
+             then unifyArgs InTerm loc env argsx argsy
              else postpone loc env (quote empty env (NApp (NLocal xv) argsx))
                                    (quote empty env (NApp (NLocal yv) argsy))
     -- If they're both holes, solve the one with the bigger context with

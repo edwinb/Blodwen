@@ -191,15 +191,18 @@ bindTopImplicits {vars} mode gam env hs tm ty
 
 convert : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           {auto e : Ref EST (EState vars)} ->
-          annot -> Env Term vars -> NF vars -> NF vars -> 
+          annot -> ElabMode -> Env Term vars -> NF vars -> NF vars -> 
           Core annot (List Name)
-convert loc env x y 
-    = catch (do solveConstraints Exact
-                log 10 $ "Unifying " ++ show (quote empty env x) ++ " and " 
-                                     ++ show (quote empty env y)
-                vs <- unify Exact loc env x y
-                solveConstraints Exact
-                pure vs)
+convert loc elabmode env x y 
+    = let umode = case elabmode of
+                       InLHS => InLHS
+                       _ => InTerm in
+          catch (do solveConstraints umode
+                    log 10 $ "Unifying " ++ show (quote empty env x) ++ " and " 
+                                         ++ show (quote empty env y)
+                    vs <- unify umode loc env x y
+                    solveConstraints umode
+                    pure vs)
             (\err => do gam <- getCtxt 
                         throw (WhenUnifying loc (normaliseHoles gam env (quote empty env x))
                                                 (normaliseHoles gam env (quote empty env y))
@@ -240,18 +243,17 @@ convertImps loc env got exp imps = pure (got, reverse imps)
 
 checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
            {auto e : Ref EST (EState vars)} ->
-           annot ->
-           Env Term vars ->
+           annot -> ElabMode -> Env Term vars ->
            (term : Term vars) -> (got : Term vars) -> 
            (exp : Maybe (Term vars)) ->
            Core annot (Term vars, Term vars) 
-checkExp loc env tm got Nothing
+checkExp loc elabmode env tm got Nothing
     = pure (tm, got)
-checkExp loc env tm got (Just exp) 
+checkExp loc elabmode env tm got (Just exp) 
     = do gam <- getCtxt
          let expnf = nf gam env exp
          (got', imps) <- convertImps loc env (nf gam env got) expnf []
-         constr <- convert loc env got' expnf
+         constr <- convert loc elabmode env got' expnf
          case constr of
               [] => pure (apply tm imps, quote empty env got')
               cs => do gam <- getCtxt
@@ -309,7 +311,7 @@ mutual
            -- If the variable has an implicit binder in its type, add
            -- the implicits here
            (ty, imps) <- getImps loc env (nf gam env varty) []
-           checkExp loc env (apply x' imps) (quote empty env ty) expected
+           checkExp loc elabmode env (apply x' imps) (quote empty env ty) expected
   checkImp top impmode elabmode env (IPi loc plicity Nothing ty retTy) expected 
       = do n <- genName "pi"
            checkPi top impmode elabmode loc env plicity n ty retTy expected
@@ -329,7 +331,7 @@ mutual
                 NBind _ (Pi _ ty) scdone =>
                   do (argtm, argty) <- check top impmode elabmode env arg (Just (quote empty env ty))
                      let sc' = scdone (toClosure False env argtm)
-                     checkExp loc env (App (apply fntm impArgs) argtm)
+                     checkExp loc elabmode env (App (apply fntm impArgs) argtm)
                                   (quote gam env sc') expected
                 _ => 
                   do bn <- genName "aTy"
@@ -340,16 +342,16 @@ mutual
                          check top impmode elabmode env arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
                      -- Check the type of 'fn' is an actual function type
                      (fnchk, _) <-
-                         checkExp loc env fntm 
+                         checkExp loc elabmode env fntm 
                                   (Bind bn (Pi Explicit expty) scty) 
                                   (Just (quote gam env scopeTy))
-                     checkExp loc env (App fnchk argtm)
+                     checkExp loc elabmode env (App fnchk argtm)
                                   (Bind bn (Let argtm argty) scty) expected
   checkImp top impmode elabmode env (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
-           checkExp loc env x' ty expected
+           checkExp loc elabmode env x' ty expected
   checkImp top impmode elabmode env (IType loc) exp
-      = checkExp loc env TType TType exp
+      = checkExp loc elabmode env TType TType exp
   checkImp top impmode InExpr env (IBindVar loc str) exp
       = throw (BadImplicit loc str)
   checkImp top impmode elabmode env (IBindVar loc str) Nothing
@@ -378,7 +380,7 @@ mutual
                                    toBind $= ((n, (tm, expected)) :: ) } est)
                      pure (tm, expected)
                 Just (tm, ty) =>
-                     checkExp loc env tm ty (Just expected)
+                     checkExp loc elabmode env tm ty (Just expected)
   checkImp top impmode elabmode env (Implicit loc) Nothing
       = do t <- addHole env TType
            let hty = mkConstantApp t env
@@ -427,8 +429,8 @@ mutual
                                           TType
                       traverse (\n => implicitBind n) (map fst scopeImps)
                       traverse (\n => implicitBind n) (map fst argImps)
-                      checkExp loc env binder bindert expected
-                _ => checkExp loc env (Bind n (Pi info tyv) scopev)
+                      checkExp loc elabmode env binder bindert expected
+                _ => checkExp loc elabmode env (Bind n (Pi info tyv) scopev)
                                       TType expected
 
   checkLam : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -446,7 +448,7 @@ mutual
                                      (Just (renameTop n psc))
            st' <- strengthenedEState top loc
            put EST st'
-           checkExp loc env (Bind n (Lam plicity tyv) scopev)
+           checkExp loc elabmode env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         (Just (Bind bn (Pi plicity pty) psc))
   checkLam top impmode elabmode loc env plicity n ty scope expected
@@ -456,7 +458,7 @@ mutual
            (scopev, scopet) <- check {e=e'} top impmode elabmode env' scope Nothing
            st' <- strengthenedEState top loc
            put EST st'
-           checkExp loc env (Bind n (Lam plicity tyv) scopev)
+           checkExp loc elabmode env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         expected
   
@@ -479,9 +481,9 @@ mutual
            (scopev, scopet) <- check {e=e'} top impmode elabmode env' scope (map weaken expected)
            st' <- strengthenedEState top loc
            put EST st'
-           checkExp loc env (Bind n (Let valv tyv) scopev)
-                            (Bind n (Let valv tyv) scopet)
-                            expected
+           checkExp loc elabmode env (Bind n (Let valv tyv) scopev)
+                                     (Bind n (Let valv tyv) scopet)
+                                     expected
 
 -- Find any holes in the resulting expression, and implicitly bind them
 -- at the top level (i.e. they can't depend on any explicitly given
@@ -564,10 +566,9 @@ elabTerm env impmode elabmode tm tyin
     = do resetHoles
          e <- newRef EST initEState
          (chktm, ty) <- Elab.check {e} True impmode elabmode env tm tyin
-         solveConstraints Exact
          solveConstraints (case elabmode of
-                                InLHS => Exact
-                                _ => Approx)
+                                InLHS => InLHS
+                                _ => InTerm)
          est <- get EST
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'
