@@ -13,17 +13,18 @@ import Control.Catchable
 
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto e : Ref UST (UState annot)} ->
+              Elaborator annot ->
               Env Term vars -> ImpClause annot ->
               Core annot Clause
-checkClause env (MkImpClause loc lhs_raw rhs_raw)
+checkClause elab env (MkImpClause loc lhs_raw rhs_raw)
     = do -- putStrLn $ "CHECKING " ++ show lhs_raw ++ " = " ++ show rhs_raw
-         (lhs_in, lhsty_in) <- inferTerm env PATTERN InLHS lhs_raw
+         (lhs_in, lhsty_in) <- inferTerm elab env PATTERN InLHS lhs_raw
          gam <- getCtxt
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          (vs ** (env', lhspat, reqty)) <- extend env lhs lhsty
          log 5 (show lhs ++ " : " ++ show reqty)
-         rhs <- checkTerm env' NONE InExpr rhs_raw reqty
+         rhs <- checkTerm elab env' NONE InExpr rhs_raw reqty
          log 3 (show lhs ++ " = " ++ show rhs)
          pure (MkClause env' lhspat rhs)
   where
@@ -40,15 +41,16 @@ export
 processDef : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             Elaborator annot ->
              Env Term vars -> annot ->
              Name -> List (ImpClause annot) -> 
              Core annot ()
-processDef env loc n cs_raw
+processDef elab env loc n cs_raw
     = do gam <- getCtxt
          case lookupDefTy n gam of
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>
-                do cs <- traverse (\x => checkClause env x) cs_raw
+                do cs <- traverse (\x => checkClause elab env x) cs_raw
                    addFnDef loc Public (MkFn n ty cs)
                    gam <- getCtxt
                    log 3 $

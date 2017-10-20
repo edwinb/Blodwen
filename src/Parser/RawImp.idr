@@ -8,7 +8,11 @@ import public Parser.Support
 import public Text.Parser
 import Data.List.Views
 
-%default total
+%default covering
+
+-- Forward declare since they're used in the parser
+topDecl : Rule (ImpDecl ())
+collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
 
 atom : Rule (RawImp ())
 atom
@@ -80,6 +84,7 @@ mutual
   let_
       = do keyword "let"
            n <- name
+           commit
            ty <- optional 
                     (do symbol ":"
                         expr)
@@ -89,6 +94,11 @@ mutual
            keyword "in"
            scope <- typeExpr
            pure (ILet () n ty val scope)
+    <|> do keyword "let"
+           symbol "{"
+           ds <- some topDecl
+           symbol "}"
+           pure (ILocal () (collectDefs ds))
 
   binder : Rule (RawImp ())
   binder
@@ -172,7 +182,8 @@ directive
          symbol ";"
          pure (ILog (cast lvl))
 
-topDecl : Rule (ImpDecl ())
+-- Declared at the top
+-- topDecl : Rule (ImpDecl ())
 topDecl
     = do dat <- dataDecl
          pure (IData () dat)
@@ -186,8 +197,9 @@ topDecl
          pure (IDef () (fst nd) [snd nd])
 
 -- All the clauses get parsed as one-clause definitions. Collect any
--- neighbouring clauses with the same function name into one definition
-collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
+-- neighbouring clauses with the same function name into one definition.
+-- Declared at the top.
+-- collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
 collectDefs [] = []
 collectDefs (IDef annot fn cs :: ds)
     = let (cs', rest) = spanMap (isClause fn) ds in

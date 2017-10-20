@@ -23,27 +23,38 @@ import Interfaces.FileIO
 %default covering
 
 using (FileIO m)
+  -- Need to propagate the top level elaborator 'processDecl' throughout
+  -- the rest of the elaborator, since otherwise we'd need cyclic modules
+  -- (that is, TTImp.Elab needs to call processDecl for nested constructs)
   processDecl : {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState annot)} ->
                 {auto i : Ref ImpST (ImpState annot)} ->
+                Env Term vars ->
                 ImpDecl annot -> 
                 Core annot ()
-  processDecl (IClaim loc ty) = processType [] ty
-  processDecl (IDef loc n cs) = processDef [] loc n cs
-  processDecl (IData loc d) = processData [] d
-  processDecl (ImplicitNames loc ns) 
+  processDecl env (IClaim loc ty) 
+      = processType (\c, u, i => processDecl {c} {u} {i})
+                    env ty
+  processDecl env (IDef loc n cs) 
+      = processDef (\c, u, i => processDecl {c} {u} {i})
+                   env loc n cs
+  processDecl env (IData loc d) 
+      = processData (\c, u, i => processDecl {c} {u} {i})
+                    env d
+  processDecl env (ImplicitNames loc ns) 
       = do traverse (\ x => addImp (fst x) (snd x)) ns
            pure ()
-  processDecl (ILog lvl) = setLogLevel lvl
+  processDecl env (ILog lvl) = setLogLevel lvl
 
   export
   processDecls : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
+                 Env Term vars ->
                  List (ImpDecl annot) -> 
                  Core annot ()
-  processDecls decls
+  processDecls vars decls
       = do i <- newRef ImpST (initImpState {annot})
-           xs <- traverse (\x => processDecl x) decls
+           xs <- traverse (processDecl vars) decls
            pure ()
 
   export
@@ -56,6 +67,9 @@ using (FileIO m)
            case runParser res prog of
                 Left err => ioe_lift (putStrLn ("TTImp Parse error: " ++ show err))
                 Right decls => 
-                     catch (processDecls decls)
+                     catch (processDecls [] decls)
                            (\err => ioe_lift (printLn err))
 
+  export
+  elabTop : Elaborator annot
+  elabTop = \c, u, i => processDecl {c} {u} {i}
