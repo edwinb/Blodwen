@@ -29,7 +29,7 @@ mutual
               (nTy : RawImp annot) -> (nVal : RawImp annot) -> 
               (scope : RawImp annot) ->
               RawImp annot
-       ILocal : annot -> List (ImpDecl annot) -> RawImp annot
+       ILocal : annot -> List (ImpDecl annot) -> RawImp annot -> RawImp annot
        IApp : annot -> 
               (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
        IPrimVal : annot -> Constant -> RawImp annot
@@ -62,13 +62,51 @@ mutual
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        ILog : Nat -> ImpDecl annot
 
+-- Information about names in nested blocks
+public export
+record NestedNames (vars : List Name) where
+  constructor MkNested
+  -- A map from names to the decorated version of the name, and the new name
+  -- applied to its enclosing environment
+  names : List (Name, (Name, Term vars))
+
+export
+Weaken NestedNames where
+  weaken (MkNested ns) = MkNested (map wknName ns)
+    where
+      wknName : (Name, (Name, Term vars)) ->
+                (Name, (Name, Term (n :: vars)))
+      wknName (n, (n', rep)) = (n, (n', weaken rep))
+
+export
+dropName : Name -> NestedNames vars -> NestedNames vars
+dropName n nest = record { names $= drop } nest
+  where
+    drop : List (Name, a) -> List (Name, a)
+    drop [] = []
+    drop ((x, y) :: xs) 
+        = if x == n then drop xs 
+             else (x, y) :: drop xs
+
+export
+definedInBlock : List (ImpDecl annot) -> List Name
+definedInBlock = concatMap defName
+  where
+    getName : ImpTy annot -> Name
+    getName (MkImpTy _ n _) = n
+
+    defName : ImpDecl annot -> List Name
+    defName (IClaim _ ty) = [getName ty]
+    defName (IData _ (MkImpData _ n _ cons)) = n :: map getName cons
+    defName _ = []
+
 export
 getAnnot : RawImp a -> a
 getAnnot (IVar x _) = x
 getAnnot (IPi x _ _ _ _) = x
 getAnnot (ILam x _ _ _ _) = x
 getAnnot (ILet x _ _ _ _) = x
-getAnnot (ILocal x _) = x
+getAnnot (ILocal x _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IPrimVal x _) = x
 getAnnot (IType x) = x
@@ -96,8 +134,8 @@ mutual
     show (ILet _ n nTy nVal scope)
         = "(%let (" ++ show n ++ " " ++ show nTy ++ " " ++ show nVal ++ ") "
                ++ show scope ++ ")"
-    show (ILocal _ def)
-        = "(%local " ++ show def ++ ")"
+    show (ILocal _ def scope)
+        = "(%local (" ++ show def ++ ") " ++ show scope ++ ")"
     show (IApp _ fn arg) 
         = "(" ++ show fn ++ " " ++ show arg ++ ")"
     show (IPrimVal _ y) = show y

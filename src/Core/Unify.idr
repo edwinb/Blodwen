@@ -564,6 +564,7 @@ retry : {auto c : Ref Ctxt Defs} ->
         Core annot (List Name)
 retry mode cname
     = do ust <- get UST
+         gam <- getCtxt
          case lookupCtxt cname (constraints ust) of
               Nothing => pure []
               -- If the constraint is now resolved (i.e. unifying now leads
@@ -571,7 +572,9 @@ retry mode cname
               -- constraint context so we don't do it again
               Just Resolved => pure []
               Just (MkConstraint loc env x y) =>
-                   do cs <- unify mode loc env x y
+                   do log 5 $ "Retrying " ++ show (normalise gam env x)
+                                          ++ " and " ++ show (normalise gam env y)
+                      cs <- unify mode loc env x y
                       case cs of
                            [] => do setConstraint cname Resolved
                                     pure []

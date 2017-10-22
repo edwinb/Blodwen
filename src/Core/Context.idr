@@ -90,13 +90,21 @@ lookupGlobal n gam = lookupCtxt n gam
 
 export
 lookupDef : Name -> Gamma -> Maybe Def
-lookupDef n gam = do def <- lookupGlobal n gam
-                     pure (definition def)
+lookupDef n gam
+    = do def <- lookupGlobal n gam
+         pure (definition def)
+
+export
+lookupTy : Name -> Gamma -> Maybe ClosedTerm
+lookupTy n gam 
+    = do def <- lookupGlobal n gam
+         pure (type def)
 
 export
 lookupDefTy : Name -> Gamma -> Maybe (Def, ClosedTerm)
-lookupDefTy n gam = do def <- lookupGlobal n gam
-                       pure (definition def, type def)
+lookupDefTy n gam 
+    = do def <- lookupGlobal n gam
+         pure (definition def, type def)
 
 public export
 record Constructor where

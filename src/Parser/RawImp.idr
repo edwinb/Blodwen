@@ -98,7 +98,9 @@ mutual
            symbol "{"
            ds <- some topDecl
            symbol "}"
-           pure (ILocal () (collectDefs ds))
+           keyword "in"
+           scope <- typeExpr
+           pure (ILocal () (collectDefs ds) scope)
 
   binder : Rule (RawImp ())
   binder

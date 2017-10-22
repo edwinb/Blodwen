@@ -1,0 +1,40 @@
+data Nat : Type where {
+     Z : Nat;
+     S : Nat -> Nat;
+}
+
+plus : Nat -> Nat -> Nat;
+plus Z     y = y;
+plus (S k) y = S (plus k y);
+
+fn2 : Nat -> Nat -> Nat;
+fn2 x y = let { w : _;
+                w = plus x x;
+                help : Nat -> Nat;
+                help z = plus z w; } in
+          plus (help y) w;
+
+fn : Nat -> Nat -> Nat;
+fn x y = let { w : _;
+               w = plus x x; } in
+         let foo = plus x x in
+         let { help : Nat -> Nat;
+               help z = plus z w; } in
+         plus (help y) foo;
+
+localdata : Nat -> Nat;
+localdata x = let { data Bool : Type where {
+                         False : Bool;
+                         True : Bool; 
+                    }
+
+                    isS : Nat -> Bool;
+                    isS Z = False;
+                    isS (S k) = True;
+
+                    boolToNat : Bool -> Nat;
+                    boolToNat False = Z;
+                    boolToNat True = S x;
+                  } in
+                boolToNat (isS x);
+

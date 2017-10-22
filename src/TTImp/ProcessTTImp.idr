@@ -30,31 +30,32 @@ using (FileIO m)
                 {auto u : Ref UST (UState annot)} ->
                 {auto i : Ref ImpST (ImpState annot)} ->
                 Env Term vars ->
+                NestedNames vars ->
                 ImpDecl annot -> 
                 Core annot ()
-  processDecl env (IClaim loc ty) 
+  processDecl env nest (IClaim loc ty) 
       = processType (\c, u, i => processDecl {c} {u} {i})
-                    env ty
-  processDecl env (IDef loc n cs) 
+                    env nest ty
+  processDecl env nest (IDef loc n cs) 
       = processDef (\c, u, i => processDecl {c} {u} {i})
-                   env loc n cs
-  processDecl env (IData loc d) 
+                   env nest loc n cs
+  processDecl env nest (IData loc d) 
       = processData (\c, u, i => processDecl {c} {u} {i})
-                    env d
-  processDecl env (ImplicitNames loc ns) 
+                    env nest d
+  processDecl env nest (ImplicitNames loc ns) 
       = do traverse (\ x => addImp (fst x) (snd x)) ns
            pure ()
-  processDecl env (ILog lvl) = setLogLevel lvl
+  processDecl env nest (ILog lvl) = setLogLevel lvl
 
   export
   processDecls : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
-                 Env Term vars ->
+                 Env Term vars -> NestedNames vars ->
                  List (ImpDecl annot) -> 
                  Core annot ()
-  processDecls vars decls
+  processDecls env nest decls
       = do i <- newRef ImpST (initImpState {annot})
-           xs <- traverse (processDecl vars) decls
+           xs <- traverse (processDecl env nest) decls
            pure ()
 
   export
@@ -67,7 +68,7 @@ using (FileIO m)
            case runParser res prog of
                 Left err => ioe_lift (putStrLn ("TTImp Parse error: " ++ show err))
                 Right decls => 
-                     catch (processDecls [] decls)
+                     catch (processDecls [] (MkNested []) decls)
                            (\err => ioe_lift (printLn err))
 
   export

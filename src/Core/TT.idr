@@ -528,6 +528,9 @@ Show (Term vars) where
         showApp (Ref x fn) [] = show fn
         showApp (Bind n (Lam x ty) sc) [] 
             = assert_total ("\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
+        showApp (Bind n (Let val ty) sc) [] 
+            = assert_total ("let " ++ show n ++ " : " ++ show ty ++ " = " ++
+							               show val ++ " in " ++ show sc)
         showApp (Bind n (Pi Explicit ty) sc) [] 
             = assert_total ("(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
         showApp (Bind n (Pi Implicit ty) sc) [] 
