@@ -394,10 +394,12 @@ mutual
            -- If the function has an implicit binder in its type, add
            -- the implicits here
            (scopeTy, impArgs) <- getImps loc env (nf gam env fnty) []
+           gam <- getCtxt
            case scopeTy of
                 NBind _ (Pi _ ty) scdone =>
                   do (argtm, argty) <- check process top impmode elabmode env nest arg (Just (quote empty env ty))
                      let sc' = scdone (toClosure False env argtm)
+                     gam <- getCtxt
                      checkExp loc elabmode env (App (apply fntm impArgs) argtm)
                                   (quote gam env sc') expected
                 _ => 
@@ -408,6 +410,7 @@ mutual
                      (argtm, argty) <- 
                          check process top impmode elabmode env nest arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
                      -- Check the type of 'fn' is an actual function type
+                     gam <- getCtxt
                      (fnchk, _) <-
                          checkExp loc elabmode env fntm 
                                   (Bind bn (Pi Explicit expty) scty) 
@@ -441,7 +444,8 @@ mutual
            case lookup n (boundNames est) of
                 Nothing =>
                   do tm <- addBoundName n env expected
---                      putStrLn $ "ADDED BOUND IMPLICIT " ++ show (n, (tm, expected))
+                     log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
+                     gam <- getCtxt
                      put EST 
                          (record { boundNames $= ((n, (tm, expected)) ::),
                                    toBind $= ((n, (tm, expected)) :: ) } est)
@@ -578,6 +582,7 @@ findHoles mode env tm exp
          tm <- holes h tm
          hs <- get HVar
          gam <- getCtxt
+         log 5 $ "Extra implicits to bind: " ++ show (reverse hs)
          let (tm', ty) = bindTopImplicits mode gam env (reverse hs) tm exp
          pure (tm', ty, map fst hs)
   where
@@ -627,12 +632,16 @@ findHoles mode env tm exp
              pure (Bind y (PVar ty') sc')
     holes h tm = pure tm
 
-renameImplicits : Term vars -> Term vars
-renameImplicits (Bind (PV n) b sc) 
-    = Bind (UN n) b (renameImplicits (renameTop (UN n) sc))
-renameImplicits (Bind n b sc) 
-    = Bind n b (renameImplicits sc)
-renameImplicits t = t
+renameImplicits : Gamma -> Term vars -> Term vars
+renameImplicits gam (Bind (PV n) b sc) 
+    = case lookupDef (PV n) gam of
+           Just (PMDef _ _ def) =>
+--                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
+                    Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
+           _ => Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
+renameImplicits gam (Bind n b sc) 
+    = Bind n b (renameImplicits gam sc)
+renameImplicits gam t = t
 
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
@@ -657,14 +666,17 @@ elabTerm process defining env nest impmode elabmode tm tyin
          let fullImps = reverse $ toBind est
          clearToBind -- remove the bound holes
          gam <- getCtxt
+         log 5 $ "Binding implicits " ++ show (dropTmIn fullImps) ++
+                 " in " ++ show chktm
          let (restm, resty) = bindImplicits impmode gam env
                                             (dropTmIn fullImps) chktm ty
          traverse (\n => implicitBind n) (map fst fullImps)
          gam <- getCtxt
          (ptm, pty, bound) <- findHoles impmode env (normaliseHoles gam env restm) resty
          -- Give implicit bindings their proper names, as UNs not PVs
-         let ptm' = renameImplicits ptm
-         let pty' = renameImplicits pty
+         gam <- getCtxt
+         let ptm' = renameImplicits gam ptm
+         let pty' = renameImplicits gam pty
          -- Drop any holes we created which aren't used in the resulting
          -- term
          traverse (\n => implicitBind n) bound

@@ -58,10 +58,19 @@ Eq PiInfo where
 
 public export
 data Binder : Type -> Type where
+	   -- Lambda bound variables with their implicitness
      Lam : PiInfo -> (ty : type) -> Binder type
+		 -- Let bound variables with their value
      Let : (val : type) -> (ty : type) -> Binder type
+		 -- Forall/pi bound variables with their implicitness
      Pi : PiInfo -> (ty : type) -> Binder type
-     PVar : (ty : type) -> Binder type
+		 -- pattern bound variables
+     PVar : (ty : type) -> Binder type 
+		 -- pattern bound variables with a known value (e.g. @ patterns or
+		 -- variables unified with something else)
+	   -- Like 'Let' but no computational force
+     PLet : (val : type) -> (ty : type) -> Binder type 
+		 -- the type of pattern bound variables
      PVTy : (ty : type) -> Binder type
 
 export
@@ -70,6 +79,7 @@ binderType (Lam x ty) = ty
 binderType (Let val ty) = ty
 binderType (Pi x ty) = ty
 binderType (PVar ty) = ty
+binderType (PLet val ty) = ty
 binderType (PVTy ty) = ty
 
 export
@@ -78,6 +88,7 @@ setType (Lam x _) ty = Lam x ty
 setType (Let val _) ty = Let val ty
 setType (Pi x _) ty = Pi x ty
 setType (PVar _) ty = PVar ty
+setType (PLet val _) ty = PLet val ty
 setType (PVTy _) ty = PVTy ty
 
 export
@@ -86,6 +97,7 @@ Functor Binder where
   map func (Let val ty) = Let (func val) (func ty)
   map func (Pi x ty) = Pi x (func ty)
   map func (PVar ty) = PVar (func ty)
+  map func (PLet val ty) = PLet (func val) (func ty)
   map func (PVTy ty) = PVTy (func ty)
 
 -- Typechecked terms
@@ -387,6 +399,9 @@ mutual
       = Just (Pi x !(shrinkTerm ty subprf))
   shrinkBinder (PVar ty) subprf 
       = Just (PVar !(shrinkTerm ty subprf))
+  shrinkBinder (PLet val ty) subprf 
+      = Just (PLet !(shrinkTerm val subprf)
+                   !(shrinkTerm ty subprf))
   shrinkBinder (PVTy ty) subprf 
       = Just (PVTy !(shrinkTerm ty subprf))
 
@@ -492,6 +507,8 @@ getRefs tm = getSet empty tm
     getSet ns (Ref nt fn) = insert fn ns
     getSet ns (Bind x (Let val ty) tm) 
 		   = assert_total $ getSet (getSet (getSet ns val) ty) tm
+    getSet ns (Bind x (PLet val ty) tm) 
+		   = assert_total $ getSet (getSet (getSet ns val) ty) tm
     getSet ns (Bind x b tm) 
 		   = assert_total $ getSet (getSet ns (binderType b)) tm
     getSet ns (App tm arg) 
@@ -537,6 +554,9 @@ Show (Term vars) where
             = assert_total ("{" ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
         showApp (Bind n (PVar ty) sc) [] 
             = assert_total ("pat " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
+        showApp (Bind n (PLet val ty) sc) [] 
+            = assert_total ("plet " ++ show n ++ " : " ++ show ty ++ " = " ++
+							               show val ++ " in " ++ show sc)
         showApp (Bind n (PVTy ty) sc) [] 
             = assert_total ("pty " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
         showApp (App f args) [] = "Can't happen!"
@@ -571,6 +591,9 @@ Show Raw where
          " in " ++ show sc
   show (RBind n (PVar ty) sc)
        = "pat " ++ show n ++ " : " ++ show ty ++ ". " ++ show sc
+  show (RBind n (PLet val ty) sc)
+       = "plet " ++ show n ++ " : " ++ show ty ++ " = " ++ show val ++
+         " in " ++ show sc
   show (RBind n (PVTy ty) sc)
        = "pty " ++ show n ++ " : " ++ show ty ++ ". " ++ show sc
   show (RApp f a)

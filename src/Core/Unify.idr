@@ -179,7 +179,11 @@ export
 implicitBind : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
                Name -> Core annot ()
-implicitBind n = updateDef n ImpBind
+implicitBind n 
+    = do gam <- getCtxt
+         case lookupDef n gam of
+              Just (Hole len) => updateDef n ImpBind
+              _ => pure ()
 
 -- Check that the references in the term don't refer to the hole name as
 -- part of their definition

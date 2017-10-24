@@ -251,6 +251,10 @@ mutual
   quoteBinder num gam env (PVar ty) 
       = do ty' <- quoteGen num gam env ty
            pure (PVar ty')
+  quoteBinder num gam env (PLet val ty) 
+      = do val' <- quoteGen num gam env val
+           ty' <- quoteGen num gam env ty
+           pure (PLet val' ty')
   quoteBinder num gam env (PVTy ty) 
       = do ty' <- quoteGen num gam env ty
            pure (PVTy ty')

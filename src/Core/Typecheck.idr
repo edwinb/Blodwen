@@ -71,6 +71,12 @@ parameters (loc : annot, gam : Gamma)
         = do (tyv, tyt) <- chk env ty
              doConvert loc gam env tyt TType
              pure (PVar tyv, tyt)
+    chkBinder env (PLet val ty) 
+        = do (tyv, tyt) <- chk env ty
+             (valv, valt) <- chk env val
+             doConvert loc gam env tyv valt
+             doConvert loc gam env tyt TType
+             pure (PLet valv tyv, tyt)
     chkBinder env (PVTy ty) 
         = do (tyv, tyt) <- chk env ty
              doConvert loc gam env tyt TType
@@ -87,6 +93,8 @@ parameters (loc : annot, gam : Gamma)
          = (Bind nm (Pi x ty) scope, bindty)
     discharge nm (PVar ty) bindty scope scopety 
          = (Bind nm (PVar ty) scope, Bind nm (PVTy ty) scopety)
+    discharge nm (PLet val ty) bindty scope scopety 
+         = (Bind nm (PLet val ty) scope, Bind nm (PLet val ty) scopety)
     discharge nm (PVTy ty) bindty scope scopety 
          = (Bind nm (PVTy ty) scope, bindty)
 
