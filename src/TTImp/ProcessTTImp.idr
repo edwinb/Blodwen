@@ -63,13 +63,13 @@ using (FileIO m)
             {auto u : Ref UST (UState ())} ->
             String -> Core () ()
   process file
-      = do Right res <- ioe_lift (readFile file)
-                 | Left err => ioe_lift (putStrLn ("File error: " ++ show err))
+      = do Right res <- coreLift (readFile file)
+                 | Left err => coreLift (putStrLn ("File error: " ++ show err))
            case runParser res prog of
-                Left err => ioe_lift (putStrLn ("TTImp Parse error: " ++ show err))
+                Left err => coreLift (putStrLn ("TTImp Parse error: " ++ show err))
                 Right decls => 
                      catch (processDecls [] (MkNested []) decls)
-                           (\err => ioe_lift (printLn err))
+                           (\err => coreLift (printLn err))
 
   export
   elabTop : Elaborator annot

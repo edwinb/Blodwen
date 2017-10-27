@@ -30,22 +30,22 @@ using (FileIO m)
   runMain : {auto c : Ref Ctxt Defs} -> Core () ()
   runMain
       = case runParser "main" raw of
-             Left err => ioe_lift (printLn "Can't happen, error parsing 'main'")
+             Left err => coreLift (printLn "Can't happen, error parsing 'main'")
              Right raw => do
                (ptm, pty) <- infer () [] raw
-               ioe_lift (putStr "Evaluating main: ")
+               coreLift (putStr "Evaluating main: ")
                gam <- getCtxt
-               ioe_lift (printLn (normalise gam [] ptm))
+               coreLift (printLn (normalise gam [] ptm))
 
   export
   process : {auto c : Ref Ctxt Defs} ->
             String -> Core () ()
   process file
-      = do Right res <- ioe_lift (readFile file)
-                 | Left err => ioe_lift (putStrLn ("File error: " ++ show err))
+      = do Right res <- coreLift (readFile file)
+                 | Left err => coreLift (putStrLn ("File error: " ++ show err))
            case runParser res prog of
-                Left err => ioe_lift (putStrLn ("TT Parse error: " ++ show err))
+                Left err => coreLift (putStrLn ("TT Parse error: " ++ show err))
                 Right decls => 
                      catch (processDecls decls)
-                           (\err => ioe_lift (printLn err))
+                           (\err => coreLift (printLn err))
 

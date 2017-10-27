@@ -2,9 +2,8 @@ module Core.Context
 
 import Core.TT
 import Core.CaseTree
+import public Core.Core
 
-import public Data.IORef
-import public Control.IOExcept
 import public Control.Catchable
 
 import Data.CMap
@@ -128,74 +127,10 @@ data FnDef : Type where
      MkFn : (n : Name) -> (ty : ClosedTerm) -> (clauses : List Clause) ->
             FnDef
 
--- All possible errors
--- 'annot' is an annotation provided by the thing which called the
--- function which had an error; it's intended to provide any useful information
--- a high level language might need, e.g. file/line number
-public export
-data Error annot
-    = CantConvert annot (Env Term vars) (Term vars) (Term vars)
-    | Cycle annot (Env Term vars) (Term vars) (Term vars)
-    | WhenUnifying annot (Term vars) (Term vars) (Error annot)
-	  | UndefinedName annot Name
-	  | NoDeclaration annot Name
-	  | AlreadyDefined annot Name
-	  | NotFunctionType annot (Term vars)
-	  | CaseCompile annot Name CaseError 
-		| BadImplicit annot String
-	  | GenericMsg annot String
-    | InternalError String
-
-export
-Show (Error annot) where
-  show (CantConvert _ env x y) 
-      = "Type mismatch: " ++ show x ++ " and " ++ show y
-  show (Cycle _ env x y) 
-      = "Occurs check failed: " ++ show x ++ " and " ++ show y
-  show (WhenUnifying _ x y err)
-      = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++ show err
-  show (UndefinedName _ x) = "Undefined name " ++ show x
-  show (NoDeclaration _ x) = "No type declaration for " ++ show x
-  show (AlreadyDefined _ x) = show x ++ " is already defined"
-  show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
-  show (CaseCompile _ n DifferingArgNumbers) 
-      = "Patterns for " ++ show n ++ " have different numbers of arguments"
-  show (BadImplicit _ str) = str ++ " can't be bound here"
-  show (GenericMsg _ str) = str
-  show (InternalError str) = "INTERNAL ERROR: " ++ str
-
-export
-error : Error annot -> Either (Error annot) a
-error = Left
 
 -- A label for the context in the global state
 export
 data Ctxt : Type where
-
--- TODO: Hide the IOExcept behind a data type so that we can control
--- which IO operations are allowed...
-public export
-Core : Type -> Type -> Type
-Core annot t 
-    = IOExcept (Error annot) t
-
-export
-data Ref : label -> Type -> Type where
-	   MkRef : IORef a -> Ref x a
-
-export
-newRef : (x : label) -> t -> Core annot (Ref x t)
-newRef x val 
-    = do ref <- ioe_lift (newIORef val)
-         pure (MkRef ref)
-
-export
-get : (x : label) -> {auto ref : Ref x a} -> Core annot a
-get x {ref = MkRef io} = ioe_lift (readIORef io)
-
-export
-put : (x : label) -> {auto ref : Ref x a} -> a -> Core annot ()
-put x {ref = MkRef io} val = ioe_lift (writeIORef io val)
 
 export
 getCtxt : {auto x : Ref Ctxt Defs} ->
@@ -349,6 +284,6 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
 
 export
 runWithCtxt : Core annot () -> IO ()
-runWithCtxt prog = ioe_run prog 
+runWithCtxt prog = coreRun prog 
                            (\err => printLn err)
                            (\ok => pure ())

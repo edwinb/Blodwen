@@ -68,7 +68,7 @@ log : {auto u : Ref UST (UState annot)} ->
 log lvl str
     = do ust <- get UST
          if logLevel ust >= lvl
-            then ioe_lift $ putStrLn $ "LOG " ++ show lvl ++ ": " ++ str
+            then coreLift $ putStrLn $ "LOG " ++ show lvl ++ ": " ++ str
             else pure ()
 
 export

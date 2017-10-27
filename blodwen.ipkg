@@ -4,6 +4,7 @@ pkgs = contrib
 
 modules = Core.CaseTree,
           Core.Context, 
+          Core.Core,
           Core.Name,
           Core.Normalise,
           Core.ProcessTT,

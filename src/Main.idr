@@ -24,10 +24,10 @@ using (FileIO m)
              {auto u : Ref UST (UState ())} ->
              Core () ()
   tryTTImp
-      = do ioe_lift (putStr "Blodwen> ")
-           inp <- ioe_lift getLine
+      = do coreLift (putStr "Blodwen> ")
+           inp <- coreLift getLine
            case runParser inp expr of
-                Left err => do ioe_lift (printLn err)
+                Left err => do coreLift (printLn err)
                                tryTTImp
                 Right ttimp =>
                     do -- putStrLn $ "Parsed okay: " ++ show ttimp
@@ -36,28 +36,28 @@ using (FileIO m)
                                              [] (MkNested []) NONE InExpr ttimp 
 --                        putStrLn (show tm ++ " : " ++ show ty)
                        gam <- getCtxt
-                       ioe_lift (putStrLn (show (normalise gam [] tm) ++ " : " ++
+                       coreLift (putStrLn (show (normalise gam [] tm) ++ " : " ++
                                            show (normalise gam [] ty)))
                        tryTTImp
 
   usageMsg : Core () ()
-  usageMsg = ioe_lift $ putStrLn "Usage: blodwen [source file]"
+  usageMsg = coreLift $ putStrLn "Usage: blodwen [source file]"
 
   stMain : Core () ()
   stMain 
       = do c <- newRef Ctxt initCtxt
-           [_, fname] <- ioe_lift getArgs | _ => usageMsg
-           ioe_lift $ putStrLn $ "Loading " ++ fname
+           [_, fname] <- coreLift getArgs | _ => usageMsg
+           coreLift $ putStrLn $ "Loading " ++ fname
            u <- newRef UST initUState
            case span (/= '.') fname of
-                (_, ".tt") => do ioe_lift $ putStrLn "Processing as TT"
+                (_, ".tt") => do coreLift $ putStrLn "Processing as TT"
                                  ProcessTT.process fname
-                _ => do ioe_lift $ putStrLn "Processing as TTImp"
+                _ => do coreLift $ putStrLn "Processing as TTImp"
                         ProcessTTImp.process fname
            tryTTImp {c} {u}
 
 main : IO ()
 main = do putStrLn "Welcome to Blodwen. Good luck."
-          ioe_run stMain
+          coreRun stMain
                (\err : Error () => putStrLn ("Uncaught error: " ++ show err))
                (\res => pure ())
