@@ -334,6 +334,10 @@ mutual
            pure (apply (Ref Func newh) newargs)
   
   isHoleNF : Gamma -> Name -> Bool
+  isHoleNF gam (PV _) = False -- pattern variables aren't solvable holes
+      -- TODO: That's a bit of a hack because it depends on where the name
+      -- comes from. Maybe better to note in the definition that it's standing
+      -- for a pattern/pi bound variable to be bound later.
   isHoleNF gam n
       = case lookupDef n gam of
              Just (Hole _) => True
@@ -407,6 +411,15 @@ mutual
                if isHoleNF gam var
                   then unifyHole loc env nt var args tm
                   else unifyIfEq True loc env (NApp (NRef nt var) args) tm
+  unifyApp loc env hd args (NApp (NRef nt var) args')
+      = do gam <- getCtxt
+           if convert empty env (NApp hd args) (NApp (NRef nt var) args')
+              then pure []
+              else
+                if isHoleNF gam var
+                   then unifyHole loc env nt var args' (NApp hd args)
+                   else unifyIfEq True loc env (NApp hd args)
+                                               (NApp (NRef nt var) args')
   unifyApp loc env (NLocal x) [] (NApp (NLocal y) [])
       = if sameVar x y then pure []
            else postpone loc env
@@ -512,9 +525,9 @@ mutual
                                              (NApp (NRef yt hdy) argsy)
                        else unifyApp loc env (NRef yt hdy) argsy 
                                              (NApp (NRef xt hdx) argsx))
-    unifyD _ _ mode loc env y (NApp hd args)
-        = unifyApp loc env hd args y
     unifyD _ _ mode loc env (NApp hd args) y 
+        = unifyApp loc env hd args y
+    unifyD _ _ mode loc env y (NApp hd args)
         = unifyApp loc env hd args y
     unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
         = if tagx == tagy

@@ -60,6 +60,7 @@ export
 coreFail : Error annot -> Core annot a
 coreFail e = MkCore $ pure (Left e)
 
+-- This would be better if we restrict it to a limited set of IO operations
 export
 coreLift : IO a -> Core annot a
 coreLift op = MkCore $ map Right op

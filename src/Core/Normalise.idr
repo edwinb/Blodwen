@@ -220,6 +220,9 @@ interface Quote (tm : List Name -> Type) where
   quoteGen : IORef Int ->
              Gamma -> Env Term vars -> tm vars -> IO (Term vars)
 
+  -- Ugh. An STRef would be better (even if it would be implemented exactly
+  -- like this, at least it would have an interface that prevented any chance
+  -- of problems...)
   quote gam env tm 
       = unsafePerformIO (do num <- newIORef 0
                             quoteGen num gam env tm)
@@ -312,6 +315,9 @@ interface Convert (tm : List Name -> Type) where
   convGen : IORef Int ->
             Gamma -> Env Term vars -> tm vars -> tm vars -> IO Bool
 
+  -- Ugh. An STRef would be better (even if it would be implemented exactly
+  -- like this, at least it would have an interface that prevented any chance
+  -- of problems...)
   convert gam env tm tm' 
       = unsafePerformIO (do num <- newIORef 0
                             convGen num gam env tm tm')

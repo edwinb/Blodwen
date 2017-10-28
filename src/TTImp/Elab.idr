@@ -155,8 +155,8 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
           repNameTy = repName (Ref Bound tmpN) ty' in
           case mode of
                PATTERN =>
-                   (Bind n (PVar ty) (refToLocal tmpN n repNameTm), 
-                    Bind n (PVTy ty) (refToLocal tmpN n repNameTy))
+                    (Bind n (PVar ty) (refToLocal tmpN n repNameTm), 
+                     Bind n (PVTy ty) (refToLocal tmpN n repNameTy))
                _ => (Bind n (Pi Implicit ty) (refToLocal tmpN n repNameTm), ty')
   where
     -- Replace the name applied to the given number of arguments 
@@ -190,9 +190,13 @@ bindImplicits : ImplicitMode ->
                 Gamma -> Env Term vars ->
                 List (Name, Term vars) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
-bindImplicits mode gam env hs tm ty 
-   = bindImplVars 0 mode gam hs (normaliseHoles gam env tm)
-                                (normaliseHoles gam env ty)
+bindImplicits {vars} mode gam env hs tm ty 
+   = bindImplVars 0 mode gam (map nHoles hs)
+                             (normaliseHoles gam env tm)
+                             (normaliseHoles gam env ty)
+  where
+    nHoles : (Name, Term vars) -> (Name, Term vars)
+    nHoles (n, ty) = (n, normaliseHoles gam env ty)
 
 bindTopImplicits : ImplicitMode -> Gamma -> Env Term vars ->
                    List (Name, ClosedTerm) -> Term vars -> Term vars ->
