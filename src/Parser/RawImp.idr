@@ -39,6 +39,11 @@ mutual
   simpleExpr
       = atom
     <|> binder
+    <|> do symbol ".("
+           commit
+           e <- expr
+           symbol ")"
+           pure (IMustUnify () e)
     <|> do symbol "("
            e <- expr
            symbol ")"

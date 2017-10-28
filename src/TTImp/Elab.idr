@@ -215,6 +215,7 @@ mutual
                 _ => 
                   do bn <- genName "aTy"
                      -- invent names for the argument and return types
+                     log 5 $ "Inventing arg type for " ++ show (fn, fnty)
                      (expty, scty) <- inventFnType env bn
                      -- Check the argument type against the invented arg type
                      (argtm, argty) <- 
@@ -262,8 +263,16 @@ mutual
                      pure (tm, expected)
                 Just (tm, ty) =>
                      checkExp loc elabmode env tm ty (Just expected)
-  checkImp process top impmode elabmode env nest (IMustUnify loc tm) expected
-      = throw (InternalError "dot patterns not implemented yet")
+  checkImp process top PATTERN InLHS env nest (IMustUnify loc tm) (Just expected)
+      = do (wantedTm, wantedTy) <- checkImp process top PATTERN InLHS env nest tm (Just expected)
+           n <- addHole env expected
+           gam <- getCtxt
+           let tm = mkConstantApp n env
+           addDot loc env wantedTm tm
+--            constr <- convert loc InLHS env (nf gam env wantedTm) (nf gam env tm)
+           checkExp loc InLHS env tm wantedTy (Just expected)
+  checkImp process top _ elabmode env nest (IMustUnify loc tm) expected
+      = throw (GenericMsg loc "Dot pattern not valid here")
   checkImp process top impmode elabmode env nest (Implicit loc) Nothing
       = do t <- addHole env TType
            let hty = mkConstantApp t env
@@ -380,81 +389,6 @@ mutual
                                      (Bind n (Let valv tyv) scopet)
                                      expected
 
--- Find any holes in the resulting expression, and implicitly bind them
--- at the top level (i.e. they can't depend on any explicitly given
--- arguments).
--- Return the updated term and type, and the names of holes which occur
-findHoles : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-            ImplicitMode -> Env Term vars -> Term vars -> Term vars ->
-            Core annot (Term vars, Term vars, List Name) 
-findHoles NONE env tm exp = pure (tm, exp, [])
-findHoles (PI False) env tm exp = pure (tm, exp, [])
-findHoles mode env tm exp
-    = do h <- newRef HVar []
-         tm <- holes h tm
-         hs <- get HVar
-         gam <- getCtxt
-         log 5 $ "Extra implicits to bind: " ++ show (reverse hs)
-         let (tm', ty) = bindTopImplicits mode gam env (reverse hs) tm exp
-         pure (tm', ty, map fst hs)
-  where
-    data HVar : Type where -- empty type to label the local state
-
-    mkType : (vars : List Name) -> Term hs -> Maybe (Term hs)
-    mkType (v :: vs) (Bind tm (Pi _ ty) sc) 
-        = do sc' <- mkType vs sc
-             shrinkTerm sc' (DropCons SubRefl)
-    mkType _ tm = pure tm
-
-    processHole : Ref HVar (List (Name, ClosedTerm)) ->
-                  Name -> (vars : List Name) -> ClosedTerm ->
-                  Core annot ()
-    processHole h n vars ty
-       = do hs <- get HVar
---             putStrLn $ "IMPLICIT: " ++ show (n, vars, ty)
-            case mkType vars ty of
-                 Nothing => pure ()
-                 Just impTy =>
-                    case lookup n hs of
-                         Just _ => pure ()
-                         Nothing => put HVar ((n, impTy) :: hs)
-
-    holes : Ref HVar (List (Name, ClosedTerm)) ->
-            Term vars -> 
-            Core annot (Term vars)
-    holes h {vars} (Ref nt fn) 
-        = do gam <- getCtxt
-             case lookupDefTy fn gam of
-                  Just (Hole _, ty) =>
-                       do processHole h fn vars ty
-                          pure (Ref nt fn)
-                  _ => pure (Ref nt fn)
-    holes h (App fn arg)
-        = do fn' <- holes h fn
-             arg' <- holes h arg
-             pure (App fn' arg')
-    -- Allow implicits under 'Pi' and 'PVar' only
-    holes h (Bind y (Pi imp ty) sc)
-        = do ty' <- holes h ty
-             sc' <- holes h sc
-             pure (Bind y (Pi imp ty') sc')
-    holes h (Bind y (PVar ty) sc)
-        = do ty' <- holes h ty
-             sc' <- holes h sc
-             pure (Bind y (PVar ty') sc')
-    holes h tm = pure tm
-
-renameImplicits : Gamma -> Term vars -> Term vars
-renameImplicits gam (Bind (PV n) b sc) 
-    = case lookupDef (PV n) gam of
-           Just (PMDef _ _ def) =>
---                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
-                    Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
-           _ => Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
-renameImplicits gam (Bind n b sc) 
-    = Bind n b (renameImplicits gam sc)
-renameImplicits gam t = t
-
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
@@ -472,6 +406,8 @@ elabTerm process defining env nest impmode elabmode tm tyin
          solveConstraints (case elabmode of
                                 InLHS => InLHS
                                 _ => InTerm)
+         dumpDots
+         checkDots
          est <- get EST
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'

@@ -274,5 +274,7 @@ mkLCPatVars tm = mkPatVars True tm
              then IBindVar loc n
              else IVar loc (UN n)
     mkPatVars notfn (IApp loc f arg) 
-        = IApp loc (mkPatVars notfn f) (mkPatVars False arg)
+        = IApp loc (mkPatVars True f) (mkPatVars False arg)
+    mkPatVars notfn (IMustUnify loc tm) 
+        = IMustUnify loc (mkPatVars notfn tm)
     mkPatVars notfn tm = tm

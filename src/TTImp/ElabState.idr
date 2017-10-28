@@ -1,6 +1,7 @@
 module TTImp.ElabState
 
 import TTImp.TTImp
+import Core.CaseTree
 import Core.Context
 import Core.TT
 import Core.Normalise
@@ -123,7 +124,7 @@ clearToBind : {auto e : Ref EST (EState vs)} ->
 clearToBind
     = do est <- get EST
          put EST (record { toBind = [] } est)
-   
+  
 export
 dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))
@@ -197,4 +198,81 @@ bindTopImplicits {vars} mode gam env hs tm ty
     weakenVars : (Name, ClosedTerm) -> (Name, Term vars)
     weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
                                      weakenNs vars tm)
+
+-- Find any holes in the resulting expression, and implicitly bind them
+-- at the top level (i.e. they can't depend on any explicitly given
+-- arguments).
+-- Return the updated term and type, and the names of holes which occur
+export
+findHoles : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+            ImplicitMode -> Env Term vars -> Term vars -> Term vars ->
+            Core annot (Term vars, Term vars, List Name) 
+findHoles NONE env tm exp = pure (tm, exp, [])
+findHoles (PI False) env tm exp = pure (tm, exp, [])
+findHoles mode env tm exp
+    = do h <- newRef HVar []
+         tm <- holes h tm
+         hs <- get HVar
+         gam <- getCtxt
+         log 5 $ "Extra implicits to bind: " ++ show (reverse hs)
+         let (tm', ty) = bindTopImplicits mode gam env (reverse hs) tm exp
+         pure (tm', ty, map fst hs)
+  where
+    data HVar : Type where -- empty type to label the local state
+
+    mkType : (vars : List Name) -> Term hs -> Maybe (Term hs)
+    mkType (v :: vs) (Bind tm (Pi _ ty) sc) 
+        = do sc' <- mkType vs sc
+             shrinkTerm sc' (DropCons SubRefl)
+    mkType _ tm = pure tm
+
+    processHole : Ref HVar (List (Name, ClosedTerm)) ->
+                  Name -> (vars : List Name) -> ClosedTerm ->
+                  Core annot ()
+    processHole h n vars ty
+       = do hs <- get HVar
+--             putStrLn $ "IMPLICIT: " ++ show (n, vars, ty)
+            case mkType vars ty of
+                 Nothing => pure ()
+                 Just impTy =>
+                    case lookup n hs of
+                         Just _ => pure ()
+                         Nothing => put HVar ((n, impTy) :: hs)
+
+    holes : Ref HVar (List (Name, ClosedTerm)) ->
+            Term vars -> 
+            Core annot (Term vars)
+    holes h {vars} (Ref nt fn) 
+        = do gam <- getCtxt
+             case lookupDefTy fn gam of
+                  Just (Hole _, ty) =>
+                       do processHole h fn vars ty
+                          pure (Ref nt fn)
+                  _ => pure (Ref nt fn)
+    holes h (App fn arg)
+        = do fn' <- holes h fn
+             arg' <- holes h arg
+             pure (App fn' arg')
+    -- Allow implicits under 'Pi' and 'PVar' only
+    holes h (Bind y (Pi imp ty) sc)
+        = do ty' <- holes h ty
+             sc' <- holes h sc
+             pure (Bind y (Pi imp ty') sc')
+    holes h (Bind y (PVar ty) sc)
+        = do ty' <- holes h ty
+             sc' <- holes h sc
+             pure (Bind y (PVar ty') sc')
+    holes h tm = pure tm
+
+export
+renameImplicits : Gamma -> Term vars -> Term vars
+renameImplicits gam (Bind (PV n) b sc) 
+    = case lookupDef (PV n) gam of
+           Just (PMDef _ _ def) =>
+--                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
+                    Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
+           _ => Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
+renameImplicits gam (Bind n b sc) 
+    = Bind n b (renameImplicits gam sc)
+renameImplicits gam t = t
 

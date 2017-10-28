@@ -15,13 +15,14 @@ data Error annot
     = CantConvert annot (Env Term vars) (Term vars) (Term vars)
     | Cycle annot (Env Term vars) (Term vars) (Term vars)
     | WhenUnifying annot (Term vars) (Term vars) (Error annot)
-	  | UndefinedName annot Name
-	  | NoDeclaration annot Name
-	  | AlreadyDefined annot Name
-	  | NotFunctionType annot (Term vars)
-	  | CaseCompile annot Name CaseError 
-		| BadImplicit annot String
-	  | GenericMsg annot String
+    | UndefinedName annot Name
+    | NoDeclaration annot Name
+    | AlreadyDefined annot Name
+    | NotFunctionType annot (Term vars)
+    | CaseCompile annot Name CaseError 
+    | BadDotPattern annot (Term vars) (Term vars)
+    | BadImplicit annot String
+    | GenericMsg annot String
     | InternalError String
 
 export
@@ -38,6 +39,8 @@ Show (Error annot) where
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
   show (CaseCompile _ n DifferingArgNumbers) 
       = "Patterns for " ++ show n ++ " have different numbers of arguments"
+  show (BadDotPattern _ x y)
+      = "Can't match on " ++ show x
   show (BadImplicit _ str) = str ++ " can't be bound here"
   show (GenericMsg _ str) = str
   show (InternalError str) = "INTERNAL ERROR: " ++ str
