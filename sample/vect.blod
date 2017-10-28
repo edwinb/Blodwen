@@ -21,11 +21,8 @@ foldl : (b : Nat -> Type) ->
 foldl b g z Nil = z;
 foldl b g z (Cons x xs) = foldl (\i => b (S i)) g (g z x) xs;
 
+
 reverse : Vect n a -> Vect n a;
 reverse = foldl (\n => Vect n _)
                 (\rev => \x => Cons x rev) Nil;
-
-vlength : (n : Nat) -> Vect n a -> Nat;
-vlength n Nil = Z;
-vlength n (Cons x xs) = n; -- (vlength _ xs);
 

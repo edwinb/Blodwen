@@ -35,9 +35,8 @@ mutual
        IPrimVal : annot -> Constant -> RawImp annot
        IType : annot -> RawImp annot
        IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
+       IMustUnify : annot -> RawImp annot -> RawImp annot
        Implicit : annot -> RawImp annot
-  -- TODO: IDotted (things which must be solved by inference and checked
-  -- against what's given)
 
   -- Top level declarations: types, clauses and data
   public export
@@ -111,6 +110,7 @@ getAnnot (IApp x _ _) = x
 getAnnot (IPrimVal x _) = x
 getAnnot (IType x) = x
 getAnnot (IBindVar x _) = x
+getAnnot (IMustUnify x _) = x
 getAnnot (Implicit x) = x
 
 export
@@ -141,6 +141,7 @@ mutual
     show (IPrimVal _ y) = show y
     show (IType _) = "Type"
     show (IBindVar _ n) = "$" ++ show n
+    show (IMustUnify _ tm) = "(." ++ show tm ++ ")"
     show (Implicit _) = "_"
 
   export

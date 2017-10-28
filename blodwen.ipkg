@@ -27,6 +27,7 @@ modules = Core.CaseTree,
           Parser.RawImp,
 
           TTImp.Elab,
+          TTImp.ElabState,
           TTImp.ProcessData,
           TTImp.ProcessDef,
           TTImp.ProcessType,

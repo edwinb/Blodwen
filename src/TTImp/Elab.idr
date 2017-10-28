@@ -1,6 +1,7 @@
 module TTImp.Elab
 
 import TTImp.TTImp
+import public TTImp.ElabState
 import Core.CaseTree
 import Core.Context
 import Core.Normalise
@@ -12,201 +13,6 @@ import Data.List
 import Data.List.Views
 
 %default covering
-
--- How the elaborator should deal with IBindVar:
--- * NONE: IBindVar is not valid (rhs of an definition, top level expression)
--- * PI True: Bind implicits as Pi, in the appropriate scope, and bind
---            any additional holes
--- * PI False: As above, but don't bind additional holes
--- * PATTERN: Bind implicits as PVar, but only at the top level
-public export
-data ImplicitMode = NONE | PI Bool | PATTERN
-
-public export
-data ElabMode = InType | InLHS | InExpr
-
-record ElabState (vars : List Name) where
-  constructor MkElabState
-  boundNames : List (Name, (Term vars, Term vars))
-                  -- implicit pattern/type variable bindings and the 
-                  -- term/type they elaborated to
-  toBind : List (Name, (Term vars, Term vars))
-                  -- implicit pattern/type variables which haven't been
-                  -- bound yet.
-  defining : Name -- Name of thing we're currently defining
-
-public export
-Elaborator : Type -> Type
-Elaborator annot
-    = {vars : List Name} ->
-      Ref Ctxt Defs -> Ref UST (UState annot) ->
-      Ref ImpST (ImpState annot) ->
-      Env Term vars -> NestedNames vars -> 
-      ImpDecl annot -> Core annot ()
-
-
--- A label for the internal elaborator state
-data EST : Type where
-
-initEState : Name -> ElabState vars
-initEState n = MkElabState [] [] n
-
-EState : List Name -> Type
-EState = ElabState
-
--- weaken the unbound implicits which have not yet been bound
--- weakenEState : CoreM annot [EST ::: EState vs] [EST ::: EState (n :: vs)] ()
--- weakenEState 
---     = do est <- get EST
---          putM EST (MkElabState (map wknTms (boundNames est))
---                                (map wknTms (toBind est)))
---   where
---     wknTms : (Name, (Term vs, Term vs)) -> 
---              (Name, (Term (n :: vs), Term (n :: vs)))
---     wknTms (f, (x, y)) = (f, (weaken x, weaken y))
-
-weakenedEState : {auto e : Ref EST (EState vs)} ->
-                 Core annot (Ref EST (EState (n :: vs)))
-weakenedEState
-    = do est <- get EST
-         e' <- newRef EST (MkElabState (map wknTms (boundNames est))
-                                       (map wknTms (toBind est))
-                                       (defining est))
-         pure e'
-  where
-    wknTms : (Name, (Term vs, Term vs)) -> 
-             (Name, (Term (n :: vs), Term (n :: vs)))
-    wknTms (f, (x, y)) = (f, (weaken x, weaken y))
-
--- remove the outermost variable from the unbound implicits which have not
--- yet been bound. If it turns out to depend on it, that means it can't
--- be bound at the top level, which is an error.
-strengthenedEState : {auto e : Ref EST (EState (n :: vs))} ->
-                     (top : Bool) -> annot ->
-                     Core annot (EState vs)
-strengthenedEState True loc = do est <- get EST
-                                 pure (initEState (defining est))
-strengthenedEState False loc 
-    = do est <- get EST
-         bns <- traverse strTms (boundNames est)
-         todo <- traverse strTms (toBind est)
-         pure (MkElabState bns todo (defining est))
-  where
-    -- Remove any instance of the top level local variable from an
-    -- application. Fail if it turns out to be necessary.
-    -- NOTE: While this isn't strictly correct given the type of the hole
-    -- which stands for the unbound implicits, it's harmless because we
-    -- never actualy *use* that hole - this process is only to ensure that the
-    -- unbound implicit doesn't depend on any variables it doesn't have
-    -- in scope.
-    removeArgVars : List (Term (n :: vs)) -> Maybe (List (Term vs))
-    removeArgVars [] = pure []
-    removeArgVars (Local (There p) :: args) 
-        = do args' <- removeArgVars args
-             pure (Local p :: args')
-    removeArgVars (Local Here :: args) 
-        = removeArgVars args
-    removeArgVars (a :: args)
-        = do a' <- shrinkTerm a (DropCons SubRefl)
-             args' <- removeArgVars args
-             pure (a' :: args')
-
-    removeArg : Term (n :: vs) -> Maybe (Term vs)
-    removeArg tm with (unapply tm)
-      removeArg (apply f args) | ArgsList 
-          = do args' <- removeArgVars args
-               f' <- shrinkTerm f (DropCons SubRefl)
-               pure (apply f' args')
-
-    strTms : (Name, (Term (n :: vs), Term (n :: vs))) -> 
-             Core annot (Name, (Term vs, Term vs))
-    strTms {vs} (f, (x, y))
-        = case (removeArg x, shrinkTerm y (DropCons SubRefl)) of
-               (Just x', Just y') => pure (f, (x', y'))
-               _ => throw (GenericMsg loc ("Invalid unbound implicit " ++ show f))
-
-clearEState : {auto e : Ref EST (EState vs)} ->
-              Core annot ()
-clearEState = do est <- get EST
-                 put EST (initEState (defining est))
-
-clearToBind : {auto e : Ref EST (EState vs)} ->
-              Core annot ()
-clearToBind
-    = do est <- get EST
---          putStrLn $ "Clearing holes: " ++ show (map fst (toBind est))
-         put EST (record { toBind = [] } est)
-   
-dropTmIn : List (a, (c, d)) -> List (a, d)
-dropTmIn = map (\ (n, (_, t)) => (n, t))
-
--- Bind implicit arguments, returning the new term and its updated type
-bindImplVars : Int -> 
-               ImplicitMode ->
-               Gamma ->
-               List (Name, Term vars) ->
-               Term vars -> Term vars -> (Term vars, Term vars)
-bindImplVars i NONE gam args scope scty = (scope, scty)
-bindImplVars i mode gam [] scope scty = (scope, scty)
-bindImplVars i mode gam ((n, ty) :: imps) scope scty
-    = let (scope', ty') = bindImplVars (i + 1) mode gam imps scope scty
-          tmpN = MN "unb" i
-          repNameTm = repName (Ref Bound tmpN) scope' 
-          repNameTy = repName (Ref Bound tmpN) ty' in
-          case mode of
-               PATTERN =>
-                    (Bind n (PVar ty) (refToLocal tmpN n repNameTm), 
-                     Bind n (PVTy ty) (refToLocal tmpN n repNameTy))
-               _ => (Bind n (Pi Implicit ty) (refToLocal tmpN n repNameTm), ty')
-  where
-    -- Replace the name applied to the given number of arguments 
-    -- with another term
-    repName : (new : Term vars) -> Term vars -> Term vars
-    repName new (Local p) = Local p
-    repName new (Ref nt fn)
-        = case nameEq n fn of
-               Nothing => Ref nt fn
-               Just Refl => new
-    repName new (Bind y b tm) 
-        = Bind y (assert_total (map (repName new) b)) 
-                 (repName (weaken new) tm)
-    repName new (App fn arg) 
-        = case getFn fn of
-               Ref nt fn' =>
-                   case nameEq n fn' of
-                        Nothing => App (repName new fn) (repName new arg)
-                        Just Refl => 
-                           let locs = case lookupDef fn' gam of
-                                           Just (Hole i) => i
-                                           _ => 0
-                                        in
-                               apply new (drop locs (getArgs (App fn arg)))
-               _ => App (repName new fn) (repName new arg)
-    repName new (PrimVal y) = PrimVal y
-    repName new Erased = Erased
-    repName new TType = TType
-
-bindImplicits : ImplicitMode ->
-                Gamma -> Env Term vars ->
-                List (Name, Term vars) ->
-                Term vars -> Term vars -> (Term vars, Term vars)
-bindImplicits {vars} mode gam env hs tm ty 
-   = bindImplVars 0 mode gam (map nHoles hs)
-                             (normaliseHoles gam env tm)
-                             (normaliseHoles gam env ty)
-  where
-    nHoles : (Name, Term vars) -> (Name, Term vars)
-    nHoles (n, ty) = (n, normaliseHoles gam env ty)
-
-bindTopImplicits : ImplicitMode -> Gamma -> Env Term vars ->
-                   List (Name, ClosedTerm) -> Term vars -> Term vars ->
-                   (Term vars, Term vars)
-bindTopImplicits {vars} mode gam env hs tm ty
-    = bindImplicits mode gam env (map weakenVars hs) tm ty
-  where
-    weakenVars : (Name, ClosedTerm) -> (Name, Term vars)
-    weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
-                                     weakenNs vars tm)
 
 convert : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           {auto e : Ref EST (EState vars)} ->
@@ -456,6 +262,8 @@ mutual
                      pure (tm, expected)
                 Just (tm, ty) =>
                      checkExp loc elabmode env tm ty (Just expected)
+  checkImp process top impmode elabmode env nest (IMustUnify loc tm) expected
+      = throw (InternalError "dot patterns not implemented yet")
   checkImp process top impmode elabmode env nest (Implicit loc) Nothing
       = do t <- addHole env TType
            let hty = mkConstantApp t env
