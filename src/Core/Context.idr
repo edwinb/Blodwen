@@ -35,7 +35,10 @@ data Def : Type where
      DCon  : (tag : Int) -> (arity : Nat) -> Def
      TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
 
-     Hole : (numlocs : Nat) -> Def -- Unsolved hole, under 'numlocs' locals
+     Hole : (numlocs : Nat) -> (pvar : Bool) -> Def 
+		           -- Unsolved hole, under 'numlocs' locals, and whether it
+						   -- is standing for a pattern variable (and therefore mustn't
+							 -- be solved)
      ImpBind : Def -- Hole turned into an implicitly bound variable
                    -- (which will be deleted after elaboration)
      -- The constraint names refer into a context of constraints,
@@ -58,7 +61,7 @@ getRefs None = []
 getRefs (PMDef ishole args sc) = getRefs sc
 getRefs (DCon tag arity) = []
 getRefs (TCon tag arity datacons) = []
-getRefs (Hole numlocs) = []
+getRefs (Hole numlocs _) = []
 getRefs ImpBind = []
 getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 
@@ -246,19 +249,21 @@ addFnDef : {auto x : Ref Ctxt Defs} ->
 addFnDef loc vis (MkFn n ty clauses) 
     = do let cs = map toClosed clauses
          (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
---          putStrLn $ "Case tree for " ++ show n ++ ": " 
+--          log 5 $ "Case tree for " ++ show n ++ ": " 
 -- 				             ++ show args ++ "\n" ++ show cs ++ "\n" ++ show tree
          let def = newDef ty vis (PMDef False args tree)
          addDef n def
   where
-    close : Int -> Env Term vars -> Term vars -> ClosedTerm
-    close i [] tm = tm
-    close i (b :: bs) tm 
-        = close (i + 1) bs (subst (Ref Bound (MN "pat" i)) tm)
+    close : Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm
+    close i plets [] tm = tm
+    close i True (PLet val ty :: bs) tm 
+		    = close (i + 1) True bs (Bind (MN "pat" i) (Let val ty) (renameTop _ tm))
+    close i plets (b :: bs) tm 
+        = close (i + 1) plets bs (subst (Ref Bound (MN "pat" i)) tm)
 
     toClosed : Clause -> (ClosedTerm, ClosedTerm)
     toClosed (MkClause env lhs rhs) 
-          = (close 0 env lhs, close 0 env rhs)
+          = (close 0 False env lhs, close 0 True env rhs)
 
 export
 addData : {auto x : Ref Ctxt Defs} ->

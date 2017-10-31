@@ -35,7 +35,8 @@ mutual
        IPrimVal : annot -> Constant -> RawImp annot
        IType : annot -> RawImp annot
        IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
-       IMustUnify : annot -> RawImp annot -> RawImp annot
+       IAs : annot -> String -> (pattern : RawImp annot) -> RawImp annot
+       IMustUnify : annot -> (pattern : RawImp annot) -> RawImp annot
        Implicit : annot -> RawImp annot
 
   -- Top level declarations: types, clauses and data
@@ -111,6 +112,7 @@ getAnnot (IPrimVal x _) = x
 getAnnot (IType x) = x
 getAnnot (IBindVar x _) = x
 getAnnot (IMustUnify x _) = x
+getAnnot (IAs x _ _) = x
 getAnnot (Implicit x) = x
 
 export
@@ -142,6 +144,7 @@ mutual
     show (IType _) = "Type"
     show (IBindVar _ n) = "$" ++ show n
     show (IMustUnify _ tm) = "(." ++ show tm ++ ")"
+    show (IAs _ n tm) = n ++ "@(" ++ show tm ++ ")"
     show (Implicit _) = "_"
 
   export
@@ -277,4 +280,6 @@ mkLCPatVars tm = mkPatVars True tm
         = IApp loc (mkPatVars True f) (mkPatVars False arg)
     mkPatVars notfn (IMustUnify loc tm) 
         = IMustUnify loc (mkPatVars notfn tm)
+    mkPatVars notfn (IAs loc n tm) 
+        = IAs loc n (mkPatVars notfn tm)
     mkPatVars notfn tm = tm

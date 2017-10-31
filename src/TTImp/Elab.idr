@@ -45,7 +45,7 @@ getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           Core annot (NF vars, List (Term vars)) 
 getImps loc env (NBind bn (Pi Implicit ty) sc) imps
     = do hn <- genName (nameRoot bn)
-         addNamedHole hn env (quote empty env ty)
+         addNamedHole hn False env (quote empty env ty)
          let arg = mkConstantApp hn env
          getImps loc env (sc (toClosure True env arg)) (arg :: imps)
 getImps loc env ty imps = pure (ty, reverse imps)
@@ -61,7 +61,7 @@ convertImps loc env (NBind bn (Pi Implicit ty) sc) (NBind bn' (Pi Implicit ty') 
     = pure (NBind bn (Pi Implicit ty) sc, reverse imps)
 convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
     = do hn <- genName (nameRoot bn)
-         addNamedHole hn env (quote empty env ty)
+         addNamedHole hn False env (quote empty env ty)
          let arg = mkConstantApp hn env
          convertImps loc env (sc (toClosure False env arg)) exp (arg :: imps)
 convertImps loc env got exp imps = pure (got, reverse imps)
@@ -93,8 +93,8 @@ inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
 inventFnType env bname
     = do an <- genName "argh"
          scn <- genName "sch"
-         argTy <- addBoundName an env TType
-         scTy <- addBoundName scn (Pi Explicit argTy :: env) TType
+         argTy <- addBoundName an False env TType
+         scTy <- addBoundName scn False (Pi Explicit argTy :: env) TType
          pure (argTy, scTy)
 
 mutual
@@ -242,7 +242,7 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
-                  do tm <- addBoundName n env hty
+                  do tm <- addBoundName n True env hty
                      put EST 
                          (record { boundNames $= ((n, (tm, hty)) ::),
                                    toBind $= ((n, (tm, hty)) ::) } est)
@@ -254,9 +254,8 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
-                  do tm <- addBoundName n env expected
+                  do tm <- addBoundName n True env expected
                      log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
-                     gam <- getCtxt
                      put EST 
                          (record { boundNames $= ((n, (tm, expected)) ::),
                                    toBind $= ((n, (tm, expected)) :: ) } est)
@@ -273,6 +272,25 @@ mutual
            checkExp loc InLHS env tm wantedTy (Just expected)
   checkImp process top _ elabmode env nest (IMustUnify loc tm) expected
       = throw (GenericMsg loc "Dot pattern not valid here")
+  checkImp process top PATTERN InLHS env nest (IAs loc var tm) (Just expected)
+      = do let n = PV var
+           est <- get EST
+           (patTm, patTy) <- checkImp process top PATTERN InLHS env nest tm (Just expected)
+           addBoundName n False env expected
+           case lookup n (boundNames est) of
+                Just (tm, ty) =>
+                    throw (GenericMsg loc ("Name " ++ var ++ " already bound"))
+                Nothing =>
+                    do tm <- addBoundName n False env expected
+                       log 5 $ "Added @ pattern name " ++ show (n, (tm, expected))
+                       put EST
+                           (record { boundNames $= ((n, (tm, expected)) ::),
+                                     toBind $= ((n, (tm, expected)) ::) } est)
+                       gam <- getCtxt
+                       convert loc InLHS env (nf gam env patTm) (nf gam env tm)
+                       pure (patTm, expected)
+  checkImp process top _ elabmode env nest (IAs loc var tm) expected
+      = throw (GenericMsg loc "@-pattern not valid here")
   checkImp process top impmode elabmode env nest (Implicit loc) Nothing
       = do t <- addHole env TType
            let hty = mkConstantApp t env

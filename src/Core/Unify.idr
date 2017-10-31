@@ -182,7 +182,7 @@ implicitBind : {auto c : Ref Ctxt Defs} ->
 implicitBind n 
     = do gam <- getCtxt
          case lookupDef n gam of
-              Just (Hole len) => updateDef n ImpBind
+              Just (Hole len True) => updateDef n ImpBind
               _ => pure ()
 
 -- Check that the references in the term don't refer to the hole name as
@@ -247,7 +247,7 @@ mutual
               -- 'h' here, make a new hole 'sh' which only uses the available
               -- arguments, and solve h with it.
               case lookupDefTy h gam of
-                   Just (Hole, ty) => 
+                   Just (Hole _ _, ty) => 
                         do sn <- genName "sh"
                            mkSmallerHole loc [] ty h as sn args
                    _ => pure (apply (Ref Func h) as)
@@ -291,7 +291,7 @@ mutual
              Nothing => ufail loc $ "Can't shrink hole"
              Just defty =>
                 do -- Make smaller hole
-                   let hole = newDef defty Public (Hole (length sofar))
+                   let hole = newDef defty Public (Hole (length sofar) False)
                    addHoleName newhole
                    addDef newhole hole
                    -- Solve old hole with it
@@ -334,13 +334,9 @@ mutual
            pure (apply (Ref Func newh) newargs)
   
   isHoleNF : Gamma -> Name -> Bool
-  isHoleNF gam (PV _) = False -- pattern variables aren't solvable holes
-      -- TODO: That's a bit of a hack because it depends on where the name
-      -- comes from. Maybe better to note in the definition that it's standing
-      -- for a pattern/pi bound variable to be bound later.
   isHoleNF gam n
       = case lookupDef n gam of
-             Just (Hole _) => True
+             Just (Hole _ pvar) => not pvar
              _ => False
 
   unifyHole : {auto c : Ref Ctxt Defs} ->

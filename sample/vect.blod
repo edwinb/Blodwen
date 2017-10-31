@@ -26,3 +26,7 @@ reverse : Vect n a -> Vect n a;
 reverse = foldl (\n => Vect n _)
                 (\rev => \x => Cons x rev) Nil;
 
+vlength : (n : Nat) -> Vect n a -> Nat;
+vlength Z Nil = Z;
+vlength n@_ (Cons x xs) = n; -- (vlength _ xs);
+

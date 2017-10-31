@@ -19,8 +19,7 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
               Core annot Clause
 checkClause elab defining env nest (MkImpClause loc lhs_raw rhs_raw)
-    = do -- putStrLn $ "CHECKING " ++ show lhs_raw ++ " = " ++ show rhs_raw
-         (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
+    = do (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
          gam <- getCtxt
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
@@ -39,6 +38,11 @@ checkClause elab defining env nest (MkImpClause loc lhs_raw rhs_raw)
             = throw (InternalError "Names don't match in pattern type")
       extend env nest (Bind n (PVar tmsc) sc) (Bind n (PVTy _) tysc) | (Just Refl) 
             = extend (PVar tmsc :: env) (weaken nest) sc tysc
+    extend env nest (Bind n (PLet tmv tmt) sc) (Bind n' (PLet _ _) tysc) with (nameEq n n')
+      extend env nest (Bind n (PLet tmv tmt) sc) (Bind n' (PLet _ _) tysc) | Nothing 
+            = throw (InternalError "Names don't match in pattern type")
+      extend env nest (Bind n (PLet tmv tmt) sc) (Bind n (PLet _ _) tysc) | (Just Refl) 
+            = extend (PLet tmv tmt :: env) (weaken nest) sc tysc
     extend env nest tm ty = pure (_ ** (env, nest, tm, ty))
 
 export

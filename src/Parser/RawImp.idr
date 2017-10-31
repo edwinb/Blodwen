@@ -37,7 +37,12 @@ mutual
 
   simpleExpr : Rule (RawImp ())
   simpleExpr
-      = atom
+      = do x <- unqualifiedName
+           symbol "@"
+           commit
+           expr <- simpleExpr
+           pure (IAs () x expr)
+    <|> atom
     <|> binder
     <|> do symbol ".("
            commit

@@ -144,8 +144,15 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
           repNameTy = repName (Ref Bound tmpN) ty' in
           case mode of
                PATTERN =>
-                    (Bind n (PVar ty) (refToLocal tmpN n repNameTm), 
-                     Bind n (PVTy ty) (refToLocal tmpN n repNameTy))
+                  case lookupDef n gam of
+                       Just (PMDef _ _ t) =>
+                          (Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                      (refToLocal tmpN n repNameTm), 
+                           Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                      (refToLocal tmpN n repNameTy))
+                       _ =>
+                          (Bind n (PVar ty) (refToLocal tmpN n repNameTm), 
+                           Bind n (PVTy ty) (refToLocal tmpN n repNameTy))
                _ => (Bind n (Pi Implicit ty) (refToLocal tmpN n repNameTm), ty')
   where
     -- Replace the name applied to the given number of arguments 
@@ -166,7 +173,7 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                         Nothing => App (repName new fn) (repName new arg)
                         Just Refl => 
                            let locs = case lookupDef fn' gam of
-                                           Just (Hole i) => i
+                                           Just (Hole i _) => i
                                            _ => 0
                                         in
                                apply new (drop locs (getArgs (App fn arg)))
@@ -245,7 +252,7 @@ findHoles mode env tm exp
     holes h {vars} (Ref nt fn) 
         = do gam <- getCtxt
              case lookupDefTy fn gam of
-                  Just (Hole _, ty) =>
+                  Just (Hole _ _, ty) =>
                        do processHole h fn vars ty
                           pure (Ref nt fn)
                   _ => pure (Ref nt fn)
@@ -253,7 +260,7 @@ findHoles mode env tm exp
         = do fn' <- holes h fn
              arg' <- holes h arg
              pure (App fn' arg')
-    -- Allow implicits under 'Pi' and 'PVar' only
+    -- Allow implicits under 'Pi', 'PVar', 'PLet' only
     holes h (Bind y (Pi imp ty) sc)
         = do ty' <- holes h ty
              sc' <- holes h sc
@@ -262,6 +269,11 @@ findHoles mode env tm exp
         = do ty' <- holes h ty
              sc' <- holes h sc
              pure (Bind y (PVar ty') sc')
+    holes h (Bind y (PLet val ty) sc)
+        = do val' <- holes h val
+             ty' <- holes h ty
+             sc' <- holes h sc
+             pure (Bind y (PLet val' ty') sc')
     holes h tm = pure tm
 
 export

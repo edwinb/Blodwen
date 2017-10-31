@@ -175,11 +175,11 @@ addConstant env tm ty constrs
 export
 addNamedHole : {auto u : Ref UST (UState annot)} ->
                {auto c : Ref Ctxt Defs} ->
-               Name -> Env Term vars ->
+               Name -> (patvar : Bool) -> Env Term vars ->
                (ty : Term vars) -> Core annot ()
-addNamedHole cn env ty
+addNamedHole cn patvar env ty
     = do let defty = mkConstantTy env ty
-         let hole = newDef defty Public (Hole (length env))
+         let hole = newDef defty Public (Hole (length env) patvar)
          addHoleName cn
          addDef cn hole
 
@@ -191,16 +191,16 @@ addHole : {auto u : Ref UST (UState annot)} ->
           (ty : Term vars) -> Core annot Name
 addHole env ty
     = do cn <- genName "h"
-         addNamedHole cn env ty
+         addNamedHole cn False env ty
          pure cn
 
 export
 addBoundName : {auto u : Ref UST (UState annot)} ->
                {auto c : Ref Ctxt Defs} ->
-               Name -> Env Term vars ->
+               Name -> (patvar : Bool) -> Env Term vars ->
                (ty : Term vars) -> Core annot (Term vars)
-addBoundName n env exp
-    = do addNamedHole n env exp
+addBoundName n patvar env exp
+    = do addNamedHole n patvar env exp
          pure (mkConstantApp n env)
 
 export
@@ -249,7 +249,7 @@ dumpHole hole
                                             ++ "\n\twhen"
                             traverse (\x => dumpConstraint x) constraints 
                             pure ()
-                    Just (Hole _, ty) =>
+                    Just (Hole _ _, ty) =>
                          log 2 $ "?" ++ show hole ++ " : " ++ 
                                            show (normalise gam [] ty)
                     Just (PMDef _ args t, ty) =>
