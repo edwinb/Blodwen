@@ -75,7 +75,7 @@ rawTokens =
 export
 lex : String -> Either (Int, Int, String) (List (TokenData Token))
 lex str 
-    = case Lexer.lex rawTokens str of
+    = case lex rawTokens str of
            (tok, (_, _, "")) => Right (filter notComment tok)
            (_, fail) => Left fail
     where

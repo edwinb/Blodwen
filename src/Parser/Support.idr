@@ -35,7 +35,7 @@ runParser str p
     = case lex str of
            Left err => Left $ LexFail err
            Right toks => 
-              case parse toks (do res <- p; eof; pure res) of
+              case parse (do res <- p; eof; pure res) toks of
                    Left (Error err []) => 
                           Left $ ParseFail err Nothing []
                    Left (Error err (t :: ts)) => 

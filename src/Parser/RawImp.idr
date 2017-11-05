@@ -82,10 +82,10 @@ mutual
   lam
       = do symbol "\\"
            n <- name
-           ty <- optional 
+           ty <- option 
+                    (Implicit ())
                     (do symbol ":"
                         expr)
-                    (Implicit ())
            symbol "=>"
            scope <- typeExpr
            pure (ILam () Explicit n ty scope)
@@ -95,10 +95,10 @@ mutual
       = do keyword "let"
            n <- name
            commit
-           ty <- optional 
+           ty <- option 
+                    (Implicit ())
                     (do symbol ":"
                         expr)
-                    (Implicit ())
            symbol "="
            val <- expr
            keyword "in"
@@ -182,9 +182,9 @@ implicitsDecl
     impDecl : Rule (String, RawImp ())
     impDecl 
         = do x <- unqualifiedName
-             ty <- optional (do symbol ":"
-                                expr)
-                            (Implicit ())
+             ty <- option (Implicit ())
+                          (do symbol ":"
+                              expr)
              pure (x, ty)
 
 directive : Rule (ImpDecl ())
