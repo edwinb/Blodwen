@@ -144,7 +144,7 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
           repNameTy = repName (Ref Bound tmpN) ty' in
           case mode of
                PATTERN =>
-                  case lookupDef n gam of
+                  case lookupDefExact n gam of
                        Just (PMDef _ _ t) =>
                           (Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
                                       (refToLocal tmpN n repNameTm), 
@@ -172,7 +172,7 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                    case nameEq n fn' of
                         Nothing => App (repName new fn) (repName new arg)
                         Just Refl => 
-                           let locs = case lookupDef fn' gam of
+                           let locs = case lookupDefExact fn' gam of
                                            Just (Hole i _) => i
                                            _ => 0
                                         in
@@ -223,6 +223,7 @@ findHoles mode env tm exp
          gam <- getCtxt
          log 5 $ "Extra implicits to bind: " ++ show (reverse hs)
          let (tm', ty) = bindTopImplicits mode gam env (reverse hs) tm exp
+         traverse implicitBind (map fst hs)
          pure (tm', ty, map fst hs)
   where
     data HVar : Type where -- empty type to label the local state
@@ -251,7 +252,7 @@ findHoles mode env tm exp
             Core annot (Term vars)
     holes h {vars} (Ref nt fn) 
         = do gam <- getCtxt
-             case lookupDefTy fn gam of
+             case lookupDefTyExact fn gam of
                   Just (Hole _ _, ty) =>
                        do processHole h fn vars ty
                           pure (Ref nt fn)
@@ -279,7 +280,7 @@ findHoles mode env tm exp
 export
 renameImplicits : Gamma -> Term vars -> Term vars
 renameImplicits gam (Bind (PV n) b sc) 
-    = case lookupDef (PV n) gam of
+    = case lookupDefExact (PV n) gam of
            Just (PMDef _ _ def) =>
 --                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
                     Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))

@@ -21,8 +21,8 @@ empty : Context a
 empty = MkContext empty
 
 export
-lookupCtxt : Name -> Context a -> Maybe a
-lookupCtxt n (MkContext dict) = lookup n dict
+lookupCtxtExact : Name -> Context a -> Maybe a
+lookupCtxtExact n (MkContext dict) = lookup n dict
 
 export
 addCtxt : Name -> a -> Context a -> Context a
@@ -79,33 +79,34 @@ export
 record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
+      defNamespace : List String -- namespace for current definitions
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty 100 0 0
+initCtxt = MkAllDefs empty [] 100 0 0
 
-lookupGlobal : Name -> Gamma -> Maybe GlobalDef
-lookupGlobal n gam = lookupCtxt n gam
+lookupGlobalExact : Name -> Gamma -> Maybe GlobalDef
+lookupGlobalExact n gam = lookupCtxtExact n gam
 
 export
-lookupDef : Name -> Gamma -> Maybe Def
-lookupDef n gam
-    = do def <- lookupGlobal n gam
+lookupDefExact : Name -> Gamma -> Maybe Def
+lookupDefExact n gam
+    = do def <- lookupGlobalExact n gam
          pure (definition def)
 
 export
-lookupTy : Name -> Gamma -> Maybe ClosedTerm
-lookupTy n gam 
-    = do def <- lookupGlobal n gam
+lookupTyExact : Name -> Gamma -> Maybe ClosedTerm
+lookupTyExact n gam 
+    = do def <- lookupGlobalExact n gam
          pure (type def)
 
 export
-lookupDefTy : Name -> Gamma -> Maybe (Def, ClosedTerm)
-lookupDefTy n gam 
-    = do def <- lookupGlobal n gam
+lookupDefTyExact : Name -> Gamma -> Maybe (Def, ClosedTerm)
+lookupDefTyExact n gam 
+    = do def <- lookupGlobalExact n gam
          pure (definition def, type def)
 
 public export
@@ -181,7 +182,7 @@ getDescendents n g
     getAllDesc (n :: rest) ns g
       = if contains n ns
            then getAllDesc rest ns g
-           else case lookupGlobal n g of
+           else case lookupGlobalExact n g of
                      Nothing => ns
                      Just def => assert_total $
 											 let refs = refersTo def in
@@ -199,7 +200,7 @@ updateDef : {auto x : Ref Ctxt Defs} ->
 						Name -> Def -> Core annot ()
 updateDef n def 
     = do g <- getCtxt
-         case lookupCtxt n g of
+         case lookupCtxtExact n g of
               Nothing => throw (InternalError ("No such name to update " ++ show n))
               Just odef => 
                    let gdef = record { definition = def,

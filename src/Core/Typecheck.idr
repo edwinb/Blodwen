@@ -24,7 +24,7 @@ parameters (loc : annot, gam : Gamma)
     chk env (RVar x) 
         = case defined x env of
                Nothing => 
-                  case lookupDefTy x gam of
+                  case lookupDefTyExact x gam of
                        Just (PMDef _ _ _, ty) => 
                             pure $ (Ref Func x, embed ty)
                        Just (DCon tag arity, ty) => 

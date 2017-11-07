@@ -136,7 +136,7 @@ mutual
       = case lookup x (names nest) of
              Just (n', tm) =>
                   do gam <- getCtxt
-                     case lookupTy n' gam of
+                     case lookupTyExact n' gam of
                           Nothing => throw (UndefinedName loc n')
                           Just ty => 
                              let tyenv = useVars (getArgs tm) (embed ty) in
@@ -436,7 +436,7 @@ elabTerm process defining env nest impmode elabmode tm tyin
                  " in " ++ show chktm
          let (restm, resty) = bindImplicits impmode gam env
                                             (dropTmIn fullImps) chktm ty
-         traverse (\n => implicitBind n) (map fst fullImps)
+         traverse implicitBind (map fst fullImps)
          gam <- getCtxt
          (ptm, pty, bound) <- findHoles impmode env (normaliseHoles gam env restm) resty
          -- Give implicit bindings their proper names, as UNs not PVs
@@ -446,7 +446,7 @@ elabTerm process defining env nest impmode elabmode tm tyin
          -- Drop any holes we created which aren't used in the resulting
          -- term
          traverse (\n => implicitBind n) bound
-         dumpConstraints 
+         dumpConstraints 2 False
          pure (ptm', pty')
 
 export

@@ -55,14 +55,14 @@ processDef : {auto c : Ref Ctxt Defs} ->
              Core annot ()
 processDef elab env nest loc n cs_raw
     = do gam <- getCtxt
-         case lookupDefTy n gam of
+         case lookupDefTyExact n gam of
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>
                 do cs <- traverse (\x => checkClause elab n env nest x) cs_raw
                    addFnDef loc Public (MkFn n ty cs)
                    gam <- getCtxt
                    log 3 $
-                      case lookupDef n gam of
+                      case lookupDefExact n gam of
                            Just (PMDef _ args t) =>
                               "Case tree for " ++ show n ++ "\n\t" ++
                               show args ++ " " ++ show t

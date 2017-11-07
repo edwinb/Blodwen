@@ -56,6 +56,7 @@ using (FileIO m)
   processDecls env nest decls
       = do i <- newRef ImpST (initImpState {annot})
            xs <- traverse (processDecl env nest) decls
+           dumpConstraints 0 True
            pure ()
 
   export

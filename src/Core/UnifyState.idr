@@ -233,24 +233,24 @@ addDot loc env x y
 export
 dumpHole : {auto u : Ref UST (UState annot)} ->
            {auto c : Ref Ctxt Defs} ->
-           (hole : Name) -> Core annot ()
-dumpHole hole
+           (loglevel : Nat) -> (hole : Name) -> Core annot ()
+dumpHole lvl hole
     = do ust <- get UST
-         if logLevel ust == 0
+         if logLevel ust < lvl
             then pure ()
             else do
                gam <- getCtxt
-               case lookupDefTy hole gam of
+               case lookupDefTyExact hole gam of
                     Nothing => pure ()
                     Just (Guess tm constraints, ty) => 
-                         do log 2 $ "!" ++ show hole ++ " : " ++ 
+                         do log lvl $ "!" ++ show hole ++ " : " ++ 
                                               show (normalise gam [] ty)
-                            log 2 $ "\t  = " ++ show (normalise gam [] tm)
+                            log lvl $ "\t  = " ++ show (normalise gam [] tm)
                                             ++ "\n\twhen"
                             traverse (\x => dumpConstraint x) constraints 
                             pure ()
                     Just (Hole _ _, ty) =>
-                         log 2 $ "?" ++ show hole ++ " : " ++ 
+                         log lvl $ "?" ++ show hole ++ " : " ++ 
                                            show (normalise gam [] ty)
                     Just (PMDef _ args t, ty) =>
                          log 4 $ "Solved: " ++ show hole ++ " : " ++ 
@@ -265,27 +265,29 @@ dumpHole hole
     dumpConstraint n
         = do ust <- get UST
              gam <- getCtxt
-             case lookupCtxt n (constraints ust) of
+             case lookupCtxtExact n (constraints ust) of
                   Nothing => pure ()
-                  Just Resolved => log 2 "\tResolved"
+                  Just Resolved => log lvl "\tResolved"
                   Just (MkConstraint _ env x y) =>
-                    do log 2 $ "\t  " ++ show (normalise gam env x) 
+                    do log lvl $ "\t  " ++ show (normalise gam env x) 
                                       ++ " =?= " ++ show (normalise gam env y)
                        log 5 $ "\t    from " ++ show x 
                                       ++ " =?= " ++ show y
                   Just (MkSeqConstraint _ _ xs ys) =>
-                       log 2 $ "\t\t" ++ show xs ++ " =?= " ++ show ys
+                       log lvl $ "\t\t" ++ show xs ++ " =?= " ++ show ys
 
 export
 dumpConstraints : {auto u : Ref UST (UState annot)} -> 
                   {auto c : Ref Ctxt Defs} ->
+                  (loglevel : Nat) ->
+                  (all : Bool) ->
                   Core annot ()
-dumpConstraints 
-    = do hs <- getCurrentHoleNames
+dumpConstraints loglevel all
+    = do hs <- if all then getHoleNames else getCurrentHoleNames
          case hs of
               [] => pure ()
-              _ => do log 2 "--- CONSTRAINTS AND HOLES ---"
-                      traverse dumpHole hs
+              _ => do log loglevel "--- CONSTRAINTS AND HOLES ---"
+                      traverse (dumpHole loglevel) hs
                       pure ()
 
 export

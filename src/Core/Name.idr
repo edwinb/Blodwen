@@ -171,4 +171,13 @@ mutual
     compare (PV x) (PV y) = compare x y
     compare (GN x) (GN y) = compare x y
 
+hashString : String -> Int
+hashString "" = 1
+hashString xs 
+    = assert_total $
+        cast (prim__strHead xs) + hashString (prim__strTail xs) * 31
+
+export
+hashName : Name -> Int
+hashName x = hashString (show x)
 

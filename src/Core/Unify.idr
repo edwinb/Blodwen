@@ -149,7 +149,7 @@ instantiate : {auto c : Ref Ctxt Defs} ->
               Core annot ()
 instantiate loc metavar smvs tm {newvars}
      = do gam <- getCtxt
-          case lookupDefTy metavar gam of
+          case lookupDefTyExact metavar gam of
                Nothing => ufail loc $ "No such metavariable " ++ show metavar
                Just (_, ty) => 
                     case mkRHS [] newvars CompatPre ty 
@@ -181,8 +181,8 @@ implicitBind : {auto c : Ref Ctxt Defs} ->
                Name -> Core annot ()
 implicitBind n 
     = do gam <- getCtxt
-         case lookupDef n gam of
-              Just (Hole len True) => updateDef n ImpBind
+         case lookupDefExact n gam of
+              Just (Hole len _) => updateDef n ImpBind
               _ => pure ()
 
 -- Check that the references in the term don't refer to the hole name as
@@ -246,7 +246,7 @@ mutual
               -- doesn't have enough arguments to be able to pass them to
               -- 'h' here, make a new hole 'sh' which only uses the available
               -- arguments, and solve h with it.
-              case lookupDefTy h gam of
+              case lookupDefTyExact h gam of
                    Just (Hole _ _, ty) => 
                         do sn <- genName "sh"
                            mkSmallerHole loc [] ty h as sn args
@@ -335,7 +335,7 @@ mutual
   
   isHoleNF : Gamma -> Name -> Bool
   isHoleNF gam n
-      = case lookupDef n gam of
+      = case lookupDefExact n gam of
              Just (Hole _ pvar) => not pvar
              _ => False
 
@@ -578,7 +578,7 @@ retry : {auto c : Ref Ctxt Defs} ->
 retry mode cname
     = do ust <- get UST
          gam <- getCtxt
-         case lookupCtxt cname (constraints ust) of
+         case lookupCtxtExact cname (constraints ust) of
               Nothing => pure []
               -- If the constraint is now resolved (i.e. unifying now leads
               -- to no new constraints) replace it with 'Resolved' in the
@@ -605,7 +605,7 @@ retryHole : {auto c : Ref Ctxt Defs} ->
             Core annot ()
 retryHole mode hole
     = do gam <- getCtxt
-         case lookupDef hole gam of
+         case lookupDefExact hole gam of
               Nothing => pure ()
               Just (Guess tm constraints) => 
                    do cs' <- traverse (\x => retry mode x) constraints
