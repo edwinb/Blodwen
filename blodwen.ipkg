@@ -17,6 +17,7 @@ modules = Core.CaseTree,
 
           Data.CMap,
           Data.CSet,
+          Data.StringMap,
 
           Interfaces.FileIO,
           Interfaces.SystemIO,

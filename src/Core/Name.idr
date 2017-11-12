@@ -8,6 +8,7 @@ mutual
   data Name = UN String -- user given name
             | MN String Int -- machine generated name
             | NS (List String) Name -- a name in a hierarchical namespace 
+                  -- namespaces are in reverse order (innermost name first)
             | HN String Int -- machine generated metavariable name
             | PV String -- implicitly bound pattern variable name
             | GN GenName -- various kinds of generated names

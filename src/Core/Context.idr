@@ -7,26 +7,68 @@ import public Core.Core
 import public Control.Catchable
 
 import Data.CMap
+import Data.StringMap
 import Data.CSet
 import Data.List
 
 %default total
 
 export
-data Context : Type -> Type where
-     MkContext : SortedMap a -> Context a
+record Context a where
+     constructor MkContext 
+     -- for looking up by exact (completely qualified) names
+     exactNames : SortedMap a 
+     -- for looking up by name root or partially qualified (so possibly
+     -- ambiguous) names
+     hierarchy : StringMap (List (Name, a))
 
 export
 empty : Context a
-empty = MkContext empty
+empty = MkContext empty empty
 
 export
 lookupCtxtExact : Name -> Context a -> Maybe a
-lookupCtxtExact n (MkContext dict) = lookup n dict
+lookupCtxtExact n dict = lookup n (exactNames dict)
+
+export
+lookupCtxtName : Name -> Context a -> List (Name, a)
+lookupCtxtName n dict
+    = case lookup (nameRoot n) (hierarchy dict) of
+           Nothing => []
+           Just ns => filter (matches n) ns
+	where
+		-- Name matches if a prefix of the namespace matches a prefix of the 
+    -- namespace in the context
+    matches : Name -> (Name, a) -> Bool
+    matches (NS ns _) (NS cns _, _) = ns `isPrefixOf` cns
+    matches (NS _ _) _ = True -- no in library name, so root doesn't match
+    matches _ _ = True -- no prefix, so root must match, so good
+
+export
+lookupCtxt : Name -> Context a -> List a
+lookupCtxt n dict = map snd (lookupCtxtName n dict)
+
+addToHier : Name -> a -> 
+						StringMap (List (Name, a)) -> StringMap (List (Name, a))
+addToHier n val hier
+     = let root = nameRoot n in
+           case lookup root hier of
+                Nothing => insert root [(n, val)] hier
+                Just ns => insert root (update val ns) hier
+  where
+    update : a -> List (Name, a) -> List (Name, a)
+    update val [] = [(n, val)]
+    update val (old :: xs) 
+		    = if n == fst old 
+					   then (n, val) :: xs
+						 else old :: update val xs
 
 export
 addCtxt : Name -> a -> Context a -> Context a
-addCtxt n val (MkContext dict) = MkContext (insert n val dict)
+addCtxt n val (MkContext dict hier) 
+     = let dict' = insert n val dict
+           hier' = addToHier n val hier in
+           MkContext dict' hier'
 
 public export
 data Def : Type where
@@ -91,11 +133,19 @@ initCtxt = MkAllDefs empty [] 100 0 0
 lookupGlobalExact : Name -> Gamma -> Maybe GlobalDef
 lookupGlobalExact n gam = lookupCtxtExact n gam
 
+lookupGlobalName : Name -> Gamma -> List (Name, GlobalDef)
+lookupGlobalName n gam = lookupCtxtName n gam
+
 export
 lookupDefExact : Name -> Gamma -> Maybe Def
 lookupDefExact n gam
     = do def <- lookupGlobalExact n gam
          pure (definition def)
+
+export
+lookupDefName : Name -> Gamma -> List (Name, Def)
+lookupDefName n gam
+    = map (\(x, g) => (x, definition g)) (lookupGlobalName n gam)
 
 export
 lookupTyExact : Name -> Gamma -> Maybe ClosedTerm
@@ -104,10 +154,21 @@ lookupTyExact n gam
          pure (type def)
 
 export
+lookupTyName : Name -> Gamma -> List (Name, ClosedTerm)
+lookupTyName n gam
+    = map (\(x, g) => (x, type g)) (lookupGlobalName n gam)
+
+export
 lookupDefTyExact : Name -> Gamma -> Maybe (Def, ClosedTerm)
 lookupDefTyExact n gam 
     = do def <- lookupGlobalExact n gam
          pure (definition def, type def)
+
+export
+lookupDefTyName : Name -> Gamma -> List (Name, Def, ClosedTerm)
+lookupDefTyName n gam
+    = map (\(x, g) => (x, definition g, type g)) (lookupGlobalName n gam)
+
 
 public export
 record Constructor where

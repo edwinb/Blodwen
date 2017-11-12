@@ -101,6 +101,7 @@ resetHoles : {auto u : Ref UST (UState annot)} ->
              Core annot ()
 resetHoles 
     = do ust <- get UST
+         -- TODO: Also clear out solved/ImpBind holes
          put UST (record { currentHoles = [] } ust)
 
 export
