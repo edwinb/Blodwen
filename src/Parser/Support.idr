@@ -110,6 +110,7 @@ identPart
                            Ident str => Just str
                            _ => Nothing)
 
+export
 namespace_ : Rule (List String)
 namespace_ = sepBy1 (symbol ".") identPart
 

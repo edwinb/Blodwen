@@ -187,6 +187,14 @@ implicitsDecl
                               expr)
              pure (x, ty)
 
+namespaceDecl : Rule (List String)
+namespaceDecl
+    = do keyword "namespace"
+         commit
+         ns <- namespace_
+         symbol ";"
+         pure ns
+
 directive : Rule (ImpDecl ())
 directive
     = do exactIdent "logging"
@@ -199,6 +207,8 @@ directive
 topDecl
     = do dat <- dataDecl
          pure (IData () dat)
+  <|> do ns <- namespaceDecl
+         pure (INamespace () ns)
   <|> do ns <- implicitsDecl
          pure (ImplicitNames () ns)
   <|> do symbol "%"; commit

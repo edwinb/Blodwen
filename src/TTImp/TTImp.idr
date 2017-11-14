@@ -59,6 +59,7 @@ mutual
        IClaim : annot -> ImpTy annot -> ImpDecl annot
        IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
        IData : annot -> ImpData annot -> ImpDecl annot
+       INamespace : annot -> List String -> ImpDecl annot
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        ILog : Nat -> ImpDecl annot
 
@@ -167,6 +168,7 @@ mutual
     show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                          showSep "\n\t" (map show cs)
     show (IData _ d) = show d
+    show (INamespace _ ns) = "namespace " ++ show ns
     show (ImplicitNames _ ns) = "implicit " ++ show ns
     show (ILog lvl) = "logging " ++ show lvl
 
@@ -175,10 +177,11 @@ public export
 record ImpState annot where
   constructor MkImpState
   impNames : List (String, RawImp annot) -- names which can be implicitly bound
+  currentNS : List String -- Current namespace, default "Main"
 
 export
 initImpState : ImpState annot
-initImpState = MkImpState []
+initImpState = MkImpState [] ["Main"]
 
 -- A label for TTImp state in the global state
 export
@@ -190,6 +193,36 @@ addImp : {auto i : Ref ImpST (ImpState annot)} ->
 addImp str ty
     = do ist <- get ImpST
          put ImpST (record { impNames $= ((str, ty) ::) } ist)
+
+-- Set the default namespace for new definitions
+export
+setNS : {auto i : Ref ImpST (ImpState annot)} ->
+        List String -> Core annot ()
+setNS ns
+    = do ist <- get ImpST
+         put ImpST (record { currentNS = ns } ist)
+
+-- Add a new nested namespace to the current namespace for new definitions
+-- e.g. extendNS ["Data"] when namespace is "Prelude.List" leads to
+-- current namespace of "Prelude.List.Data"
+-- Inner namespaces go first, for ease of name lookup
+export
+extendNS : {auto i : Ref ImpST (ImpState annot)} ->
+           List String -> Core annot ()
+extendNS ns
+    = do ist <- get ImpST
+         put ImpST (record { currentNS $= (++ (reverse ns)) } ist)
+
+-- Get the name as it would be defined in the current namespace
+-- i.e. if it doesn't have an explicit namespace already, add it,
+-- otherwise leave it alone
+export
+inCurrentNS : {auto i : Ref ImpST (ImpState annot)} ->
+              Name -> Core annot Name
+inCurrentNS (UN n)
+    = do ist <- get ImpST
+         pure (NS (currentNS ist) (UN n))
+inCurrentNS n = pure n
 
 remove : Maybe Name -> List (String, a) -> List (String, a)
 remove (Just (UN n)) xs = removeN n xs

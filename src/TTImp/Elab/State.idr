@@ -1,4 +1,4 @@
-module TTImp.ElabState
+module TTImp.Elab.State
 
 import TTImp.TTImp
 import Core.CaseTree
@@ -288,4 +288,92 @@ renameImplicits gam (Bind (PV n) b sc)
 renameImplicits gam (Bind n b sc) 
     = Bind n b (renameImplicits gam sc)
 renameImplicits gam t = t
+
+export
+convert : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> ElabMode -> Env Term vars -> NF vars -> NF vars -> 
+          Core annot (List Name)
+convert loc elabmode env x y 
+    = let umode = case elabmode of
+                       InLHS => InLHS
+                       _ => InTerm in
+          catch (do solveConstraints umode
+                    log 10 $ "Unifying " ++ show (quote empty env x) ++ " and " 
+                                         ++ show (quote empty env y)
+                    vs <- unify umode loc env x y
+                    solveConstraints umode
+                    pure vs)
+            (\err => do gam <- getCtxt 
+                        throw (WhenUnifying loc (normaliseHoles gam env (quote empty env x))
+                                                (normaliseHoles gam env (quote empty env y))
+                                  err))
+  
+-- Get the implicit arguments that need to be inserted at this point
+-- in a function application. Do this by reading off implicit Pis
+-- in the expected type ('ty') and adding new holes for each.
+-- Return the (normalised) remainder of the type, and the list of
+-- implicits added
+export
+getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> Env Term vars ->
+          (ty : NF vars) -> List (Term vars) ->
+          Core annot (NF vars, List (Term vars)) 
+getImps loc env (NBind bn (Pi Implicit ty) sc) imps
+    = do hn <- genName (nameRoot bn)
+         addNamedHole hn False env (quote empty env ty)
+         let arg = mkConstantApp hn env
+         getImps loc env (sc (toClosure True env arg)) (arg :: imps)
+getImps loc env ty imps = pure (ty, reverse imps)
+
+--- When converting, add implicits until we've applied enough for the
+--- expected type
+export
+convertImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+              {auto e : Ref EST (EState vars)} ->
+              annot -> Env Term vars ->
+              (got : NF vars) -> (exp : NF vars) -> List (Term vars) ->
+              Core annot (NF vars, List (Term vars))
+convertImps loc env (NBind bn (Pi Implicit ty) sc) (NBind bn' (Pi Implicit ty') sc') imps
+    = pure (NBind bn (Pi Implicit ty) sc, reverse imps)
+convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
+    = do hn <- genName (nameRoot bn)
+         addNamedHole hn False env (quote empty env ty)
+         let arg = mkConstantApp hn env
+         convertImps loc env (sc (toClosure False env arg)) exp (arg :: imps)
+convertImps loc env got exp imps = pure (got, reverse imps)
+
+export
+checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+           {auto e : Ref EST (EState vars)} ->
+           annot -> ElabMode -> Env Term vars ->
+           (term : Term vars) -> (got : Term vars) -> 
+           (exp : Maybe (Term vars)) ->
+           Core annot (Term vars, Term vars) 
+checkExp loc elabmode env tm got Nothing
+    = pure (tm, got)
+checkExp loc elabmode env tm got (Just exp) 
+    = do gam <- getCtxt
+         let expnf = nf gam env exp
+         (got', imps) <- convertImps loc env (nf gam env got) expnf []
+         constr <- convert loc elabmode env got' expnf
+         case constr of
+              [] => pure (apply tm imps, quote empty env got')
+              cs => do gam <- getCtxt
+                       c <- addConstant env (apply tm imps) exp cs
+                       pure (mkConstantApp c env, got)
+
+export
+inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+               {auto e : Ref EST (EState vars)} ->
+               Env Term vars ->
+               (bname : Name) ->
+               Core annot (Term vars, Term (bname :: vars))
+inventFnType env bname
+    = do an <- genName "argh"
+         scn <- genName "sch"
+         argTy <- addBoundName an False env TType
+         scTy <- addBoundName scn False (Pi Explicit argTy :: env) TType
+         pure (argTy, scTy)
 

@@ -42,6 +42,8 @@ using (FileIO m)
   processDecl env nest (IData loc d) 
       = processData (\c, u, i => processDecl {c} {u} {i})
                     env nest d
+  processDecl env nest (INamespace loc ns)
+      = setNS ns
   processDecl env nest (ImplicitNames loc ns) 
       = do traverse (\ x => addImp (fst x) (snd x)) ns
            pure ()
