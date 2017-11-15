@@ -14,17 +14,41 @@ import Data.List.Views
 
 %default covering
 
+-- Check a name. At this point, we've already established that it's not
+-- one of the local definitions, so it either must be a local variable or
+-- a globally defined name
 checkName : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             ElabMode -> annot -> Env Term vars -> Name -> Maybe (Term vars) ->
             Core annot (Term vars, Term vars)
-checkName elabmode loc env x expected 
-    = do (x', varty) <- infer loc env (RVar x)
-         gam <- getCtxt
-         -- If the variable has an implicit binder in its type, add
-         -- the implicits here
-         (ty, imps) <- getImps loc env (nf gam env varty) []
-         checkExp loc elabmode env (apply x' imps) (quote empty env ty) expected
+checkName {vars} elabmode loc env x expected 
+    = do gam <- getCtxt
+         case defined x env of
+           Just lv => 
+               do let varty = binderType (getBinder lv env) 
+                  (ty, imps) <- getImps loc env (nf gam env varty) []
+                  checkExp loc elabmode env (apply (Local lv) imps)
+                          (quote empty env ty) expected
+           Nothing =>
+               case lookupDefTyName x gam of
+                    [] => throw $ UndefinedName loc x
+                    [(fullname, def, ty)] => 
+                         resolveRef fullname def gam (embed ty)
+                    -- TODO: Resolve ambiguities
+                    ns => throw $ AmbiguousName loc (map fst ns)
+  where
+    resolveRef : Name -> Def -> Gamma -> Term vars -> 
+                 Core annot (Term vars, Term vars)
+    resolveRef n def gam varty
+        = do let nt : NameType 
+                      = case def of
+                           PMDef _ _ _ => Func
+                           DCon tag arity => DataCon tag arity
+                           TCon tag arity _ => TyCon tag arity
+                           _ => Func
+             (ty, imps) <- getImps loc env (nf gam env varty) []
+             checkExp loc elabmode env (apply (Ref nt n) imps) 
+                          (quote empty env ty) expected
 
 mutual
   export

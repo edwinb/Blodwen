@@ -16,6 +16,7 @@ data Error annot
     | Cycle annot (Env Term vars) (Term vars) (Term vars)
     | WhenUnifying annot (Term vars) (Term vars) (Error annot)
     | UndefinedName annot Name
+    | AmbiguousName annot (List Name)
     | NoDeclaration annot Name
     | AlreadyDefined annot Name
     | NotFunctionType annot (Term vars)
@@ -25,6 +26,8 @@ data Error annot
     | GenericMsg annot String
     | InternalError String
 
+-- Simplest possible display - higher level languages should unelaborate names
+-- and display annotations appropriately
 export
 Show (Error annot) where
   show (CantConvert _ env x y) 
@@ -34,6 +37,7 @@ Show (Error annot) where
   show (WhenUnifying _ x y err)
       = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++ show err
   show (UndefinedName _ x) = "Undefined name " ++ show x
+  show (AmbiguousName _ ns) = "Ambiguous name " ++ show ns
   show (NoDeclaration _ x) = "No type declaration for " ++ show x
   show (AlreadyDefined _ x) = show x ++ " is already defined"
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm

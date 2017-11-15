@@ -19,7 +19,8 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
               Core annot Clause
 checkClause elab defining env nest (MkImpClause loc lhs_raw rhs_raw)
-    = do (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
+    = do lhs_raw <- lhsInCurrentNS lhs_raw
+         (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
          gam <- getCtxt
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
@@ -53,8 +54,9 @@ processDef : {auto c : Ref Ctxt Defs} ->
              Env Term vars -> NestedNames vars -> annot ->
              Name -> List (ImpClause annot) -> 
              Core annot ()
-processDef elab env nest loc n cs_raw
+processDef elab env nest loc n_in cs_raw
     = do gam <- getCtxt
+         n <- inCurrentNS n_in
          case lookupDefTyExact n gam of
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>

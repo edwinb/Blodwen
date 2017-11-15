@@ -16,8 +16,9 @@ checkCon : {auto c : Ref Ctxt Defs} ->
            Elaborator annot -> 
            Env Term vars -> NestedNames vars -> ImpTy annot ->
            Core annot Constructor
-checkCon elab env nest (MkImpTy annot cn ty_raw)
-    = do ty_imp <- mkBindImps ty_raw
+checkCon elab env nest (MkImpTy annot cn_in ty_raw)
+    = do cn <- inCurrentNS cn_in
+         ty_imp <- mkBindImps ty_raw
          ty <- checkTerm elab cn env nest (PI False) InType ty_imp TType
          let ty' = abstractEnvType env ty
          -- TODO: Check 'ty' returns something in the right family
@@ -31,8 +32,9 @@ processData : {auto c : Ref Ctxt Defs} ->
               Elaborator annot ->
               Env Term vars -> NestedNames vars -> ImpData annot -> 
               Core annot ()
-processData elab env nest (MkImpData annot n ty_raw cons_raw)
-    = do ty_imp <- mkBindImps ty_raw
+processData elab env nest (MkImpData annot n_in ty_raw cons_raw)
+    = do n <- inCurrentNS n_in
+         ty_imp <- mkBindImps ty_raw
          ty <- checkTerm elab n env nest (PI False) InType ty_imp TType
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty

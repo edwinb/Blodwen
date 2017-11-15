@@ -224,6 +224,20 @@ inCurrentNS (UN n)
          pure (NS (currentNS ist) (UN n))
 inCurrentNS n = pure n
 
+-- Update the lhs of a clause so that the name is fully explicit, and
+-- by default is in the current namespace
+export
+lhsInCurrentNS : {auto i : Ref ImpST (ImpState annot)} ->
+                 RawImp annot -> Core annot (RawImp annot)
+lhsInCurrentNS (IApp loc f a)
+    = do f' <- lhsInCurrentNS f
+         pure (IApp loc f' a)
+lhsInCurrentNS (IVar loc n)
+    = do n' <- inCurrentNS n
+         pure (IVar loc n')
+lhsInCurrentNS tm = pure tm
+         
+
 remove : Maybe Name -> List (String, a) -> List (String, a)
 remove (Just (UN n)) xs = removeN n xs
   where
