@@ -25,6 +25,9 @@ atom
   <|> do symbol "$"
          x <- unqualifiedName
          pure (IBindVar () x)
+  <|> do symbol "?"
+         x <- unqualifiedName
+         pure (IHole () x)
   <|> do x <- name
          pure (IVar () x)
 

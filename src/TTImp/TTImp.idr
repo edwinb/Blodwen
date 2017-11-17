@@ -33,6 +33,7 @@ mutual
        IApp : annot -> 
               (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
        IPrimVal : annot -> Constant -> RawImp annot
+       IHole : annot -> String -> RawImp annot
        IType : annot -> RawImp annot
        IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
        IAs : annot -> String -> (pattern : RawImp annot) -> RawImp annot
@@ -110,6 +111,7 @@ getAnnot (ILet x _ _ _ _) = x
 getAnnot (ILocal x _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IPrimVal x _) = x
+getAnnot (IHole x _) = x
 getAnnot (IType x) = x
 getAnnot (IBindVar x _) = x
 getAnnot (IMustUnify x _) = x
@@ -142,6 +144,7 @@ mutual
     show (IApp _ fn arg) 
         = "(" ++ show fn ++ " " ++ show arg ++ ")"
     show (IPrimVal _ y) = show y
+    show (IHole _ x) = "?" ++ x
     show (IType _) = "Type"
     show (IBindVar _ n) = "$" ++ show n
     show (IMustUnify _ tm) = "(." ++ show tm ++ ")"

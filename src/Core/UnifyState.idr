@@ -153,7 +153,7 @@ mkConstantApp {vars} cn env
   = let args = reverse (mkConstantAppArgs {done = []} env []) in
         apply (Ref Func cn) (rewrite sym (appendNilRightNeutral vars) in args)
 
--- Given a term and a type, add a new constant to the global context
+-- Given a term and a type, add a new guarded constant to the global context
 -- by applying the term to the current environment
 -- Return its name
 export

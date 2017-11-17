@@ -151,35 +151,7 @@ mutual
       updateName nest i = i
 
   checkImp process top impmode elabmode env nest (IApp loc fn arg) expected 
-      = do (fntm, fnty) <- check process top impmode elabmode env nest fn Nothing
-           gam <- getCtxt
-           -- If the function has an implicit binder in its type, add
-           -- the implicits here
-           (scopeTy, impArgs) <- getImps loc env (nf gam env fnty) []
-           gam <- getCtxt
-           case scopeTy of
-                NBind _ (Pi _ ty) scdone =>
-                  do (argtm, argty) <- check process top impmode elabmode env nest arg (Just (quote empty env ty))
-                     let sc' = scdone (toClosure False env argtm)
-                     gam <- getCtxt
-                     checkExp loc elabmode env (App (apply fntm impArgs) argtm)
-                                  (quote gam env sc') expected
-                _ => 
-                  do bn <- genName "aTy"
-                     -- invent names for the argument and return types
-                     log 5 $ "Inventing arg type for " ++ show (fn, fnty)
-                     (expty, scty) <- inventFnType env bn
-                     -- Check the argument type against the invented arg type
-                     (argtm, argty) <- 
-                         check process top impmode elabmode env nest arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
-                     -- Check the type of 'fn' is an actual function type
-                     gam <- getCtxt
-                     (fnchk, _) <-
-                         checkExp loc elabmode env fntm 
-                                  (Bind bn (Pi Explicit expty) scty) 
-                                  (Just (quote gam env scopeTy))
-                     checkExp loc elabmode env (App fnchk argtm)
-                                  (Bind bn (Let argtm argty) scty) expected
+      = checkApp process top impmode elabmode loc env nest fn arg expected
   checkImp process top impmode elabmode env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp loc elabmode env x' ty expected
@@ -243,6 +215,16 @@ mutual
                        pure (patTm, expected)
   checkImp process top _ elabmode env nest (IAs loc var tm) expected
       = throw (GenericMsg loc "@-pattern not valid here")
+  checkImp process top impmode elabmode env nest (IHole loc n_in) Nothing
+      = do t <- addHole env TType
+           let hty = mkConstantApp t env
+           n <- inCurrentNS (UN n_in)
+           addNamedHole n False env hty
+           pure (mkConstantApp n env, hty)
+  checkImp process top impmode elabmode env nest (IHole loc n_in) (Just expected) 
+      = do n <- inCurrentNS (UN n_in)
+           addNamedHole n False env expected
+           pure (mkConstantApp n env, expected)
   checkImp process top impmode elabmode env nest (Implicit loc) Nothing
       = do t <- addHole env TType
            let hty = mkConstantApp t env
@@ -252,6 +234,47 @@ mutual
       = do n <- addHole env expected
            pure (mkConstantApp n env, expected)
  
+  checkApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+             {auto e : Ref EST (EState vars)} ->
+             {auto i : Ref ImpST (ImpState annot)} ->
+             Elaborator annot ->
+             (top : Bool) -> -- top level, unbound implicits bound here
+             ImplicitMode -> ElabMode ->
+             annot -> Env Term vars -> NestedNames vars -> 
+             (fn : RawImp annot) -> (arg : RawImp annot) ->
+             Maybe (Term vars) ->
+             Core annot (Term vars, Term vars) 
+  checkApp process top impmode elabmode loc env nest fn arg expected
+      = do (fntm, fnty) <- check process top impmode elabmode env nest fn Nothing
+           gam <- getCtxt
+           -- If the function has an implicit binder in its type, add
+           -- the implicits here
+           (scopeTy, impArgs) <- getImps loc env (nf gam env fnty) []
+           gam <- getCtxt
+           case scopeTy of
+                NBind _ (Pi _ ty) scdone =>
+                  do (argtm, argty) <- check process top impmode elabmode env nest arg (Just (quote empty env ty))
+                     let sc' = scdone (toClosure False env argtm)
+                     gam <- getCtxt
+                     checkExp loc elabmode env (App (apply fntm impArgs) argtm)
+                                  (quote gam env sc') expected
+                _ => 
+                  do bn <- genName "aTy"
+                     -- invent names for the argument and return types
+                     log 5 $ "Inventing arg type for " ++ show (fn, fnty)
+                     (expty, scty) <- inventFnType env bn
+                     -- Check the argument type against the invented arg type
+                     (argtm, argty) <- 
+                         check process top impmode elabmode env nest arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
+                     -- Check the type of 'fn' is an actual function type
+                     gam <- getCtxt
+                     (fnchk, _) <-
+                         checkExp loc elabmode env fntm 
+                                  (Bind bn (Pi Explicit expty) scty) 
+                                  (Just (quote gam env scopeTy))
+                     checkExp loc elabmode env (App fnchk argtm)
+                                  (Bind bn (Let argtm argty) scty) expected
+
   checkPi : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
