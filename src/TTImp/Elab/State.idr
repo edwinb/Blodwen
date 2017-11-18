@@ -41,6 +41,16 @@ Elaborator annot
       Env Term vars -> NestedNames vars -> 
       ImpDecl annot -> Core annot ()
 
+public export
+record ElabInfo where
+  constructor MkElabInfo
+  topLevel : Bool
+  implicitMode : ImplicitMode
+  elabMode : ElabMode
+
+export
+initElabInfo : ImplicitMode -> ElabMode -> ElabInfo
+initElabInfo imp elab = MkElabInfo True imp elab
 
 -- A label for the internal elaborator state
 export
@@ -49,6 +59,33 @@ data EST : Type where
 export
 initEState : Name -> EState vars
 initEState n = MkElabState [] [] n
+
+-- Convenient way to record all of the elaborator state, for the times
+-- we need to backtrack
+export
+AllState : List Name -> Type -> Type
+AllState vars annot = (Defs, UState annot, EState vars, ImpState annot)
+
+export
+getState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+           Core annot (AllState vars annot)
+getState
+    = do ctxt <- get Ctxt
+         ust <- get UST
+         est <- get EST
+         ist <- get ImpST
+         pure (ctxt, ust, est, ist)
+
+export
+putState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+           AllState vars annot -> Core annot ()
+putState (ctxt, ust, est, ist)
+    = do put Ctxt ctxt
+         put UST ust
+         put EST est
+         put ImpST ist
 
 export
 weakenedEState : {auto e : Ref EST (EState vs)} ->
@@ -347,17 +384,17 @@ convertImps loc env got exp imps = pure (got, reverse imps)
 export
 checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
            {auto e : Ref EST (EState vars)} ->
-           annot -> ElabMode -> Env Term vars ->
+           annot -> ElabInfo -> Env Term vars ->
            (term : Term vars) -> (got : Term vars) -> 
            (exp : Maybe (Term vars)) ->
            Core annot (Term vars, Term vars) 
-checkExp loc elabmode env tm got Nothing
+checkExp loc elabinfo env tm got Nothing
     = pure (tm, got)
-checkExp loc elabmode env tm got (Just exp) 
+checkExp loc elabinfo env tm got (Just exp) 
     = do gam <- getCtxt
          let expnf = nf gam env exp
          (got', imps) <- convertImps loc env (nf gam env got) expnf []
-         constr <- convert loc elabmode env got' expnf
+         constr <- convert loc (elabMode elabinfo) env got' expnf
          case constr of
               [] => pure (apply tm imps, quote empty env got')
               cs => do gam <- getCtxt
@@ -377,3 +414,62 @@ inventFnType env bname
          scTy <- addBoundName scn False (Pi Explicit argTy :: env) TType
          pure (argTy, scTy)
 
+-- try an elaborator, if it fails reset the state and return 'Left',
+-- otherwise return 'Right'
+export
+tryElab : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+          Core annot a -> Core annot (Either (Error annot) a)
+tryElab elab 
+    = do -- store the current state of everything
+         st <- getState
+         catch (do res <- elab 
+                   pure (Right res))
+               (\err => do -- reset the state
+                           putState st
+                           pure (Left err))
+
+-- try one elaborator; if it fails, try another
+export
+try : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+      {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+      Core annot (Term vars, Term vars) ->
+      Core annot (Term vars, Term vars) ->
+      Core annot (Term vars, Term vars)
+try elab1 elab2
+    = do Right ok <- tryElab elab1
+               | Left err => elab2
+         pure ok
+
+-- try all elaborators, return the results from the ones which succeed
+-- and the corresponding elaborator state
+export
+successful : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             List (Core annot (Term vars, Term vars)) ->
+             Core annot (List (Term vars, Term vars, AllState vars annot))
+successful [] = pure []
+successful (elab :: elabs)
+    = do init_st <- getState
+         Right (restm, resty) <- tryElab elab
+               | Left err => successful elabs
+
+         elabState <- getState -- save state at end of successful elab
+         -- reinitialise state for next elabs
+         putState init_st
+         rest <- successful elabs
+         pure ((restm, resty, elabState) :: rest)
+
+export
+exactlyOne : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             annot ->
+             List (Core annot (Term vars, Term vars)) ->
+             Core annot (Term vars, Term vars)
+exactlyOne loc [elab] = elab
+exactlyOne loc all
+    = do [(restm, resty, state)] <- successful all
+             | [] => throw (GenericMsg loc "All elaborators failed")
+             | rs => throw (AmbiguousElab loc (map fst rs))
+         putState state
+         pure (restm, resty)

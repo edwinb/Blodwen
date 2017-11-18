@@ -17,6 +17,7 @@ data Error annot
     | WhenUnifying annot (Term vars) (Term vars) (Error annot)
     | UndefinedName annot Name
     | AmbiguousName annot (List Name)
+    | AmbiguousElab annot (List (Term vars))
     | NoDeclaration annot Name
     | AlreadyDefined annot Name
     | NotFunctionType annot (Term vars)
@@ -38,6 +39,7 @@ Show (Error annot) where
       = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++ show err
   show (UndefinedName _ x) = "Undefined name " ++ show x
   show (AmbiguousName _ ns) = "Ambiguous name " ++ show ns
+  show (AmbiguousElab _ ts) = "Ambiguous elaboration " ++ show ts
   show (NoDeclaration _ x) = "No type declaration for " ++ show x
   show (AlreadyDefined _ x) = show x ++ " is already defined"
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm

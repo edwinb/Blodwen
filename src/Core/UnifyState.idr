@@ -172,7 +172,7 @@ addConstant env tm ty constrs
          addDef cn guess
          pure cn
 
--- Given a type, add a new global metavariable and return its name
+-- Given a type and a name, add a new global metavariable
 export
 addNamedHole : {auto u : Ref UST (UState annot)} ->
                {auto c : Ref Ctxt Defs} ->

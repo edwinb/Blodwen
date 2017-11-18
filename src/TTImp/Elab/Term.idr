@@ -19,15 +19,15 @@ import Data.List.Views
 -- a globally defined name
 checkName : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
-            ElabMode -> annot -> Env Term vars -> Name -> Maybe (Term vars) ->
+            ElabInfo -> annot -> Env Term vars -> Name -> Maybe (Term vars) ->
             Core annot (Term vars, Term vars)
-checkName {vars} elabmode loc env x expected 
+checkName {vars} elabinfo loc env x expected 
     = do gam <- getCtxt
          case defined x env of
            Just lv => 
                do let varty = binderType (getBinder lv env) 
                   (ty, imps) <- getImps loc env (nf gam env varty) []
-                  checkExp loc elabmode env (apply (Local lv) imps)
+                  checkExp loc elabinfo env (apply (Local lv) imps)
                           (quote empty env ty) expected
            Nothing =>
                case lookupDefTyName x gam of
@@ -47,49 +47,46 @@ checkName {vars} elabmode loc env x expected
                            TCon tag arity _ => TyCon tag arity
                            _ => Func
              (ty, imps) <- getImps loc env (nf gam env varty) []
-             checkExp loc elabmode env (apply (Ref nt n) imps) 
+             checkExp loc elabinfo env (apply (Ref nt n) imps) 
                           (quote empty env ty) expected
+  
+-- If the expected type has an implicit pi, elaborate with leading
+-- implicit lambdas (so at the moment, implicit lambdas can only be inserted
+-- by the machine, not a programmer.)
+insertImpLam : Env Term vars ->
+               (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
+               RawImp annot
+insertImpLam env tm Nothing = tm
+insertImpLam env tm (Just ty) = bindLam tm ty
+  where
+    bindLam : RawImp annot -> Term vars -> RawImp annot
+    bindLam tm (Bind n (Pi Implicit ty) sc)
+        = let loc = getAnnot tm in
+              ILam loc Implicit n (Implicit loc) (bindLam tm sc)
+    bindLam tm sc = tm
 
 mutual
   export
   check : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-          Elaborator annot ->
-          (top : Bool) -> -- top level, unbound implicits bound here
-          ImplicitMode -> ElabMode ->
+          Elaborator annot -> ElabInfo ->
           Env Term vars -> NestedNames vars ->
           (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
           Core annot (Term vars, Term vars) 
-  check process top impmode InLHS env nest tm exp -- don't expand implicit lambda on LHS
-      = checkImp process top impmode InLHS env nest tm exp
-  check process top impmode elabmode env nest tm exp 
-      = let tm' = insertImpLam env tm exp in
-            checkImp process top impmode elabmode env nest tm' exp
-
-  -- If the expected type has an implicit pi, elaborate with leading
-  -- implicit lambdas (so at the moment, implicit lambdas can only be inserted
-  -- by the machine, not a programmer.)
-  insertImpLam : Env Term vars ->
-                 (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
-                 RawImp annot
-  insertImpLam env tm Nothing = tm
-  insertImpLam env tm (Just ty) = bindLam tm ty
-    where
-      bindLam : RawImp annot -> Term vars -> RawImp annot
-      bindLam tm (Bind n (Pi Implicit ty) sc)
-          = let loc = getAnnot tm in
-                ILam loc Implicit n (Implicit loc) (bindLam tm sc)
-      bindLam tm sc = tm
+  check process elabinfo env nest tm exp -- don't expand implicit lambda on LHS
+      = case elabMode elabinfo of
+             InLHS => checkImp process elabinfo env nest tm exp
+             _ => let tm' = insertImpLam env tm exp in
+                      checkImp process elabinfo env nest tm' exp
 
   checkImp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
              Elaborator annot ->
-             (top : Bool) -> -- top level, unbound implicits bound here
-             ImplicitMode -> ElabMode ->
+             ElabInfo ->
              Env Term vars -> NestedNames vars ->
              (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
              Core annot (Term vars, Term vars) 
-  checkImp process top impmode elabmode env nest (IVar loc x) expected 
+  checkImp process elabinfo env nest (IVar loc x) expected 
       = case lookup x (names nest) of
              Just (n', tm) =>
                   do gam <- getCtxt
@@ -98,31 +95,30 @@ mutual
                           Just ty => 
                              let tyenv = useVars (getArgs tm) (embed ty) in
                                 do log 5 $ "Type of " ++ show n' ++ " : " ++ show tyenv
-                                   checkExp loc elabmode env tm tyenv expected
-             _ => checkName elabmode loc env x expected
+                                   checkExp loc elabinfo env tm tyenv expected
+             _ => checkName elabinfo loc env x expected
     where
       useVars : List (Term vars) -> Term vars -> Term vars
       useVars [] sc = sc
       useVars (a :: as) (Bind n (Pi _ ty) sc) 
            = Bind n (Let a ty) (useVars (map weaken as) sc)
       useVars _ sc = sc -- Can't happen?
-
-  checkImp process top impmode elabmode env nest (IPi loc plicity Nothing ty retTy) expected 
+  checkImp process elabinfo env nest (IPi loc plicity Nothing ty retTy) expected 
       = do n <- genName "pi"
-           checkPi process top impmode elabmode loc env nest plicity n ty retTy expected
-  checkImp process top impmode elabmode env nest (IPi loc plicity (Just n) ty retTy) expected 
-      = checkPi process top impmode elabmode loc env nest plicity n ty retTy expected
-  checkImp process top impmode elabmode env nest (ILam loc plicity n ty scope) expected
-      = checkLam process top impmode elabmode loc env nest plicity n ty scope expected
-  checkImp process top impmode elabmode env nest (ILet loc n nTy nVal scope) expected 
-      = checkLet process top impmode elabmode loc env nest n nTy nVal scope expected
-  checkImp {vars} {c} {u} {i} process top impmode elabmode env nest (ILocal loc nested scope) expected 
+           checkPi process elabinfo loc env nest plicity n ty retTy expected
+  checkImp process elabinfo env nest (IPi loc plicity (Just n) ty retTy) expected 
+      = checkPi process elabinfo loc env nest plicity n ty retTy expected
+  checkImp process elabinfo env nest (ILam loc plicity n ty scope) expected
+      = checkLam process elabinfo loc env nest plicity n ty scope expected
+  checkImp process elabinfo env nest (ILet loc n nTy nVal scope) expected 
+      = checkLet process elabinfo loc env nest n nTy nVal scope expected
+  checkImp {vars} {c} {u} {i} process elabinfo env nest (ILocal loc nested scope) expected 
       = do let defNames = definedInBlock nested
            est <- get EST
            let f = defining est
            let nest' = record { names $= ((map (applyEnv f) defNames) ++) } nest
            traverse (process c u i env nest') (map (updateName nest') nested)
-           checkImp process top impmode elabmode env nest' scope expected
+           checkImp process elabinfo env nest' scope expected
     where
       applyEnv : Name -> Name -> (Name, (Name, Term vars))
       applyEnv outer inner = (inner, (GN (Nested outer inner), 
@@ -150,56 +146,91 @@ mutual
       updateName nest (IData loc d) = IData loc (updateDataName nest d)
       updateName nest i = i
 
-  checkImp process top impmode elabmode env nest (IApp loc fn arg) expected 
-      = checkApp process top impmode elabmode loc env nest fn arg expected
-  checkImp process top impmode elabmode env nest (IPrimVal loc x) expected 
+  checkImp process elabinfo env nest (IApp loc fn arg) expected 
+      = checkApp process elabinfo loc env nest fn arg expected
+  checkImp process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
-           checkExp loc elabmode env x' ty expected
-  checkImp process top impmode elabmode env nest (IType loc) exp
-      = checkExp loc elabmode env TType TType exp
-  checkImp process top impmode InExpr env nest (IBindVar loc str) exp
+           checkExp loc elabinfo env x' ty expected
+  checkImp process elabinfo env nest (IType loc) exp
+      = checkExp loc elabinfo env TType TType exp
+  checkImp process elabinfo env nest (IBindVar loc str) exp with (elabMode elabinfo)
+    checkImp process elabinfo env nest (IBindVar loc str) exp | InExpr
       = throw (BadImplicit loc str)
-  checkImp process top impmode elabmode env nest (IBindVar loc str) Nothing
-      = do let n = PV str
-           t <- addHole env TType
-           let hty = mkConstantApp t env
-           est <- get EST
-           case lookup n (boundNames est) of
-                Nothing =>
-                  do tm <- addBoundName n True env hty
-                     put EST 
-                         (record { boundNames $= ((n, (tm, hty)) ::),
-                                   toBind $= ((n, (tm, hty)) ::) } est)
-                     pure (tm, hty)
-                Just (tm, ty) =>
-                     pure (tm, ty)
-  checkImp process top impmode elabmode env nest (IBindVar loc str) (Just expected) 
-      = do let n = PV str
-           est <- get EST
-           case lookup n (boundNames est) of
-                Nothing =>
-                  do tm <- addBoundName n True env expected
-                     log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
-                     put EST 
-                         (record { boundNames $= ((n, (tm, expected)) ::),
-                                   toBind $= ((n, (tm, expected)) :: ) } est)
-                     pure (tm, expected)
-                Just (tm, ty) =>
-                     checkExp loc elabmode env tm ty (Just expected)
-  checkImp process top PATTERN InLHS env nest (IMustUnify loc tm) (Just expected)
-      = do (wantedTm, wantedTy) <- checkImp process top PATTERN InLHS env nest tm (Just expected)
+    checkImp process elabinfo env nest (IBindVar loc str) Nothing | elabmode
+        = do let n = PV str
+             t <- addHole env TType
+             let hty = mkConstantApp t env
+             est <- get EST
+             case lookup n (boundNames est) of
+                  Nothing =>
+                    do tm <- addBoundName n True env hty
+                       put EST 
+                           (record { boundNames $= ((n, (tm, hty)) ::),
+                                     toBind $= ((n, (tm, hty)) ::) } est)
+                       pure (tm, hty)
+                  Just (tm, ty) =>
+                       pure (tm, ty)
+    checkImp process elabinfo env nest (IBindVar loc str) (Just expected) | elabmode
+        = do let n = PV str
+             est <- get EST
+             case lookup n (boundNames est) of
+                  Nothing =>
+                    do tm <- addBoundName n True env expected
+                       log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
+                       put EST 
+                           (record { boundNames $= ((n, (tm, expected)) ::),
+                                     toBind $= ((n, (tm, expected)) :: ) } est)
+                       pure (tm, expected)
+                  Just (tm, ty) =>
+                       checkExp loc elabinfo env tm ty (Just expected)
+  checkImp process elabinfo env nest (IMustUnify loc tm) (Just expected) with (elabMode elabinfo)
+    checkImp process elabinfo env nest (IMustUnify loc tm) (Just expected) | InLHS
+      = do (wantedTm, wantedTy) <- checkImp process elabinfo env nest tm (Just expected)
            n <- addHole env expected
            gam <- getCtxt
            let tm = mkConstantApp n env
            addDot loc env wantedTm tm
---            constr <- convert loc InLHS env (nf gam env wantedTm) (nf gam env tm)
-           checkExp loc InLHS env tm wantedTy (Just expected)
-  checkImp process top _ elabmode env nest (IMustUnify loc tm) expected
+           checkExp loc elabinfo env tm wantedTy (Just expected)
+    checkImp process elabinfo env nest (IMustUnify loc tm) (Just expected) | elabmode
+        = throw (GenericMsg loc "Dot pattern not valid here")
+  checkImp process elabinfo env nest (IMustUnify loc tm) expected
       = throw (GenericMsg loc "Dot pattern not valid here")
-  checkImp process top PATTERN InLHS env nest (IAs loc var tm) (Just expected)
+  checkImp process elabinfo env nest (IAs loc var tm) expected with (elabMode elabinfo)
+    checkImp process elabinfo env nest (IAs loc var tm) (Just expected) | InLHS
+      = checkAs process elabinfo loc env nest var tm expected
+    checkImp process elabinfo env nest (IAs loc var tm) expected | elabmode
+        = throw (GenericMsg loc "@-pattern not valid here")
+  checkImp process elabinfo env nest (IHole loc n_in) Nothing
+      = do t <- addHole env TType
+           let hty = mkConstantApp t env
+           n <- inCurrentNS (UN n_in)
+           addNamedHole n False env hty
+           pure (mkConstantApp n env, hty)
+  checkImp process elabinfo env nest (IHole loc n_in) (Just expected) 
+      = do n <- inCurrentNS (UN n_in)
+           addNamedHole n False env expected
+           pure (mkConstantApp n env, expected)
+  checkImp process elabinfo env nest (Implicit loc) Nothing
+      = do t <- addHole env TType
+           let hty = mkConstantApp t env
+           n <- addHole env hty
+           pure (mkConstantApp n env, hty)
+  checkImp process elabinfo env nest (Implicit loc) (Just expected) 
+      = do n <- addHole env expected
+           pure (mkConstantApp n env, expected)
+
+  checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+            {auto e : Ref EST (EState vars)} ->
+            {auto i : Ref ImpST (ImpState annot)} ->
+            Elaborator annot ->
+            ElabInfo -> annot -> Env Term vars -> NestedNames vars -> 
+            String -> (arg : RawImp annot) ->
+            Term vars ->
+            Core annot (Term vars, Term vars) 
+  checkAs process elabinfo loc env nest var tm expected
       = do let n = PV var
            est <- get EST
-           (patTm, patTy) <- checkImp process top PATTERN InLHS env nest tm (Just expected)
+           (patTm, patTy) <- checkImp process elabinfo env nest tm (Just expected)
            addBoundName n False env expected
            case lookup n (boundNames est) of
                 Just (tm, ty) =>
@@ -213,39 +244,17 @@ mutual
                        gam <- getCtxt
                        convert loc InLHS env (nf gam env patTm) (nf gam env tm)
                        pure (patTm, expected)
-  checkImp process top _ elabmode env nest (IAs loc var tm) expected
-      = throw (GenericMsg loc "@-pattern not valid here")
-  checkImp process top impmode elabmode env nest (IHole loc n_in) Nothing
-      = do t <- addHole env TType
-           let hty = mkConstantApp t env
-           n <- inCurrentNS (UN n_in)
-           addNamedHole n False env hty
-           pure (mkConstantApp n env, hty)
-  checkImp process top impmode elabmode env nest (IHole loc n_in) (Just expected) 
-      = do n <- inCurrentNS (UN n_in)
-           addNamedHole n False env expected
-           pure (mkConstantApp n env, expected)
-  checkImp process top impmode elabmode env nest (Implicit loc) Nothing
-      = do t <- addHole env TType
-           let hty = mkConstantApp t env
-           n <- addHole env hty
-           pure (mkConstantApp n env, hty)
-  checkImp process top impmode elabmode env nest (Implicit loc) (Just expected) 
-      = do n <- addHole env expected
-           pure (mkConstantApp n env, expected)
- 
+
   checkApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
              Elaborator annot ->
-             (top : Bool) -> -- top level, unbound implicits bound here
-             ImplicitMode -> ElabMode ->
-             annot -> Env Term vars -> NestedNames vars -> 
+             ElabInfo -> annot -> Env Term vars -> NestedNames vars -> 
              (fn : RawImp annot) -> (arg : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot (Term vars, Term vars) 
-  checkApp process top impmode elabmode loc env nest fn arg expected
-      = do (fntm, fnty) <- check process top impmode elabmode env nest fn Nothing
+  checkApp process elabinfo loc env nest fn arg expected
+      = do (fntm, fnty) <- check process elabinfo env nest fn Nothing
            gam <- getCtxt
            -- If the function has an implicit binder in its type, add
            -- the implicits here
@@ -253,10 +262,10 @@ mutual
            gam <- getCtxt
            case scopeTy of
                 NBind _ (Pi _ ty) scdone =>
-                  do (argtm, argty) <- check process top impmode elabmode env nest arg (Just (quote empty env ty))
+                  do (argtm, argty) <- check process elabinfo env nest arg (Just (quote empty env ty))
                      let sc' = scdone (toClosure False env argtm)
                      gam <- getCtxt
-                     checkExp loc elabmode env (App (apply fntm impArgs) argtm)
+                     checkExp loc elabinfo env (App (apply fntm impArgs) argtm)
                                   (quote gam env sc') expected
                 _ => 
                   do bn <- genName "aTy"
@@ -264,36 +273,38 @@ mutual
                      log 5 $ "Inventing arg type for " ++ show (fn, fnty)
                      (expty, scty) <- inventFnType env bn
                      -- Check the argument type against the invented arg type
-                     (argtm, argty) <- 
-                         check process top impmode elabmode env nest arg (Just expty) -- (Bind bn (Pi Explicit expty) scty))
+                     (argtm, argty) <- check process elabinfo env nest arg (Just expty)
                      -- Check the type of 'fn' is an actual function type
                      gam <- getCtxt
                      (fnchk, _) <-
-                         checkExp loc elabmode env fntm 
+                         checkExp loc elabinfo env fntm 
                                   (Bind bn (Pi Explicit expty) scty) 
                                   (Just (quote gam env scopeTy))
-                     checkExp loc elabmode env (App fnchk argtm)
+                     checkExp loc elabinfo env (App fnchk argtm)
                                   (Bind bn (Let argtm argty) scty) expected
+
 
   checkPi : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
-            Elaborator annot ->
-            (top : Bool) -> -- top level, unbound implicits bound here
-            ImplicitMode -> ElabMode ->
+            Elaborator annot -> ElabInfo ->
             annot -> Env Term vars -> NestedNames vars -> PiInfo -> Name -> 
             (argty : RawImp annot) -> (retty : RawImp annot) ->
             Maybe (Term vars) ->
             Core annot (Term vars, Term vars) 
-  checkPi process top impmode elabmode loc env nest info n argty retty expected
-      = do (tyv, tyt) <- check process False impmode elabmode env nest argty (Just TType)
+  checkPi process elabinfo loc env nest info n argty retty expected
+      = do let top = topLevel elabinfo
+           let impmode = implicitMode elabinfo
+           let elabmode = elabMode elabinfo
+           (tyv, tyt) <- check process (record { topLevel = False } elabinfo) 
+                               env nest argty (Just TType)
            let env' : Env Term (n :: _) = Pi info tyv :: env
            est <- get EST
            let argImps = if top then (reverse $ toBind est) else []
            when top $ clearToBind 
            e' <- weakenedEState 
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} process top impmode elabmode env' (weaken nest') retty (Just TType)
+           (scopev, scopet) <- check {e=e'} process elabinfo env' (weaken nest') retty (Just TType)
            est <- get {ref=e'} EST
            let scopeImps = reverse $ toBind est
            st' <- strengthenedEState {e=e'} top loc
@@ -317,41 +328,39 @@ mutual
                                           TType
                       traverse (\n => implicitBind n) (map fst scopeImps)
                       traverse (\n => implicitBind n) (map fst argImps)
-                      checkExp loc elabmode env binder bindert expected
-                _ => checkExp loc elabmode env (Bind n (Pi info tyv) scopev)
+                      checkExp loc elabinfo env binder bindert expected
+                _ => checkExp loc elabinfo env (Bind n (Pi info tyv) scopev)
                                       TType expected
 
   checkLam : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
-             Elaborator annot ->
-             (top : Bool) -> -- top level, unbound implicits bound here
-             ImplicitMode -> ElabMode ->
+             Elaborator annot -> ElabInfo ->
              annot -> Env Term vars -> NestedNames vars -> PiInfo -> Name ->
              (ty : RawImp annot) -> (scope : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot (Term vars, Term vars) 
-  checkLam process top impmode elabmode loc env nest plicity n ty scope (Just (Bind bn (Pi Explicit pty) psc))
-      = do (tyv, tyt) <- check process top impmode elabmode env nest ty (Just TType)
+  checkLam process elabinfo loc env nest plicity n ty scope (Just (Bind bn (Pi Explicit pty) psc))
+      = do (tyv, tyt) <- check process elabinfo env nest ty (Just TType)
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check process {e=e'} top impmode elabmode (Pi plicity pty :: env) 
+           (scopev, scopet) <- check process {e=e'} elabinfo (Pi plicity pty :: env) 
                                      (weaken nest') scope 
                                      (Just (renameTop n psc))
-           st' <- strengthenedEState top loc
+           st' <- strengthenedEState (topLevel elabinfo) loc
            put EST st'
-           checkExp loc elabmode env (Bind n (Lam plicity tyv) scopev)
+           checkExp loc elabinfo env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         (Just (Bind bn (Pi plicity pty) psc))
-  checkLam process top impmode elabmode loc env nest plicity n ty scope expected
-      = do (tyv, tyt) <- check process top impmode elabmode env nest ty (Just TType)
+  checkLam process elabinfo loc env nest plicity n ty scope expected
+      = do (tyv, tyt) <- check process elabinfo env nest ty (Just TType)
            let env' : Env Term (n :: _) = Pi Explicit tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} process top impmode elabmode env' (weaken nest') scope Nothing
-           st' <- strengthenedEState top loc
+           (scopev, scopet) <- check {e=e'} process elabinfo env' (weaken nest') scope Nothing
+           st' <- strengthenedEState (topLevel elabinfo) loc
            put EST st'
-           checkExp loc elabmode env (Bind n (Lam plicity tyv) scopev)
+           checkExp loc elabinfo env (Bind n (Lam plicity tyv) scopev)
                         (Bind n (Pi plicity tyv) scopet)
                         expected
   
@@ -359,25 +368,23 @@ mutual
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
              Elaborator annot ->
-             (top : Bool) -> -- top level, unbound implicits bound here
-             ImplicitMode -> ElabMode ->
-             annot -> Env Term vars -> NestedNames vars ->
+             ElabInfo -> annot -> Env Term vars -> NestedNames vars ->
              Name -> 
              (ty : RawImp annot) -> 
              (val : RawImp annot) -> 
              (scope : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot (Term vars, Term vars) 
-  checkLet process top impmode elabmode loc env nest n ty val scope expected
-      = do (tyv, tyt) <- check process top impmode elabmode env nest ty (Just TType)
-           (valv, valt) <- check process top impmode elabmode env nest val (Just tyv)
+  checkLet process elabinfo loc env nest n ty val scope expected
+      = do (tyv, tyt) <- check process elabinfo env nest ty (Just TType)
+           (valv, valt) <- check process elabinfo env nest val (Just tyv)
            let env' : Env Term (n :: _) = Let valv tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} process top impmode elabmode env' 
+           (scopev, scopet) <- check {e=e'} process elabinfo env' 
                                      (weaken nest') scope (map weaken expected)
-           st' <- strengthenedEState top loc
+           st' <- strengthenedEState (topLevel elabinfo) loc
            put EST st'
-           checkExp loc elabmode env (Bind n (Let valv tyv) scopev)
+           checkExp loc elabinfo env (Bind n (Let valv tyv) scopev)
                                      (Bind n (Let valv tyv) scopet)
                                      expected
