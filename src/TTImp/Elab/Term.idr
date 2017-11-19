@@ -36,7 +36,7 @@ getImps loc env ty imps = pure (ty, reverse imps)
 -- one of the local definitions, so it either must be a local variable or
 -- a globally defined name
 checkName : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-            {auto e : Ref EST (EState vars)} ->
+            {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
             ElabInfo -> annot -> Env Term vars -> Name -> Maybe (Term vars) ->
             Core annot (Term vars, Term vars)
 checkName {vars} elabinfo loc env x expected 
@@ -52,7 +52,8 @@ checkName {vars} elabinfo loc env x expected
                        [] => throw $ UndefinedName loc x
                        [(fullname, def, ty)] => 
                             resolveRef fullname def gam (embed ty)
-                       ns => throw $ AmbiguousName loc (map fst ns)
+                       ns => exactlyOne loc (map (\ (n, def, ty) =>
+                                     resolveRef n def gam (embed ty)) ns)
   where
     resolveRef : Name -> Def -> Gamma -> Term vars -> 
                  Core annot (Term vars, Term vars)
@@ -82,6 +83,28 @@ insertImpLam env tm (Just ty) = bindLam tm ty
               ILam loc Implicit n (Implicit loc) (bindLam tm sc)
     bindLam tm sc = tm
 
+expandAmbigName : Gamma -> Env Term vars -> NestedNames vars ->
+                  RawImp annot -> 
+                  List (annot, RawImp annot) -> RawImp annot -> RawImp annot
+expandAmbigName gam env nest orig args (IVar loc x)
+   = case lookup x (names nest) of
+          Just _ => orig
+          Nothing => 
+            case defined x env of
+                 Just _ => orig
+                 Nothing => case lookupCtxtName x gam of
+                                 [] => orig
+                                 ns => IAlternative loc True
+                                         (map (\n => buildAlt (IVar loc n) args) 
+                                              (map fst ns))
+  where
+    buildAlt : RawImp annot -> List (annot, RawImp annot) -> RawImp annot
+    buildAlt f [] = f
+    buildAlt f ((loc, a) :: as) = buildAlt (IApp loc f a) as
+expandAmbigName gam env nest orig args (IApp loc f a)
+   = expandAmbigName gam env nest orig ((loc, a) :: args) f
+expandAmbigName gam env nest orig args _ = orig
+
 mutual
   export
   check : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -90,12 +113,14 @@ mutual
           Env Term vars -> NestedNames vars ->
           (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
           Core annot (Term vars, Term vars) 
-  check process elabinfo env nest tm exp 
-      = case elabMode elabinfo of
-             -- don't expand implicit lambda on LHS
-             InLHS => checkImp process elabinfo env nest tm exp
-             _ => let tm' = insertImpLam env tm exp in
-                      checkImp process elabinfo env nest tm' exp
+  check process elabinfo env nest tm_in exp 
+      = do gam <- getCtxt
+           let tm = expandAmbigName gam env nest tm_in [] tm_in
+           case elabMode elabinfo of
+               -- don't expand implicit lambda on LHS
+               InLHS => checkImp process elabinfo env nest tm exp
+               _ => let tm' = insertImpLam env tm exp in
+                        checkImp process elabinfo env nest tm' exp
 
   checkImp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
