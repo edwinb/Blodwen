@@ -18,6 +18,7 @@ data Error annot
     | UndefinedName annot Name
     | AmbiguousName annot (List Name)
     | AmbiguousElab annot (List (Term vars))
+    | AllFailed (List (Error annot))
     | NoDeclaration annot Name
     | AlreadyDefined annot Name
     | NotFunctionType annot (Term vars)
@@ -40,6 +41,7 @@ Show (Error annot) where
   show (UndefinedName _ x) = "Undefined name " ++ show x
   show (AmbiguousName _ ns) = "Ambiguous name " ++ show ns
   show (AmbiguousElab _ ts) = "Ambiguous elaboration " ++ show ts
+  show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
   show (NoDeclaration _ x) = "No type declaration for " ++ show x
   show (AlreadyDefined _ x) = show x ++ " is already defined"
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm

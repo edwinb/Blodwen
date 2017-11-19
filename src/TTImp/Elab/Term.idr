@@ -191,6 +191,8 @@ mutual
 
   checkImp process elabinfo env nest (IApp loc fn arg) expected 
       = checkApp process elabinfo loc env nest fn arg expected
+  -- TODO: On failure to disambiguate, postpone? This may become a more worthile
+  -- thing to do after we have some proof search (interfaces, auto implicits)
   checkImp process elabinfo env nest (IAlternative loc uniq alts) expected
       = let tryall = if uniq then exactlyOne else anyOne in
             tryall loc (map (\t => 
