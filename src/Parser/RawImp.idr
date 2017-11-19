@@ -52,6 +52,11 @@ mutual
            e <- expr
            symbol ")"
            pure (IMustUnify () e)
+    <|> do symbol "(|"
+           commit
+           alts <- sepBy1 (symbol ",") expr
+           symbol "|)"
+           pure (IAlternative () True alts)
     <|> do symbol "("
            e <- expr
            symbol ")"

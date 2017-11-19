@@ -52,6 +52,7 @@ special = ["%lam", "%pi", "%imppi", "%let"]
 -- Reserved symbols (thing which can't be used a a prefix of other symbols)
 symbols : List String
 symbols = [".(", -- for things such as Foo.Bar.(+)
+           "(|", "|)",
            ".", "%",
            "(", ")", "{", "}", "[", "]", "`", ",", "|", ";", "_",
            "->", "=>"]

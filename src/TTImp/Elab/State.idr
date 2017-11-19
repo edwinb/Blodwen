@@ -346,24 +346,6 @@ convert loc elabmode env x y
                                                 (normaliseHoles gam env (quote empty env y))
                                   err))
   
--- Get the implicit arguments that need to be inserted at this point
--- in a function application. Do this by reading off implicit Pis
--- in the expected type ('ty') and adding new holes for each.
--- Return the (normalised) remainder of the type, and the list of
--- implicits added
-export
-getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-          {auto e : Ref EST (EState vars)} ->
-          annot -> Env Term vars ->
-          (ty : NF vars) -> List (Term vars) ->
-          Core annot (NF vars, List (Term vars)) 
-getImps loc env (NBind bn (Pi Implicit ty) sc) imps
-    = do hn <- genName (nameRoot bn)
-         addNamedHole hn False env (quote empty env ty)
-         let arg = mkConstantApp hn env
-         getImps loc env (sc (toClosure True env arg)) (arg :: imps)
-getImps loc env ty imps = pure (ty, reverse imps)
-
 --- When converting, add implicits until we've applied enough for the
 --- expected type
 export
@@ -473,3 +455,14 @@ exactlyOne loc all
              | rs => throw (AmbiguousElab loc (map fst rs))
          putState state
          pure (restm, resty)
+
+export
+anyOne : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+         {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+         annot ->
+         List (Core annot (Term vars, Term vars)) ->
+         Core annot (Term vars, Term vars)
+anyOne loc [] = throw (GenericMsg loc "All elaborators failed")
+anyOne loc [elab] = elab
+anyOne loc (e :: es) = try e (anyOne loc es)
+

@@ -32,6 +32,8 @@ mutual
        ILocal : annot -> List (ImpDecl annot) -> RawImp annot -> RawImp annot
        IApp : annot -> 
               (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
+       IAlternative : annot -> (unique : Bool) -> 
+                      List (RawImp annot) -> RawImp annot
        IPrimVal : annot -> Constant -> RawImp annot
        IHole : annot -> String -> RawImp annot
        IType : annot -> RawImp annot
@@ -110,6 +112,7 @@ getAnnot (ILam x _ _ _ _) = x
 getAnnot (ILet x _ _ _ _) = x
 getAnnot (ILocal x _ _) = x
 getAnnot (IApp x _ _) = x
+getAnnot (IAlternative x _ _) = x
 getAnnot (IPrimVal x _) = x
 getAnnot (IHole x _) = x
 getAnnot (IType x) = x
@@ -143,6 +146,8 @@ mutual
         = "(%local (" ++ show def ++ ") " ++ show scope ++ ")"
     show (IApp _ fn arg) 
         = "(" ++ show fn ++ " " ++ show arg ++ ")"
+    show (IAlternative _ u alts) 
+        = "(|" ++ showSep "," (map show alts) ++ "|)"
     show (IPrimVal _ y) = show y
     show (IHole _ x) = "?" ++ x
     show (IType _) = "Type"

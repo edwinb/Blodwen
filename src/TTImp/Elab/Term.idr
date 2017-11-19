@@ -14,6 +14,24 @@ import Data.List.Views
 
 %default covering
 
+-- Get the implicit arguments that need to be inserted at this point
+-- in a function application. Do this by reading off implicit Pis
+-- in the expected type ('ty') and adding new holes for each.
+-- Return the (normalised) remainder of the type, and the list of
+-- implicits added
+export
+getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> Env Term vars ->
+          (ty : NF vars) -> List (Term vars) ->
+          Core annot (NF vars, List (Term vars)) 
+getImps loc env (NBind bn (Pi Implicit ty) sc) imps
+    = do hn <- genName (nameRoot bn)
+         addNamedHole hn False env (quote empty env ty)
+         let arg = mkConstantApp hn env
+         getImps loc env (sc (toClosure True env arg)) (arg :: imps)
+getImps loc env ty imps = pure (ty, reverse imps)
+
 -- Check a name. At this point, we've already established that it's not
 -- one of the local definitions, so it either must be a local variable or
 -- a globally defined name
@@ -30,12 +48,11 @@ checkName {vars} elabinfo loc env x expected
                   checkExp loc elabinfo env (apply (Local lv) imps)
                           (quote empty env ty) expected
            Nothing =>
-               case lookupDefTyName x gam of
-                    [] => throw $ UndefinedName loc x
-                    [(fullname, def, ty)] => 
-                         resolveRef fullname def gam (embed ty)
-                    -- TODO: Resolve ambiguities
-                    ns => throw $ AmbiguousName loc (map fst ns)
+                  case lookupDefTyName x gam of
+                       [] => throw $ UndefinedName loc x
+                       [(fullname, def, ty)] => 
+                            resolveRef fullname def gam (embed ty)
+                       ns => throw $ AmbiguousName loc (map fst ns)
   where
     resolveRef : Name -> Def -> Gamma -> Term vars -> 
                  Core annot (Term vars, Term vars)
@@ -73,8 +90,9 @@ mutual
           Env Term vars -> NestedNames vars ->
           (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
           Core annot (Term vars, Term vars) 
-  check process elabinfo env nest tm exp -- don't expand implicit lambda on LHS
+  check process elabinfo env nest tm exp 
       = case elabMode elabinfo of
+             -- don't expand implicit lambda on LHS
              InLHS => checkImp process elabinfo env nest tm exp
              _ => let tm' = insertImpLam env tm exp in
                       checkImp process elabinfo env nest tm' exp
@@ -148,6 +166,10 @@ mutual
 
   checkImp process elabinfo env nest (IApp loc fn arg) expected 
       = checkApp process elabinfo loc env nest fn arg expected
+  checkImp process elabinfo env nest (IAlternative loc uniq alts) expected
+      = let tryall = if uniq then exactlyOne else anyOne in
+            tryall loc (map (\t => 
+                    checkImp process elabinfo env nest t expected) alts)
   checkImp process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp loc elabinfo env x' ty expected
