@@ -390,9 +390,13 @@ mutual
                                                      (quote empty env tm)))
                                       else do instantiate loc var submv tm'
                                               pure []
-           Nothing => postpone loc env 
-                           (quote empty env (NApp (NRef nt var) args))
-                           (quote empty env tm)
+           Nothing => do log 10 $ "Postponing constraint " ++
+                                      show (quote empty env (NApp (NRef nt var) args))
+                                       ++ " =?= " ++
+                                      show (quote empty env tm)
+                         postpone loc env 
+                               (quote empty env (NApp (NRef nt var) args))
+                               (quote empty env tm)
 
   unifyApp : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -424,9 +428,20 @@ mutual
   unifyApp loc env hd args (NApp hd' args')
       = if convert empty env (NApp hd args) (NApp hd' args')
            then pure []
-           else postpone loc env
-                 (quote empty env (NApp hd args)) 
-                 (quote empty env (NApp hd' args'))
+           else do log 10 $ "Postponing constraint " ++
+                            show (quote empty env (NApp hd args)) ++ " =?= " ++
+                            show (quote empty env (NApp hd' args))
+                   postpone loc env
+                            (quote empty env (NApp hd args)) 
+                            (quote empty env (NApp hd' args'))
+  -- A local variable against a constructor is impossible, because the local
+  -- should quantify over everything
+  unifyApp loc env (NLocal x) [] (NDCon n t a args)
+      = ufail loc $ "Can't unify " ++ show (quote empty env (NApp (NLocal x) []))
+                        ++ " and " ++ show (quote empty env (NDCon n t a args))
+  unifyApp loc env (NLocal x) [] (NTCon n t a args)
+      = ufail loc $ "Can't unify " ++ show (quote empty env (NApp (NLocal x) []))
+                        ++ " and " ++ show (quote empty env (NTCon n t a args))
   -- If they're already convertible without metavariables, we're done,
   -- otherwise postpone
   unifyApp loc env hd args tm 
@@ -434,8 +449,11 @@ mutual
            if convert gam env (quote empty env (NApp hd args))
                               (quote empty env tm)
               then pure []
-              else postpone loc env
-                         (quote empty env (NApp hd args)) (quote empty env tm)
+              else do log 0 $ "Catch all case: Postponing constraint " ++
+                            show (quote empty env (NApp hd args)) ++ " =?= " ++
+                            show (quote empty env tm)
+                      postpone loc env
+                           (quote empty env (NApp hd args)) (quote empty env tm)
   
   export
   Unify Closure where
@@ -457,7 +475,10 @@ mutual
              if convert gam env x y
                 then pure []
                 else if post 
-                        then postpone loc env (quote empty env x) (quote empty env y)
+                        then do log 10 $ "Postponing constraint (unifyIfEq) " ++
+                                         show (quote empty env x) ++ " =?= " ++
+                                         show (quote empty env y)
+                                postpone loc env (quote empty env x) (quote empty env y)
                         else ufail loc $ "Can't unify " ++ show (quote empty env x)
                                             ++ " and "
                                             ++ show (quote empty env y)
@@ -502,8 +523,12 @@ mutual
     unifyD _ _ InTerm loc env (NApp (NLocal xv) argsx) (NApp (NLocal yv) argsy)
         = if sameVar xv yv
              then unifyArgs InTerm loc env argsx argsy
-             else postpone loc env (quote empty env (NApp (NLocal xv) argsx))
-                                   (quote empty env (NApp (NLocal yv) argsy))
+             else do log 10 $ "Postponing constraint (locals) " ++
+                              show (quote empty env (NApp (NLocal xv) argsx))
+                              ++ " =?= " ++
+                              show (quote empty env (NApp (NLocal yv) argsy))
+                     postpone loc env (quote empty env (NApp (NLocal xv) argsx))
+                                      (quote empty env (NApp (NLocal yv) argsy))
     -- If they're both holes, solve the one with the bigger context with
     -- the other
     unifyD _ _ mode loc env (NApp (NRef xt hdx) argsx) (NApp (NRef yt hdy) argsy)
