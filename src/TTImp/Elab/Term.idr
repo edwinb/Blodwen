@@ -30,6 +30,8 @@ getImps loc env (NBind bn (Pi Implicit ty) sc) imps
          addNamedHole hn False env (quote empty env ty)
          let arg = mkConstantApp hn env
          getImps loc env (sc (toClosure True env arg)) (arg :: imps)
+getImps loc env (NBind bn (Pi AutoImplicit ty) sc) imps
+    = throw $ InternalError "auto implicits not yet implemented"
 getImps loc env ty imps = pure (ty, reverse imps)
 
 -- Check a name. At this point, we've already established that it's not
@@ -166,7 +168,7 @@ mutual
       applyEnv : Name -> Name -> (Name, (Name, Term vars))
       applyEnv outer inner = (inner, (GN (Nested outer inner), 
                                       mkConstantApp (GN (Nested outer inner)) env))
-      
+
       -- Update the names in the declarations to the new 'nested' names.
       -- When we encounter the names in elaboration, we'll update to an
       -- application of the nested name.

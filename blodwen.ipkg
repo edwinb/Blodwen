@@ -24,8 +24,9 @@ modules = Core.CaseTree,
 
           Parser.Lexer,
           Parser.Raw,
-          Parser.Support,
           Parser.RawImp,
+          Parser.REPL,
+          Parser.Support,
 
           TTImp.Elab,
           TTImp.Elab.State,
@@ -34,6 +35,7 @@ modules = Core.CaseTree,
           TTImp.ProcessDef,
           TTImp.ProcessType,
           TTImp.ProcessTTImp,
+          TTImp.REPL,
           TTImp.TTImp
 
 sourcedir = src

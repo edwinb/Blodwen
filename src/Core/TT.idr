@@ -45,20 +45,14 @@ Eq Constant where
    IntType == IntType = True
    _ == _ = False
 
--- The 'Nat' refers to a user defined search algorithm for instantiating
--- the argument. Much as I'd like a more precise type here, that type would
--- involve 'Core' which hasn't been defined yet (it's in Core/Core.idr)
--- The idea is: a front end can add search algorithms (such as auto implicits
--- or type class instantiation, or some other decision procedure), which are
--- referred to and invoked using the Nat as an identifier
 public export
-data PiInfo = Implicit | Explicit | Search Nat
+data PiInfo = Implicit | Explicit | AutoImplicit
 
 export
 Eq PiInfo where
   (==) Implicit Implicit = True
   (==) Explicit Explicit = True
-  (==) (Search algx) (Search algy) = algx == algy
+  (==) AutoImplicit AutoImplicit = True
   (==) _ _ = False
 
 public export

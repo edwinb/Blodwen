@@ -74,6 +74,19 @@ mutual
            scope <- typeExpr
            pure (IPi () Explicit (Just n) ty scope)
 
+  autoImplicitPi : Rule (RawImp ())
+  autoImplicitPi
+      = do symbol "{"
+           keyword "auto"
+           commit
+           n <- name
+           symbol ":"
+           ty <- expr
+           symbol "}"
+           symbol "->"
+           scope <- typeExpr
+           pure (IPi () Implicit (Just n) ty scope)
+
   implicitPi : Rule (RawImp ())
   implicitPi
       = do symbol "{"
@@ -122,7 +135,8 @@ mutual
 
   binder : Rule (RawImp ())
   binder
-      = implicitPi
+      = autoImplicitPi
+    <|> implicitPi
     <|> explicitPi
     <|> lam
     <|> let_

@@ -66,6 +66,14 @@ mutual
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        ILog : Nat -> ImpDecl annot
 
+-- REPL commands for TTImp interaction
+public export
+data ImpREPL : Type -> Type where
+     Eval : RawImp annot -> ImpREPL annot
+     Check : RawImp annot -> ImpREPL annot
+     ProofSearch : Name -> ImpREPL annot
+     Quit : ImpREPL annot
+
 -- Information about names in nested blocks
 public export
 record NestedNames (vars : List Name) where
