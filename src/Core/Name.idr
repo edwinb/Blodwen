@@ -27,6 +27,15 @@ mutual
   nameRoot (PV x) = x
   nameRoot (GN x) = gnameRoot x
 
+  export
+  userNameRoot : Name -> Maybe String
+  userNameRoot (UN x) = Just x
+  userNameRoot (MN x y) = Nothing
+  userNameRoot (NS xs x) = userNameRoot x
+  userNameRoot (HN x y) = Nothing
+  userNameRoot (PV x) = Nothing
+  userNameRoot (GN x) = Nothing
+
 export
 showSep : String -> List String -> String
 showSep sep [] = ""

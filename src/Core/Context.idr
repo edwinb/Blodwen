@@ -19,7 +19,7 @@ record Context a where
      -- for looking up by exact (completely qualified) names
      exactNames : SortedMap a 
      -- for looking up by name root or partially qualified (so possibly
-     -- ambiguous) names
+     -- ambiguous) names. This doesn't store machine generated names.
      hierarchy : StringMap (List (Name, a))
 
 export
@@ -33,9 +33,11 @@ lookupCtxtExact n dict = lookup n (exactNames dict)
 export
 lookupCtxtName : Name -> Context a -> List (Name, a)
 lookupCtxtName n dict
-    = case lookup (nameRoot n) (hierarchy dict) of
+    = case userNameRoot n of
            Nothing => []
-           Just ns => filter (matches n) ns
+           Just r => case lookup r (hierarchy dict) of
+                          Nothing => []
+                          Just ns => filter (matches n) ns
 	where
 		-- Name matches if a prefix of the namespace matches a prefix of the 
     -- namespace in the context
@@ -51,10 +53,14 @@ lookupCtxt n dict = map snd (lookupCtxtName n dict)
 addToHier : Name -> a -> 
 						StringMap (List (Name, a)) -> StringMap (List (Name, a))
 addToHier n val hier
-     = let root = nameRoot n in
-           case lookup root hier of
-                Nothing => insert root [(n, val)] hier
-                Just ns => insert root (update val ns) hier
+     -- Only add user defined names. Machine generated names can only be
+		 -- found with the exactNames
+     = case userNameRoot n of
+            Nothing => hier
+            Just root =>
+                 case lookup root hier of
+                      Nothing => insert root [(n, val)] hier
+                      Just ns => insert root (update val ns) hier
   where
     update : a -> List (Name, a) -> List (Name, a)
     update val [] = [(n, val)]

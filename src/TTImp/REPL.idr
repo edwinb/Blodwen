@@ -1,5 +1,6 @@
 module TTImp.REPL
 
+import Core.AutoSearch
 import Core.Context
 import Core.Normalise
 import Core.TT
@@ -33,10 +34,12 @@ process (Check ttimp)
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- getCtxt
          coreLift (putStrLn (show tm ++ " : " ++
-                             show (normalise gam [] ty)))
+                             show (normaliseHoles gam [] ty)))
          pure True
 process (ProofSearch n)
-    = throw (InternalError "Proof search not yet implemented")
+    = do tm <- search () n
+         coreLift (putStrLn (show tm))
+         pure True
 process Quit 
     = do coreLift $ putStrLn "Bye for now!"
          pure False

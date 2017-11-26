@@ -73,7 +73,7 @@ mutual
                     CaseTree (outer ++ (ns ++ inner))
   insertCaseNames {outer} {inner} ns (Case x xs) 
       = Case (insertElemNames {outer} {inner} ns x)
-             (assert_total (map (insertCaseAltNames {outer} {inner} ns)) xs)
+             (assert_total (map (insertCaseAltNames {outer} {inner} ns) xs))
   insertCaseNames {outer} ns (STerm tm) = STerm (insertNames {outer} ns tm)
   insertCaseNames ns (Unmatched msg) = Unmatched msg
   insertCaseNames ns Impossible = Impossible
@@ -95,7 +95,7 @@ Weaken CaseTree where
 mutual
   export
   embed : CaseTree args -> CaseTree (args ++ more)
-  embed (Case x xs) = Case (elemExtend x) (map embedAlt xs)
+  embed (Case x xs) = Case (elemExtend x) (assert_total (map embedAlt xs))
   embed (STerm tm) = STerm (embed tm)
   embed (Unmatched msg) = Unmatched msg
   embed Impossible = Impossible

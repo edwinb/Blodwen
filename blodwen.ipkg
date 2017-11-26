@@ -2,7 +2,8 @@ package blodwen
 
 pkgs = contrib
 
-modules = Core.CaseTree,
+modules = Core.AutoSearch,
+          Core.CaseTree,
           Core.Context, 
           Core.Core,
           Core.Name,

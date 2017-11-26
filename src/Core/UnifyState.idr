@@ -245,14 +245,14 @@ dumpHole lvl hole
                     Nothing => pure ()
                     Just (Guess tm constraints, ty) => 
                          do log lvl $ "!" ++ show hole ++ " : " ++ 
-                                              show (normalise gam [] ty)
-                            log lvl $ "\t  = " ++ show (normalise gam [] tm)
+                                              show (normaliseHoles gam [] ty)
+                            log lvl $ "\t  = " ++ show (normaliseHoles gam [] tm)
                                             ++ "\n\twhen"
                             traverse (\x => dumpConstraint x) constraints 
                             pure ()
                     Just (Hole _ _, ty) =>
                          log lvl $ "?" ++ show hole ++ " : " ++ 
-                                           show (normalise gam [] ty)
+                                           show (normaliseHoles gam [] ty)
                     Just (PMDef _ args t, ty) =>
                          log 4 $ "Solved: " ++ show hole ++ " : " ++ 
                                        show (normalise gam [] ty) ++

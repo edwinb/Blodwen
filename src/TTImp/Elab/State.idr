@@ -415,9 +415,9 @@ tryElab elab
 export
 try : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
       {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-      Core annot (Term vars, Term vars) ->
-      Core annot (Term vars, Term vars) ->
-      Core annot (Term vars, Term vars)
+      Core annot a ->
+      Core annot a ->
+      Core annot a
 try elab1 elab2
     = do Right ok <- tryElab elab1
                | Left err => elab2
@@ -428,13 +428,13 @@ try elab1 elab2
 export
 successful : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-             List (Core annot (Term vars, Term vars)) ->
+             List (Core annot a) ->
              Core annot (List (Either (Error annot)
-                                      (Term vars, Term vars, AllState vars annot)))
+                                      (a, AllState vars annot)))
 successful [] = pure []
 successful (elab :: elabs)
     = do init_st <- getState
-         Right (restm, resty) <- tryElab elab
+         Right res <- tryElab elab
                | Left err => do rest <- successful elabs
                                 pure (Left err :: rest)
 
@@ -442,7 +442,7 @@ successful (elab :: elabs)
          -- reinitialise state for next elabs
          putState init_st
          rest <- successful elabs
-         pure (Right (restm, resty, elabState) :: rest)
+         pure (Right (res, elabState) :: rest)
 
 export
 exactlyOne : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
@@ -454,17 +454,17 @@ exactlyOne loc [elab] = elab
 exactlyOne loc all
     = do elabs <- successful all
          case rights elabs of
-              [(restm, resty, state)] =>
+              [(res, state)] =>
                    do putState state
-                      pure (restm, resty)
+                      pure res
               rs => throw (altError (lefts elabs) rs)
   where
     -- If they've all failed, collect all the errors
     -- If more than one succeeded, report the ambiguity
-    altError : List (Error annot) -> List (Term vars, Term vars, AllState vars annot) ->
+    altError : List (Error annot) -> List ((Term vars, Term vars), AllState vars annot) ->
                Error annot
     altError ls [] = AllFailed ls
-    altError ls rs = AmbiguousElab loc (map fst rs)
+    altError ls rs = AmbiguousElab loc (map (\x => fst (fst x)) rs)
 
 export
 anyOne : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
