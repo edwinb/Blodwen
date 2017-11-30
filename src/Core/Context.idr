@@ -96,7 +96,7 @@ data Def : Type where
 public export
 data Visibility = Public | Export | Private
 
-export
+public export
 record GlobalDef where
      constructor MkGlobalDef
      type : ClosedTerm
@@ -136,9 +136,11 @@ export
 initCtxt : Defs
 initCtxt = MkAllDefs empty [] 100 0 0
 
+export
 lookupGlobalExact : Name -> Gamma -> Maybe GlobalDef
 lookupGlobalExact n gam = lookupCtxtExact n gam
 
+export
 lookupGlobalName : Name -> Gamma -> List (Name, GlobalDef)
 lookupGlobalName n gam = lookupCtxtName n gam
 

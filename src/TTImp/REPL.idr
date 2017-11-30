@@ -38,7 +38,9 @@ process (Check ttimp)
          pure True
 process (ProofSearch n)
     = do tm <- search () n
-         coreLift (putStrLn (show tm))
+         gam <- getCtxt
+         coreLift (putStrLn (show (normalise gam [] tm)))
+         dumpConstraints 0 True
          pure True
 process Quit 
     = do coreLift $ putStrLn "Bye for now!"

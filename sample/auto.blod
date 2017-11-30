@@ -63,4 +63,3 @@ mkTy a = Int -> (inp : a) -> Int -> a;
 
 test3 : (a : Type) -> mkTy a;
 test3 = ?help3;
-
