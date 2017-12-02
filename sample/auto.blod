@@ -53,13 +53,13 @@ posi _ (Cons x xs) Here = x;
 posi _ (Cons x xs) (There p) = posi _ xs p;
 
 test : Nat -> Nat;
-test n = posi (S n) (Cons n (Cons (S n) (Cons n Nil))) ?help;
+test n = posi (S n) (Cons n (Cons (S n) (Cons n Nil))) %search;
 
 test2 : Int -> (inp : Nat) -> Int -> Nat;
-test2 = ?help2;
+test2 = %search; -- ?help2;
 
 mkTy : Type -> Type;
 mkTy a = Int -> (inp : a) -> Int -> a;
 
 test3 : (a : Type) -> mkTy a;
-test3 = ?help3;
+test3 = %search; -- ?help3;

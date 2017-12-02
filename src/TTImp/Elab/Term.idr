@@ -2,6 +2,7 @@ module TTImp.Elab.Term
 
 import TTImp.TTImp
 import public TTImp.Elab.State
+import Core.AutoSearch
 import Core.CaseTree
 import Core.Context
 import Core.Normalise
@@ -13,26 +14,6 @@ import Data.List
 import Data.List.Views
 
 %default covering
-
--- Get the implicit arguments that need to be inserted at this point
--- in a function application. Do this by reading off implicit Pis
--- in the expected type ('ty') and adding new holes for each.
--- Return the (normalised) remainder of the type, and the list of
--- implicits added
-export
-getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-          {auto e : Ref EST (EState vars)} ->
-          annot -> Env Term vars ->
-          (ty : NF vars) -> List (Term vars) ->
-          Core annot (NF vars, List (Term vars)) 
-getImps loc env (NBind bn (Pi Implicit ty) sc) imps
-    = do hn <- genName (nameRoot bn)
-         addNamedHole hn False env (quote empty env ty)
-         let arg = mkConstantApp hn env
-         getImps loc env (sc (toClosure True env arg)) (arg :: imps)
-getImps loc env (NBind bn (Pi AutoImplicit ty) sc) imps
-    = throw $ InternalError "auto implicits not yet implemented"
-getImps loc env ty imps = pure (ty, reverse imps)
 
 -- Check a name. At this point, we've already established that it's not
 -- one of the local definitions, so it either must be a local variable or
@@ -193,8 +174,20 @@ mutual
 
   checkImp process elabinfo env nest (IApp loc fn arg) expected 
       = checkApp process elabinfo loc env nest fn arg expected
-  -- TODO: On failure to disambiguate, postpone? This may become a more worthile
-  -- thing to do after we have some proof search (interfaces, auto implicits)
+  checkImp process elabinfo env nest (IImplicitApp loc fn nm arg) expected 
+      = throw (InternalError "Not implemented")
+  checkImp process elabinfo env nest (ISearch loc depth) Nothing
+      = throw (InternalError "Trying to search for a term with an unknown type")
+  checkImp process elabinfo env nest (ISearch loc depth) (Just expected)
+      = do n <- addSearchable loc env expected depth
+           let umode = case elabMode elabinfo of
+                            InLHS => InLHS
+                            _ => InTerm
+           -- try again to solve the holes, including the search we've just added.
+           solveConstraints umode
+           pure (mkConstantApp n env, expected)
+  -- TODO: On failure to disambiguate, postpone? Would need another unification
+  -- tactic, like 'search' is...
   checkImp process elabinfo env nest (IAlternative loc uniq alts) expected
       = let tryall = if uniq then exactlyOne else anyOne in
             tryall loc (map (\t => 
@@ -209,12 +202,12 @@ mutual
       = throw (BadImplicit loc str)
     checkImp process elabinfo env nest (IBindVar loc str) Nothing | elabmode
         = do let n = PV str
-             t <- addHole env TType
+             t <- addHole loc env TType
              let hty = mkConstantApp t env
              est <- get EST
              case lookup n (boundNames est) of
                   Nothing =>
-                    do tm <- addBoundName n True env hty
+                    do tm <- addBoundName loc n True env hty
                        put EST 
                            (record { boundNames $= ((n, (tm, hty)) ::),
                                      toBind $= ((n, (tm, hty)) ::) } est)
@@ -226,7 +219,7 @@ mutual
              est <- get EST
              case lookup n (boundNames est) of
                   Nothing =>
-                    do tm <- addBoundName n True env expected
+                    do tm <- addBoundName loc n True env expected
                        log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
                        put EST 
                            (record { boundNames $= ((n, (tm, expected)) ::),
@@ -237,7 +230,7 @@ mutual
   checkImp process elabinfo env nest (IMustUnify loc tm) (Just expected) with (elabMode elabinfo)
     checkImp process elabinfo env nest (IMustUnify loc tm) (Just expected) | InLHS
       = do (wantedTm, wantedTy) <- checkImp process elabinfo env nest tm (Just expected)
-           n <- addHole env expected
+           n <- addHole loc env expected
            gam <- getCtxt
            let tm = mkConstantApp n env
            addDot loc env wantedTm tm
@@ -252,22 +245,22 @@ mutual
     checkImp process elabinfo env nest (IAs loc var tm) expected | elabmode
         = throw (GenericMsg loc "@-pattern not valid here")
   checkImp process elabinfo env nest (IHole loc n_in) Nothing
-      = do t <- addHole env TType
+      = do t <- addHole loc env TType
            let hty = mkConstantApp t env
            n <- inCurrentNS (UN n_in)
-           addNamedHole n False env hty
+           addNamedHole loc n False env hty
            pure (mkConstantApp n env, hty)
   checkImp process elabinfo env nest (IHole loc n_in) (Just expected) 
       = do n <- inCurrentNS (UN n_in)
-           addNamedHole n False env expected
+           addNamedHole loc n False env expected
            pure (mkConstantApp n env, expected)
   checkImp process elabinfo env nest (Implicit loc) Nothing
-      = do t <- addHole env TType
+      = do t <- addHole loc env TType
            let hty = mkConstantApp t env
-           n <- addHole env hty
+           n <- addHole loc env hty
            pure (mkConstantApp n env, hty)
   checkImp process elabinfo env nest (Implicit loc) (Just expected) 
-      = do n <- addHole env expected
+      = do n <- addHole loc env expected
            pure (mkConstantApp n env, expected)
 
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -282,12 +275,12 @@ mutual
       = do let n = PV var
            est <- get EST
            (patTm, patTy) <- checkImp process elabinfo env nest tm (Just expected)
-           addBoundName n False env expected
+           addBoundName loc n False env expected
            case lookup n (boundNames est) of
                 Just (tm, ty) =>
                     throw (GenericMsg loc ("Name " ++ var ++ " already bound"))
                 Nothing =>
-                    do tm <- addBoundName n False env expected
+                    do tm <- addBoundName loc n False env expected
                        log 5 $ "Added @ pattern name " ++ show (n, (tm, expected))
                        put EST
                            (record { boundNames $= ((n, (tm, expected)) ::),
@@ -322,7 +315,7 @@ mutual
                   do bn <- genName "aTy"
                      -- invent names for the argument and return types
                      log 5 $ "Inventing arg type for " ++ show (fn, fnty)
-                     (expty, scty) <- inventFnType env bn
+                     (expty, scty) <- inventFnType loc env bn
                      -- Check the argument type against the invented arg type
                      (argtm, argty) <- check process elabinfo env nest arg (Just expty)
                      -- Check the type of 'fn' is an actual function type

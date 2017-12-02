@@ -40,6 +40,28 @@ unify {c} {u} = unifyD c u
 ufail : annot -> String -> Core annot a
 ufail loc msg = throw (GenericMsg loc msg)
 
+-- Given a name, which must currently be a hole, attempt to fill in the hole with
+-- an expression which would fit. Also returns the expression.
+-- (Defined in AutoSearch; we need this when searching arguments recursively
+-- too and we need to invoke it during unification, so this is to avoid
+-- cycles in module imports)
+export
+search : {auto c : Ref Ctxt Defs} ->
+         {auto u : Ref UST (UState annot)} ->
+         annot -> Nat -> Name -> Core annot ClosedTerm
+
+-- try one elaborator; if it fails, try another
+export
+try : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+      Core annot a -> Core annot a -> Core annot a
+try elab1 elab2
+    = do ctxt <- get Ctxt
+         ust <- get UST
+         catch elab1
+               (\err => do put Ctxt ctxt
+                           put UST ust
+                           elab2)
+
 unifyArgs : (Unify tm, Quote tm) =>
             {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
@@ -292,7 +314,7 @@ mutual
              Just defty =>
                 do -- Make smaller hole
                    let hole = newDef defty Public (Hole (length sofar) False)
-                   addHoleName newhole
+                   addHoleName loc newhole
                    addDef newhole hole
                    -- Solve old hole with it
                    case mkOldHoleDef holetype newhole sofar (sofar ++ args) of
@@ -507,7 +529,7 @@ mutual
                        cs => -- constraints, make new guarded constant
                              do let txtm = quote empty env tx
                                 let tytm = quote empty env ty
-                                c <- addConstant env
+                                c <- addConstant loc env
                                        (Bind x (Lam Explicit txtm) (Local Here))
                                        (Bind x (Pi Explicit txtm)
                                            (weaken tytm)) cs
@@ -626,9 +648,9 @@ retry mode cname
 
 retryHole : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
-            UnifyMode -> (hole : Name) ->
+            UnifyMode -> (hole : (annot, Name)) ->
             Core annot ()
-retryHole mode hole
+retryHole mode (loc, hole)
     = do gam <- getCtxt
          case lookupDefExact hole gam of
               Nothing => pure ()
@@ -641,6 +663,10 @@ retryHole mode hole
                            [] => do updateDef hole (PMDef True [] (STerm tm))
                                     removeHoleName hole
                            newcs => updateDef hole (Guess tm newcs)
+              Just (BySearch depth) => 
+                   try (do search loc depth hole
+                           pure ())
+                       (pure ()) -- postpone again
               Just _ => pure () -- Nothing we can do
 
 -- Attempt to solve any remaining constraints in the unification context.
@@ -651,8 +677,8 @@ solveConstraints : {auto c : Ref Ctxt Defs} ->
                    {auto u : Ref UST (UState annot)} ->
                    UnifyMode -> Core annot ()
 solveConstraints mode
-    = do hs <- getHoleNames
-         traverse (\x => retryHole mode x) hs
+    = do hs <- getHoleInfo
+         traverse (retryHole mode) hs
          -- Question: Another iteration if any holes have been resolved?
          pure ()
 

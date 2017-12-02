@@ -28,6 +28,9 @@ atom
   <|> do symbol "?"
          x <- unqualifiedName
          pure (IHole () x)
+  <|> do symbol "%"
+         exactIdent "search"
+         pure (ISearch () 1000)
   <|> do x <- name
          pure (IVar () x)
 

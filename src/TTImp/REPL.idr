@@ -37,7 +37,7 @@ process (Check ttimp)
                              show (normaliseHoles gam [] ty)))
          pure True
 process (ProofSearch n)
-    = do tm <- search () n
+    = do tm <- search () 1000 n
          gam <- getCtxt
          coreLift (putStrLn (show (normalise gam [] tm)))
          dumpConstraints 0 True

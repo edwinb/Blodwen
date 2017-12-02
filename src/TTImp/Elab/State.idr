@@ -358,7 +358,7 @@ convertImps loc env (NBind bn (Pi Implicit ty) sc) (NBind bn' (Pi Implicit ty') 
     = pure (NBind bn (Pi Implicit ty) sc, reverse imps)
 convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
     = do hn <- genName (nameRoot bn)
-         addNamedHole hn False env (quote empty env ty)
+         addNamedHole loc hn False env (quote empty env ty)
          let arg = mkConstantApp hn env
          convertImps loc env (sc (toClosure False env arg)) exp (arg :: imps)
 convertImps loc env got exp imps = pure (got, reverse imps)
@@ -380,29 +380,49 @@ checkExp loc elabinfo env tm got (Just exp)
          case constr of
               [] => pure (apply tm imps, quote empty env got')
               cs => do gam <- getCtxt
-                       c <- addConstant env (apply tm imps) exp cs
+                       c <- addConstant loc env (apply tm imps) exp cs
                        pure (mkConstantApp c env, got)
 
 export
 inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} ->
-               Env Term vars ->
-               (bname : Name) ->
+               annot -> Env Term vars -> (bname : Name) ->
                Core annot (Term vars, Term (bname :: vars))
-inventFnType env bname
+inventFnType loc env bname
     = do an <- genName "argh"
          scn <- genName "sch"
-         argTy <- addBoundName an False env TType
-         scTy <- addBoundName scn False (Pi Explicit argTy :: env) TType
+         argTy <- addBoundName loc an False env TType
+         scTy <- addBoundName loc scn False (Pi Explicit argTy :: env) TType
          pure (argTy, scTy)
+
+-- Get the implicit arguments that need to be inserted at this point
+-- in a function application. Do this by reading off implicit Pis
+-- in the expected type ('ty') and adding new holes for each.
+-- Return the (normalised) remainder of the type, and the list of
+-- implicits added
+export
+getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> Env Term vars ->
+          (ty : NF vars) -> List (Term vars) ->
+          Core annot (NF vars, List (Term vars)) 
+getImps loc env (NBind bn (Pi Implicit ty) sc) imps
+    = do hn <- genName (nameRoot bn)
+         addNamedHole loc hn False env (quote empty env ty)
+         let arg = mkConstantApp hn env
+         getImps loc env (sc (toClosure True env arg)) (arg :: imps)
+getImps loc env (NBind bn (Pi AutoImplicit ty) sc) imps
+    = throw $ InternalError "auto implicits not yet implemented"
+getImps loc env ty imps = pure (ty, reverse imps)
+
 
 -- try an elaborator, if it fails reset the state and return 'Left',
 -- otherwise return 'Right'
 export
-tryElab : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
-          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-          Core annot a -> Core annot (Either (Error annot) a)
-tryElab elab 
+tryError : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+           Core annot a -> Core annot (Either (Error annot) a)
+tryError elab 
     = do -- store the current state of everything
          st <- getState
          catch (do res <- elab 
@@ -413,13 +433,13 @@ tryElab elab
 
 -- try one elaborator; if it fails, try another
 export
-try : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
-      {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-      Core annot a ->
-      Core annot a ->
-      Core annot a
-try elab1 elab2
-    = do Right ok <- tryElab elab1
+tryElab : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+          Core annot a ->
+          Core annot a ->
+          Core annot a
+tryElab elab1 elab2
+    = do Right ok <- tryError elab1
                | Left err => elab2
          pure ok
 
@@ -434,7 +454,7 @@ successful : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
 successful [] = pure []
 successful (elab :: elabs)
     = do init_st <- getState
-         Right res <- tryElab elab
+         Right res <- tryError elab
                | Left err => do rest <- successful elabs
                                 pure (Left err :: rest)
 
@@ -474,5 +494,5 @@ anyOne : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
          Core annot (Term vars, Term vars)
 anyOne loc [] = throw (GenericMsg loc "All elaborators failed")
 anyOne loc [elab] = elab
-anyOne loc (e :: es) = try e (anyOne loc es)
+anyOne loc (e :: es) = tryElab e (anyOne loc es)
 

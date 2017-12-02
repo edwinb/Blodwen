@@ -38,8 +38,9 @@ public export
 record UnifyState annot where
      constructor MkUnifyState
      logLevel : Nat
-     holes : List Name -- unsolved metavariables in gamma (holes and
-                       -- guarded constants)
+     holes : List (annot, Name)
+            -- unsolved metavariables in gamma (holes and guarded constants)
+            -- along with where they were introduced
      currentHoles : List Name -- unsolved metavariables in this session
      constraints : Context (Constraint annot) -- metavariable constraints 
      dotConstraints : List (Constraint annot) -- dot pattern constraints
@@ -80,12 +81,19 @@ isHole : {auto u : Ref UST (UState annot)} ->
          Name -> Core annot Bool
 isHole n 
     = do ust <- get UST
-         pure (n `elem` holes ust)
+         pure (n `elem` map snd (holes ust))
 
 export
 getHoleNames : {auto u : Ref UST (UState annot)} ->
                Core annot (List Name)
 getHoleNames 
+    = do ust <- get UST
+         pure (map snd (holes ust))
+
+export
+getHoleInfo : {auto u : Ref UST (UState annot)} ->
+               Core annot (List (annot, Name))
+getHoleInfo 
     = do ust <- get UST
          pure (holes ust)
 
@@ -106,23 +114,23 @@ resetHoles
 
 export
 addHoleName : {auto u : Ref UST (UState annot)} ->
-              Name -> Core annot ()
-addHoleName n
+              annot -> Name -> Core annot ()
+addHoleName loc n
     = do ust <- get UST
-         put UST (record { holes $= (n ::),
+         put UST (record { holes $= ((loc, n) ::),
                            currentHoles $= (n ::) } ust)
 
-dropFirst : Eq a => a -> List a -> List a
-dropFirst x [] = []
-dropFirst x (y :: ys) = if x == y then ys else y :: dropFirst x ys
+dropFirst : (a -> b -> Bool) -> a -> List b -> List b
+dropFirst f x [] = []
+dropFirst f x (y :: ys) = if f x y then ys else y :: dropFirst f x ys
 
 export
 removeHoleName : {auto u : Ref UST (UState annot)} ->
                  Name -> Core annot ()
 removeHoleName n
     = do ust <- get UST
-         put UST (record { holes $= dropFirst n,
-                           currentHoles $= dropFirst n } ust)
+         put UST (record { holes $= dropFirst (\x, y => x == snd y) n,
+                           currentHoles $= dropFirst (==) n } ust)
 
 -- Make a new constant by applying a term to everything in the current
 -- environment
@@ -159,16 +167,16 @@ mkConstantApp {vars} cn env
 export
 addConstant : {auto u : Ref UST (UState annot)} ->
               {auto c : Ref Ctxt Defs} ->
-              Env Term vars -> 
+              annot -> Env Term vars -> 
               (tm : Term vars) -> (ty : Term vars) ->
               (constrs : List Name) ->
               Core annot Name
-addConstant env tm ty constrs
+addConstant loc env tm ty constrs
     = do let def = mkConstant env tm
          let defty = mkConstantTy env ty
          let guess = newDef defty Public (Guess def constrs)
          cn <- genName "p"
-         addHoleName cn
+         addHoleName loc cn
          addDef cn guess
          pure cn
 
@@ -176,32 +184,47 @@ addConstant env tm ty constrs
 export
 addNamedHole : {auto u : Ref UST (UState annot)} ->
                {auto c : Ref Ctxt Defs} ->
-               Name -> (patvar : Bool) -> Env Term vars ->
+               annot -> Name -> (patvar : Bool) -> Env Term vars ->
                (ty : Term vars) -> Core annot ()
-addNamedHole cn patvar env ty
+addNamedHole loc cn patvar env ty
     = do let defty = mkConstantTy env ty
          let hole = newDef defty Public (Hole (length env) patvar)
-         addHoleName cn
+         addHoleName loc cn
          addDef cn hole
 
 -- Given a type, add a new global metavariable and return its name
 export
 addHole : {auto u : Ref UST (UState annot)} ->
           {auto c : Ref Ctxt Defs} ->       
-          Env Term vars ->
+          annot -> Env Term vars ->
           (ty : Term vars) -> Core annot Name
-addHole env ty
+addHole loc env ty
     = do cn <- genName "h"
-         addNamedHole cn False env ty
+         addNamedHole loc cn False env ty
+         pure cn
+
+-- Given a type, add a new global name for proof search to resolve, 
+-- and return its name
+export
+addSearchable : {auto u : Ref UST (UState annot)} ->
+                {auto c : Ref Ctxt Defs} ->       
+                annot -> Env Term vars ->
+                (ty : Term vars) -> Nat -> Core annot Name
+addSearchable loc env ty depth
+    = do cn <- genName "h"
+         let defty = mkConstantTy env ty
+         let hole = newDef defty Public (BySearch depth)
+         addHoleName loc cn
+         addDef cn hole
          pure cn
 
 export
 addBoundName : {auto u : Ref UST (UState annot)} ->
                {auto c : Ref Ctxt Defs} ->
-               Name -> (patvar : Bool) -> Env Term vars ->
+               annot -> Name -> (patvar : Bool) -> Env Term vars ->
                (ty : Term vars) -> Core annot (Term vars)
-addBoundName n patvar env exp
-    = do addNamedHole n patvar env exp
+addBoundName loc n patvar env exp
+    = do addNamedHole loc n patvar env exp
          pure (mkConstantApp n env)
 
 export
@@ -252,6 +275,9 @@ dumpHole lvl hole
                             pure ()
                     Just (Hole _ _, ty) =>
                          log lvl $ "?" ++ show hole ++ " : " ++ 
+                                           show (normaliseHoles gam [] ty)
+                    Just (BySearch _, ty) =>
+                         log lvl $ "Search " ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
                     Just (PMDef _ args t, ty) =>
                          log 4 $ "Solved: " ++ show hole ++ " : " ++ 

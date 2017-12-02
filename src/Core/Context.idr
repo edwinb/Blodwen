@@ -87,6 +87,8 @@ data Def : Type where
 		           -- Unsolved hole, under 'numlocs' locals, and whether it
 						   -- is standing for a pattern variable (and therefore mustn't
 							 -- be solved)
+     BySearch : Nat -> Def -- Undefined name, to be defined by proof search
+                    -- e.g. auto implicit or interface implementation
      ImpBind : Def -- Hole turned into an implicitly bound variable
                    -- (which will be deleted after elaboration)
      -- The constraint names refer into a context of constraints,
@@ -110,6 +112,7 @@ getRefs (PMDef ishole args sc) = getRefs sc
 getRefs (DCon tag arity) = []
 getRefs (TCon tag arity datacons) = []
 getRefs (Hole numlocs _) = []
+getRefs (BySearch _) = []
 getRefs ImpBind = []
 getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 
