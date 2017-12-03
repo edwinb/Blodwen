@@ -30,6 +30,10 @@ record EState (vars : List Name) where
   toBind : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variables which haven't been
                   -- bound yet.
+  implicitsUsed : List Name -- explicitly given implicits which have been used
+                            -- in the current application (need to keep track, as
+                            -- they may not be given in the same order as they are 
+                            -- needed in the type)
   defining : Name -- Name of thing we're currently defining
 
 public export
@@ -42,15 +46,22 @@ Elaborator annot
       ImpDecl annot -> Core annot ()
 
 public export
-record ElabInfo where
+record ElabInfo (vars : List Name) where
   constructor MkElabInfo
-  topLevel : Bool
+  topLevel : Bool -- at the top level of a type sig (i.e not in a higher order type)
   implicitMode : ImplicitMode
   elabMode : ElabMode
+  implicitsGiven : List (Name, Term vars, Term vars)
 
 export
-initElabInfo : ImplicitMode -> ElabMode -> ElabInfo
-initElabInfo imp elab = MkElabInfo True imp elab
+initElabInfo : ImplicitMode -> ElabMode -> ElabInfo vars
+initElabInfo imp elab = MkElabInfo True imp elab []
+
+export
+Weaken ElabInfo where
+  weaken (MkElabInfo top imp elab given)
+      = MkElabInfo top imp elab 
+                    (map (\ (n, tm, ty) => (n, weaken tm, weaken ty)) given)
 
 -- A label for the internal elaborator state
 export
@@ -58,7 +69,7 @@ data EST : Type where
 
 export
 initEState : Name -> EState vars
-initEState n = MkElabState [] [] n
+initEState n = MkElabState [] [] [] n
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -88,12 +99,46 @@ putState (ctxt, ust, est, ist)
          put ImpST ist
 
 export
+saveImps : {auto e : Ref EST (EState vars)} -> Core annot (List Name)
+saveImps
+    = do est <- get EST
+         pure (implicitsUsed est)
+
+export
+restoreImps : {auto e : Ref EST (EState vars)} -> List Name -> Core annot ()
+restoreImps imps
+    = do est <- get EST
+         put EST (record { implicitsUsed = imps } est)
+
+export
+usedImp : {auto e : Ref EST (EState vars)} -> Name -> Core annot ()
+usedImp imp
+    = do est <- get EST
+         put EST (record { implicitsUsed $= (imp :: ) } est)
+
+-- Check that explicitly given implicits that we've used are allowed in the
+-- the current application
+export
+checkUsedImplicits : {auto e : Ref EST (EState vars)} ->
+                     annot -> List Name -> List Name -> Term vars -> Core annot ()
+checkUsedImplicits loc used [] tm = pure ()
+checkUsedImplicits loc used given tm
+    = let unused = filter (\x => not (x `elem` used)) given in
+          case unused of
+               [] => -- remove the things which were given, and are now part of
+                     -- an application, from the 'implicitsUsed' list, because
+                     -- we've now verified that they were used correctly.
+                     restoreImps (filter (\x => not (x `elem` given)) used)
+               (n :: _) => throw (InvalidImplicit loc n tm)
+
+export
 weakenedEState : {auto e : Ref EST (EState vs)} ->
                  Core annot (Ref EST (EState (n :: vs)))
 weakenedEState
     = do est <- get EST
          e' <- newRef EST (MkElabState (map wknTms (boundNames est))
                                        (map wknTms (toBind est))
+                                       (implicitsUsed est)
                                        (defining est))
          pure e'
   where
@@ -114,7 +159,7 @@ strengthenedEState False loc
     = do est <- get EST
          bns <- traverse strTms (boundNames est)
          todo <- traverse strTms (toBind est)
-         pure (MkElabState bns todo (defining est))
+         pure (MkElabState bns todo (implicitsUsed est) (defining est))
   where
     -- Remove any instance of the top level local variable from an
     -- application. Fail if it turns out to be necessary.
@@ -366,7 +411,7 @@ convertImps loc env got exp imps = pure (got, reverse imps)
 export
 checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
            {auto e : Ref EST (EState vars)} ->
-           annot -> ElabInfo -> Env Term vars ->
+           annot -> ElabInfo vars -> Env Term vars ->
            (term : Term vars) -> (got : Term vars) -> 
            (exp : Maybe (Term vars)) ->
            Core annot (Term vars, Term vars) 
@@ -403,18 +448,42 @@ inventFnType loc env bname
 export
 getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           {auto e : Ref EST (EState vars)} ->
-          annot -> Env Term vars ->
+          annot -> Env Term vars -> ElabInfo vars ->
           (ty : NF vars) -> List (Term vars) ->
           Core annot (NF vars, List (Term vars)) 
-getImps loc env (NBind bn (Pi Implicit ty) sc) imps
-    = do hn <- genName (nameRoot bn)
-         addNamedHole loc hn False env (quote empty env ty)
-         let arg = mkConstantApp hn env
-         getImps loc env (sc (toClosure True env arg)) (arg :: imps)
-getImps loc env (NBind bn (Pi AutoImplicit ty) sc) imps
-    = throw $ InternalError "auto implicits not yet implemented"
-getImps loc env ty imps = pure (ty, reverse imps)
+getImps loc env elabinfo (NBind bn (Pi Implicit ty) sc) imps
+    = case lookup bn (implicitsGiven elabinfo) of
+           Just (imptm, impty) =>
+             do usedImp bn
+                (tmc, tyc) <- checkExp loc elabinfo env imptm impty 
+                                       (Just (quote empty env ty))
+                getImps loc env elabinfo (sc (toClosure True env tmc)) (tmc :: imps)
+           Nothing =>
+             do hn <- genName (nameRoot bn)
+                addNamedHole loc hn False env (quote empty env ty)
+                let arg = mkConstantApp hn env
+                getImps loc env elabinfo (sc (toClosure True env arg)) (arg :: imps)
+getImps loc env elabinfo (NBind bn (Pi AutoImplicit ty) sc) imps
+    = case lookup bn (implicitsGiven elabinfo) of
+           Just (imptm, impty) =>
+             do usedImp bn
+                (tmc, tyc) <- checkExp loc elabinfo env imptm impty 
+                                       (Just (quote empty env ty))
+                getImps loc env elabinfo (sc (toClosure True env tmc)) (tmc :: imps)
+           Nothing => throw $ InternalError "auto implicits not yet implemented"
+getImps loc env elabinfo ty imps = pure (ty, reverse imps)
 
+-- Given a raw term, collect the explicitly given implicits {x = tm} in the
+-- top level application, and return an updated term without them
+export
+collectGivenImps : RawImp annot -> (RawImp annot, List (Name, RawImp annot))
+collectGivenImps (IImplicitApp loc fn nm arg)
+    = let (fn', args') = collectGivenImps fn in
+          (fn', (nm, arg) :: args')
+collectGivenImps (IApp loc fn arg)
+    = let (fn', args') = collectGivenImps fn in
+          (IApp loc fn' arg, args')
+collectGivenImps tm = (tm, [])
 
 -- try an elaborator, if it fails reset the state and return 'Left',
 -- otherwise return 'Right'

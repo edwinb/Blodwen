@@ -38,8 +38,33 @@ mutual
   appExpr : Rule (RawImp ())
   appExpr
       = do f <- simpleExpr
-           args <- many simpleExpr
-           pure (apply f args)
+           args <- many argExpr
+           pure (applyExpImp f args)
+    where
+      applyExpImp : RawImp () -> 
+                    List (Either (RawImp ()) (Name, RawImp ())) -> 
+                    RawImp ()
+      applyExpImp f [] = f
+      applyExpImp f (Left exp :: args)
+          = applyExpImp (IApp () f exp) args
+      applyExpImp f (Right (n, imp) :: args) 
+          = applyExpImp (IImplicitApp () f n imp) args
+
+  argExpr : Rule (Either (RawImp ()) (Name, RawImp ()))
+  argExpr
+      = do arg <- implicitArg
+           pure (Right arg)
+    <|> do arg <- simpleExpr
+           pure (Left arg)
+
+  implicitArg : Rule (Name, RawImp ())
+  implicitArg
+      = do symbol "{"
+           x <- name
+           symbol "="
+           tm <- expr
+           symbol "}"
+           pure (x, tm)
 
   simpleExpr : Rule (RawImp ())
   simpleExpr

@@ -306,6 +306,10 @@ addBindImps is used (IApp x fn arg)
     = let (fn', used1) = addBindImps is used fn
           (arg', used2) = addBindImps is used1 arg in
           (IApp x fn' arg', used2)
+addBindImps is used (IImplicitApp x fn n arg) 
+    = let (fn', used1) = addBindImps is used fn
+          (arg', used2) = addBindImps is used1 arg in
+          (IImplicitApp x fn' n arg', used2)
 addBindImps is used tm = (tm, used)
 
 bindWith : annot ->
@@ -350,6 +354,8 @@ mkLCPatVars tm = mkPatVars True tm
              else IVar loc (UN n)
     mkPatVars notfn (IApp loc f arg) 
         = IApp loc (mkPatVars True f) (mkPatVars False arg)
+    mkPatVars notfn (IImplicitApp loc f n arg) 
+        = IImplicitApp loc (mkPatVars True f) n (mkPatVars False arg)
     mkPatVars notfn (IMustUnify loc tm) 
         = IMustUnify loc (mkPatVars notfn tm)
     mkPatVars notfn (IAs loc n tm) 
