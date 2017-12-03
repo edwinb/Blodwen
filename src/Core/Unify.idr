@@ -239,7 +239,7 @@ occursCheck gam n tm
         = do fchk <- oc chk f
              oc fchk a
     oc chk tm = Just chk
-
+        
 mutual
   -- Find holes which are applied to environments which are too big, and
   -- solve them with a new hole applied to only the available arguments.
@@ -517,7 +517,7 @@ mutual
              else
                do ct <- unify mode loc env tx ty
                   xn <- genName "x"
-                  let env' : TT.Env.Env Term (x :: _)
+                  let env' : Env Term (x :: _)
                            = Pi ix (quote empty env tx) :: env
                   case ct of
                        [] => -- no constraints, check the scope
@@ -540,6 +540,24 @@ mutual
                                 let termy = refToLocal xn x (quote empty env tscy)
                                 cs' <- unify mode loc env' termx termy
                                 pure (union cs cs')
+    unifyD _ _ mode loc env (NBind x (Lam ix tx) scx) (NBind y (Lam iy ty) scy) 
+        = if ix /= iy
+             then ufail loc $ "Can't unify " ++ show (quote empty env
+                                                     (NBind x (Pi ix tx) scx))
+                                         ++ " and " ++
+                                            show (quote empty env
+                                                     (NBind y (Pi iy ty) scy))
+             else
+               do csty <- unify mode loc env tx ty
+                  xn <- genName "x"
+                  let env' : Env Term (x :: _)
+                           = Lam ix (quote empty env tx) :: env
+                  let tscx = scx (toClosure False env (Ref Bound xn))
+                  let tscy = scy (toClosure False env (Ref Bound xn))
+                  let termx = refToLocal xn x (quote empty env tscx)
+                  let termy = refToLocal xn x (quote empty env tscy)
+                  cssc <- unify mode loc env' termx termy
+                  pure (union csty cssc)
     -- Locally bound things, in a term (not LHS). Since we have to unify
     -- for *all* possible values, we can safely unify the arguments.
     unifyD _ _ InTerm loc env (NApp (NLocal xv) argsx) (NApp (NLocal yv) argsy)
@@ -568,10 +586,6 @@ mutual
                                              (NApp (NRef yt hdy) argsy)
                        else unifyApp loc env (NRef yt hdy) argsy 
                                              (NApp (NRef xt hdx) argsx))
-    unifyD _ _ mode loc env (NApp hd args) y 
-        = unifyApp loc env hd args y
-    unifyD _ _ mode loc env y (NApp hd args)
-        = unifyApp loc env hd args y
     unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
         = if tagx == tagy
              then do log 5 ("Constructor " ++ show (quote empty env (NDCon x tagx ax xs))
@@ -605,7 +619,30 @@ mutual
     unifyD _ _ mode loc env x NErased = pure []
     unifyD _ _ mode loc env NErased y = pure []
     unifyD _ _ mode loc env NType NType = pure []
-    unifyD _ _ mode loc env x y = unifyIfEq False loc env x y
+    -- If one thing is a lambda and the other is a name applied to some
+    -- arguments, eta expand and try again
+    unifyD _ _ mode loc env tmx@(NBind x (Lam ix tx) scx) tmy
+        = do gam <- getCtxt
+             let etay = nf gam env 
+                           (Bind x (Lam ix (quote empty env tx))
+                                   (App (weaken (quote empty env tmy)) (Local Here)))
+             unify mode loc env tmx etay
+    unifyD _ _ mode loc env tmx tmy@(NBind y (Lam iy ty) scy)
+        = do gam <- getCtxt
+             let etax = nf gam env 
+                           (Bind y (Lam iy (quote empty env ty))
+                                   (App (weaken (quote empty env tmx)) (Local Here)))
+             unify mode loc env etax tmy
+    -- If it's not a case where we can make progress directly like one of 
+    -- the above, unify applications with some other term.
+    unifyD _ _ mode loc env (NApp hd args) y 
+        = unifyApp loc env hd args y
+    unifyD _ _ mode loc env y (NApp hd args)
+        = unifyApp loc env hd args y
+    unifyD _ _ mode loc env x y 
+        = do log 10 $ "Conversion check: " ++ show (quote empty env x) 
+                                ++ " and " ++ show (quote empty env y)
+             unifyIfEq False loc env x y
 
   export
   Unify Term where

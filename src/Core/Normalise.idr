@@ -101,16 +101,8 @@ parameters (gam : Gamma, holesonly : Bool)
                                    Nothing => NApp (NRef nt fn) stk
                                    Just val => val
                     else NApp (NRef nt fn) stk
-               Just (DCon tag arity) => 
-                    case takeFromStack arity stk of
-                         Nothing => NApp (NRef nt fn) stk
-                         Just (args, stk') => 
-                            NDCon fn tag arity (args ++ stk')
-               Just (TCon tag arity _) =>
-                    case takeFromStack arity stk of
-                         Nothing => NApp (NRef nt fn) stk
-                         Just (args, stk') => 
-                            NTCon fn tag arity (args ++ stk')
+               Just (DCon tag arity) => NDCon fn tag arity stk
+               Just (TCon tag arity _) => NTCon fn tag arity stk
                _ => NApp (NRef nt fn) stk
     
     -- Take arguments from the stack, as long as there's enough.
@@ -342,6 +334,16 @@ mutual
         = do var <- genName num "convVar"
              let c = MkClosure False [] env (Ref Bound var)
              convGen num gam env (scope c) (scope' c)
+    convGen num gam env tmx@(NBind x (Lam ix tx) scx) tmy
+        = let etay = nf gam env (Bind x (Lam ix (quote empty env tx))
+                                   (App (weaken (quote empty env tmy))
+                                        (Local Here))) in
+              convGen num gam env tmx etay
+    convGen num gam env tmx tmy@(NBind y (Lam iy ty) scy)
+        = let etax = nf gam env (Bind y (Lam iy (quote empty env ty))
+                                   (App (weaken (quote empty env tmx))
+                                        (Local Here))) in
+              convGen num gam env etax tmy
     convGen num gam env (NApp val args) (NApp val' args') 
         = do hs <- chkConvHead gam env val val'
              as <- allConv num gam env args args'
