@@ -19,7 +19,8 @@ plus (S k) y = S (plus k y);
 -- We need to declare which names can be used as implicit arguments. This
 -- avoids any possibility of confusion with function names.
 
-implicit n, a, b, c, k, i, ty;
+implicit n, a, b, c, k, ty;
+implicit i; -- : Fin k;
 
 data Vect : Nat -> Type -> Type where {
      Nil  : Vect Z a;
@@ -35,7 +36,7 @@ data Fin : Nat -> Type where {
 
 -- Lookup an element by position in a vector.
 
-lookup : Fin i -> Vect i ty -> ty;
+lookup : Fin k -> Vect k ty -> ty;
 lookup FZ (Cons t ts) = t;
 lookup (FS i) (Cons t ts) = lookup i ts;
 
@@ -56,7 +57,7 @@ interpTy (Arrow s t) = interpTy s -> interpTy t;
 -- Declare some more implicits. We also give the type for 'gam', since it
 -- uses more implicit names itself.
 
-implicit s, t, u, gam : Vect k Ty;
+implicit s, t, u, gam; -- : Vect k Ty;
 
 -- 'HasType i t gam' says that the variable at position i has type t
 -- in context gam:
@@ -86,7 +87,6 @@ data Env : Vect n Ty -> Type where {
 }
 
 -- Find a value in an environment
-
 lookupEnv : HasType i t gam -> Env gam -> interpTy t;
 lookupEnv Stop (ECons x xs) = x;
 lookupEnv (Pop var) (ECons x xs) = lookupEnv var xs;
@@ -107,4 +107,3 @@ testId = Lam (Var Stop);
 
 testAdd : Lang gam (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)));
 testAdd = Lam (Lam (Op plus (Var Stop) (Var (Pop Stop))));
-

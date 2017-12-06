@@ -35,16 +35,15 @@ elabTerm process defining env nest impmode elabmode tm tyin
                                 _ => InTerm)
          dumpDots
          checkDots
-         est <- get EST
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'
-         let fullImps = reverse $ toBind est
+         fullImps <- getToBind env
+         setBound (map fst fullImps) -- maybe not necessary since we're done now
          clearToBind -- remove the bound holes
          gam <- getCtxt
-         log 5 $ "Binding implicits " ++ show (dropTmIn fullImps) ++
+         log 5 $ "Binding implicits " ++ show fullImps ++
                  " in " ++ show chktm
-         let (restm, resty) = bindImplicits impmode gam env
-                                            (dropTmIn fullImps) chktm ty
+         let (restm, resty) = bindImplicits impmode gam env fullImps chktm ty
          traverse implicitBind (map fst fullImps)
          gam <- getCtxt
          (ptm, pty, bound) <- findHoles impmode env (normaliseHoles gam env restm) resty

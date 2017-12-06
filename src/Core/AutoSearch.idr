@@ -105,7 +105,9 @@ searchType loc depth env ty@(NTCon n t ar args)
     = if length args == ar
          then do gam <- getCtxt
                  case lookupDefExact n gam of
-                      Just (TCon _ _ cons) => searchNames loc depth env ty cons
+                      Just (TCon _ _ cons) => 
+                           try (trivial loc env (quote empty env ty))
+                               (searchNames loc depth env ty cons)
                       _ => throw (CantSolveGoal loc env (quote empty env ty))
          else throw (CantSolveGoal loc env (quote empty env ty))
 -- TODO: Remove this, it's just a test...

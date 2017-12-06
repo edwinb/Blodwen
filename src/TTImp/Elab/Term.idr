@@ -15,6 +15,70 @@ import Data.List.Views
 
 %default covering
 
+-- Get the implicit arguments that need to be inserted at this point
+-- in a function application. Do this by reading off implicit Pis
+-- in the expected type ('ty') and adding new holes for each.
+-- Return the (normalised) remainder of the type, and the list of
+-- implicits added
+getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> Env Term vars -> ElabInfo vars ->
+          (ty : NF vars) -> List (Term vars) ->
+          Core annot (NF vars, List (Term vars)) 
+getImps loc env elabinfo (NBind bn (Pi Implicit ty) sc) imps
+    = case lookup bn (implicitsGiven elabinfo) of
+           Just (imptm, impty) =>
+             do usedImp bn
+                (tmc, tyc) <- checkExp loc elabinfo env imptm impty 
+                                       (Just (quote empty env ty))
+                getImps loc env elabinfo (sc (toClosure True env tmc)) (tmc :: imps)
+           Nothing =>
+            -- In an expression, add a hole
+            -- In a pattern or type, treat as a variable to bind
+             case elabMode elabinfo of
+                InExpr => 
+                   do hn <- genName (nameRoot bn)
+                      addNamedHole loc hn False env (quote empty env ty)
+                      let arg = mkConstantApp hn env
+                      getImps loc env elabinfo (sc (toClosure True env arg)) (arg :: imps)
+                _ =>
+                   do hn <- genName (nameRoot bn)
+                      -- Add as a pattern variable, but let it unify with other
+                      -- things, hence 'False' as an argument to addBoundName
+                      let expected = quote empty env ty
+                      tm <- addBoundName loc hn False env expected
+                      log 5 $ "Added Bound implicit " ++ show (hn, (tm, expected))
+                      est <- get EST
+                      put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
+                                        toBind $= ((hn, (tm, expected)) :: ) } est)
+                      getImps loc env elabinfo (sc (toClosure True env tm)) (tm :: imps)
+
+getImps loc env elabinfo (NBind bn (Pi AutoImplicit ty) sc) imps
+    = case lookup bn (implicitsGiven elabinfo) of
+           Just (imptm, impty) =>
+             do usedImp bn
+                (tmc, tyc) <- checkExp loc elabinfo env imptm impty 
+                                       (Just (quote empty env ty))
+                getImps loc env elabinfo (sc (toClosure True env tmc)) (tmc :: imps)
+           Nothing => 
+             -- on the LHS, just treat it as an implicit pattern variable.
+             -- on the RHS, add a searchable hole
+             case elabMode elabinfo of
+                  InLHS => 
+                     do hn <- genName (nameRoot bn)
+                        addNamedHole loc hn False env (quote empty env ty)
+                        let arg = mkConstantApp hn env
+                        getImps loc env elabinfo (sc (toClosure True env arg)) (arg :: imps)
+                  _ => 
+                     do n <- addSearchable loc env (quote empty env ty) 500
+                        log 0 $ "Auto implicit search: " ++ show n ++
+                                " for " ++ show (quote empty env ty)
+                        solveConstraints InTerm
+                        let arg = mkConstantApp n env
+                        getImps loc env elabinfo (sc (toClosure True env arg)) (arg :: imps)
+getImps loc env elabinfo ty imps = pure (ty, reverse imps)
+
+
 -- Check a name. At this point, we've already established that it's not
 -- one of the local definitions, so it either must be a local variable or
 -- a globally defined name
@@ -182,9 +246,7 @@ mutual
            let (fn', args) = collectGivenImps fn
            elabinfo' <- checkGivenImps process elabinfo env nest args
            log 10 $ "Implicits: " ++ show (implicitsGiven elabinfo')
-           res <- checkApp process elabinfo' loc env nest fn' arg expected
-           let restm = fst res
-           let resty = snd res
+           (restm, resty) <- checkApp process elabinfo' loc env nest fn' arg expected
            -- Add any remaining implicits greedily
            gam <- getCtxt
            (ty, imps) <- getImps loc env elabinfo' (nf gam env resty) []
@@ -193,15 +255,13 @@ mutual
            log 10 $ "Used: " ++ show (implicitsUsed est, map fst args)
            checkUsedImplicits loc (implicitsUsed est) (map fst args) restm
            case imps of
-                [] => pure res
+                [] => pure (restm, resty)
                 _ => checkExp loc elabinfo env (apply restm imps) (quote empty env ty) expected
   checkImp process elabinfo env nest (IImplicitApp loc fn nm arg) expected 
       = do let (fn', args) = collectGivenImps fn
            elabinfo' <- checkGivenImps process elabinfo env nest ((nm, arg) :: args)
            log 10 $ "IImplicits: " ++ show (implicitsGiven elabinfo')
-           res <- checkImp process elabinfo' env nest fn' expected
-           let restm = fst res
-           let resty = snd res
+           (restm, resty) <- checkImp process elabinfo' env nest fn' expected
            -- Add any remaining implicits greedily
            gam <- getCtxt
            (ty, imps) <- getImps loc env elabinfo' (nf gam env resty) []
@@ -210,7 +270,7 @@ mutual
            log 10 $ "IUsed: " ++ show (implicitsUsed est, nm :: map fst args)
            checkUsedImplicits loc (implicitsUsed est) (nm :: map fst args) restm
            case imps of
-                [] => pure res
+                [] => pure (restm, resty)
                 _ => checkExp loc elabinfo env (apply restm imps) (quote empty env ty) expected
   checkImp process elabinfo env nest (ISearch loc depth) Nothing
       = throw (InternalError "Trying to search for a term with an unknown type")
@@ -296,8 +356,19 @@ mutual
            n <- addHole loc env hty
            pure (mkConstantApp n env, hty)
   checkImp process elabinfo env nest (Implicit loc) (Just expected) 
-      = do n <- addHole loc env expected
-           pure (mkConstantApp n env, expected)
+      = case elabMode elabinfo of
+             InLHS =>
+                do hn <- genName "imp_pat"
+                   -- Add as a pattern variable, but let it unify with other
+                   -- things, hence 'False' as an argument to addBoundName
+                   tm <- addBoundName loc hn False env expected
+                   est <- get EST
+                   put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
+                                     toBind $= ((hn, (tm, expected)) :: ) } est)
+                   pure (tm, expected)
+             _ =>
+                do n <- addHole loc env expected
+                   pure (mkConstantApp n env, expected)
 
   checkGivenImp
           : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -407,13 +478,18 @@ mutual
                                env nest argty (Just TType)
            let env' : Env Term (n :: _) = Pi info tyv :: env
            est <- get EST
-           let argImps = if top then (reverse $ toBind est) else []
+           
+           tobind <- getToBind env
+           let argImps = if top then tobind else []
+           -- note the names as now being bound implicits, so we don't bind again
+           setBound (map fst argImps)
            when top $ clearToBind 
            e' <- weakenedEState 
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} process (weaken elabinfo) env' (weaken nest') retty (Just TType)
-           est <- get {ref=e'} EST
-           let scopeImps = reverse $ toBind est
+           scopeImps <- getToBind {e=e'} env'
+           -- note the names as now being bound implicits, so we don't bind again
+           setBound (map fst scopeImps)
            st' <- strengthenedEState {e=e'} top loc
            put EST st'
            -- Bind implicits which were first used in
@@ -422,19 +498,19 @@ mutual
            -- have implicits at this level in 'PATT' implicit mode
            case (top, impmode) of
                 (True, PI _) =>
-                   do -- putStrLn $ "Binding implicits " ++ show (dropTmIn argImps)
-                      --                                 ++ show (dropTmIn scopeImps)
+                   do log 5 $ "Binding arg implicits " ++ show argImps
                       gam <- getCtxt
                       let (scopev', scopet')
                           = bindImplicits impmode gam env'
-                                          (dropTmIn scopeImps) scopev scopet
+                                          scopeImps scopev scopet
                       let (binder, bindert)
                           = bindImplicits impmode gam env
-                                          (dropTmIn argImps)
+                                          argImps
                                           (Bind n (Pi info tyv) scopev')
                                           TType
-                      traverse (\n => implicitBind n) (map fst scopeImps)
-                      traverse (\n => implicitBind n) (map fst argImps)
+                      log 5 $ "Result " ++ show binder ++ " : " ++ show bindert
+                      traverse implicitBind (map fst scopeImps)
+                      traverse implicitBind (map fst argImps)
                       checkExp loc elabinfo env binder bindert expected
                 _ => checkExp loc elabinfo env (Bind n (Pi info tyv) scopev)
                                       TType expected

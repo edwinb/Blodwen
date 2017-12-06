@@ -488,14 +488,17 @@ unapply (App fn arg) with (unapply fn)
 unapply tm = ArgsList {f = tm} {args = []}
 
 export
+getFnArgs : (tm : Term vars) -> (Term vars, List (Term vars))
+getFnArgs tm with (unapply tm)
+  getFnArgs (apply f args) | ArgsList = (f, args)
+
+export
 getFn : (tm : Term vars) -> Term vars
-getFn tm with (unapply tm)
-  getFn (apply f args) | ArgsList = f
+getFn tm = fst (getFnArgs tm)
 
 export
 getArgs : (tm : Term vars) -> List (Term vars)
-getArgs tm with (unapply tm)
-  getArgs (apply f args) | ArgsList = args
+getArgs tm = snd (getFnArgs tm)
 
 export
 getRefs : Term vars -> SortedSet
@@ -551,6 +554,8 @@ Show (Term vars) where
             = assert_total ("(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
         showApp (Bind n (Pi Implicit ty) sc) [] 
             = assert_total ("{" ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
+        showApp (Bind n (Pi AutoImplicit ty) sc) [] 
+            = assert_total ("{auto " ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
         showApp (Bind n (PVar ty) sc) [] 
             = assert_total ("pat " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
         showApp (Bind n (PLet val ty) sc) [] 

@@ -25,9 +25,9 @@ checkClause elab defining env nest (MkImpClause loc lhs_raw rhs_raw)
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs lhsty
-         log 5 (show lhs ++ " : " ++ show reqty)
+         log 3 ("LHS: " ++ show lhs ++ " : " ++ show reqty)
          rhs <- checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
-         log 3 (show lhs ++ " = " ++ show rhs)
+         log 3 ("Clause: " ++ show lhs ++ " = " ++ show rhs)
          pure (MkClause env' lhspat rhs)
   where
     extend : Env Term vars -> NestedNames vars -> 

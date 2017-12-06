@@ -21,6 +21,7 @@ checkCon elab env nest (MkImpTy annot cn_in ty_raw)
          ty_imp <- mkBindImps ty_raw
          ty <- checkTerm elab cn env nest (PI False) InType ty_imp TType
          let ty' = abstractEnvType env ty
+         log 3 $ show cn ++ " : " ++ show ty'
          -- TODO: Check 'ty' returns something in the right family
          gam <- getCtxt
          pure (MkCon cn (getArity gam [] ty') ty')
@@ -38,6 +39,7 @@ processData elab env nest (MkImpData annot n_in ty_raw cons_raw)
          ty <- checkTerm elab n env nest (PI False) InType ty_imp TType
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty
+         log 3 $ show n ++ " : " ++ show ty'
          addDef n (newDef ty' Public None)
          cons <- traverse (\x => checkCon elab env nest x) cons_raw
          gam <- getCtxt

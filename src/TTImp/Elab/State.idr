@@ -30,6 +30,9 @@ record EState (vars : List Name) where
   toBind : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variables which haven't been
                   -- bound yet.
+  boundImplicits : List Name
+                  -- names we've already decided will be bound implicits, no
+                  -- we don't need to bind again
   implicitsUsed : List Name -- explicitly given implicits which have been used
                             -- in the current application (need to keep track, as
                             -- they may not be given in the same order as they are 
@@ -69,7 +72,7 @@ data EST : Type where
 
 export
 initEState : Name -> EState vars
-initEState n = MkElabState [] [] [] n
+initEState n = MkElabState [] [] [] [] n
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -138,6 +141,7 @@ weakenedEState
     = do est <- get EST
          e' <- newRef EST (MkElabState (map wknTms (boundNames est))
                                        (map wknTms (toBind est))
+                                       (boundImplicits est)
                                        (implicitsUsed est)
                                        (defining est))
          pure e'
@@ -159,7 +163,7 @@ strengthenedEState False loc
     = do est <- get EST
          bns <- traverse strTms (boundNames est)
          todo <- traverse strTms (toBind est)
-         pure (MkElabState bns todo (implicitsUsed est) (defining est))
+         pure (MkElabState bns todo (boundImplicits est) (implicitsUsed est) (defining est))
   where
     -- Remove any instance of the top level local variable from an
     -- application. Fail if it turns out to be necessary.
@@ -206,10 +210,54 @@ clearToBind : {auto e : Ref EST (EState vs)} ->
 clearToBind
     = do est <- get EST
          put EST (record { toBind = [] } est)
-  
+ 
 export
 dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))
+
+-- Record the given names, arising as unbound implicits, as having been bound
+-- now (so don't bind them again)
+export
+setBound : {auto e : Ref EST (EState vars)} ->
+           List Name -> Core annot ()
+setBound ns
+    = do est <- get EST
+         put EST (record { boundImplicits $= (ns ++) } est)
+
+-- 'toBind' are the names which are to be implicitly bound (pattern bindings and
+-- unbound implicits).
+export
+getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
+            {auto u : Ref UST (UState annot)} ->
+            Env Term vars ->
+            Core annot (List (Name, Term vars))
+getToBind {vars} env
+    = do est <- get EST
+         ust <- get UST
+         gam <- getCtxt
+         log 5 $ "Before normImps " ++ show (map (norm gam) (reverse $ toBind est))
+         log 10 $ "With holes " ++ show (map snd (holes ust))
+         -- if we encounter a hole name that we've seen before, and is now 
+         -- stored in boundImplicits, we don't want to bind it again
+         normImps gam (boundImplicits est) (reverse $ toBind est)
+  where
+    norm : Gamma -> (Name, Term vars, Term vars) -> (Name, Term vars)
+    norm gam (n, tm, ty) = (n, normaliseHoles gam env tm)
+
+    normImps : Gamma -> List Name -> List (Name, Term vars, Term vars) -> 
+               Core annot (List (Name, Term vars))
+    normImps gam ns [] = pure []
+    normImps gam ns ((n, tm, ty) :: ts) =
+        case (getFnArgs (normaliseHoles gam env tm)) of
+             (Ref nt n', args) => 
+                do hole <- isHole n'
+                   if hole && not (n' `elem` ns)
+                      then do rest <- normImps gam (n' :: ns) ts
+                              pure ((n', normaliseHoles gam env ty) :: rest)
+                      -- unified to something concrete, so no longer relevant, drop it
+                      else normImps gam ns ts
+             _ => do rest <- normImps gam (n :: ns) ts
+                     pure ((n, normaliseHoles gam env ty) :: rest)
 
 -- Bind implicit arguments, returning the new term and its updated type
 bindImplVars : Int -> 
@@ -228,13 +276,29 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                PATTERN =>
                   case lookupDefExact n gam of
                        Just (PMDef _ _ t) =>
-                          (Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
-                                      (refToLocal tmpN n repNameTm), 
-                           Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
-                                      (refToLocal tmpN n repNameTy))
+                          -- if n is an accessible pattern variable, bind it,
+                          -- otherwise reduce it
+                          case n of
+                               PV _ =>
+                                  (Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                              (refToLocal tmpN n repNameTm), 
+                                   Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                              (refToLocal tmpN n repNameTy))
+                               _ => (subst (embed (normalise gam [] (Ref Func n)))
+                                           (refToLocal tmpN n repNameTm),
+                                     subst (embed (normalise gam [] (Ref Func n)))
+                                           (refToLocal tmpN n repNameTy))
                        _ =>
                           (Bind n (PVar ty) (refToLocal tmpN n repNameTm), 
                            Bind n (PVTy ty) (refToLocal tmpN n repNameTy))
+               PI _ =>
+                  case lookupDefExact n gam of
+                     Just (PMDef _ _ t) =>
+                        (subst (embed (normalise gam [] (Ref Func n)))
+                               (refToLocal tmpN n repNameTm),
+                         subst (embed (normalise gam [] (Ref Func n)))
+                               (refToLocal tmpN n repNameTy))
+                     _ => (Bind n (Pi Implicit ty) (refToLocal tmpN n repNameTm), ty')
                _ => (Bind n (Pi Implicit ty) (refToLocal tmpN n repNameTm), ty')
   where
     -- Replace the name applied to the given number of arguments 
@@ -439,39 +503,6 @@ inventFnType loc env bname
          argTy <- addBoundName loc an False env TType
          scTy <- addBoundName loc scn False (Pi Explicit argTy :: env) TType
          pure (argTy, scTy)
-
--- Get the implicit arguments that need to be inserted at this point
--- in a function application. Do this by reading off implicit Pis
--- in the expected type ('ty') and adding new holes for each.
--- Return the (normalised) remainder of the type, and the list of
--- implicits added
-export
-getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-          {auto e : Ref EST (EState vars)} ->
-          annot -> Env Term vars -> ElabInfo vars ->
-          (ty : NF vars) -> List (Term vars) ->
-          Core annot (NF vars, List (Term vars)) 
-getImps loc env elabinfo (NBind bn (Pi Implicit ty) sc) imps
-    = case lookup bn (implicitsGiven elabinfo) of
-           Just (imptm, impty) =>
-             do usedImp bn
-                (tmc, tyc) <- checkExp loc elabinfo env imptm impty 
-                                       (Just (quote empty env ty))
-                getImps loc env elabinfo (sc (toClosure True env tmc)) (tmc :: imps)
-           Nothing =>
-             do hn <- genName (nameRoot bn)
-                addNamedHole loc hn False env (quote empty env ty)
-                let arg = mkConstantApp hn env
-                getImps loc env elabinfo (sc (toClosure True env arg)) (arg :: imps)
-getImps loc env elabinfo (NBind bn (Pi AutoImplicit ty) sc) imps
-    = case lookup bn (implicitsGiven elabinfo) of
-           Just (imptm, impty) =>
-             do usedImp bn
-                (tmc, tyc) <- checkExp loc elabinfo env imptm impty 
-                                       (Just (quote empty env ty))
-                getImps loc env elabinfo (sc (toClosure True env tmc)) (tmc :: imps)
-           Nothing => throw $ InternalError "auto implicits not yet implemented"
-getImps loc env elabinfo ty imps = pure (ty, reverse imps)
 
 -- Given a raw term, collect the explicitly given implicits {x = tm} in the
 -- top level application, and return an updated term without them

@@ -52,19 +52,20 @@ mutual
 
   argExpr : Rule (Either (RawImp ()) (Name, RawImp ()))
   argExpr
-      = do arg <- implicitArg
-           pure (Right arg)
-    <|> do arg <- simpleExpr
+      = do arg <- simpleExpr
            pure (Left arg)
+    <|> do arg <- implicitArg
+           pure (Right arg)
 
   implicitArg : Rule (Name, RawImp ())
   implicitArg
       = do symbol "{"
-           x <- name
+           x <- unqualifiedName
            symbol "="
-           tm <- expr
+           commit
+           tm <- expr 
            symbol "}"
-           pure (x, tm)
+           pure (UN x, tm)
 
   simpleExpr : Rule (RawImp ())
   simpleExpr
@@ -113,7 +114,7 @@ mutual
            symbol "}"
            symbol "->"
            scope <- typeExpr
-           pure (IPi () Implicit (Just n) ty scope)
+           pure (IPi () AutoImplicit (Just n) ty scope)
 
   implicitPi : Rule (RawImp ())
   implicitPi
@@ -207,6 +208,7 @@ clause
     getFn : RawImp annot -> EmptyRule Name
     getFn (IVar _ n) = pure n
     getFn (IApp _ f a) = getFn f
+    getFn (IImplicitApp _ f _ a) = getFn f
     getFn _ = fail "Not a function application" 
 
 dataDecl : Rule (ImpData ())
