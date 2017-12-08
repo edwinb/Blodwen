@@ -253,14 +253,20 @@ inCurrentNS n = pure n
 -- by default is in the current namespace
 export
 lhsInCurrentNS : {auto i : Ref ImpST (ImpState annot)} ->
-                 RawImp annot -> Core annot (RawImp annot)
-lhsInCurrentNS (IApp loc f a)
-    = do f' <- lhsInCurrentNS f
+                 NestedNames vars -> RawImp annot -> Core annot (RawImp annot)
+lhsInCurrentNS nest (IApp loc f a)
+    = do f' <- lhsInCurrentNS nest f
          pure (IApp loc f' a)
-lhsInCurrentNS (IVar loc n)
-    = do n' <- inCurrentNS n
-         pure (IVar loc n')
-lhsInCurrentNS tm = pure tm
+lhsInCurrentNS nest (IVar loc n)
+    = case lookup n (names nest) of
+           Nothing =>
+              do n' <- inCurrentNS n
+                 pure (IVar loc n')
+           -- If it's one of the names in the current nested block, we'll
+           -- be rewriting it during elaboration to be in the scope of the
+           -- parent name.
+           Just _ => pure (IVar loc n)
+lhsInCurrentNS nest tm = pure tm
          
 
 remove : Maybe Name -> List (String, a) -> List (String, a)

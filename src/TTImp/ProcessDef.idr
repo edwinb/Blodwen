@@ -19,7 +19,7 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
               Core annot Clause
 checkClause elab defining env nest (MkImpClause loc lhs_raw rhs_raw)
-    = do lhs_raw <- lhsInCurrentNS lhs_raw
+    = do lhs_raw <- lhsInCurrentNS nest lhs_raw
          (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
          gam <- getCtxt
          let lhs = normaliseHoles gam env lhs_in

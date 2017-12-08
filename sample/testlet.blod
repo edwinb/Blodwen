@@ -8,7 +8,7 @@ plus Z     y = y;
 plus (S k) y = S (plus k y);
 
 fn2 : Nat -> Nat -> Nat;
-fn2 x y = let { w : _;
+fn2 x y = let { w : Nat;
                 w = plus x x;
                 help : Nat -> Nat;
                 help z = plus z w; } in
