@@ -52,6 +52,16 @@ posi : (x : a) -> (xs : List a) -> Elem x xs -> a;
 posi _ (Cons x xs) Here = x;
 posi _ (Cons x xs) (There p) = posi _ xs p;
 
+posa : (x : a) -> (xs : List a) -> {auto prf : Elem x xs} -> a;
+posa x xs {prf = prf} = posi x xs %search;
+
+posa2 : (x : a) -> (xs : List a) -> {auto prf : Elem x xs} -> a;
+posa2 x (Cons x xs) {prf = Here} = x;
+posa2 y (Cons x xs) {prf = There p} = posa2 y xs {prf = p};
+
+-- -- posa _ (Cons x xs) Here = x;
+-- -- posa _ (Cons x xs) (There p) = posi _ xs p;
+
 test : Nat -> Nat;
 test n = posi (S n) (Cons n (Cons (S n) (Cons n Nil))) %search;
 

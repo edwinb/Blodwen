@@ -49,22 +49,16 @@ Elaborator annot
       ImpDecl annot -> Core annot ()
 
 public export
-record ElabInfo (vars : List Name) where
+record ElabInfo annot where
   constructor MkElabInfo
   topLevel : Bool -- at the top level of a type sig (i.e not in a higher order type)
   implicitMode : ImplicitMode
   elabMode : ElabMode
-  implicitsGiven : List (Name, Term vars, Term vars)
+  implicitsGiven : List (Name, RawImp annot)
 
 export
-initElabInfo : ImplicitMode -> ElabMode -> ElabInfo vars
+initElabInfo : ImplicitMode -> ElabMode -> ElabInfo annot
 initElabInfo imp elab = MkElabInfo True imp elab []
-
-export
-Weaken ElabInfo where
-  weaken (MkElabInfo top imp elab given)
-      = MkElabInfo top imp elab 
-                    (map (\ (n, tm, ty) => (n, weaken tm, weaken ty)) given)
 
 -- A label for the internal elaborator state
 export
@@ -455,43 +449,6 @@ convert loc elabmode env x y
                                                 (normaliseHoles gam env (quote empty env y))
                                   err))
   
---- When converting, add implicits until we've applied enough for the
---- expected type
-export
-convertImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-              {auto e : Ref EST (EState vars)} ->
-              annot -> Env Term vars ->
-              (got : NF vars) -> (exp : NF vars) -> List (Term vars) ->
-              Core annot (NF vars, List (Term vars))
-convertImps loc env (NBind bn (Pi Implicit ty) sc) (NBind bn' (Pi Implicit ty') sc') imps
-    = pure (NBind bn (Pi Implicit ty) sc, reverse imps)
-convertImps loc env (NBind bn (Pi Implicit ty) sc) exp imps
-    = do hn <- genName (nameRoot bn)
-         addNamedHole loc hn False env (quote empty env ty)
-         let arg = mkConstantApp hn env
-         convertImps loc env (sc (toClosure False env arg)) exp (arg :: imps)
-convertImps loc env got exp imps = pure (got, reverse imps)
-
-export
-checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-           {auto e : Ref EST (EState vars)} ->
-           annot -> ElabInfo vars -> Env Term vars ->
-           (term : Term vars) -> (got : Term vars) -> 
-           (exp : Maybe (Term vars)) ->
-           Core annot (Term vars, Term vars) 
-checkExp loc elabinfo env tm got Nothing
-    = pure (tm, got)
-checkExp loc elabinfo env tm got (Just exp) 
-    = do gam <- getCtxt
-         let expnf = nf gam env exp
-         (got', imps) <- convertImps loc env (nf gam env got) expnf []
-         constr <- convert loc (elabMode elabinfo) env got' expnf
-         case constr of
-              [] => pure (apply tm imps, quote empty env got')
-              cs => do gam <- getCtxt
-                       c <- addConstant loc env (apply tm imps) exp cs
-                       pure (mkConstantApp c env, got)
-
 export
 inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} ->
