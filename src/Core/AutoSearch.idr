@@ -104,20 +104,18 @@ searchType loc depth env (NBind n (Pi info ty) scfn)
 searchType loc depth env ty@(NTCon n t ar args)
     = if length args == ar
          then do gam <- getCtxt
-                 case lookupDefExact n gam of
-                      Just (TCon _ _ cons) => 
-                           try (trivial loc env (quote empty env ty))
-                               (searchNames loc depth env ty cons)
-                      _ => throw (CantSolveGoal loc env (quote empty env ty))
+                 cons <- getHintsFor loc n
+                 log 5 $ "Hints for " ++ show n ++ ": " ++ show cons
+                 try (trivial loc env (quote empty env ty))
+                     (searchNames loc depth env ty cons)
          else throw (CantSolveGoal loc env (quote empty env ty))
--- TODO: Remove this, it's just a test...
 searchType loc depth env (NPrimVal IntType)
-    = pure (PrimVal (I 42))
+    = pure (PrimVal (I 0))
 searchType loc depth env ty 
     = do gam <- getCtxt
          try (trivial loc env (quote empty env ty))
              (throw (CantSolveGoal loc env (quote empty env ty)))
-                             
+
 searchHole : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Nat -> Name -> Gamma -> GlobalDef -> Core annot ClosedTerm

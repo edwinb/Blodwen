@@ -67,6 +67,8 @@ mutual
        IData : annot -> ImpData annot -> ImpDecl annot
        INamespace : annot -> List String -> ImpDecl annot
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
+       IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
+               ImpDecl annot
        ILog : Nat -> ImpDecl annot
 
 -- REPL commands for TTImp interaction
@@ -195,7 +197,8 @@ mutual
     show (IData _ d) = show d
     show (INamespace _ ns) = "namespace " ++ show ns
     show (ImplicitNames _ ns) = "implicit " ++ show ns
-    show (ILog lvl) = "logging " ++ show lvl
+    show (IHint _ n t) = "%hint " ++ show n ++ " " ++ show t
+    show (ILog lvl) = "%logging " ++ show lvl
 
 -- State which is useful to preserve throughout elaborating a file
 public export

@@ -46,6 +46,8 @@ processDecl env nest (INamespace loc ns)
 processDecl env nest (ImplicitNames loc ns) 
     = do traverse (\ x => addImp (fst x) (snd x)) ns
          pure ()
+processDecl env nest (IHint loc n Nothing) = addGlobalHint n
+processDecl env nest (IHint loc n (Just ty)) = addHintFor ty n
 processDecl env nest (ILog lvl) = setLogLevel lvl
 
 export

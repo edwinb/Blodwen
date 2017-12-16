@@ -1,4 +1,4 @@
-module Context.Core
+module Core.Core
 
 import Core.TT
 import Core.CaseTree
@@ -77,6 +77,7 @@ coreFail e = MkCore $ pure (Left e)
 
 -- This would be better if we restrict it to a limited set of IO operations
 export
+%inline
 coreLift : IO a -> Core annot a
 coreLift op = MkCore $ map Right op
 
@@ -90,12 +91,16 @@ thing on the road to self hosting, and we can make sure this isn't a problem
 in the next version (i.e., in this project...)! -}
 
 -- Monad (specialised)
-export
+export %inline
 (>>=) : Core annot a -> (a -> Core annot b) -> Core annot b
-(>>=) (MkCore act) f = MkCore $ act >>= either (pure . Left) (runCore . f)
+(>>=) (MkCore act) f 
+    = MkCore $ act >>= 
+         (\x => case x of
+                     Left err => pure (Left err)
+                     Right val => runCore (f val))
 
 -- Applicative (specialised)
-export
+export %inline
 pure : a -> Core annot a
 pure x = MkCore (pure (pure x))
 
@@ -103,7 +108,7 @@ export
 (<*>) : Core annot (a -> b) -> Core annot a -> Core annot b
 (<*>) (MkCore f) (MkCore a) = MkCore [| f <*> a |]
 
-export
+export %inline
 when : Bool -> Lazy (Core annot ()) -> Core annot ()
 when True f = f
 when False f = pure ()
@@ -133,11 +138,11 @@ newRef x val
     = do ref <- coreLift (newIORef val)
          pure (MkRef ref)
 
-export
+export %inline 
 get : (x : label) -> {auto ref : Ref x a} -> Core annot a
 get x {ref = MkRef io} = coreLift (readIORef io)
 
-export
+export %inline
 put : (x : label) -> {auto ref : Ref x a} -> a -> Core annot ()
 put x {ref = MkRef io} val = coreLift (writeIORef io val)
 

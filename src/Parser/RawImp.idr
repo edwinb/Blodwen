@@ -253,6 +253,13 @@ directive
          lvl <- intLit
          symbol ";"
          pure (ILog (cast lvl))
+  <|> do exactIdent "hint"
+         h <- name
+         ty <- option Nothing
+                      (do n <- name
+                          pure (Just n))
+         symbol ";"
+         pure (IHint () h ty)
 
 -- Declared at the top
 -- topDecl : Rule (ImpDecl ())

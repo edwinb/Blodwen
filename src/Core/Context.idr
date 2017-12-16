@@ -131,13 +131,15 @@ record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
       defNamespace : List String -- namespace for current definitions
+      autoHints : List Name -- global auto hints
+      typeHints : Context (List Name) -- type name hints
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty [] 100 0 0
+initCtxt = MkAllDefs empty [] [] empty 100 0 0
 
 export
 lookupGlobalExact : Name -> Gamma -> Maybe GlobalDef
@@ -359,6 +361,39 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
         = do let condef = newDef ty (conVisibility vis) (DCon tag a)
              let gam' = addCtxt n condef gam
              addDataConstructors (tag + 1) cs gam'
+
+export
+addHintFor : {auto x : Ref Ctxt Defs} ->
+					   Name -> Name -> Core annot ()
+addHintFor ty hint
+    = do defs <- get Ctxt
+         let hs : List Name
+                = case lookupCtxtExact ty (typeHints defs) of
+                       Nothing => []
+                       Just ns => ns
+         put Ctxt (record { typeHints $= addCtxt ty (hint :: hs) } defs)
+
+export
+addGlobalHint : {auto x : Ref Ctxt Defs} ->
+					      Name -> Core annot ()
+addGlobalHint hint
+    = do d <- get Ctxt
+         put Ctxt (record { autoHints $= (hint ::) } d)
+
+-- Get all the names that might solve a goal of the given type
+-- (constructors, local hints, global hints, in that order)
+export
+getHintsFor : {auto x : Ref Ctxt Defs} ->
+							annot -> Name -> Core annot (List Name)
+getHintsFor loc target
+    = do defs <- get Ctxt
+         case lookupDefExact target (gamma defs) of
+              Just (TCon _ _ cons) => 
+                   do let hs = case lookupCtxtExact target (typeHints defs) of
+                                    Nothing => []
+                                    Just ns => ns
+                      pure (hs ++ cons ++ autoHints defs)
+              _ => throw (UndefinedName loc target)
 
 export
 runWithCtxt : Core annot () -> IO ()
