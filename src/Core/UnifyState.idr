@@ -282,7 +282,7 @@ dumpHole lvl hole
                     Just (PMDef _ args t, ty) =>
                          log 4 $ "Solved: " ++ show hole ++ " : " ++ 
                                        show (normalise gam [] ty) ++
-                                       " = " ++ show t
+                                       " = " ++ show (normalise gam [] (Ref Func hole))
                     Just (ImpBind, ty) =>
                          log 4 $ "Bound: " ++ show hole ++ " : " ++ 
                                        show (normalise gam [] ty)

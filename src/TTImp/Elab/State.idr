@@ -33,6 +33,7 @@ record EState (vars : List Name) where
   boundImplicits : List Name
                   -- names we've already decided will be bound implicits, no
                   -- we don't need to bind again
+  asVariables : List Name -- Names bound in @-patterns
   implicitsUsed : List Name -- explicitly given implicits which have been used
                             -- in the current application (need to keep track, as
                             -- they may not be given in the same order as they are 
@@ -66,7 +67,7 @@ data EST : Type where
 
 export
 initEState : Name -> EState vars
-initEState n = MkElabState [] [] [] [] n
+initEState n = MkElabState [] [] [] [] [] n
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -136,6 +137,7 @@ weakenedEState
          e' <- newRef EST (MkElabState (map wknTms (boundNames est))
                                        (map wknTms (toBind est))
                                        (boundImplicits est)
+                                       (asVariables est)
                                        (implicitsUsed est)
                                        (defining est))
          pure e'
@@ -157,7 +159,10 @@ strengthenedEState False loc
     = do est <- get EST
          bns <- traverse strTms (boundNames est)
          todo <- traverse strTms (toBind est)
-         pure (MkElabState bns todo (boundImplicits est) (implicitsUsed est) (defining est))
+         pure (MkElabState bns todo (boundImplicits est) 
+                                    (asVariables est)
+                                    (implicitsUsed est) 
+                                    (defining est))
   where
     -- Remove any instance of the top level local variable from an
     -- application. Fail if it turns out to be necessary.
@@ -233,16 +238,28 @@ getToBind {vars} env
          log 10 $ "With holes " ++ show (map snd (holes ust))
          -- if we encounter a hole name that we've seen before, and is now 
          -- stored in boundImplicits, we don't want to bind it again
-         normImps gam (boundImplicits est) (reverse $ toBind est)
+         normImps gam (boundImplicits est) (asLast (asVariables est)
+                                                   (reverse $ toBind est))
   where
+    -- put the @-pattern bound names last (so that we have the thing they're
+    -- equal to bound first)
+    asLast : List Name -> List (Name, Term vars, Term vars) -> 
+                          List (Name, Term vars, Term vars)
+    asLast asvars ns 
+        = filter (\p => not (fst p `elem` asvars)) ns ++
+          filter (\p => fst p `elem` asvars) ns
+
     norm : Gamma -> (Name, Term vars, Term vars) -> (Name, Term vars)
     norm gam (n, tm, ty) = (n, normaliseHoles gam env tm)
 
     normImps : Gamma -> List Name -> List (Name, Term vars, Term vars) -> 
                Core annot (List (Name, Term vars))
     normImps gam ns [] = pure []
-    normImps gam ns ((n, tm, ty) :: ts) =
-        case (getFnArgs (normaliseHoles gam env tm)) of
+    normImps gam ns ((PV n, tm, ty) :: ts) 
+        = do rest <- normImps gam (PV n :: ns) ts
+             pure ((PV n, normaliseHoles gam env ty) :: rest)
+    normImps gam ns ((n, tm, ty) :: ts)
+        = case (getFnArgs (normaliseHoles gam env tm)) of
              (Ref nt n', args) => 
                 do hole <- isHole n'
                    if hole && not (n' `elem` ns)

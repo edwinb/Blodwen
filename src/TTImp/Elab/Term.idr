@@ -324,9 +324,9 @@ mutual
             Core annot (Term vars, Term vars) 
   checkAs process elabinfo loc env nest var tm expected
       = do let n = PV var
-           est <- get EST
            (patTm, patTy) <- checkImp process elabinfo env nest tm (Just expected)
            addBoundName loc n False env expected
+           est <- get EST
            case lookup n (boundNames est) of
                 Just (tm, ty) =>
                     throw (GenericMsg loc ("Name " ++ var ++ " already bound"))
@@ -335,7 +335,8 @@ mutual
                        log 5 $ "Added @ pattern name " ++ show (n, (tm, expected))
                        put EST
                            (record { boundNames $= ((n, (tm, expected)) ::),
-                                     toBind $= ((n, (tm, expected)) ::) } est)
+                                     toBind $= ((n, (tm, expected)) ::),
+                                     asVariables $= (n ::) } est)
                        gam <- getCtxt
                        convert loc InLHS env (nf gam env patTm) (nf gam env tm)
                        pure (patTm, expected)
