@@ -6,6 +6,7 @@ import System
 
 tests : List String
 tests = ["test001", "test002", "test003", "test004", "test005",
+         "test006",
          "perf001"]
 
 chdir : String -> IO Bool
