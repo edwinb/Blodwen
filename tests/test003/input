@@ -1,0 +1,3 @@
+posa 3 (Cons 2 (Cons 3 (Cons 4 Nil)))
+posa 1 (Cons 2 (Cons 3 (Cons 4 Nil)))
+:q

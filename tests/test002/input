@@ -1,0 +1,4 @@
+interp Nil testAdd
+interp Nil testAdd (S Z)
+interp Nil testAdd (S Z) (S (S (S Z)))
+:q

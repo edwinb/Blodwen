@@ -1,0 +1,18 @@
+implicit a, b, x;
+
+data Eq : a -> b -> Type where {
+     Refl : {x : a} -> Eq x x;
+}
+
+data Test : Type where {
+     MkTest : Int -> Int -> Test;
+}
+
+eta1: Eq MkTest (\x => \y => MkTest _ _);
+eta1 = Refl;
+
+eta2: Eq (MkTest 1) (\x => MkTest _ x);
+eta2 = Refl;
+
+eta3: (f : a -> b) -> Eq f (\x => f x);
+eta3 f = Refl;

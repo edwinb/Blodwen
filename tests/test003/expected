@@ -1,0 +1,10 @@
+Welcome to Blodwen. Good luck.
+Loading auto.blod
+Processing as TTImp
+LOG 0: Auto implicit search: {h:83} for (List.Elem {a:78} y xs)
+LOG 0: --- CONSTRAINTS AND HOLES ---
+Blodwen> LOG 0: Auto implicit search: {h:125} for (List.Elem Int 3 (List.Cons Int 2 (List.Cons Int 3 (List.Cons Int 4 (List.Nil Int)))))
+3 : Int
+Blodwen> LOG 0: Auto implicit search: {h:139} for (List.Elem Int 1 (List.Cons Int 2 (List.Cons Int 3 (List.Cons Int 4 (List.Nil Int)))))
+(List.posi Int 1 (List.Cons Int 2 (List.Cons Int 3 (List.Cons Int 4 (List.Nil Int)))) {h:139}) : Int
+Blodwen> Bye for now!
