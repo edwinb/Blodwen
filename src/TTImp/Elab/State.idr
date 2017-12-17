@@ -76,10 +76,10 @@ AllState : List Name -> Type -> Type
 AllState vars annot = (Defs, UState annot, EState vars, ImpState annot)
 
 export
-getState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
-           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-           Core annot (AllState vars annot)
-getState
+getAllState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+              Core annot (AllState vars annot)
+getAllState
     = do ctxt <- get Ctxt
          ust <- get UST
          est <- get EST
@@ -87,13 +87,32 @@ getState
          pure (ctxt, ust, est, ist)
 
 export
-putState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+putAllState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
            {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
            AllState vars annot -> Core annot ()
-putState (ctxt, ust, est, ist)
+putAllState (ctxt, ust, est, ist)
     = do put Ctxt ctxt
          put UST ust
          put EST est
+         put ImpST ist
+
+export
+getState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+           {auto i : Ref ImpST (ImpState annot)} ->
+           Core annot (Defs, UState annot, ImpState annot)
+getState
+    = do ctxt <- get Ctxt
+         ust <- get UST
+         ist <- get ImpST
+         pure (ctxt, ust, ist)
+
+export
+putState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+           {auto i : Ref ImpST (ImpState annot)} ->
+           (Defs, UState annot, ImpState annot)-> Core annot ()
+putState (ctxt, ust, ist)
+    = do put Ctxt ctxt
+         put UST ust
          put ImpST ist
 
 export
@@ -462,8 +481,9 @@ convert loc elabmode env x y
                     solveConstraints umode
                     pure vs)
             (\err => do gam <- getCtxt 
-                        throw (WhenUnifying loc (normaliseHoles gam env (quote empty env x))
-                                                (normaliseHoles gam env (quote empty env y))
+                        throw (WhenUnifying loc env
+                                            (normaliseHoles gam env (quote empty env x))
+                                            (normaliseHoles gam env (quote empty env y))
                                   err))
   
 export
@@ -498,16 +518,16 @@ tryError : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
            Core annot a -> Core annot (Either (Error annot) a)
 tryError elab 
     = do -- store the current state of everything
-         st <- getState
+         st <- getAllState
          catch (do res <- elab 
                    pure (Right res))
                (\err => do -- reset the state
-                           putState st
+                           putAllState st
                            pure (Left err))
 
 -- try one elaborator; if it fails, try another
 export
-tryElab : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+tryElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
           Core annot a ->
           Core annot a ->
@@ -517,29 +537,44 @@ tryElab elab1 elab2
                | Left err => elab2
          pure ok
 
+-- try one elaborator; if it fails, handle the error
+export
+handle : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+         {auto i : Ref ImpST (ImpState annot)} ->
+         Core annot a ->
+         (Error annot -> Core annot a) ->
+         Core annot a
+handle elab1 elab2
+    = do -- store the current state of everything
+         st <- getState
+         catch elab1
+               (\err => do -- reset the state
+                           putState st
+                           elab2 err)
+
 -- try all elaborators, return the results from the ones which succeed
 -- and the corresponding elaborator state
 export
-successful : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+successful : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
              List (Core annot a) ->
              Core annot (List (Either (Error annot)
                                       (a, AllState vars annot)))
 successful [] = pure []
 successful (elab :: elabs)
-    = do init_st <- getState
+    = do init_st <- getAllState
          Right res <- tryError elab
                | Left err => do rest <- successful elabs
                                 pure (Left err :: rest)
 
-         elabState <- getState -- save state at end of successful elab
+         elabState <- getAllState -- save state at end of successful elab
          -- reinitialise state for next elabs
-         putState init_st
+         putAllState init_st
          rest <- successful elabs
          pure (Right (res, elabState) :: rest)
 
 export
-exactlyOne : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+exactlyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
              annot ->
              List (Core annot (Term vars, Term vars)) ->
@@ -549,7 +584,7 @@ exactlyOne loc all
     = do elabs <- successful all
          case rights elabs of
               [(res, state)] =>
-                   do putState state
+                   do putAllState state
                       pure res
               rs => throw (altError (lefts elabs) rs)
   where
@@ -561,7 +596,7 @@ exactlyOne loc all
     altError ls rs = AmbiguousElab loc (map (\x => fst (fst x)) rs)
 
 export
-anyOne : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+anyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
          annot ->
          List (Core annot (Term vars, Term vars)) ->

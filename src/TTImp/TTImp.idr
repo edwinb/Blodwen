@@ -52,8 +52,9 @@ mutual
 
   public export
   data ImpClause : Type -> Type where
-       MkImpClause : annot -> (lhs : RawImp annot) -> (rhs : RawImp annot) ->
-                     ImpClause annot
+       PatClause : annot -> (lhs : RawImp annot) -> (rhs : RawImp annot) ->
+                   ImpClause annot
+       ImpossibleClause : annot -> (lhs : RawImp annot) -> ImpClause annot
 
   public export
   data ImpData : Type -> Type where
@@ -181,7 +182,8 @@ mutual
 
   export
   Show (ImpClause annot) where
-    show (MkImpClause _ lhs rhs) = show lhs ++ " = " ++ show rhs
+    show (PatClause _ lhs rhs) = show lhs ++ " = " ++ show rhs
+    show (ImpossibleClause _ lhs) = show lhs ++ " impossible"
 
   export
   Show (ImpData annot) where

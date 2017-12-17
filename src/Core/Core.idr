@@ -14,7 +14,8 @@ public export
 data Error annot
     = CantConvert annot (Env Term vars) (Term vars) (Term vars)
     | Cycle annot (Env Term vars) (Term vars) (Term vars)
-    | WhenUnifying annot (Term vars) (Term vars) (Error annot)
+    | WhenUnifying annot (Env Term vars) (Term vars) (Term vars) (Error annot)
+    | ValidCase annot (Env Term vars) (Either (Term vars) (Error annot))
     | UndefinedName annot Name
     | AmbiguousName annot (List Name)
     | AmbiguousElab annot (List (Term vars))
@@ -38,8 +39,12 @@ Show (Error annot) where
       = "Type mismatch: " ++ show x ++ " and " ++ show y
   show (Cycle _ env x y) 
       = "Occurs check failed: " ++ show x ++ " and " ++ show y
-  show (WhenUnifying _ x y err)
+  show (WhenUnifying _ _ x y err)
       = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++ show err
+  show (ValidCase _ _ prob)
+      = case prob of
+             Left tm => assert_total (show tm) ++ " is not a valid impossible pattern because it typechecks"
+             Right err => "Not a valid impossible pattern:\n\t" ++ assert_total (show err)
   show (UndefinedName _ x) = "Undefined name " ++ show x
   show (AmbiguousName _ ns) = "Ambiguous name " ++ show ns
   show (AmbiguousElab _ ts) = "Ambiguous elaboration " ++ show ts

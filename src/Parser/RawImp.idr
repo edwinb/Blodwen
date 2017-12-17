@@ -194,22 +194,32 @@ tyDecl
          symbol ";"
          pure (MkImpTy () n ty)
 
-clause : Rule (Name, ImpClause ())
-clause
-    = do lhs <- expr
-         symbol "="
-         rhs <- expr
-         symbol ";"
-         fn <- getFn lhs
-         -- Turn lower case names on lhs into IBindVar pattern variables
-         -- before returning
-         pure (fn, MkImpClause () (mkLCPatVars lhs) rhs)
+parseRHS : (lhs : RawImp ()) -> Rule (Name, ImpClause ())
+parseRHS lhs
+     = do symbol "="
+          commit
+          rhs <- expr
+          symbol ";"
+          fn <- getFn lhs
+          -- Turn lower case names on lhs into IBindVar pattern variables
+          -- before returning
+          pure (fn, PatClause () (mkLCPatVars lhs) rhs)
+   <|> do keyword "impossible"
+          symbol ";"
+          fn <- getFn lhs
+          pure (fn, ImpossibleClause () (mkLCPatVars lhs))
   where
     getFn : RawImp annot -> EmptyRule Name
     getFn (IVar _ n) = pure n
     getFn (IApp _ f a) = getFn f
     getFn (IImplicitApp _ f _ a) = getFn f
     getFn _ = fail "Not a function application" 
+
+
+clause : Rule (Name, ImpClause ())
+clause
+    = do lhs <- expr
+         parseRHS lhs
 
 dataDecl : Rule (ImpData ())
 dataDecl
