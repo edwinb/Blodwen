@@ -60,6 +60,7 @@ checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
                        _ => throw (ValidCase loc env (Right err)))
 checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
     = do lhs_raw <- lhsInCurrentNS nest lhs_raw
+         log 5 ("Checking LHS: " ++ show lhs_raw)
          (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
          gam <- getCtxt
          let lhs = normaliseHoles gam env lhs_in

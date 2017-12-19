@@ -29,6 +29,7 @@ mutual
               (nTy : RawImp annot) -> (nVal : RawImp annot) -> 
               (scope : RawImp annot) ->
               RawImp annot
+       ICase : annot -> RawImp annot -> List (ImpClause annot) -> RawImp annot
        ILocal : annot -> List (ImpDecl annot) -> RawImp annot -> RawImp annot
        IApp : annot -> 
               (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
@@ -124,6 +125,7 @@ getAnnot (IVar x _) = x
 getAnnot (IPi x _ _ _ _) = x
 getAnnot (ILam x _ _ _ _) = x
 getAnnot (ILet x _ _ _ _) = x
+getAnnot (ICase x _ _) = x
 getAnnot (ILocal x _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IImplicitApp x _ _ _) = x
@@ -158,6 +160,8 @@ mutual
     show (ILet _ n nTy nVal scope)
         = "(%let (" ++ show n ++ " " ++ show nTy ++ " " ++ show nVal ++ ") "
                ++ show scope ++ ")"
+    show (ICase _ scr alts)
+        = "(%case (" ++ show scr ++ ") " ++ show alts ++ ")"
     show (ILocal _ def scope)
         = "(%local (" ++ show def ++ ") " ++ show scope ++ ")"
     show (IApp _ fn arg) 
@@ -338,14 +342,20 @@ bindWith loc ((n, _) :: ns) used tm
 -- bound when it's first used.
 -- Any name which occurs in impNames *with* a type gets an IPi Implicit binder
 -- at the front
+-- Any name in the current environment won't be bound
 export
 mkBindImps : {auto i : Ref ImpST (ImpState annot)} ->
+             Env Term vars ->
              RawImp annot -> 
              Core annot (RawImp annot)
-mkBindImps tm 
+mkBindImps env tm 
     = do ist <- get ImpST
-         let (btm, ns) = addBindImps (impNames ist) [] tm
-         pure (bindWith (getAnnot tm) (impNames ist) ns btm)
+         let (btm, ns) = addBindImps (removeNames env (impNames ist)) [] tm
+         pure (bindWith (getAnnot tm) (removeNames env (impNames ist)) ns btm)
+  where
+    removeNames : Env Term vars -> List (String, a) -> List (String, a)
+    removeNames [] is = is
+    removeNames ((::) {x} b bs) is = removeNames bs (remove (Just x) is)
 
 -- Turn names into pattern variables as IBindVar
 -- This considers a name a pattern variable if it begins with a lower case

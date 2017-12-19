@@ -80,6 +80,14 @@ binderType (Pi x ty) = ty
 binderType (PVar ty) = ty
 binderType (PLet val ty) = ty
 binderType (PVTy ty) = ty
+  
+Show ty => Show (Binder ty) where
+	show (Lam _ t) = "\\" ++ show t
+	show (Pi _ t) = "Pi " ++ show t
+	show (Let v t) = "let " ++ show v ++ " : " ++ show t
+	show (PVar t) = "pat " ++ show t
+	show (PLet v t) = "plet " ++ show v ++ ": " ++ show t
+	show (PVTy t) = "pty " ++ show t
 
 export
 setType : Binder tm -> tm -> Binder tm
@@ -573,6 +581,12 @@ Show (Term vars) where
         showApp f args = "(" ++ assert_total (show f) ++ " " ++
                                 assert_total (showSep " " (map show args))
                              ++ ")"
+
+export
+Show (Env Term vars) where
+  show [] = "empty"
+  show ((::) {x} b bs) = with Strings (show x ++ " " ++ show b ++ "; " ++ show bs)
+
 
 -- Raw terms, not yet typechecked
 public export

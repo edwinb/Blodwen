@@ -42,7 +42,7 @@ ident = pred startIdent <+> many (pred validIdent)
 -- Reserved words
 keywords : List String
 keywords = ["data", "module", "where", "let", "in", 
-            "auto", "implicit", "namespace", "impossible", "case",
+            "auto", "implicit", "namespace", "impossible", "case", "of",
             "Type", "Int"]
 
 -- Reserved words for internal syntax

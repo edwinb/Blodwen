@@ -1,0 +1,6 @@
+Welcome to Blodwen. Good luck.
+Loading cases.blod
+Processing as TTImp
+LOG 0: --- CONSTRAINTS AND HOLES ---
+Blodwen> (Main.Cons Int 1 (Main.S (Main.S (Main.S Main.Z))) (Main.Cons Int 2 (Main.S (Main.S Main.Z)) (Main.Cons Int 3 (Main.S Main.Z) (Main.Cons Int 4 Main.Z (Main.Nil Int))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Int)
+Blodwen> Bye for now!

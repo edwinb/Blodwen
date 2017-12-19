@@ -87,10 +87,14 @@ mutual
                   do gam <- getCtxt
                      case lookupTyExact n' gam of
                           Nothing => throw (UndefinedName loc n')
-                          Just ty => 
-                             let tyenv = useVars (getArgs tm) (embed ty) in
-                                do log 5 $ "Type of " ++ show n' ++ " : " ++ show tyenv
-                                   checkExp process loc elabinfo env nest tm tyenv expected
+                          Just varty => 
+                             do let tyenv = useVars (getArgs tm) (embed varty)
+                                (ty_nf, imps) <- getImps process loc env nest elabinfo (nf gam env tyenv) []
+                                let ty = quote empty env ty_nf
+                                log 5 $ "Type of " ++ show n' ++ " : " ++ show ty
+                                log 5 $ "Term: " ++ show (apply tm imps)
+                                checkExp process loc elabinfo env nest 
+                                         (apply tm imps) ty expected
              _ => checkName process elabinfo loc env nest x expected
     where
       useVars : List (Term vars) -> Term vars -> Term vars
@@ -107,6 +111,13 @@ mutual
       = checkLam process elabinfo loc env nest plicity n ty scope expected
   checkImp process elabinfo env nest (ILet loc n nTy nVal scope) expected 
       = checkLet process elabinfo loc env nest n nTy nVal scope expected
+  checkImp {vars} {c} {u} {i} process elabinfo env nest (ICase loc scr alts) expected 
+      = do (scrtm, scrty) <- check process elabinfo env nest scr Nothing
+           log 0 $ "Expected: " ++ show expected
+           log 0 $ "Scrutinee: " ++ show scrtm ++ " : " ++ show scrty
+           log 0 $ "Env: " ++ show env
+           log 0 $ "Alts: " ++ show alts
+           throw (InternalError "Case not yet implemented")
   checkImp {vars} {c} {u} {i} process elabinfo env nest (ILocal loc nested scope) expected 
       = do let defNames = definedInBlock nested
            est <- get EST

@@ -161,6 +161,31 @@ mutual
            keyword "in"
            scope <- typeExpr
            pure (ILocal () (collectDefs ds) scope)
+  
+  case_ : Rule (RawImp ())
+  case_
+      = do keyword "case"
+           scr <- expr
+           keyword "of"
+           symbol "{"
+           alts <- many caseAlt
+           symbol "}"
+           pure (ICase () scr alts)
+
+  caseAlt : Rule (ImpClause ())
+  caseAlt
+      = do lhs <- expr
+           caseRHS lhs
+          
+  caseRHS : RawImp () -> Rule (ImpClause ())
+  caseRHS lhs
+      = do symbol "=>"
+           rhs <- expr
+           symbol ";"
+           pure (PatClause () (mkLCPatVars lhs) rhs)
+    <|> do keyword "impossible"
+           symbol ";"
+           pure (ImpossibleClause () (mkLCPatVars lhs))
 
   binder : Rule (RawImp ())
   binder
@@ -169,6 +194,7 @@ mutual
     <|> explicitPi
     <|> lam
     <|> let_
+    <|> case_
 
   typeExpr : Rule (RawImp ())
   typeExpr
