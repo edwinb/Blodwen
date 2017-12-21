@@ -27,9 +27,9 @@ parameters (loc : annot, gam : Gamma)
                   case lookupDefTyExact x gam of
                        Just (PMDef _ _ _, ty) => 
                             pure $ (Ref Func x, embed ty)
-                       Just (DCon tag arity, ty) => 
+                       Just (DCon tag arity _, ty) => 
                             pure $ (Ref (DataCon tag arity) x, embed ty)
-                       Just (TCon tag arity _, ty) => 
+                       Just (TCon tag arity _ _, ty) => 
                             pure $ (Ref (TyCon tag arity) x, embed ty)
                        Just (_, ty) => 
                             pure $ (Ref Func x, embed ty)

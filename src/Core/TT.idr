@@ -175,6 +175,19 @@ namespace Env
 
 %name Env env
 
+namespace AList
+  public export
+	data AList : Type -> List b -> Type where
+       Nil : AList a []
+       (::) : (val : a) -> AList a xs -> AList a (x :: xs) -- 'val' corresponds to x
+
+  export
+  getCorresponding : (as : AList ty xs) -> Elem x xs -> ty
+  getCorresponding (val :: _) Here = val
+  getCorresponding (val :: as) (There later) = getCorresponding as later
+
+%name AList as
+
 export
 defined : (n : Name) -> Env Term vars -> Maybe (Elem n vars)
 defined n [] = Nothing
@@ -279,6 +292,7 @@ getBinder (There later) (b :: env) = map weaken (getBinder later env)
 
 -- Some syntax manipulation
 
+export
 addVar : Elem var (later ++ vars) -> Elem var (later ++ x :: vars)
 addVar {later = []} prf = There prf
 addVar {later = (var :: xs)} Here = Here
@@ -574,7 +588,7 @@ Show (Term vars) where
         showApp (App f args) [] = "Can't happen!"
         showApp (PrimVal x) [] = show x
         showApp TType [] = "Type"
-        showApp Erased [] = "[__]"
+        showApp Erased [] = "__"
         showApp f [] = "[unknown thing]"
         -- below is only total because 'args' must be non-empty, so the
         -- totality checker won't see it

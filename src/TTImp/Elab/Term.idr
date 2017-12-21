@@ -52,6 +52,22 @@ expandAmbigName gam env nest orig args (IApp loc f a)
    = expandAmbigName gam env nest orig ((loc, a) :: args) f
 expandAmbigName gam env nest orig args _ = orig
 
+-- Erase any forced arguments from a top level application
+eraseForced : Gamma -> Term vars -> Term vars
+eraseForced gam tm with (unapply tm)
+  eraseForced gam (apply (Ref (DataCon t ar) n) args) | ArgsList 
+      = case lookupDefExact n gam of
+             Just (DCon _ _ forcedpos)
+                  => apply (Ref (DataCon t ar) n) (dropPos 0 forcedpos args)
+             _ => apply (Ref (DataCon t ar) n) args
+    where
+      dropPos : Nat -> List Nat -> List (Term vars) -> List (Term vars)
+      dropPos i fs [] = []
+      dropPos i fs (x :: xs)
+          = if i `elem` fs then Erased :: dropPos (S i) fs xs
+                           else x :: dropPos (S i) fs xs
+  eraseForced gam (apply f args) | ArgsList = apply f args
+
 mutual
   export
   check : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -318,8 +334,8 @@ mutual
           = do let nt : NameType 
                         = case def of
                              PMDef _ _ _ => Func
-                             DCon tag arity => DataCon tag arity
-                             TCon tag arity _ => TyCon tag arity
+                             DCon tag arity _ => DataCon tag arity
+                             TCon tag arity _ _ => TyCon tag arity
                              _ => Func
                (ty, imps) <- getImps process loc env nest elabinfo (nf gam env varty) []
                checkExp process loc elabinfo env nest (apply (Ref nt n) imps) 
@@ -391,7 +407,6 @@ mutual
                                   (Just (quote gam env fnty))
                      checkExp process loc elabinfo env nest (App fnchk argtm)
                                   (Bind bn (Let argtm argty) scty) expected
-
 
   checkPi : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
@@ -611,14 +626,15 @@ mutual
              (exp : Maybe (Term vars)) ->
              Core annot (Term vars, Term vars) 
   checkExp process loc elabinfo env nest tm got Nothing
-      = pure (tm, got)
+      = do gam <- getCtxt
+           pure (eraseForced gam tm, got)
   checkExp process loc elabinfo env nest tm got (Just exp) 
       = do gam <- getCtxt
            let expnf = nf gam env exp
            (got', imps) <- convertImps process loc env nest elabinfo (nf gam env got) expnf []
            constr <- convert loc (elabMode elabinfo) env got' expnf
            case constr of
-                [] => pure (apply tm imps, quote empty env got')
+                [] => pure (eraseForced gam (apply tm imps), quote empty env got')
                 cs => do gam <- getCtxt
                          c <- addConstant loc env (apply tm imps) exp cs
                          pure (mkConstantApp c env, got)

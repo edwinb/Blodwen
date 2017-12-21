@@ -20,6 +20,9 @@ command
   <|> do symbol ":"; exactIdent "s"
          n <- name
          pure (ProofSearch n)
+  <|> do symbol ":"; exactIdent "di"
+         n <- name
+         pure (DebugInfo n)
   <|> do symbol ":"; exactIdent "q"
          pure Quit
   <|> do tm <- expr

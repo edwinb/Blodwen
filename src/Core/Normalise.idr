@@ -101,8 +101,8 @@ parameters (gam : Gamma, holesonly : Bool)
                                    Nothing => NApp (NRef nt fn) stk
                                    Just val => val
                     else NApp (NRef nt fn) stk
-               Just (DCon tag arity) => NDCon fn tag arity stk
-               Just (TCon tag arity _) => NTCon fn tag arity stk
+               Just (DCon tag arity _) => NDCon fn tag arity stk
+               Just (TCon tag arity _ _) => NTCon fn tag arity stk
                _ => NApp (NRef nt fn) stk
     
     -- Take arguments from the stack, as long as there's enough.

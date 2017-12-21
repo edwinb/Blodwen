@@ -2,7 +2,7 @@ Welcome to Blodwen. Good luck.
 Loading vect.blod
 Processing as TTImp
 LOG 0: --- CONSTRAINTS AND HOLES ---
-Blodwen> (Main.Cons Main.Nat (Main.S Main.Z) (Main.S Main.Z) (Main.Cons Main.Nat (Main.S (Main.S Main.Z)) Main.Z (Main.Nil Main.Nat))) : (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat)
+Blodwen> (Main.Cons __ (Main.S Main.Z) __ (Main.Cons __ (Main.S (Main.S Main.Z)) __ (Main.Nil __))) : (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat)
 Blodwen> When unifying: (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat) and (Main.Vect (Main.S Main.Z) Main.Nat)
 	Can't unify (Main.S Main.Z) and Main.Z
 Blodwen> Bye for now!

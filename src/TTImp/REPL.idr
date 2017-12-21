@@ -16,6 +16,9 @@ import Control.Catchable
 
 %default covering
 
+showInfo : (Name, Def) -> Core annot ()
+showInfo (n, d) = coreLift $ putStrLn (show n ++ " ==> " ++ show d)
+
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState ())} ->
@@ -41,6 +44,10 @@ process (ProofSearch n)
          gam <- getCtxt
          coreLift (putStrLn (show (normalise gam [] tm)))
          dumpConstraints 0 True
+         pure True
+process (DebugInfo n)
+    = do gam <- getCtxt
+         traverse showInfo (lookupDefName n gam)
          pure True
 process Quit 
     = do coreLift $ putStrLn "Bye for now!"

@@ -40,9 +40,12 @@ processData elab env nest (MkImpData annot n_in ty_raw cons_raw)
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty
          log 3 $ show n ++ " : " ++ show ty'
-         addDef n (newDef ty' Public None)
-         cons <- traverse (\x => checkCon elab env nest x) cons_raw
          gam <- getCtxt
-         let def = MkData (MkCon n (getArity gam [] ty') ty') cons
+         let arity = getArity gam [] ty'
+         -- Add a temporary type constructor, to use while checking
+         -- data constructors (tag is meaningless here, so just set to 0)
+         addDef n (newDef ty' Public (TCon 0 arity [] []))
+         cons <- traverse (\x => checkCon elab env nest x) cons_raw
+         let def = MkData (MkCon n arity ty') cons
          addData Public def
 

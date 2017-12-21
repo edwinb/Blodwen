@@ -79,6 +79,7 @@ data ImpREPL : Type -> Type where
      Eval : RawImp annot -> ImpREPL annot
      Check : RawImp annot -> ImpREPL annot
      ProofSearch : Name -> ImpREPL annot
+     DebugInfo : Name -> ImpREPL annot
      Quit : ImpREPL annot
 
 -- Information about names in nested blocks

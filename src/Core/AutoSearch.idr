@@ -64,7 +64,7 @@ searchName : {auto c : Ref Ctxt Defs} ->
 searchName loc depth env ty con
     = do gam <- getCtxt
          case lookupDefTyExact con gam of
-              Just (DCon tag arity, cty)
+              Just (DCon tag arity _, cty)
                   => do let nty = normalise gam [] cty
                         (args, appTy) <- mkArgs loc env (embed nty)
                         [] <- unify InTerm loc env ty (nf gam env appTy)

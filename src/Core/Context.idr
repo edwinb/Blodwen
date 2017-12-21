@@ -80,9 +80,14 @@ public export
 data Def : Type where
      None  : Def -- Not yet defined
      PMDef : (ishole : Bool) -> (args : List Name) -> CaseTree args -> Def
-     DCon  : (tag : Int) -> (arity : Nat) -> Def
-     TCon  : (tag : Int) -> (arity : Nat) -> (datacons : List Name) -> Def
-
+     DCon  : (tag : Int) -> (arity : Nat) -> 
+						 (forcedpos : List Nat) -> -- argument positions whose value is
+			                         -- forced by the constructors type
+			       Def
+     TCon  : (tag : Int) -> (arity : Nat) -> 
+						 (parampos : List Nat) -> -- argument positions which are parametric
+						 (datacons : List Name) -> 
+			       Def
      Hole : (numlocs : Nat) -> (pvar : Bool) -> Def 
 		           -- Unsolved hole, under 'numlocs' locals, and whether it
 						   -- is standing for a pattern variable (and therefore mustn't
@@ -94,6 +99,29 @@ data Def : Type where
      -- The constraint names refer into a context of constraints,
      -- defined in Core.Unify
      Guess : (guess : ClosedTerm) -> (constraints : List Name) -> Def
+
+export
+Show Def where
+  show None = "No definition"
+  show (PMDef hole args tree) 
+      = showHole hole ++"; " ++ show args ++ ";" ++ show tree
+    where
+      showHole : Bool -> String
+      showHole h = if h then "Hole" else "Def"
+  show (TCon tag arity params cons)
+	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ "; params " ++
+        show params ++ "; constructors " ++ show cons
+  show (DCon tag arity forced)
+      = "DataCon " ++ show tag ++ "; arity " ++ show arity ++ 
+        "; forced positions " ++ show forced
+  show (Hole locs False)
+      = "Hole with " ++ show locs ++ " locals"
+  show (Hole locs True)
+      = "Pattern variable with " ++ show locs ++ " locals"
+  show (BySearch n)
+      = "Search with depth " ++ show n
+  show ImpBind = "Implicitly bound name"
+  show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
 
 public export
 data Visibility = Public | Export | Private
@@ -109,8 +137,8 @@ record GlobalDef where
 getRefs : Def -> List Name
 getRefs None = []
 getRefs (PMDef ishole args sc) = getRefs sc
-getRefs (DCon tag arity) = []
-getRefs (TCon tag arity datacons) = []
+getRefs (DCon tag arity forced) = []
+getRefs (TCon tag arity params datacons) = []
 getRefs (Hole numlocs _) = []
 getRefs (BySearch _) = []
 getRefs ImpBind = []
@@ -311,8 +339,7 @@ simpleCase : {auto x : Ref Ctxt Defs} ->
              (clauses : List (ClosedTerm, ClosedTerm)) ->
              Core annot (args ** CaseTree args)
 simpleCase loc fn def clauses 
-      -- \x is needed below due to scoped implicits being weird...
-    = do ps <- traverse (\x => toPatClause loc fn x) clauses
+    = do ps <- traverse (toPatClause loc fn) clauses
          case patCompile ps def of
               Left err => throw (CaseCompile loc fn err)
               Right ok => pure ok
@@ -324,7 +351,7 @@ addFnDef : {auto x : Ref Ctxt Defs} ->
 addFnDef loc vis (MkFn n ty clauses) 
     = do let cs = map toClosed clauses
          (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
---          log 5 $ "Case tree for " ++ show n ++ ": " 
+--          coreLift $ putStrLn $ "Case tree for " ++ show n ++ ": " 
 -- 				             ++ show args ++ "\n" ++ show cs ++ "\n" ++ show tree
          let def = newDef ty vis (PMDef False args tree)
          addDef n def
@@ -346,19 +373,39 @@ addData : {auto x : Ref Ctxt Defs} ->
 addData vis (MkData (MkCon tyn arity tycon) datacons)
     = do gam <- getCtxt 
          tag <- getNextTypeTag 
-         let tydef = newDef tycon vis (TCon tag arity (map name datacons))
+         let tydef = newDef tycon vis (TCon tag arity [] (map name datacons))
          let gam' = addCtxt tyn tydef gam
          setCtxt (addDataConstructors 0 datacons gam')
   where
     conVisibility : Visibility -> Visibility
     conVisibility Export = Private
     conVisibility x = x
+    
+    findGuarded : AList Nat vars -> Term vars -> List Nat
+    findGuarded as tm with (unapply tm)
+      findGuarded as (apply (Ref (DataCon _ _) _) args) | ArgsList 
+			     = nub $ assert_total (concatMap (findGuarded as) args)
+      findGuarded as (apply (Ref (TyCon _ _) _) args) | ArgsList 
+			     = nub $ assert_total (concatMap (findGuarded as) args)
+      findGuarded as (apply (Local {x} var) []) | ArgsList
+	         = [getCorresponding as var]
+      findGuarded as (apply f args) | ArgsList 
+			     = []
+
+		-- Calculate which argument positions in the type are 'forced'.
+		-- An argument is forced if it appears guarded by constructors in one
+		-- of the parameters or indices of the constructor's return type
+    forcedPos : (pos : Nat) -> AList Nat vars -> Term vars -> List Nat
+    forcedPos p as (Bind x (Pi _ ty) sc)
+        = forcedPos (p + 1) (p :: as) sc
+    forcedPos p as tm = findGuarded as tm
 
     addDataConstructors : (tag : Int) -> 
                           List Constructor -> Gamma -> Gamma
     addDataConstructors tag [] gam = gam
     addDataConstructors tag (MkCon n a ty :: cs) gam
-        = do let condef = newDef ty (conVisibility vis) (DCon tag a)
+        = do let condef = newDef ty (conVisibility vis) 
+						                     (DCon tag a (forcedPos 0 [] ty))
              let gam' = addCtxt n condef gam
              addDataConstructors (tag + 1) cs gam'
 
@@ -388,7 +435,7 @@ getHintsFor : {auto x : Ref Ctxt Defs} ->
 getHintsFor loc target
     = do defs <- get Ctxt
          case lookupDefExact target (gamma defs) of
-              Just (TCon _ _ cons) => 
+              Just (TCon _ _ _ cons) => 
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
@@ -400,3 +447,16 @@ runWithCtxt : Core annot () -> IO ()
 runWithCtxt prog = coreRun prog 
                            (\err => printLn err)
                            (\ok => pure ())
+
+-- Return whether an argument to the given term would be a forced argument
+export
+isForcedArg : Gamma -> Term vars -> Bool
+isForcedArg gam tm with (unapply tm)
+  isForcedArg gam (apply (Ref (DataCon _ _) n) args) | ArgsList 
+      = case lookupDefExact n gam of
+             Just (DCon _ _ forcedpos)
+						    -- if the number of args so far is in forcedpos, then
+								-- the next argument position is indeed forced
+                   => length args `elem` forcedpos
+             _ => False
+  isForcedArg gam (apply f args) | ArgsList = False
