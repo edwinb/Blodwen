@@ -172,6 +172,19 @@ TTI String where
                                           (incLoc len next) rest)
                            pure val
 
+-- Some useful types from the prelude
+
+export
+TTI Bool where
+  toBuf b False = toBuf b (the Bits8 0)
+  toBuf b True = toBuf b (the Bits8 1)
+  fromBuf b
+      = do val <- fromBuf b {a = Bits8}
+           case val of
+                0 => pure False
+                1 => pure True
+                _ => throw (InternalError "Corrupted binary data for Bool")
+
 export
 (TTI a, TTI b) => TTI (a, b) where
   toBuf b (x, y)
@@ -214,12 +227,48 @@ TTI a => TTI (List a) where
           = do val <- fromBuf b
                readElems (val :: xs) k
 
+toLimbs : Integer -> List Int
+toLimbs x
+    = if x == 0 
+         then []
+         else if x == -1 then [-1]
+              else fromInteger (prim__andBigInt x 0xff) ::
+                    toLimbs (prim__ashrBigInt x 8)
+
+fromLimbs : List Int -> Integer
+fromLimbs [] = 0
+fromLimbs (x :: xs) = cast x + prim__shlBigInt (fromLimbs xs) 8
+
+export
+TTI Integer where
+  toBuf b val
+    = if val < 0
+         then do toBuf b (the Bits8 0)
+                 toBuf b (toLimbs (-val))
+         else do toBuf b (the Bits8 1)
+                 toBuf b (toLimbs val)
+  fromBuf b 
+    = do val <- fromBuf b {a = Bits8}
+         case val of
+              0 => do val <- fromBuf b
+                      pure (-(fromLimbs val))
+              1 => do val <- fromBuf b
+                      pure (fromLimbs val)
+              _ => throw (InternalError "Corrupted binary data for Integer")
+
+export
+TTI Nat where
+  toBuf b val = toBuf b (cast {to=Integer} val)
+  fromBuf b = do val <- fromBuf b
+                 pure (fromInteger val)
+
 {-
 testMain : Core () ()
 testMain
     = do buf <- initBinary
          toBuf buf (the Bits8 42)
-         toBuf buf $ the Int 1234567890
+         toBuf buf $ the Integer 12345678900000000000000000000000000000000
+         toBuf buf $ the Integer (-12345678900000000000000000000000000000000)
          toBuf buf $ "AAAAAAAAAAAA"
          toBuf buf $ the Int 6
          toBuf buf $ "Sossidges!!!!"
@@ -238,7 +287,9 @@ testMain
          val <- fromBuf buf
          coreLift $ printLn (the Bits8 val)
          val <- fromBuf buf
-         coreLift $ printLn (the Int val)
+         coreLift $ printLn (the Integer val)
+         val <- fromBuf buf
+         coreLift $ printLn (the Integer val)
          val <- fromBuf buf
          coreLift $ printLn (the String val)
          val <- fromBuf buf
