@@ -127,10 +127,29 @@ public export
 data Visibility = Public | Export | Private
 
 public export
+data DefFlag = Hint | Inline
+
+export
+Eq DefFlag where
+    (==) Hint Hint = True
+    (==) Inline Inline = True
+    (==) _ _ = False
+
+public export
+data PartialReason = NotCovering | RecursiveCall (List Name)
+
+public export
+data Totality = Partial PartialReason | Unchecked | Covering | Total 
+
+-- *everything* about a definition goes here, so that we can save out the
+-- type checked code "simply" by writing out a list of GlobalDefs
+public export
 record GlobalDef where
      constructor MkGlobalDef
      type : ClosedTerm
      visibility : Visibility
+     totality : Totality
+     flags : List DefFlag
      definition : Def
      refersTo : List Name
 
@@ -146,7 +165,7 @@ getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 
 export
 newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
-newDef ty vis def = MkGlobalDef ty vis def (getRefs def)
+newDef ty vis def = MkGlobalDef ty vis Unchecked [] def (getRefs def)
 
 -- A context of global definitions
 public export
@@ -209,7 +228,6 @@ export
 lookupDefTyName : Name -> Gamma -> List (Name, Def, ClosedTerm)
 lookupDefTyName n gam
     = map (\(x, g) => (x, definition g, type g)) (lookupGlobalName n gam)
-
 
 public export
 record Constructor where
@@ -309,6 +327,83 @@ updateDef n def
 																		   refersTo = getRefs def } odef in
                        setCtxt (addCtxt n gdef g)
  
+export
+setFlag : {auto x : Ref Ctxt Defs} ->
+					annot -> Name -> DefFlag -> Core annot ()
+setFlag loc n fl
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def =>
+                   do let flags' = fl :: filter (/= fl) (flags def)
+                      addDef n (record { flags = flags' } def)
+
+export
+unsetFlag : {auto x : Ref Ctxt Defs} ->
+            annot -> Name -> DefFlag -> Core annot ()
+unsetFlag loc n fl
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def =>
+                   do let flags' = filter (/= fl) (flags def)
+                      addDef n (record { flags = flags' } def)
+
+export
+hasFlag : {auto x : Ref Ctxt Defs} ->
+          annot -> Name -> DefFlag -> Core annot Bool
+hasFlag loc n fl
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure (fl `elem` flags def)
+
+export
+setTotality : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Totality -> Core annot ()
+setTotality loc n tot
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { totality = tot } def)
+
+export
+getTotality : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Core annot Totality
+getTotality loc n
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure $ totality def
+
+export
+setVisibility : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> Visibility -> Core annot ()
+setVisibility loc n vis
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { visibility = vis } def)
+
+export
+getVisibility : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot Visibility
+getVisibility loc n
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure $ visibility def
+
+export
+isTotal : {auto x : Ref Ctxt Defs} ->
+          annot -> Name -> Core annot Bool
+isTotal loc n
+    = do t <- getTotality loc n
+         case t of
+              Total => pure True
+              _ => pure False
 
 argToPat : ClosedTerm -> Pat
 argToPat tm with (unapply tm)

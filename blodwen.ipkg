@@ -37,7 +37,9 @@ modules = Core.AutoSearch,
           TTImp.ProcessType,
           TTImp.ProcessTTImp,
           TTImp.REPL,
-          TTImp.TTImp
+          TTImp.TTImp,
+
+          Utils.Binary
 
 sourcedir = src
 executable = blodwen
