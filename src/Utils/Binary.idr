@@ -2,6 +2,7 @@ module Utils.Binary
 
 import Core.Core
 import Data.Buffer
+import Data.List
 
 %default covering
 
@@ -226,6 +227,26 @@ TTI a => TTI (List a) where
       readElems xs (S k)
           = do val <- fromBuf b
                readElems (val :: xs) k
+
+count : Elem x xs -> Int
+count Here = 0
+count (There p) = 1 + count p
+
+-- Assumption is that it was type safe when we wrote it out, so believe_me
+-- to rebuild proofs is fine.
+-- We're just making up the implicit arguments - this is only fine at run
+-- time because those arguments get erased!
+mkPrf : Int -> Elem x xs
+mkPrf i {x} {xs}
+    = if i == 0 then believe_me (Here {x} {xs = x :: xs})
+                else believe_me (There {y=x} (mkPrf {x} {xs} (i-1)))
+
+export
+TTI (Elem x xs) where
+  toBuf b prf = toBuf b (count prf)
+  fromBuf b
+    = do val <- fromBuf b {a = Int}
+         pure (mkPrf val)
 
 toLimbs : Integer -> List Int
 toLimbs x

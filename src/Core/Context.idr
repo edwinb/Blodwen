@@ -177,16 +177,17 @@ export
 record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
-      defNamespace : List String -- namespace for current definitions
+      currentNS : List String -- namespace for current definitions
       autoHints : List Name -- global auto hints
       typeHints : Context (List Name) -- type name hints
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
 
+
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty [] [] empty 100 0 0
+initCtxt = MkAllDefs empty ["Main"] [] empty 100 0 0
 
 export
 lookupGlobalExact : Name -> Gamma -> Maybe GlobalDef
@@ -261,6 +262,39 @@ getCtxt : {auto x : Ref Ctxt Defs} ->
 					Core annot Gamma
 getCtxt = pure (gamma !(get Ctxt))
 
+-- Set the default namespace for new definitions
+export
+setNS : {auto c : Ref Ctxt Defs} ->
+        List String -> Core annot ()
+setNS ns
+    = do defs <- get Ctxt
+         put Ctxt (record { currentNS = ns } defs)
+
+-- Add a new nested namespace to the current namespace for new definitions
+-- e.g. extendNS ["Data"] when namespace is "Prelude.List" leads to
+-- current namespace of "Prelude.List.Data"
+-- Inner namespaces go first, for ease of name lookup
+export
+extendNS : {auto c : Ref Ctxt Defs} ->
+           List String -> Core annot ()
+extendNS ns
+    = do defs <- get Ctxt
+         put Ctxt (record { currentNS $= (++ (reverse ns)) } defs)
+
+-- Get the name as it would be defined in the current namespace
+-- i.e. if it doesn't have an explicit namespace already, add it,
+-- otherwise leave it alone
+export
+inCurrentNS : {auto c : Ref Ctxt Defs} ->
+              Name -> Core annot Name
+inCurrentNS (UN n)
+    = do defs <- get Ctxt
+         pure (NS (currentNS defs) (UN n))
+inCurrentNS n@(MN _ _)
+    = do defs <- get Ctxt
+         pure (NS (currentNS defs) n)
+inCurrentNS n = pure n
+
 export
 getNextTypeTag : {auto x : Ref Ctxt Defs} ->
 								 Core annot Int
@@ -284,7 +318,7 @@ genName : {auto x : Ref Ctxt Defs} ->
 genName root
     = do ust <- get Ctxt
          put Ctxt (record { nextVar $= (+1) } ust)
-         pure (MN root (nextVar ust))
+         inCurrentNS (MN root (nextVar ust))
 
 export
 setCtxt : {auto x : Ref Ctxt Defs} -> Gamma -> Core annot ()

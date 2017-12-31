@@ -241,7 +241,7 @@ addConstraint : {auto u : Ref UST (UState annot)} ->
                 Constraint annot -> Core annot Name
 addConstraint constr
     = do c_id <- getNextHole
-         let cn = MN "constraint" c_id
+         cn <- inCurrentNS (MN "constraint" c_id)
          setConstraint cn constr
          pure cn
 

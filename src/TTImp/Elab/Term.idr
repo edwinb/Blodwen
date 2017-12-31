@@ -120,7 +120,7 @@ mutual
       useVars _ sc = sc -- Can't happen?
   checkImp process elabinfo env nest (IPi loc plicity Nothing ty retTy) expected 
       = do n <- genName "pi"
-           checkPi process elabinfo loc env nest plicity n ty retTy expected
+           checkPi process elabinfo loc env nest plicity (dropNS n) ty retTy expected
   checkImp process elabinfo env nest (IPi loc plicity (Just n) ty retTy) expected 
       = checkPi process elabinfo loc env nest plicity n ty retTy expected
   checkImp process elabinfo env nest (ILam loc plicity n ty scope) expected

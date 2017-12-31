@@ -41,6 +41,11 @@ mutual
   userNameRoot (GN x) = Nothing
 
 export
+dropNS : Name -> Name
+dropNS (NS _ n) = n
+dropNS n = n
+
+export
 showSep : String -> List String -> String
 showSep sep [] = ""
 showSep sep [x] = x

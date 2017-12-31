@@ -212,11 +212,10 @@ public export
 record ImpState annot where
   constructor MkImpState
   impNames : List (String, RawImp annot) -- names which can be implicitly bound
-  currentNS : List String -- Current namespace, default "Main"
 
 export
 initImpState : ImpState annot
-initImpState = MkImpState [] ["Main"]
+initImpState = MkImpState []
 
 -- A label for TTImp state in the global state
 export
@@ -229,40 +228,10 @@ addImp str ty
     = do ist <- get ImpST
          put ImpST (record { impNames $= ((str, ty) ::) } ist)
 
--- Set the default namespace for new definitions
-export
-setNS : {auto i : Ref ImpST (ImpState annot)} ->
-        List String -> Core annot ()
-setNS ns
-    = do ist <- get ImpST
-         put ImpST (record { currentNS = ns } ist)
-
--- Add a new nested namespace to the current namespace for new definitions
--- e.g. extendNS ["Data"] when namespace is "Prelude.List" leads to
--- current namespace of "Prelude.List.Data"
--- Inner namespaces go first, for ease of name lookup
-export
-extendNS : {auto i : Ref ImpST (ImpState annot)} ->
-           List String -> Core annot ()
-extendNS ns
-    = do ist <- get ImpST
-         put ImpST (record { currentNS $= (++ (reverse ns)) } ist)
-
--- Get the name as it would be defined in the current namespace
--- i.e. if it doesn't have an explicit namespace already, add it,
--- otherwise leave it alone
-export
-inCurrentNS : {auto i : Ref ImpST (ImpState annot)} ->
-              Name -> Core annot Name
-inCurrentNS (UN n)
-    = do ist <- get ImpST
-         pure (NS (currentNS ist) (UN n))
-inCurrentNS n = pure n
-
 -- Update the lhs of a clause so that the name is fully explicit, and
 -- by default is in the current namespace
 export
-lhsInCurrentNS : {auto i : Ref ImpST (ImpState annot)} ->
+lhsInCurrentNS : {auto c : Ref Ctxt Defs} ->
                  NestedNames vars -> RawImp annot -> Core annot (RawImp annot)
 lhsInCurrentNS nest (IApp loc f a)
     = do f' <- lhsInCurrentNS nest f

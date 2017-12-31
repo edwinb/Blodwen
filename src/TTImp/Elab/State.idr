@@ -301,7 +301,8 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
     = let (scope', ty') = bindImplVars (i + 1) mode gam imps scope scty
           tmpN = MN "unb" i
           repNameTm = repName (Ref Bound tmpN) scope' 
-          repNameTy = repName (Ref Bound tmpN) ty' in
+          repNameTy = repName (Ref Bound tmpN) ty'
+          n' = dropNS n in
           case mode of
                PATTERN =>
                   case lookupDefExact n gam of
@@ -310,17 +311,18 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                           -- otherwise reduce it
                           case n of
                                PV _ =>
-                                  (Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
-                                              (refToLocal tmpN n repNameTm), 
-                                   Bind n (PLet (embed (normalise gam [] (Ref Func n))) ty) 
-                                              (refToLocal tmpN n repNameTy))
+                                  (Bind n' (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                           (refToLocal tmpN n' repNameTm), 
+                                   Bind n' 
+                                        (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                              (refToLocal tmpN n' repNameTy))
                                _ => (subst (embed (normalise gam [] (Ref Func n)))
                                            (refToLocal tmpN n repNameTm),
                                      subst (embed (normalise gam [] (Ref Func n)))
                                            (refToLocal tmpN n repNameTy))
                        _ =>
-                          (Bind n (PVar ty) (refToLocal tmpN n repNameTm), 
-                           Bind n (PVTy ty) (refToLocal tmpN n repNameTy))
+                          (Bind n' (PVar ty) (refToLocal tmpN n' repNameTm), 
+                           Bind n' (PVTy ty) (refToLocal tmpN n' repNameTy))
                PI _ =>
                   case lookupDefExact n gam of
                      Just (PMDef _ _ t) =>
@@ -328,8 +330,8 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                                (refToLocal tmpN n repNameTm),
                          subst (embed (normalise gam [] (Ref Func n)))
                                (refToLocal tmpN n repNameTy))
-                     _ => (Bind n (Pi Implicit ty) (refToLocal tmpN n repNameTm), ty')
-               _ => (Bind n (Pi Implicit ty) (refToLocal tmpN n repNameTm), ty')
+                     _ => (Bind n' (Pi Implicit ty) (refToLocal tmpN n' repNameTm), ty')
+               _ => (Bind n' (Pi Implicit ty) (refToLocal tmpN n' repNameTm), ty')
   where
     -- Replace the name applied to the given number of arguments 
     -- with another term
