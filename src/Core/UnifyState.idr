@@ -29,9 +29,6 @@ data Constraint : Type -> Type where
      -- A resolved constraint
      Resolved : Constraint annot
 
--- union : List Name -> List Name -> List Name
--- union cs cs' = nub (cs ++ cs') -- TODO: as a set, not list
-
 -- Currently unsolved constraints - the 'constraints' in the 'Guess'
 -- definitions in Gamma refer into this unification state
 public export

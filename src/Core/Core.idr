@@ -6,6 +6,13 @@ import Core.CaseTree
 import public Data.IORef
 import public Control.Catchable
 
+public export
+data TTIErrorMsg
+    = FormatOlder
+    | FormatNewer
+    | EndOfBuffer String
+    | Corrupt String
+
 -- All possible errors
 -- 'annot' is an annotation provided by the thing which called the
 -- function which had an error; it's intended to provide any useful information
@@ -29,7 +36,15 @@ data Error annot
     | BadDotPattern annot (Term vars) (Term vars)
     | BadImplicit annot String
     | GenericMsg annot String
+    | TTIError TTIErrorMsg
     | InternalError String
+
+export
+Show TTIErrorMsg where
+  show FormatOlder = "TTI data is in an older format"
+  show FormatNewer = "TTI data is in a newer format"
+  show (EndOfBuffer when) = "End of buffer when reading " ++ when
+  show (Corrupt ty) = "Corrupt TTI data for " ++ ty
 
 -- Simplest possible display - higher level languages should unelaborate names
 -- and display annotations appropriately
@@ -60,6 +75,7 @@ Show (Error annot) where
       = "Can't match on " ++ show x
   show (BadImplicit _ str) = str ++ " can't be bound here"
   show (GenericMsg _ str) = str
+  show (TTIError str) = "File error: " ++ show str
   show (InternalError str) = "INTERNAL ERROR: " ++ str
 
 export

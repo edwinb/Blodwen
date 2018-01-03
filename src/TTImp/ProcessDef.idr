@@ -103,6 +103,7 @@ processDef elab env nest loc n_in cs_raw
               Just (None, ty) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
                    addFnDef loc Public (MkFn n ty (mapMaybe id cs))
+                   addToSave n
                    gam <- getCtxt
                    log 3 $
                       case lookupDefExact n gam of

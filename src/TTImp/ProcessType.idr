@@ -23,4 +23,5 @@ processType elab env nest (MkImpTy annot n_in ty_raw)
          ty <- checkTerm elab n env nest (PI False) InType ty_imp TType
          log 1 $ show n ++ " : " ++ show (abstractEnvType env ty)
          addDef n (newDef (abstractEnvType env ty) Public None)
+         addToSave n
 

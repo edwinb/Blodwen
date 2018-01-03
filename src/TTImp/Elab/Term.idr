@@ -47,7 +47,7 @@ expandAmbigName gam env nest orig args (IVar loc x)
   where
     buildAlt : RawImp annot -> List (annot, RawImp annot) -> RawImp annot
     buildAlt f [] = f
-    buildAlt f ((loc, a) :: as) = buildAlt (IApp loc f a) as
+    buildAlt f ((loc', a) :: as) = buildAlt (IApp loc' f a) as
 expandAmbigName gam env nest orig args (IApp loc f a)
    = expandAmbigName gam env nest orig ((loc, a) :: args) f
 expandAmbigName gam env nest orig args _ = orig
@@ -156,16 +156,16 @@ mutual
                  _ => n
 
       updateTyName : NestedNames vars -> ImpTy annot -> ImpTy annot
-      updateTyName nest (MkImpTy loc n ty) = MkImpTy loc (newName nest n) ty
+      updateTyName nest (MkImpTy loc' n ty) = MkImpTy loc' (newName nest n) ty
 
       updateDataName : NestedNames vars -> ImpData annot -> ImpData annot
-      updateDataName nest (MkImpData loc n tycons dcons)
-          = MkImpData loc (newName nest n) tycons (map (updateTyName nest) dcons)
+      updateDataName nest (MkImpData loc' n tycons dcons)
+          = MkImpData loc' (newName nest n) tycons (map (updateTyName nest) dcons)
 
       updateName : NestedNames vars -> ImpDecl annot -> ImpDecl annot
-      updateName nest (IClaim loc ty) = IClaim loc (updateTyName nest ty)
-      updateName nest (IDef loc n cs) = IDef loc (newName nest n) cs
-      updateName nest (IData loc d) = IData loc (updateDataName nest d)
+      updateName nest (IClaim loc' ty) = IClaim loc' (updateTyName nest ty)
+      updateName nest (IDef loc' n cs) = IDef loc' (newName nest n) cs
+      updateName nest (IData loc' d) = IData loc' (updateDataName nest d)
       updateName nest i = i
 
   checkImp process elabinfo env nest (IApp loc fn arg) expected 

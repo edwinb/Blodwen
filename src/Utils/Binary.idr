@@ -58,6 +58,61 @@ reset (MkBin done cur rest)
         = MkBin [] (record { loc = 0 } chunk)
                    (map (record { loc = 0 }) rest)
 
+req : List Chunk -> Int
+req [] = 0
+req (c :: cs)
+    = used c + req cs
+
+-- Take all the data from the chunks in a 'Binary' and copy them into one
+-- single buffer, ready for writing to disk.
+-- TODO: YAGNI? Delete if so...
+toBuffer : Binary -> IO (Maybe Buffer)
+toBuffer (MkBin done cur rest)
+    = do let chunks = reverse done ++ cur :: rest
+         Just b <- newBuffer (req chunks)
+              | Nothing => pure Nothing
+         copyToBuf 0 b chunks
+         pure (Just b)
+  where
+    copyToBuf : (pos : Int) -> Buffer -> List Chunk -> IO ()
+    copyToBuf pos b [] = pure ()
+    copyToBuf pos b (c :: cs)
+        = do copyData (buf c) 0 (used c) b pos
+             copyToBuf (pos + used c) b cs
+
+fromBuffer : Buffer -> IO Binary
+fromBuffer buf
+    = do len <- rawSize buf
+         pure (MkBin [] (MkChunk buf 0 len len) []) -- assume all used
+
+export
+writeToFile : (fname : String) -> Binary -> IO (Either FileError ())
+writeToFile fname (MkBin done cur rest)
+    = do Right h <- openFile fname WriteTruncate
+               | Left err => pure (Left err)
+         let chunks = reverse done ++ cur :: rest
+         writeChunks h chunks
+         closeFile h
+         pure (Right ())
+  where
+    writeChunks : File -> List Chunk -> IO ()
+    writeChunks h [] = pure ()
+    writeChunks h (c :: cs)
+        = do writeBufferToFile h (resetBuffer (buf c)) (used c)
+             writeChunks h cs
+
+export
+readFromFile : (fname : String) -> IO (Either FileError Binary)
+readFromFile fname
+    = do Right h <- openFile fname Read
+               | Left err => pure (Left err)
+         Right max <- fileSize h
+               | Left err => pure (Left err)
+         Just b <- newBuffer max
+               | Nothing => pure (Left (GenericFileError 0)) --- um, not really
+         b <- readBufferFromFile h b max
+         pure (Right (MkBin [] (MkChunk b 0 max max) []))
+
 public export
 interface TTI a where -- TTI = TT intermediate code/interface file
   -- Add binary data representing the value to the given buffer
@@ -73,6 +128,10 @@ initBinary
     = do Just buf <- coreLift $ newBuffer 65536
              | Nothing => throw (InternalError "Buffer creation failed")
          newRef Bin (MkBin [] (newChunk buf) [])
+
+export
+corrupt : String -> Core annot a
+corrupt ty = throw (TTIError (Corrupt ty))
 
 -- Primitives; these are the only things that have to deal with growing
 -- the buffer list
@@ -102,11 +161,19 @@ TTI Bits8 where
                  pure val
               else
                 case rest of
-                     [] => throw (InternalError "End of buffer when reading Byte")
+                     [] => throw (TTIError (EndOfBuffer "Byte"))
                      (next :: rest) =>
                         do val <- coreLift $ getByte (buf next) 0
                            put Bin (MkBin (chunk :: done) (incLoc 1 next) rest)
                            pure val
+
+export
+tag : {auto b : Ref Bin Binary} -> Bits8 -> Core annot ()
+tag {b} val = toBuf b val
+
+export
+getTag : {auto b : Ref Bin Binary} -> Core annot Bits8
+getTag {b} = fromBuf b
 
 export
 TTI Int where
@@ -132,7 +199,7 @@ TTI Int where
                  pure val
               else
                 case rest of
-                     [] => throw (InternalError "End of buffer when reading Int")
+                     [] => throw (TTIError (EndOfBuffer "Int"))
                      (next :: rest) =>
                         do val <- coreLift $ getInt (buf next) 0
                            put Bin (MkBin (chunk :: done) (incLoc 4 next) rest)
@@ -166,7 +233,7 @@ TTI String where
                    pure val
               else 
                 case rest of
-                     [] => throw (InternalError "End of buffer when reading String")
+                     [] => throw (TTIError (EndOfBuffer "String"))
                      (next :: rest) =>
                         do val <- coreLift $ getString (buf next) 0 len
                            put Bin (MkBin (chunk :: done)
@@ -177,14 +244,13 @@ TTI String where
 
 export
 TTI Bool where
-  toBuf b False = toBuf b (the Bits8 0)
-  toBuf b True = toBuf b (the Bits8 1)
+  toBuf b False = tag 0
+  toBuf b True = tag 1
   fromBuf b
-      = do val <- fromBuf b {a = Bits8}
-           case val of
-                0 => pure False
-                1 => pure True
-                _ => throw (InternalError "Corrupted binary data for Bool")
+      = case !getTag of
+             0 => pure False
+             1 => pure True
+             _ => corrupt "Bool"
 
 export
 (TTI a, TTI b) => TTI (a, b) where
@@ -199,18 +265,17 @@ export
 export
 TTI a => TTI (Maybe a) where
   toBuf b Nothing
-     = toBuf b (the Bits8 0)
+     = tag 0
   toBuf b (Just val)
-     = do toBuf b (the Bits8 1)
+     = do tag 1
           toBuf b val
 
   fromBuf b
-     = do val <- fromBuf b {a = Bits8}
-          case val of
-               0 => pure Nothing
-               1 => do val <- fromBuf b
-                       pure (Just val)
-               _ => throw (InternalError "Corrupted binary data for Maybe")
+     = case !getTag of
+            0 => pure Nothing
+            1 => do val <- fromBuf b
+                    pure (Just val)
+            _ => corrupt "Maybe"
 
 export
 TTI a => TTI (List a) where
@@ -246,7 +311,9 @@ TTI (Elem x xs) where
   toBuf b prf = toBuf b (count prf)
   fromBuf b
     = do val <- fromBuf b {a = Int}
-         pure (mkPrf val)
+         if val > 0
+            then pure (assert_total (mkPrf val))
+            else corrupt "Elem"
 
 toLimbs : Integer -> List Int
 toLimbs x
@@ -263,7 +330,7 @@ fromLimbs (x :: xs) = cast x + prim__shlBigInt (fromLimbs xs) 8
 export
 TTI Integer where
   toBuf b val
-    = if val < 0
+    = assert_total $ if val < 0
          then do toBuf b (the Bits8 0)
                  toBuf b (toLimbs (-val))
          else do toBuf b (the Bits8 1)
@@ -275,7 +342,7 @@ TTI Integer where
                       pure (-(fromLimbs val))
               1 => do val <- fromBuf b
                       pure (fromLimbs val)
-              _ => throw (InternalError "Corrupted binary data for Integer")
+              _ => corrupt "Integer"
 
 export
 TTI Nat where

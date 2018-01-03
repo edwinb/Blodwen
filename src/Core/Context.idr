@@ -1,8 +1,10 @@
 module Core.Context
 
-import Core.TT
 import Core.CaseTree
 import public Core.Core
+import Core.TT
+import Core.TTI
+import Utils.Binary
 
 import public Control.Catchable
 
@@ -76,6 +78,18 @@ addCtxt n val (MkContext dict hier)
            hier' = addToHier n val hier in
            MkContext dict' hier'
 
+-- Merge two contexts, with entries in the second overriding entries in
+-- the first
+mergeContext : Context a -> Context a -> Context a
+mergeContext ctxt (MkContext exact hier)
+    = insertFrom (toList exact) ctxt
+  where
+    insertFrom : List (Name, a) -> Context a -> Context a
+    insertFrom [] ctxt = ctxt
+    insertFrom ((n, val) :: cs) ctxt
+        = insertFrom cs (addCtxt n val ctxt)
+
+
 public export
 data Def : Type where
      None  : Def -- Not yet defined
@@ -123,23 +137,110 @@ Show Def where
   show ImpBind = "Implicitly bound name"
   show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
 
+TTI Def where
+  toBuf b None = tag 0
+  toBuf b (PMDef ishole args sc) 
+      = do tag 1; toBuf b ishole; toBuf b args; toBuf b sc
+  toBuf b (DCon t arity forcedpos) 
+      = do tag 2; toBuf b t; toBuf b arity; toBuf b forcedpos
+  toBuf b (TCon t arity parampos datacons) 
+      = do tag 3; toBuf b t; toBuf b arity; toBuf b parampos; toBuf b datacons
+  toBuf b (Hole numlocs pvar) 
+      = do tag 4; toBuf b numlocs; toBuf b pvar
+  toBuf b (BySearch k) 
+      = do tag 5; toBuf b k
+  toBuf b ImpBind = tag 6
+  toBuf b (Guess guess constraints) 
+      = do tag 7; toBuf b guess; toBuf b constraints
+
+  fromBuf b 
+      = case !getTag of
+             0 => pure None
+             1 => do x <- fromBuf b; y <- fromBuf b; z <- fromBuf b
+                     pure (PMDef x y z)
+             2 => do x <- fromBuf b; y <- fromBuf b; z <- fromBuf b
+                     pure (DCon x y z)
+             3 => do w <- fromBuf b; x <- fromBuf b; y <- fromBuf b; z <- fromBuf b
+                     pure (TCon w x y z)
+             4 => do x <- fromBuf b; y <- fromBuf b
+                     pure (Hole x y)
+             5 => pure ImpBind
+             6 => do x <- fromBuf b
+                     pure (BySearch x)
+             7 => do x <- fromBuf b; y <- fromBuf b
+                     pure (Guess x y)
+             _ => corrupt "Def"
+
 public export
 data Visibility = Public | Export | Private
 
 public export
-data DefFlag = Hint | Inline
+data DefFlag = TypeHint Name | GlobalHint | Inline
 
 export
 Eq DefFlag where
-    (==) Hint Hint = True
+    (==) (TypeHint ty) (TypeHint ty') = ty == ty'
+    (==) GlobalHint GlobalHint = True
     (==) Inline Inline = True
     (==) _ _ = False
 
 public export
-data PartialReason = NotCovering | RecursiveCall (List Name)
+data PartialReason = NotCovering | NotStrictlyPositive 
+                   | Calling (List Name)
 
 public export
 data Totality = Partial PartialReason | Unchecked | Covering | Total 
+
+TTI Visibility where
+  toBuf b Public = tag 0
+  toBuf b Export = tag 1
+  toBuf b Private = tag 2
+
+  fromBuf b 
+      = case !getTag of
+             0 => pure Public
+             1 => pure Export
+             2 => pure Private
+             _ => corrupt "Visibility"
+
+TTI DefFlag where
+  toBuf b (TypeHint x) = do tag 0; toBuf b x
+  toBuf b GlobalHint = tag 1
+  toBuf b Inline = tag 2
+
+  fromBuf b 
+      = case !getTag of
+             0 => do x <- fromBuf b; pure (TypeHint x)
+             1 => pure GlobalHint
+             2 => pure Inline
+             _ => corrupt "DefFlag"
+
+TTI PartialReason where
+  toBuf b NotCovering = tag 0
+  toBuf b NotStrictlyPositive = tag 1
+  toBuf b (Calling xs) = do tag 2; toBuf b xs
+
+  fromBuf b 
+      = case !getTag of
+             0 => pure NotCovering
+             1 => pure NotStrictlyPositive
+             2 => do xs <- fromBuf b
+                     pure (Calling xs)
+             _ => corrupt "PartialReason"
+
+TTI Totality where
+  toBuf b (Partial x) = do tag 0; toBuf b x
+  toBuf b Unchecked = tag 1
+  toBuf b Covering = tag 2
+  toBuf b Total = tag 3
+
+  fromBuf b 
+      = case !getTag of
+             0 => do x <- fromBuf b; pure (Partial x)
+             1 => pure Unchecked
+             2 => pure Covering
+             3 => pure Total
+             _ => corrupt "Totality"
 
 -- *everything* about a definition goes here, so that we can save out the
 -- type checked code "simply" by writing out a list of GlobalDefs
@@ -152,6 +253,24 @@ record GlobalDef where
      flags : List DefFlag
      definition : Def
      refersTo : List Name
+
+TTI GlobalDef where
+  toBuf b def
+      = do toBuf b (type def)
+           toBuf b (visibility def)
+           toBuf b (totality def)
+           toBuf b (flags def)
+           toBuf b (definition def)
+           toBuf b (refersTo def)
+
+  fromBuf b
+      = do ty <- fromBuf b
+           vis <- fromBuf b
+           tot <- fromBuf b
+           flgs <- fromBuf b
+           def <- fromBuf b
+           ref <- fromBuf b
+           pure (MkGlobalDef ty vis tot flgs def ref)
 
 getRefs : Def -> List Name
 getRefs None = []
@@ -173,21 +292,40 @@ Gamma : Type
 Gamma = Context GlobalDef
 
 -- Everything needed to typecheck data types/functions
-export
+public export
 record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
       currentNS : List String -- namespace for current definitions
+      toSave : SortedSet -- Definitions to write out as .tti
       autoHints : List Name -- global auto hints
       typeHints : Context (List Name) -- type name hints
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
 
+-- Just write out what's in "gamma" - everything else is either reconstructed
+-- from that, or not used when reading from a file
+export
+TTI Defs where
+  toBuf b val 
+      = toBuf b (CMap.toList (exactNames (gamma val)))
+  fromBuf b 
+      = do ns <- fromBuf b {a = List (Name, GlobalDef)}
+           pure (MkAllDefs (insertFrom ns empty) [] empty [] empty 100 0 0)
+    where
+      insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
+      insertFrom [] ctxt = ctxt
+      insertFrom ((n, val) :: cs) ctxt
+          = insertFrom cs (addCtxt n val ctxt)
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] [] empty 100 0 0
+initCtxt = MkAllDefs empty ["Main"] empty [] empty 100 0 0
+
+export
+getSave : Defs -> List Name
+getSave = toList . toSave
 
 export
 lookupGlobalExact : Name -> Gamma -> Maybe GlobalDef
@@ -258,9 +396,17 @@ export
 data Ctxt : Type where
 
 export
-getCtxt : {auto x : Ref Ctxt Defs} ->
+getCtxt : {auto c : Ref Ctxt Defs} ->
 					Core annot Gamma
 getCtxt = pure (gamma !(get Ctxt))
+
+-- Extend the context with the definitions given in the second
+export
+extend : {auto c : Ref Ctxt Defs} ->
+         Defs -> Core annot ()
+extend new
+    = do ctxt <- get Ctxt
+         put Ctxt (record { gamma $= mergeContext (gamma new) } ctxt)
 
 -- Set the default namespace for new definitions
 export
@@ -294,6 +440,22 @@ inCurrentNS n@(MN _ _)
     = do defs <- get Ctxt
          pure (NS (currentNS defs) n)
 inCurrentNS n = pure n
+
+-- Note that the name should be saved when writing out a .tti
+export
+addToSave : {auto c : Ref Ctxt Defs} ->
+            Name -> Core annot ()
+addToSave n
+    = do defs <- get Ctxt
+         put Ctxt (record { toSave $= insert n } defs)
+
+-- Clear the names to save when writing out a .tti
+export
+clearToSave : {auto c : Ref Ctxt Defs} ->
+              Core annot ()
+clearToSave
+    = do defs <- get Ctxt
+         put Ctxt (record { toSave = empty } defs)
 
 export
 getNextTypeTag : {auto x : Ref Ctxt Defs} ->
@@ -539,22 +701,33 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
              addDataConstructors (tag + 1) cs gam'
 
 export
+addToTypeHints : Name -> Name -> Defs -> Defs
+addToTypeHints ty hint defs
+    = let hs : List Name
+             = case lookupCtxtExact ty (typeHints defs) of
+                    Nothing => []
+                    Just ns => ns in
+          record { typeHints $= addCtxt ty (hint :: hs) } defs
+
+export
 addHintFor : {auto x : Ref Ctxt Defs} ->
-					   Name -> Name -> Core annot ()
-addHintFor ty hint
+					   annot -> Name -> Name -> Core annot ()
+addHintFor loc ty hint
     = do defs <- get Ctxt
          let hs : List Name
                 = case lookupCtxtExact ty (typeHints defs) of
                        Nothing => []
                        Just ns => ns
-         put Ctxt (record { typeHints $= addCtxt ty (hint :: hs) } defs)
+         put Ctxt (addToTypeHints ty hint defs)
+         setFlag loc hint (TypeHint ty)
 
 export
 addGlobalHint : {auto x : Ref Ctxt Defs} ->
-					      Name -> Core annot ()
-addGlobalHint hint
+					      annot -> Name -> Core annot ()
+addGlobalHint loc hint
     = do d <- get Ctxt
          put Ctxt (record { autoHints $= (hint ::) } d)
+         setFlag loc hint GlobalHint
 
 -- Get all the names that might solve a goal of the given type
 -- (constructors, local hints, global hints, in that order)

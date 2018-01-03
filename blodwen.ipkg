@@ -3,6 +3,7 @@ package blodwen
 pkgs = contrib
 
 modules = Core.AutoSearch,
+          Core.Binary,
           Core.CaseTree,
           Core.Context, 
           Core.Core,
@@ -10,6 +11,7 @@ modules = Core.AutoSearch,
           Core.Normalise,
           Core.ProcessTT,
           Core.TT,
+          Core.TTI,
           Core.Typecheck,
           Core.Unify,
           Core.UnifyState,

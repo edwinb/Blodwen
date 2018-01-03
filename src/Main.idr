@@ -15,8 +15,6 @@ import TTImp.REPL
 
 import Parser.RawImp
 
-import Control.Catchable
-
 usageMsg : Core () ()
 usageMsg = coreLift $ putStrLn "Usage: blodwen [source file]"
 

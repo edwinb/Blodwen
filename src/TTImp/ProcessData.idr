@@ -24,6 +24,7 @@ checkCon elab env nest (MkImpTy annot cn_in ty_raw)
          log 3 $ show cn ++ " : " ++ show ty'
          -- TODO: Check 'ty' returns something in the right family
          gam <- getCtxt
+         addToSave cn
          pure (MkCon cn (getArity gam [] ty') ty')
 
 export
@@ -48,4 +49,5 @@ processData elab env nest (MkImpData annot n_in ty_raw cons_raw)
          cons <- traverse (\x => checkCon elab env nest x) cons_raw
          let def = MkData (MkCon n arity ty') cons
          addData Public def
+         addToSave n
 
