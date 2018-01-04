@@ -37,6 +37,7 @@ data Error annot
     | BadImplicit annot String
     | GenericMsg annot String
     | TTIError TTIErrorMsg
+    | FileErr String FileError
     | InternalError String
 
 export
@@ -75,7 +76,8 @@ Show (Error annot) where
       = "Can't match on " ++ show x
   show (BadImplicit _ str) = str ++ " can't be bound here"
   show (GenericMsg _ str) = str
-  show (TTIError str) = "File error: " ++ show str
+  show (TTIError msg) = "Error in TTI file: " ++ show msg
+  show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
   show (InternalError str) = "INTERNAL ERROR: " ++ str
 
 export

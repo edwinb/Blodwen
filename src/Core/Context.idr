@@ -4,6 +4,8 @@ import Core.CaseTree
 import public Core.Core
 import Core.TT
 import Core.TTI
+import Core.Options
+
 import Utils.Binary
 
 import public Control.Catchable
@@ -265,7 +267,9 @@ TTI GlobalDef where
 
   fromBuf b
       = do ty <- fromBuf b
+           coreLift $ putStrLn "Read type"
            vis <- fromBuf b
+           coreLift $ putStrLn "Read visibility"
            tot <- fromBuf b
            flgs <- fromBuf b
            def <- fromBuf b
@@ -296,7 +300,9 @@ public export
 record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
+      moduleNS : List String -- namespace for the current input file
       currentNS : List String -- namespace for current definitions
+      options : Options
       toSave : SortedSet -- Definitions to write out as .tti
       autoHints : List Name -- global auto hints
       typeHints : Context (List Name) -- type name hints
@@ -312,7 +318,8 @@ TTI Defs where
       = toBuf b (CMap.toList (exactNames (gamma val)))
   fromBuf b 
       = do ns <- fromBuf b {a = List (Name, GlobalDef)}
-           pure (MkAllDefs (insertFrom ns empty) [] empty [] empty 100 0 0)
+           pure (MkAllDefs (insertFrom ns empty) [] [] defaults
+                            empty [] empty 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -321,7 +328,7 @@ TTI Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] empty [] empty 100 0 0
+initCtxt = MkAllDefs empty ["Main"] ["Main"] defaults empty [] empty 100 0 0
 
 export
 getSave : Defs -> List Name

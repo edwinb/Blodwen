@@ -311,7 +311,7 @@ TTI (Elem x xs) where
   toBuf b prf = toBuf b (count prf)
   fromBuf b
     = do val <- fromBuf b {a = Int}
-         if val > 0
+         if val >= 0
             then pure (assert_total (mkPrf val))
             else corrupt "Elem"
 

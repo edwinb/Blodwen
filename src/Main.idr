@@ -1,5 +1,6 @@
 module Main
 
+import Core.Binary
 import Core.TT
 import Core.Normalise
 import Core.Typecheck
@@ -27,6 +28,8 @@ stMain
          case span (/= '.') fname of
               (_, ".tt") => do coreLift $ putStrLn "Processing as TT"
                                ProcessTT.process fname
+              (_, ".tti") => do coreLift $ putStrLn "Processing as TTI"
+                                readFromTTI fname
               _ => do coreLift $ putStrLn "Processing as TTImp"
                       ProcessTTImp.process fname
          repl {c} {u}

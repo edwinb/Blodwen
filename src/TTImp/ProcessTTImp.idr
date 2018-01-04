@@ -61,7 +61,6 @@ processDecls env nest decls
     = do i <- newRef ImpST (initImpState {annot})
          xs <- traverse (processDecl env nest) decls
          dumpConstraints 0 True
-         pure ()
 
 export
 process : {auto c : Ref Ctxt Defs} ->

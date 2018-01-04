@@ -38,8 +38,10 @@ TTI TTIFile where
   fromBuf b
       = do hdr <- fromBuf b {a = String}
            when (hdr /= "TTI") $ corrupt "header"
+           coreLift $ putStrLn "Read header"
            ver <- fromBuf b {a = Int}
            checkTTIVersion ver ttiVersion
+           coreLift $ putStrLn "Read version"
            defs <- fromBuf b {a = Defs}
            pure (MkTTIFile ver defs)
 
@@ -86,9 +88,12 @@ readFromTTI : {auto c : Ref Ctxt Defs} ->
               (fname : String) ->
               Core annot ()
 readFromTTI fname
-    = do Right buf <- coreLift $ readFromFile fname
+    = do coreLift $ putStrLn $ "Reading " ++ fname
+         Right buf <- coreLift $ readFromFile fname
                | Left err => throw (InternalError (fname ++ ": " ++ show err))
          bin <- newRef Bin buf
+         coreLift $ putStrLn $ "Read it"
          defs <- fromBuf bin
-         extend defs
+         coreLift $ putStrLn $ "Got buffer"
+         extend (context defs)
          
