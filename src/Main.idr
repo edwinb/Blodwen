@@ -8,6 +8,8 @@ import Core.Unify
 import Core.Context
 import Core.ProcessTT
 import Core.RawContext
+import Core.Directory
+import Core.Options
 
 import TTImp.Elab
 import TTImp.ProcessTTImp
@@ -28,10 +30,12 @@ stMain
          case span (/= '.') fname of
               (_, ".tt") => do coreLift $ putStrLn "Processing as TT"
                                ProcessTT.process fname
+                               writeToTTI (getTTIFileName fname)
               (_, ".tti") => do coreLift $ putStrLn "Processing as TTI"
                                 readFromTTI fname
               _ => do coreLift $ putStrLn "Processing as TTImp"
                       ProcessTTImp.process fname
+                      writeToTTI (getTTIFileName fname)
          repl {c} {u}
 
 main : IO ()

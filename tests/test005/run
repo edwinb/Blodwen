@@ -1,1 +1,3 @@
 echo ':q' | ../../blodwen ambig.blod
+
+rm -f *.tti

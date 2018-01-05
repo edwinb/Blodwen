@@ -8,3 +8,11 @@ Blodwen> LOG 0: Auto implicit search: List.{h:125} for (List.Elem Int 3 (List.Co
 Blodwen> LOG 0: Auto implicit search: List.{h:139} for (List.Elem Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
 (List.posi Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))) List.{h:139}) : Int
 Blodwen> Bye for now!
+Welcome to Blodwen. Good luck.
+Loading auto.tti
+Processing as TTI
+Blodwen> LOG 0: Auto implicit search: Main.{h:5} for (List.Elem Int 3 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
+3 : Int
+Blodwen> LOG 0: Auto implicit search: Main.{h:19} for (List.Elem Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
+(List.posi Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))) Main.{h:19}) : Int
+Blodwen> Bye for now!

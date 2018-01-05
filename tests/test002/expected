@@ -6,3 +6,10 @@ Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus var var) : ({pi:27} : 
 Blodwen> \var : Main.Nat => (Main.plus var (Main.S Main.Z)) : ({pi:27} : Main.Nat) -> Main.Nat
 Blodwen> (Main.S (Main.S (Main.S (Main.S Main.Z)))) : Main.Nat
 Blodwen> Bye for now!
+Welcome to Blodwen. Good luck.
+Loading interp.tti
+Processing as TTI
+Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus var var) : ({pi:27} : Main.Nat) -> ({pi:27} : Main.Nat) -> Main.Nat
+Blodwen> \var : Main.Nat => (Main.plus var (Main.S Main.Z)) : ({pi:27} : Main.Nat) -> Main.Nat
+Blodwen> (Main.S (Main.S (Main.S (Main.S Main.Z)))) : Main.Nat
+Blodwen> Bye for now!

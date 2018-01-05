@@ -6,3 +6,10 @@ Blodwen> (Main.Cons __ (Main.S Main.Z) __ (Main.Cons __ (Main.S (Main.S Main.Z))
 Blodwen> When unifying: (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat) and (Main.Vect (Main.S Main.Z) Main.Nat)
 	Can't unify (Main.S Main.Z) and Main.Z
 Blodwen> Bye for now!
+Welcome to Blodwen. Good luck.
+Loading vect.tti
+Processing as TTI
+Blodwen> (Main.Cons __ (Main.S Main.Z) __ (Main.Cons __ (Main.S (Main.S Main.Z)) __ (Main.Nil __))) : (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat)
+Blodwen> When unifying: (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat) and (Main.Vect (Main.S Main.Z) Main.Nat)
+	Can't unify (Main.S Main.Z) and Main.Z
+Blodwen> Bye for now!

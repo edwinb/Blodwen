@@ -1,1 +1,3 @@
 echo ':q' | ../../blodwen eta.blod
+
+rm -f *.tti

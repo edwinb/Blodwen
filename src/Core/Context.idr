@@ -267,9 +267,7 @@ TTI GlobalDef where
 
   fromBuf b
       = do ty <- fromBuf b
-           coreLift $ putStrLn "Read type"
            vis <- fromBuf b
-           coreLift $ putStrLn "Read visibility"
            tot <- fromBuf b
            flgs <- fromBuf b
            def <- fromBuf b

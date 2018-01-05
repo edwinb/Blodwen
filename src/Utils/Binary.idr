@@ -4,6 +4,10 @@ import Core.Core
 import Data.Buffer
 import Data.List
 
+-- Serialising data as binary. Provides an interface TTI which allows
+-- reading and writing to chunks of memory, "Binary", which can be written
+-- to and read from files.
+
 %default covering
 
 -- A label for binary states

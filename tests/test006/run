@@ -1,1 +1,3 @@
 echo ':q' | ../../blodwen dotpatterns.blod
+
+rm -f *.tti

@@ -1,1 +1,4 @@
 ../../blodwen auto.blod < input
+../../blodwen auto.tti < input
+
+rm -f *.tti

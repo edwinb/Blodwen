@@ -4,6 +4,11 @@ import Core.Context
 import Core.Core
 import Core.TT
 
+-- Reading and writing 'Defs' from/to  a binary file
+-- In order to be saved, a name must have been flagged using 'toSave'.
+-- (Otherwise we'd save out everything, not just the things in the current
+-- file).
+
 import public Utils.Binary
 
 import Data.Buffer
@@ -38,10 +43,8 @@ TTI TTIFile where
   fromBuf b
       = do hdr <- fromBuf b {a = String}
            when (hdr /= "TTI") $ corrupt "header"
-           coreLift $ putStrLn "Read header"
            ver <- fromBuf b {a = Int}
            checkTTIVersion ver ttiVersion
-           coreLift $ putStrLn "Read version"
            defs <- fromBuf b {a = Defs}
            pure (MkTTIFile ver defs)
 
@@ -88,12 +91,9 @@ readFromTTI : {auto c : Ref Ctxt Defs} ->
               (fname : String) ->
               Core annot ()
 readFromTTI fname
-    = do coreLift $ putStrLn $ "Reading " ++ fname
-         Right buf <- coreLift $ readFromFile fname
+    = do Right buf <- coreLift $ readFromFile fname
                | Left err => throw (InternalError (fname ++ ": " ++ show err))
          bin <- newRef Bin buf
-         coreLift $ putStrLn $ "Read it"
          defs <- fromBuf bin
-         coreLift $ putStrLn $ "Got buffer"
          extend (context defs)
          
