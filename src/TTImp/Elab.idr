@@ -54,6 +54,8 @@ elabTerm process defining env nest impmode elabmode tm tyin
          -- Drop any holes we created which aren't used in the resulting
          -- term
          traverse (\n => implicitBind n) bound
+         normaliseHoleTypes
+         clearSolvedHoles
          dumpConstraints 2 False
          pure (ptm', pty')
 

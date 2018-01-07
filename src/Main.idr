@@ -33,6 +33,7 @@ stMain
                                writeToTTI (getTTIFileName fname)
               (_, ".tti") => do coreLift $ putStrLn "Processing as TTI"
                                 readFromTTI fname
+                                dumpConstraints 0 True
               _ => do coreLift $ putStrLn "Processing as TTImp"
                       ProcessTTImp.process fname
                       writeToTTI (getTTIFileName fname)

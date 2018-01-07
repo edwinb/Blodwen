@@ -1,7 +1,6 @@
 Welcome to Blodwen. Good luck.
 Loading interp.blod
 Processing as TTImp
-LOG 0: --- CONSTRAINTS AND HOLES ---
 Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus var var) : ({pi:27} : Main.Nat) -> ({pi:27} : Main.Nat) -> Main.Nat
 Blodwen> \var : Main.Nat => (Main.plus var (Main.S Main.Z)) : ({pi:27} : Main.Nat) -> Main.Nat
 Blodwen> (Main.S (Main.S (Main.S (Main.S Main.Z)))) : Main.Nat

@@ -91,6 +91,22 @@ mergeContext ctxt (MkContext exact hier)
     insertFrom ((n, val) :: cs) ctxt
         = insertFrom cs (addCtxt n val ctxt)
 
+export
+fromList : List (Name, a) -> Context a
+fromList [] = empty
+fromList ((n, val) :: rest) = addCtxt n val (fromList rest)
+
+export
+toList : Context a -> List (Name, a)
+toList = toList . exactNames
+
+export
+TTI annot a => TTI annot (Context a) where
+  toBuf b ctxt = toBuf b (toList (exactNames ctxt))
+  fromBuf b
+      = do xs <- fromBuf b
+           pure (fromList xs)
+
 
 public export
 data Def : Type where
@@ -139,7 +155,7 @@ Show Def where
   show ImpBind = "Implicitly bound name"
   show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
 
-TTI Def where
+TTI annot Def where
   toBuf b None = tag 0
   toBuf b (PMDef ishole args sc) 
       = do tag 1; toBuf b ishole; toBuf b args; toBuf b sc
@@ -166,9 +182,9 @@ TTI Def where
                      pure (TCon w x y z)
              4 => do x <- fromBuf b; y <- fromBuf b
                      pure (Hole x y)
-             5 => pure ImpBind
-             6 => do x <- fromBuf b
+             5 => do x <- fromBuf b
                      pure (BySearch x)
+             6 => pure ImpBind
              7 => do x <- fromBuf b; y <- fromBuf b
                      pure (Guess x y)
              _ => corrupt "Def"
@@ -193,7 +209,7 @@ data PartialReason = NotCovering | NotStrictlyPositive
 public export
 data Totality = Partial PartialReason | Unchecked | Covering | Total 
 
-TTI Visibility where
+TTI annot Visibility where
   toBuf b Public = tag 0
   toBuf b Export = tag 1
   toBuf b Private = tag 2
@@ -205,7 +221,7 @@ TTI Visibility where
              2 => pure Private
              _ => corrupt "Visibility"
 
-TTI DefFlag where
+TTI annot DefFlag where
   toBuf b (TypeHint x) = do tag 0; toBuf b x
   toBuf b GlobalHint = tag 1
   toBuf b Inline = tag 2
@@ -217,7 +233,7 @@ TTI DefFlag where
              2 => pure Inline
              _ => corrupt "DefFlag"
 
-TTI PartialReason where
+TTI annot PartialReason where
   toBuf b NotCovering = tag 0
   toBuf b NotStrictlyPositive = tag 1
   toBuf b (Calling xs) = do tag 2; toBuf b xs
@@ -230,7 +246,7 @@ TTI PartialReason where
                      pure (Calling xs)
              _ => corrupt "PartialReason"
 
-TTI Totality where
+TTI annot Totality where
   toBuf b (Partial x) = do tag 0; toBuf b x
   toBuf b Unchecked = tag 1
   toBuf b Covering = tag 2
@@ -256,7 +272,7 @@ record GlobalDef where
      definition : Def
      refersTo : List Name
 
-TTI GlobalDef where
+TTI annot GlobalDef where
   toBuf b def
       = do toBuf b (type def)
            toBuf b (visibility def)
@@ -311,7 +327,7 @@ record Defs where
 -- Just write out what's in "gamma" - everything else is either reconstructed
 -- from that, or not used when reading from a file
 export
-TTI Defs where
+TTI annot Defs where
   toBuf b val 
       = toBuf b (CMap.toList (exactNames (gamma val)))
   fromBuf b 

@@ -4,6 +4,8 @@ import Core.CaseTree
 import Core.Context
 import Core.Normalise
 import Core.TT
+import Core.TTI
+import Utils.Binary
 
 import Data.List
 import Data.List.Views
@@ -28,6 +30,27 @@ data Constraint : Type -> Type where
                        Constraint annot
      -- A resolved constraint
      Resolved : Constraint annot
+
+export
+TTI annot annot => TTI annot (Constraint annot) where
+  toBuf b (MkConstraint {vars} x env tm y) 
+      = do tag 0; toBuf b vars; toBuf b x; toBuf b env; toBuf b tm; toBuf b y
+  toBuf b (MkSeqConstraint {vars} x env xs ys) 
+      = do tag 1; toBuf b vars; toBuf b x; toBuf b env; toBuf b xs; toBuf b ys
+  toBuf b Resolved = tag 2
+
+  fromBuf b 
+      = case !getTag of
+             0 => do vars <- fromBuf b
+                     x <- fromBuf b; env <- fromBuf b;
+                     tm <- fromBuf b; y <- fromBuf b
+                     pure (MkConstraint {vars} x env tm y)
+             1 => do vars <- fromBuf b
+                     x <- fromBuf b; env <- fromBuf b;
+                     xs <- fromBuf b; ys <- fromBuf b
+                     pure (MkSeqConstraint {vars} x env xs ys)
+             2 => pure Resolved
+             _ => corrupt "Constraint"
 
 -- Currently unsolved constraints - the 'constraints' in the 'Guess'
 -- definitions in Gamma refer into this unification state
@@ -313,6 +336,59 @@ dumpConstraints loglevel all
               _ => do log loglevel "--- CONSTRAINTS AND HOLES ---"
                       traverse (dumpHole loglevel) hs
                       pure ()
+
+-- Remove any solved hole names from the list; the assumption is that all
+-- references to them have been removed with 'normaliseHoles' or by binding
+-- as pattern/pi bound arguments.
+-- It doesn't remove them from the context - but they won't get saved out as
+-- .tti, and they may be overwritten with new definitions.
+export
+clearSolvedHoles : {auto u : Ref UST (UState annot)} -> 
+                   {auto c : Ref Ctxt Defs} ->
+                   Core annot ()
+clearSolvedHoles
+    = do hs <- getHoleNames
+         gam <- getCtxt
+         traverse (clearSolved gam) hs
+         pure ()
+  where
+    clearSolved : Gamma -> Name -> Core annot ()
+    clearSolved gam n
+        = case lookupDefExact n gam of
+               Just ImpBind => removeHoleName n
+               Just (PMDef _ _ _) => removeHoleName n
+               _ => pure ()
+
+-- Make sure the types of holes have the references to solved holes normalised
+-- away (since solved holes don't get written to .tti)
+export
+normaliseHoleTypes : {auto u : Ref UST (UState annot)} -> 
+                     {auto c : Ref Ctxt Defs} ->
+                     Core annot ()
+normaliseHoleTypes
+    = do hs <- getHoleNames
+         gam <- getCtxt
+         traverse (normaliseH gam) hs
+         pure ()
+  where
+    updateType : Gamma -> Name -> GlobalDef -> Core annot ()
+    updateType gam n def
+        = do let ty' = normaliseHoles gam [] (type def)
+             addDef n (record { type = ty' } def)
+
+    normaliseH : Gamma -> Name -> Core annot ()
+    normaliseH gam n
+        = case lookupGlobalExact n gam of
+               Just gdef =>
+                  case definition gdef of
+                       PMDef h _ _ => if h then updateType gam n gdef
+                                           else pure ()
+                       Hole _ _ => updateType gam n gdef
+                       Guess _ _ => updateType gam n gdef
+                       _ => pure ()
+               Nothing => pure ()
+
+
 
 export
 dumpDots : {auto u : Ref UST (UState annot)} ->

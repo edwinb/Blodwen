@@ -13,7 +13,7 @@ import Data.List
 
 mutual
   export
-	TTI GenName where
+	TTI annot GenName where
     toBuf b (Nested x y) 
         = do tag 0
              toBuf b x
@@ -41,7 +41,7 @@ mutual
                _ => throw (TTIError (Corrupt "GenName"))
 
   export
-	TTI Name where
+	TTI annot Name where
     toBuf b (UN x) 
         = do tag 0
              toBuf b x
@@ -84,7 +84,7 @@ mutual
                _ => throw (TTIError (Corrupt "Name"))
 
 export
-TTI NameType where
+TTI annot NameType where
   toBuf b Bound = tag 0
   toBuf b Func = tag 1
   toBuf b (DataCon t arity) = do tag 2; toBuf b t; toBuf b arity
@@ -99,7 +99,7 @@ TTI NameType where
              _ => corrupt "NameType"
 
 export
-TTI PiInfo where
+TTI annot PiInfo where
   toBuf b Implicit = tag 0
   toBuf b Explicit = tag 1
   toBuf b AutoImplicit = tag 2
@@ -112,7 +112,7 @@ TTI PiInfo where
              _ => corrupt "PiInfo"
 
 export
-TTI annot => TTI (Binder annot) where
+TTI annot ty => TTI annot (Binder ty) where
   toBuf b (Lam x ty) = do tag 0; toBuf b x; toBuf b ty
   toBuf b (Let val ty) = do tag 1; toBuf b val; toBuf b ty
   toBuf b (Pi x ty) = do tag 2; toBuf b x; toBuf b ty
@@ -131,7 +131,7 @@ TTI annot => TTI (Binder annot) where
              _ => corrupt "Binder"
 
 export
-TTI Constant where
+TTI annot Constant where
   toBuf b (I x) = do tag 0; toBuf b x
   toBuf b IntType = tag 1
 
@@ -142,7 +142,7 @@ TTI Constant where
              _ => corrupt "Constant"
 
 export
-TTI (Term vars) where
+TTI annot (Term vars) where
   toBuf b (Local {x} h) = do tag 0; toBuf b x; toBuf b h
   toBuf b (Ref nt fn) = do tag 1; toBuf b nt; toBuf b fn
   toBuf b (Bind x bnd tm) 
@@ -170,9 +170,22 @@ TTI (Term vars) where
            6 => pure TType
            _ => corrupt "Term"
 
+export
+TTI annot (Env Term vars) where
+  toBuf b [] = pure ()
+  toBuf b ((::) bnd env) 
+      = do toBuf b bnd; toBuf b env
+
+  -- Length has to correspond to length of 'vars'
+  fromBuf {vars = []} b = pure Nil
+  fromBuf {vars = x :: xs} b
+      = do bnd <- fromBuf b
+           env <- fromBuf b
+           pure (bnd :: env)
+
 mutual
   export
-  TTI (CaseAlt vars) where
+  TTI annot (CaseAlt vars) where
     toBuf b (ConCase x t args sc) 
         = do tag 0; toBuf b x; toBuf b t
              toBuf b args
@@ -194,7 +207,7 @@ mutual
                _ => corrupt "CaseAlt"
 
   export
-  TTI (CaseTree vars) where
+  TTI annot (CaseTree vars) where
     toBuf b (Case {var} x xs) 
         = do tag 0; toBuf b var; toBuf b x
              assert_total (toBuf b xs)

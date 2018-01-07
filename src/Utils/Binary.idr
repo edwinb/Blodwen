@@ -118,7 +118,7 @@ readFromFile fname
          pure (Right (MkBin [] (MkChunk b 0 max max) []))
 
 public export
-interface TTI a where -- TTI = TT intermediate code/interface file
+interface TTI annot a | a where -- TTI = TT intermediate code/interface file
   -- Add binary data representing the value to the given buffer
   toBuf : Ref Bin Binary -> a -> Core annot ()
   -- Return the data representing a thing of type 'a' from the given buffer.
@@ -141,7 +141,7 @@ corrupt ty = throw (TTIError (Corrupt ty))
 -- the buffer list
 
 export
-TTI Bits8 where
+TTI annot Bits8 where
   toBuf b val 
     = do MkBin done chunk rest <- get Bin
          if avail chunk >= 1
@@ -180,7 +180,7 @@ getTag : {auto b : Ref Bin Binary} -> Core annot Bits8
 getTag {b} = fromBuf b
 
 export
-TTI Int where
+TTI annot Int where
   toBuf b val
     = do MkBin done chunk rest <- get Bin
          if avail chunk >= 4
@@ -210,7 +210,7 @@ TTI Int where
                            pure val
 
 export
-TTI String where
+TTI annot String where
   toBuf b val
       = do let req : Int = cast (length val)
            toBuf b req
@@ -247,7 +247,7 @@ TTI String where
 -- Some useful types from the prelude
 
 export
-TTI Bool where
+TTI annot Bool where
   toBuf b False = tag 0
   toBuf b True = tag 1
   fromBuf b
@@ -257,7 +257,7 @@ TTI Bool where
              _ => corrupt "Bool"
 
 export
-(TTI a, TTI b) => TTI (a, b) where
+(TTI annot a, TTI annot b) => TTI annot (a, b) where
   toBuf b (x, y)
      = do toBuf b x
           toBuf b y
@@ -267,7 +267,12 @@ export
           pure (x, y)
 
 export
-TTI a => TTI (Maybe a) where
+TTI annot () where
+  toBuf b () = pure ()
+  fromBuf b = pure ()
+
+export
+TTI annot a => TTI annot (Maybe a) where
   toBuf b Nothing
      = tag 0
   toBuf b (Just val)
@@ -282,7 +287,7 @@ TTI a => TTI (Maybe a) where
             _ => corrupt "Maybe"
 
 export
-TTI a => TTI (List a) where
+TTI annot a => TTI annot (List a) where
   toBuf b xs
       = do toBuf b (cast {to=Int} (length xs))
            traverse (toBuf b) xs
@@ -311,7 +316,7 @@ mkPrf i {x} {xs}
                 else believe_me (There {y=x} (mkPrf {x} {xs} (i-1)))
 
 export
-TTI (Elem x xs) where
+TTI annot (Elem x xs) where
   toBuf b prf = toBuf b (count prf)
   fromBuf b
     = do val <- fromBuf b {a = Int}
@@ -332,7 +337,7 @@ fromLimbs [] = 0
 fromLimbs (x :: xs) = cast x + prim__shlBigInt (fromLimbs xs) 8
 
 export
-TTI Integer where
+TTI annot Integer where
   toBuf b val
     = assert_total $ if val < 0
          then do toBuf b (the Bits8 0)
@@ -349,7 +354,7 @@ TTI Integer where
               _ => corrupt "Integer"
 
 export
-TTI Nat where
+TTI annot Nat where
   toBuf b val = toBuf b (cast {to=Integer} val)
   fromBuf b = do val <- fromBuf b
                  pure (fromInteger val)

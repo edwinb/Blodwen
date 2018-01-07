@@ -1,6 +1,5 @@
 Welcome to Blodwen. Good luck.
 Loading cases.blod
 Processing as TTImp
-LOG 0: --- CONSTRAINTS AND HOLES ---
 Blodwen> (Main.Cons __ 1 __ (Main.Cons __ 2 __ (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Int)
 Blodwen> Bye for now!
