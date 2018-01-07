@@ -3,6 +3,7 @@ module Utils.Binary
 import Core.Core
 import Data.Buffer
 import Data.List
+import public Data.StringMap
 
 -- Serialising data as binary. Provides an interface TTI which allows
 -- reading and writing to chunks of memory, "Binary", which can be written
@@ -13,6 +14,10 @@ import Data.List
 -- A label for binary states
 export 
 data Bin : Type where
+
+-- A label for storing shared strings
+export
+data Share : Type where
 
 -- A component of the serialised data.
 record Chunk where
@@ -123,7 +128,20 @@ interface TTI annot a | a where -- TTI = TT intermediate code/interface file
   toBuf : Ref Bin Binary -> a -> Core annot ()
   -- Return the data representing a thing of type 'a' from the given buffer.
   -- Throws if the data can't be parsed as an 'a'
-  fromBuf : Ref Bin Binary -> Core annot a
+  fromBuf : Ref Share (StringMap String) -> 
+            Ref Bin Binary -> Core annot a
+
+-- If the string is in the map, return the existing one to preserve sharing.
+-- Otherwise add it
+findString : {auto s : Ref Share (StringMap String)} ->
+             String -> Core annot String
+findString str
+    = do smap <- get Share
+         case lookup str smap of
+              Just str' => pure str'
+              Nothing =>
+                do put Share (insert str str smap)
+                   pure str
 
 -- Create a new list of chunks, initialised with one 64k chunk
 export
@@ -132,6 +150,10 @@ initBinary
     = do Just buf <- coreLift $ newBuffer 65536
              | Nothing => throw (InternalError "Buffer creation failed")
          newRef Bin (MkBin [] (newChunk buf) [])
+
+export
+initShare : Core annot (Ref Share (StringMap String))
+initShare = newRef Share empty
 
 export
 corrupt : String -> Core annot a
@@ -156,7 +178,7 @@ TTI annot Bits8 where
                                 (MkChunk newbuf 1 (size newbuf) 1)
                                 rest)
 
-  fromBuf b
+  fromBuf s b
     = do MkBin done chunk rest <- get Bin
          if toRead chunk >= 1
             then
@@ -176,8 +198,9 @@ tag : {auto b : Ref Bin Binary} -> Bits8 -> Core annot ()
 tag {b} val = toBuf b val
 
 export
-getTag : {auto b : Ref Bin Binary} -> Core annot Bits8
-getTag {b} = fromBuf b
+getTag : {auto s : Ref Share (StringMap String)} ->
+         {auto b : Ref Bin Binary} -> Core annot Bits8
+getTag {s} {b} = fromBuf s b
 
 export
 TTI annot Int where
@@ -194,7 +217,7 @@ TTI annot Int where
                  put Bin (MkBin (chunk :: done)
                                 (MkChunk newbuf 4 (size newbuf) 4)
                                 rest)
-  fromBuf b 
+  fromBuf s b 
     = do MkBin done chunk rest <- get Bin
          if toRead chunk >= 4
             then
@@ -227,14 +250,14 @@ TTI annot String where
                                   (MkChunk newbuf req (size newbuf) req)
                                   rest)
 
-  fromBuf b 
-      = do len <- fromBuf {a = Int} b
+  fromBuf s b 
+      = do len <- fromBuf s {a = Int} b
            MkBin done chunk rest <- get Bin
            if toRead chunk >= len
               then
                 do val <- coreLift $ getString (buf chunk) (loc chunk) len
                    put Bin (MkBin done (incLoc len chunk) rest)
-                   pure val
+                   findString val
               else 
                 case rest of
                      [] => throw (TTIError (EndOfBuffer "String"))
@@ -242,7 +265,7 @@ TTI annot String where
                         do val <- coreLift $ getString (buf next) 0 len
                            put Bin (MkBin (chunk :: done)
                                           (incLoc len next) rest)
-                           pure val
+                           findString val
 
 -- Some useful types from the prelude
 
@@ -250,7 +273,7 @@ export
 TTI annot Bool where
   toBuf b False = tag 0
   toBuf b True = tag 1
-  fromBuf b
+  fromBuf s b
       = case !getTag of
              0 => pure False
              1 => pure True
@@ -261,15 +284,15 @@ export
   toBuf b (x, y)
      = do toBuf b x
           toBuf b y
-  fromBuf b
-     = do x <- fromBuf b
-          y <- fromBuf b
+  fromBuf s b
+     = do x <- fromBuf s b
+          y <- fromBuf s b
           pure (x, y)
 
 export
 TTI annot () where
   toBuf b () = pure ()
-  fromBuf b = pure ()
+  fromBuf s b = pure ()
 
 export
 TTI annot a => TTI annot (Maybe a) where
@@ -279,10 +302,10 @@ TTI annot a => TTI annot (Maybe a) where
      = do tag 1
           toBuf b val
 
-  fromBuf b
+  fromBuf s b
      = case !getTag of
             0 => pure Nothing
-            1 => do val <- fromBuf b
+            1 => do val <- fromBuf s b
                     pure (Just val)
             _ => corrupt "Maybe"
 
@@ -292,14 +315,14 @@ TTI annot a => TTI annot (List a) where
       = do toBuf b (cast {to=Int} (length xs))
            traverse (toBuf b) xs
            pure ()
-  fromBuf b 
-      = do len <- fromBuf b {a = Int}
+  fromBuf s b 
+      = do len <- fromBuf s b {a = Int}
            readElems [] (cast len)
     where
       readElems : List a -> Nat -> Core annot (List a)
       readElems xs Z = pure (reverse xs)
       readElems xs (S k)
-          = do val <- fromBuf b
+          = do val <- fromBuf s b
                readElems (val :: xs) k
 
 count : Elem x xs -> Int
@@ -318,8 +341,8 @@ mkPrf i {x} {xs}
 export
 TTI annot (Elem x xs) where
   toBuf b prf = toBuf b (count prf)
-  fromBuf b
-    = do val <- fromBuf b {a = Int}
+  fromBuf s b
+    = do val <- fromBuf s b {a = Int}
          if val >= 0
             then pure (assert_total (mkPrf val))
             else corrupt "Elem"
@@ -344,74 +367,18 @@ TTI annot Integer where
                  toBuf b (toLimbs (-val))
          else do toBuf b (the Bits8 1)
                  toBuf b (toLimbs val)
-  fromBuf b 
-    = do val <- fromBuf b {a = Bits8}
+  fromBuf s b 
+    = do val <- fromBuf s b {a = Bits8}
          case val of
-              0 => do val <- fromBuf b
+              0 => do val <- fromBuf s b
                       pure (-(fromLimbs val))
-              1 => do val <- fromBuf b
+              1 => do val <- fromBuf s b
                       pure (fromLimbs val)
               _ => corrupt "Integer"
 
 export
 TTI annot Nat where
   toBuf b val = toBuf b (cast {to=Integer} val)
-  fromBuf b = do val <- fromBuf b
-                 pure (fromInteger val)
-
-{-
-testMain : Core () ()
-testMain
-    = do buf <- initBinary
-         toBuf buf (the Bits8 42)
-         toBuf buf $ the Integer 12345678900000000000000000000000000000000
-         toBuf buf $ the Integer (-12345678900000000000000000000000000000000)
-         toBuf buf $ "AAAAAAAAAAAA"
-         toBuf buf $ the Int 6
-         toBuf buf $ "Sossidges!!!!"
-         toBuf buf $ the Int 6
-         toBuf buf $ ("abc", the Int 42, the Int 64)
-
-         toBuf buf {a = Maybe String} Nothing
-         toBuf buf $ Just "Foom"
-         toBuf buf {a = List String} []
-         toBuf buf $ ["Foo", "Bar", "Baz", "Quux"]
-
-         bin <- get Bin
-         put Bin (reset bin)
-         bin <- get Bin
-
-         val <- fromBuf buf
-         coreLift $ printLn (the Bits8 val)
-         val <- fromBuf buf
-         coreLift $ printLn (the Integer val)
-         val <- fromBuf buf
-         coreLift $ printLn (the Integer val)
-         val <- fromBuf buf
-         coreLift $ printLn (the String val)
-         val <- fromBuf buf
-         coreLift $ printLn (the Int val)
-         val <- fromBuf buf
-         coreLift $ printLn (the String val)
-         val <- fromBuf buf
-         coreLift $ printLn (the Int val)
-
-         (str, x, y) <- fromBuf {a = (String, Int, Int)} buf
-         coreLift $ printLn (str, x, y)
-
-         val <- fromBuf buf
-         coreLift $ printLn (the (Maybe String) val)
-         val <- fromBuf buf
-         coreLift $ printLn (the (Maybe String) val)
-
-         val <- fromBuf buf
-         coreLift $ printLn (the (List String) val)
-         val <- fromBuf buf
-         coreLift $ printLn (the (List String) val)
-
-
-main : IO ()
-main = do coreRun testMain
-              (\err => putStrLn (show err))
-              (\res => putStrLn "OK!")
--}
+  fromBuf s b 
+     = do val <- fromBuf s b
+          pure (fromInteger val)

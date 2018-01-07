@@ -48,14 +48,14 @@ TTI annot annot => TTI annot (TTIFile annot) where
            toBuf b (constraints file)
            toBuf b (context file)
 
-  fromBuf b
-      = do hdr <- fromBuf b
+  fromBuf s b
+      = do hdr <- fromBuf s b
            when (hdr /= "TTI") $ corrupt "header"
-           ver <- fromBuf b
+           ver <- fromBuf s b
            checkTTIVersion ver ttiVersion
-           holes <- fromBuf b
-           constraints <- fromBuf b
-           defs <- fromBuf b
+           holes <- fromBuf s b
+           constraints <- fromBuf s b
+           defs <- fromBuf s b
            pure (MkTTIFile ver holes constraints defs)
 
 -- Update the various fields in Defs affected by the name's flags
@@ -108,8 +108,9 @@ readFromTTI : TTI annot annot =>
 readFromTTI fname
     = do Right buf <- coreLift $ readFromFile fname
                | Left err => throw (InternalError (fname ++ ": " ++ show err))
-         bin <- newRef Bin buf
-         tti <- fromBuf bin
+         bin <- newRef Bin buf -- for reading the file into
+         sh <- initShare -- for recording string sharing
+         tti <- fromBuf sh bin
          extend (context tti)
          ust <- get UST
          put UST (record { holes = holes tti,

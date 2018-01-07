@@ -39,15 +39,15 @@ TTI annot annot => TTI annot (Constraint annot) where
       = do tag 1; toBuf b vars; toBuf b x; toBuf b env; toBuf b xs; toBuf b ys
   toBuf b Resolved = tag 2
 
-  fromBuf b 
+  fromBuf s b 
       = case !getTag of
-             0 => do vars <- fromBuf b
-                     x <- fromBuf b; env <- fromBuf b;
-                     tm <- fromBuf b; y <- fromBuf b
+             0 => do vars <- fromBuf s b
+                     x <- fromBuf s b; env <- fromBuf s b;
+                     tm <- fromBuf s b; y <- fromBuf s b
                      pure (MkConstraint {vars} x env tm y)
-             1 => do vars <- fromBuf b
-                     x <- fromBuf b; env <- fromBuf b;
-                     xs <- fromBuf b; ys <- fromBuf b
+             1 => do vars <- fromBuf s b
+                     x <- fromBuf s b; env <- fromBuf s b;
+                     xs <- fromBuf s b; ys <- fromBuf s b
                      pure (MkSeqConstraint {vars} x env xs ys)
              2 => pure Resolved
              _ => corrupt "Constraint"

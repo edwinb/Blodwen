@@ -27,16 +27,16 @@ mutual
              toBuf b x
              toBuf b y
 
-    fromBuf b 
+    fromBuf s b 
         = case !getTag of
-               0 => do x <- fromBuf b
-                       y <- fromBuf b
+               0 => do x <- fromBuf s b
+                       y <- fromBuf s b
                        pure (Nested x y)
-               1 => do x <- fromBuf b
-                       y <- fromBuf b
+               1 => do x <- fromBuf s b
+                       y <- fromBuf s b
                        pure (CaseBlock x y)
-               2 => do x <- fromBuf b
-                       y <- fromBuf b
+               2 => do x <- fromBuf s b
+                       y <- fromBuf s b
                        pure (WithBlock x y)
                _ => throw (TTIError (Corrupt "GenName"))
 
@@ -64,22 +64,22 @@ mutual
         = do tag 5
              toBuf b x
 
-    fromBuf b 
+    fromBuf s b 
         = assert_total $ case !getTag of
-               0 => do x <- fromBuf b
+               0 => do x <- fromBuf s b
                        pure (UN x)
-               1 => do x <- fromBuf b
-                       y <- fromBuf b
+               1 => do x <- fromBuf s b
+                       y <- fromBuf s b
                        pure (MN x y)
-               2 => do xs <- fromBuf b
-                       x <- fromBuf b
+               2 => do xs <- fromBuf s b
+                       x <- fromBuf s b
                        pure (NS xs x)
-               3 => do x <- fromBuf b
-                       y <- fromBuf b
+               3 => do x <- fromBuf s b
+                       y <- fromBuf s b
                        pure (HN x y)
-               4 => do x <- fromBuf b
+               4 => do x <- fromBuf s b
                        pure (PV x)
-               5 => do x <- fromBuf b
+               5 => do x <- fromBuf s b
                        pure (GN x)
                _ => throw (TTIError (Corrupt "Name"))
 
@@ -90,12 +90,12 @@ TTI annot NameType where
   toBuf b (DataCon t arity) = do tag 2; toBuf b t; toBuf b arity
   toBuf b (TyCon t arity) = do tag 3; toBuf b t; toBuf b arity
 
-  fromBuf b
+  fromBuf s b
       = case !getTag of
              0 => pure Bound
              1 => pure Func
-             2 => do x <- fromBuf b; y <- fromBuf b; pure (DataCon x y)
-             3 => do x <- fromBuf b; y <- fromBuf b; pure (TyCon x y)
+             2 => do x <- fromBuf s b; y <- fromBuf s b; pure (DataCon x y)
+             3 => do x <- fromBuf s b; y <- fromBuf s b; pure (TyCon x y)
              _ => corrupt "NameType"
 
 export
@@ -104,7 +104,7 @@ TTI annot PiInfo where
   toBuf b Explicit = tag 1
   toBuf b AutoImplicit = tag 2
 
-  fromBuf b
+  fromBuf s b
       = case !getTag of
              0 => pure Implicit
              1 => pure Explicit
@@ -120,14 +120,14 @@ TTI annot ty => TTI annot (Binder ty) where
   toBuf b (PLet val ty) = do tag 4; toBuf b val; toBuf b ty
   toBuf b (PVTy ty) = do tag 5; toBuf b ty
 
-  fromBuf b
+  fromBuf s b
       = case !getTag of
-             0 => do x <- fromBuf b; y <- fromBuf b; pure (Lam x y)
-             1 => do x <- fromBuf b; y <- fromBuf b; pure (Let x y)
-             2 => do x <- fromBuf b; y <- fromBuf b; pure (Pi x y)
-             3 => do x <- fromBuf b; pure (PVar x)
-             4 => do x <- fromBuf b; y <- fromBuf b; pure (PLet x y)
-             5 => do x <- fromBuf b; pure (PVTy x)
+             0 => do x <- fromBuf s b; y <- fromBuf s b; pure (Lam x y)
+             1 => do x <- fromBuf s b; y <- fromBuf s b; pure (Let x y)
+             2 => do x <- fromBuf s b; y <- fromBuf s b; pure (Pi x y)
+             3 => do x <- fromBuf s b; pure (PVar x)
+             4 => do x <- fromBuf s b; y <- fromBuf s b; pure (PLet x y)
+             5 => do x <- fromBuf s b; pure (PVTy x)
              _ => corrupt "Binder"
 
 export
@@ -135,9 +135,9 @@ TTI annot Constant where
   toBuf b (I x) = do tag 0; toBuf b x
   toBuf b IntType = tag 1
 
-  fromBuf b
+  fromBuf s b
       = case !getTag of
-             0 => do x <- fromBuf b; pure (I x)
+             0 => do x <- fromBuf s b; pure (I x)
              1 => pure IntType
              _ => corrupt "Constant"
 
@@ -154,17 +154,17 @@ TTI annot (Term vars) where
   toBuf b Erased = tag 5
   toBuf b TType = tag 6
 
-  fromBuf b -- total because it'll fail at the end of the buffer!
+  fromBuf s b -- total because it'll fail at the end of the buffer!
       = assert_total $ case !getTag of
-           0 => do x <- fromBuf b; y <- fromBuf b; pure (Local {x} y)
-           1 => do x <- fromBuf b; y <- fromBuf b
+           0 => do x <- fromBuf s b; y <- fromBuf s b; pure (Local {x} y)
+           1 => do x <- fromBuf s b; y <- fromBuf s b
                    pure (Ref x y)
-           2 => do x <- fromBuf b; y <- fromBuf b
-                   z <- fromBuf b
+           2 => do x <- fromBuf s b; y <- fromBuf s b
+                   z <- fromBuf s b
                    pure (Bind x y z)
-           3 => do x <- fromBuf b; y <- fromBuf b
+           3 => do x <- fromBuf s b; y <- fromBuf s b
                    pure (App x y)
-           4 => do x <- fromBuf b
+           4 => do x <- fromBuf s b
                    pure (PrimVal x)
            5 => pure Erased
            6 => pure TType
@@ -177,10 +177,10 @@ TTI annot (Env Term vars) where
       = do toBuf b bnd; toBuf b env
 
   -- Length has to correspond to length of 'vars'
-  fromBuf {vars = []} b = pure Nil
-  fromBuf {vars = x :: xs} b
-      = do bnd <- fromBuf b
-           env <- fromBuf b
+  fromBuf s {vars = []} b = pure Nil
+  fromBuf s {vars = x :: xs} b
+      = do bnd <- fromBuf s b
+           env <- fromBuf s b
            pure (bnd :: env)
 
 mutual
@@ -195,14 +195,14 @@ mutual
     toBuf b (DefaultCase sc)
         = do tag 2; toBuf b sc
 
-    fromBuf b -- total because it'll fail at the end of the buffer!
+    fromBuf s b -- total because it'll fail at the end of the buffer!
         = assert_total $ case !getTag of
-               0 => do w <- fromBuf b; x <- fromBuf b; 
-                       y <- fromBuf b; z <- fromBuf b;
+               0 => do w <- fromBuf s b; x <- fromBuf s b; 
+                       y <- fromBuf s b; z <- fromBuf s b;
                        pure (ConCase w x y z)
-               1 => do x <- fromBuf b; y <- fromBuf b;
+               1 => do x <- fromBuf s b; y <- fromBuf s b;
                        pure (ConstCase x y)
-               2 => do x <- fromBuf b
+               2 => do x <- fromBuf s b
                        pure (DefaultCase x)
                _ => corrupt "CaseAlt"
 
@@ -218,14 +218,14 @@ mutual
     toBuf b Impossible 
         = tag 3
 
-    fromBuf b -- total because it'll fail at the end of the buffer!
+    fromBuf s b -- total because it'll fail at the end of the buffer!
         = assert_total $ case !getTag of
-               0 => do var <- fromBuf b; x <- fromBuf b
-                       y <- fromBuf b
+               0 => do var <- fromBuf s b; x <- fromBuf s b
+                       y <- fromBuf s b
                        pure (Case {var} x y)
-               1 => do x <- fromBuf b
+               1 => do x <- fromBuf s b
                        pure (STerm x)
-               2 => do x <- fromBuf b
+               2 => do x <- fromBuf s b
                        pure (Unmatched x)
                3 => pure Impossible
                _ => corrupt "CaseTree"

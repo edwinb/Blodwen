@@ -103,8 +103,8 @@ toList = toList . exactNames
 export
 TTI annot a => TTI annot (Context a) where
   toBuf b ctxt = toBuf b (toList (exactNames ctxt))
-  fromBuf b
-      = do xs <- fromBuf b
+  fromBuf s b
+      = do xs <- fromBuf s b
            pure (fromList xs)
 
 
@@ -171,21 +171,21 @@ TTI annot Def where
   toBuf b (Guess guess constraints) 
       = do tag 7; toBuf b guess; toBuf b constraints
 
-  fromBuf b 
+  fromBuf s b 
       = case !getTag of
              0 => pure None
-             1 => do x <- fromBuf b; y <- fromBuf b; z <- fromBuf b
+             1 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (PMDef x y z)
-             2 => do x <- fromBuf b; y <- fromBuf b; z <- fromBuf b
+             2 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (DCon x y z)
-             3 => do w <- fromBuf b; x <- fromBuf b; y <- fromBuf b; z <- fromBuf b
+             3 => do w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (TCon w x y z)
-             4 => do x <- fromBuf b; y <- fromBuf b
+             4 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (Hole x y)
-             5 => do x <- fromBuf b
+             5 => do x <- fromBuf s b
                      pure (BySearch x)
              6 => pure ImpBind
-             7 => do x <- fromBuf b; y <- fromBuf b
+             7 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (Guess x y)
              _ => corrupt "Def"
 
@@ -214,7 +214,7 @@ TTI annot Visibility where
   toBuf b Export = tag 1
   toBuf b Private = tag 2
 
-  fromBuf b 
+  fromBuf s b 
       = case !getTag of
              0 => pure Public
              1 => pure Export
@@ -226,9 +226,9 @@ TTI annot DefFlag where
   toBuf b GlobalHint = tag 1
   toBuf b Inline = tag 2
 
-  fromBuf b 
+  fromBuf s b 
       = case !getTag of
-             0 => do x <- fromBuf b; pure (TypeHint x)
+             0 => do x <- fromBuf s b; pure (TypeHint x)
              1 => pure GlobalHint
              2 => pure Inline
              _ => corrupt "DefFlag"
@@ -238,11 +238,11 @@ TTI annot PartialReason where
   toBuf b NotStrictlyPositive = tag 1
   toBuf b (Calling xs) = do tag 2; toBuf b xs
 
-  fromBuf b 
+  fromBuf s b 
       = case !getTag of
              0 => pure NotCovering
              1 => pure NotStrictlyPositive
-             2 => do xs <- fromBuf b
+             2 => do xs <- fromBuf s b
                      pure (Calling xs)
              _ => corrupt "PartialReason"
 
@@ -252,9 +252,9 @@ TTI annot Totality where
   toBuf b Covering = tag 2
   toBuf b Total = tag 3
 
-  fromBuf b 
+  fromBuf s b 
       = case !getTag of
-             0 => do x <- fromBuf b; pure (Partial x)
+             0 => do x <- fromBuf s b; pure (Partial x)
              1 => pure Unchecked
              2 => pure Covering
              3 => pure Total
@@ -281,13 +281,13 @@ TTI annot GlobalDef where
            toBuf b (definition def)
            toBuf b (refersTo def)
 
-  fromBuf b
-      = do ty <- fromBuf b
-           vis <- fromBuf b
-           tot <- fromBuf b
-           flgs <- fromBuf b
-           def <- fromBuf b
-           ref <- fromBuf b
+  fromBuf s b
+      = do ty <- fromBuf s b
+           vis <- fromBuf s b
+           tot <- fromBuf s b
+           flgs <- fromBuf s b
+           def <- fromBuf s b
+           ref <- fromBuf s b
            pure (MkGlobalDef ty vis tot flgs def ref)
 
 getRefs : Def -> List Name
@@ -330,8 +330,8 @@ export
 TTI annot Defs where
   toBuf b val 
       = toBuf b (CMap.toList (exactNames (gamma val)))
-  fromBuf b 
-      = do ns <- fromBuf b {a = List (Name, GlobalDef)}
+  fromBuf s b 
+      = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
            pure (MkAllDefs (insertFrom ns empty) [] [] defaults
                             empty [] empty 100 0 0)
     where
