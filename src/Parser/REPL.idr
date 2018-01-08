@@ -15,7 +15,7 @@ export
 command : Rule (ImpREPL ())
 command
     = do symbol ":"; exactIdent "t"
-         tm <- expr
+         tm <- expr 0
          pure (Check tm)
   <|> do symbol ":"; exactIdent "s"
          n <- name
@@ -25,5 +25,5 @@ command
          pure (DebugInfo n)
   <|> do symbol ":"; exactIdent "q"
          pure Quit
-  <|> do tm <- expr
+  <|> do tm <- expr 0
          pure (Eval tm)

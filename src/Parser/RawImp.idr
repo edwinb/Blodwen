@@ -11,7 +11,7 @@ import Data.List.Views
 %default covering
 
 -- Forward declare since they're used in the parser
-topDecl : Rule (ImpDecl ())
+topDecl : Int -> Rule (ImpDecl ())
 collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
 
 atom : Rule (RawImp ())
@@ -34,11 +34,62 @@ atom
   <|> do x <- name
          pure (IVar () x)
 
+column : EmptyRule Int
+column
+    = do (line, col) <- location
+         pure col
+
+-- Return whether we're at the end of a block entry, given the start column
+-- of the block.
+-- It's the end if we have a semicolon, or the next token starts in or before
+-- startcol
+atEnd : (startcol : Int) -> EmptyRule Bool
+atEnd startcol
+    = do symbol ";"
+         pure True
+  <|> do eof
+         pure True
+  <|> do col <- column
+         pure (col <= startcol)
+
+-- Fail if this is the end of a block entry or end of file
+continueApp : (startcol : Int) -> EmptyRule ()
+continueApp startcol
+    = if !column > startcol
+         then pure ()
+         else fail "No more apps"
+
+-- Parse an entry in a block - the parser for the entry takes the start 
+-- column of the block
+blockEntry : Int -> (Int -> Rule ty) -> Rule ty
+blockEntry startcol rule
+    = if !column < startcol
+         then fail "End of block"
+         else rule startcol
+
+block : (Int -> Rule ty) -> EmptyRule (List ty)
+block item
+    = do symbol "{"
+         commit
+         ps <- many (blockEntry 0 item)
+         symbol "}"
+         pure ps
+  <|> many (blockEntry !column item)
+         
+nonEmptyBlock : (Int -> Rule ty) -> Rule (List ty)
+nonEmptyBlock item
+    = do symbol "{"
+         ps <- many (blockEntry 0 item)
+         symbol "}"
+         pure ps
+  <|> some (blockEntry !column item)
+         
+
 mutual
-  appExpr : Rule (RawImp ())
-  appExpr
-      = do f <- simpleExpr
-           args <- many argExpr
+  appExpr : Int -> Rule (RawImp ())
+  appExpr startcol
+      = do f <- simpleExpr startcol
+           args <- many (argExpr startcol)
            pure (applyExpImp f args)
     where
       applyExpImp : RawImp () -> 
@@ -50,157 +101,155 @@ mutual
       applyExpImp f (Right (n, imp) :: args) 
           = applyExpImp (IImplicitApp () f n imp) args
 
-  argExpr : Rule (Either (RawImp ()) (Name, RawImp ()))
-  argExpr
-      = do arg <- simpleExpr
+  argExpr : Int -> Rule (Either (RawImp ()) (Name, RawImp ()))
+  argExpr startcol
+      = do continueApp startcol
+           arg <- simpleExpr startcol
            pure (Left arg)
-    <|> do arg <- implicitArg
+    <|> do continueApp startcol
+           arg <- implicitArg startcol
            pure (Right arg)
 
-  implicitArg : Rule (Name, RawImp ())
-  implicitArg
+  implicitArg : Int -> Rule (Name, RawImp ())
+  implicitArg startcol
       = do symbol "{"
            x <- unqualifiedName
            symbol "="
            commit
-           tm <- expr 
+           tm <- expr startcol
            symbol "}"
            pure (UN x, tm)
 
-  simpleExpr : Rule (RawImp ())
-  simpleExpr
+  simpleExpr : Int -> Rule (RawImp ())
+  simpleExpr startcol
       = do x <- unqualifiedName
            symbol "@"
            commit
-           expr <- simpleExpr
+           expr <- simpleExpr startcol
            pure (IAs () x expr)
-    <|> atom
-    <|> binder
+    <|> atom 
+    <|> binder startcol
     <|> do symbol ".("
            commit
-           e <- expr
+           e <- expr startcol
            symbol ")"
            pure (IMustUnify () e)
     <|> do symbol "(|"
            commit
-           alts <- sepBy1 (symbol ",") expr
+           alts <- sepBy1 (symbol ",") (expr startcol)
            symbol "|)"
            pure (IAlternative () True alts)
     <|> do symbol "("
-           e <- expr
+           e <- expr startcol
            symbol ")"
            pure e
 
-  explicitPi : Rule (RawImp ())
-  explicitPi
+  explicitPi : Int -> Rule (RawImp ())
+  explicitPi startcol
       = do symbol "("
            n <- name
            symbol ":"
            commit
-           ty <- expr
+           ty <- expr startcol
            symbol ")"
            symbol "->"
-           scope <- typeExpr
+           scope <- typeExpr startcol
            pure (IPi () Explicit (Just n) ty scope)
 
-  autoImplicitPi : Rule (RawImp ())
-  autoImplicitPi
+  autoImplicitPi : Int -> Rule (RawImp ())
+  autoImplicitPi startcol
       = do symbol "{"
            keyword "auto"
            commit
            n <- name
            symbol ":"
-           ty <- expr
+           ty <- expr startcol
            symbol "}"
            symbol "->"
-           scope <- typeExpr
+           scope <- typeExpr startcol
            pure (IPi () AutoImplicit (Just n) ty scope)
 
-  implicitPi : Rule (RawImp ())
-  implicitPi
+  implicitPi : Int -> Rule (RawImp ())
+  implicitPi startcol
       = do symbol "{"
            n <- name
            symbol ":"
            commit
-           ty <- expr
+           ty <- expr startcol
            symbol "}"
            symbol "->"
-           scope <- typeExpr
+           scope <- typeExpr startcol
            pure (IPi () Implicit (Just n) ty scope)
 
-  lam : Rule (RawImp ())
-  lam
+  lam : Int -> Rule (RawImp ())
+  lam startcol
       = do symbol "\\"
            n <- name
            ty <- option 
                     (Implicit ())
                     (do symbol ":"
-                        expr)
+                        expr startcol)
            symbol "=>"
-           scope <- typeExpr
+           scope <- typeExpr startcol
            pure (ILam () Explicit n ty scope)
 
-  let_ : Rule (RawImp ())
-  let_
+  let_ : Int -> Rule (RawImp ())
+  let_ startcol
       = do keyword "let"
            n <- name
            commit
            ty <- option 
                     (Implicit ())
                     (do symbol ":"
-                        expr)
+                        expr startcol)
            symbol "="
-           val <- expr
+           val <- expr startcol
            keyword "in"
-           scope <- typeExpr
+           scope <- typeExpr startcol
            pure (ILet () n ty val scope)
     <|> do keyword "let"
-           symbol "{"
-           ds <- some topDecl
-           symbol "}"
+           ds <- block topDecl
            keyword "in"
-           scope <- typeExpr
+           scope <- typeExpr startcol
            pure (ILocal () (collectDefs ds) scope)
   
-  case_ : Rule (RawImp ())
-  case_
+  case_ : Int -> Rule (RawImp ())
+  case_ startcol
       = do keyword "case"
-           scr <- expr
+           scr <- expr startcol
            keyword "of"
-           symbol "{"
-           alts <- many caseAlt
-           symbol "}"
+           alts <- block caseAlt
            pure (ICase () scr alts)
 
-  caseAlt : Rule (ImpClause ())
-  caseAlt
-      = do lhs <- expr
-           caseRHS lhs
+  caseAlt : Int -> Rule (ImpClause ())
+  caseAlt startcol
+      = do lhs <- expr startcol
+           caseRHS startcol lhs
           
-  caseRHS : RawImp () -> Rule (ImpClause ())
-  caseRHS lhs
+  caseRHS : Int -> RawImp () -> Rule (ImpClause ())
+  caseRHS startcol lhs
       = do symbol "=>"
-           rhs <- expr
-           symbol ";"
+           rhs <- expr (startcol + 1)
+           atEnd startcol 
            pure (PatClause () (mkLCPatVars lhs) rhs)
     <|> do keyword "impossible"
-           symbol ";"
+           atEnd startcol
            pure (ImpossibleClause () (mkLCPatVars lhs))
 
-  binder : Rule (RawImp ())
-  binder
-      = autoImplicitPi
-    <|> implicitPi
-    <|> explicitPi
-    <|> lam
-    <|> let_
-    <|> case_
+  binder : Int -> Rule (RawImp ())
+  binder startcol
+      = autoImplicitPi startcol
+    <|> implicitPi startcol
+    <|> explicitPi startcol
+    <|> lam startcol
+    <|> let_ startcol
+    <|> case_ startcol
 
-  typeExpr : Rule (RawImp ())
-  typeExpr
-      = do arg <- appExpr
+  typeExpr : Int -> Rule (RawImp ())
+  typeExpr startcol
+      = do arg <- appExpr startcol
            (do symbol "->"
-               rest <- sepBy (symbol "->") appExpr
+               rest <- sepBy (symbol "->") (appExpr startcol)
                pure (mkPi arg rest))
              <|> pure arg
     where
@@ -209,29 +258,29 @@ mutual
       mkPi arg (a :: as) = IPi () Explicit Nothing arg (mkPi a as)
 
   export
-  expr : Rule (RawImp ())
+  expr : Int -> Rule (RawImp ())
   expr = typeExpr
 
-tyDecl : Rule (ImpTy ())
-tyDecl
+tyDecl : Int -> Rule (ImpTy ())
+tyDecl startcol
     = do n <- name
          symbol ":"
-         ty <- expr
-         symbol ";"
+         ty <- expr startcol
+         atEnd startcol
          pure (MkImpTy () n ty)
 
-parseRHS : (lhs : RawImp ()) -> Rule (Name, ImpClause ())
-parseRHS lhs
+parseRHS : Int -> (lhs : RawImp ()) -> Rule (Name, ImpClause ())
+parseRHS startcol lhs
      = do symbol "="
           commit
-          rhs <- expr
-          symbol ";"
+          rhs <- expr (startcol + 1)
+          atEnd startcol
           fn <- getFn lhs
           -- Turn lower case names on lhs into IBindVar pattern variables
           -- before returning
           pure (fn, PatClause () (mkLCPatVars lhs) rhs)
    <|> do keyword "impossible"
-          symbol ";"
+          atEnd startcol
           fn <- getFn lhs
           pure (fn, ImpossibleClause () (mkLCPatVars lhs))
   where
@@ -242,29 +291,27 @@ parseRHS lhs
     getFn _ = fail "Not a function application" 
 
 
-clause : Rule (Name, ImpClause ())
-clause
-    = do lhs <- expr
-         parseRHS lhs
+clause : Int -> Rule (Name, ImpClause ())
+clause startcol
+    = do lhs <- expr startcol
+         parseRHS startcol lhs
 
-dataDecl : Rule (ImpData ())
-dataDecl
+dataDecl : Int -> Rule (ImpData ())
+dataDecl startcol
     = do keyword "data"
          n <- name
          symbol ":"
-         ty <- expr
+         ty <- expr startcol
          keyword "where"
-         symbol "{"
-         cs <- many tyDecl
-         symbol "}"
+         cs <- block tyDecl 
          pure (MkImpData () n ty cs)
 
-implicitsDecl : Rule (List (String, RawImp ()))
-implicitsDecl
+implicitsDecl : Int -> Rule (List (String, RawImp ()))
+implicitsDecl startcol
     = do keyword "implicit"
          commit
          ns <- sepBy1 (symbol ",") impDecl
-         symbol ";"
+         atEnd startcol
          pure ns
   where
     impDecl : Rule (String, RawImp ())
@@ -272,45 +319,45 @@ implicitsDecl
         = do x <- unqualifiedName
              ty <- option (Implicit ())
                           (do symbol ":"
-                              expr)
+                              expr startcol)
              pure (x, ty)
 
-namespaceDecl : Rule (List String)
-namespaceDecl
+namespaceDecl : Int -> Rule (List String)
+namespaceDecl startcol
     = do keyword "namespace"
          commit
          ns <- namespace_
-         symbol ";"
+         atEnd startcol
          pure ns
 
-directive : Rule (ImpDecl ())
-directive
+directive : Int -> Rule (ImpDecl ())
+directive startcol
     = do exactIdent "logging"
          lvl <- intLit
-         symbol ";"
+         atEnd startcol
          pure (ILog (cast lvl))
   <|> do exactIdent "hint"
          h <- name
          ty <- option Nothing
                       (do n <- name
                           pure (Just n))
-         symbol ";"
+         atEnd startcol
          pure (IHint () h ty)
 
 -- Declared at the top
 -- topDecl : Rule (ImpDecl ())
-topDecl
-    = do dat <- dataDecl
+topDecl startcol
+    = do dat <- dataDecl startcol
          pure (IData () dat)
-  <|> do ns <- namespaceDecl
+  <|> do ns <- namespaceDecl startcol
          pure (INamespace () ns)
-  <|> do ns <- implicitsDecl
+  <|> do ns <- implicitsDecl startcol
          pure (ImplicitNames () ns)
   <|> do symbol "%"; commit
-         directive
-  <|> do claim <- tyDecl
+         directive startcol
+  <|> do claim <- tyDecl startcol
          pure (IClaim () claim)
-  <|> do nd <- clause
+  <|> do nd <- clause startcol
          pure (IDef () (fst nd) [snd nd])
 
 -- All the clauses get parsed as one-clause definitions. Collect any
@@ -339,5 +386,5 @@ collectDefs (d :: ds)
 export
 prog : Rule (List (ImpDecl ()))
 prog 
-    = do ds <- some topDecl
+    = do ds <- nonEmptyBlock topDecl
          pure (collectDefs ds)
