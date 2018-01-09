@@ -6,8 +6,8 @@
 -- constructors
 
 data Nat : Type where
-     Z : Nat
-     S : Nat -> Nat
+   Z : Nat
+   S : Nat -> Nat
 
 -- A function definition, defined by a type declaration and a list of
 -- pattern clauses.

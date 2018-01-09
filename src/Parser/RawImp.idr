@@ -6,12 +6,21 @@ import TTImp.TTImp
 
 import public Parser.Support
 import public Text.Parser
+import Parser.Lexer
 import Data.List.Views
+
+import Debug.Trace
 
 %default covering
 
+-- export
+-- record IndentInfo where
+--   constructor MkIndent 
+--   levels : List Int
+--   braces : Bool
+
 -- Forward declare since they're used in the parser
-topDecl : Int -> Rule (ImpDecl ())
+topDecl : IndentInfo -> Rule (ImpDecl ())
 collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
 
 atom : Rule (RawImp ())
@@ -39,57 +48,11 @@ column
     = do (line, col) <- location
          pure col
 
--- Return whether we're at the end of a block entry, given the start column
--- of the block.
--- It's the end if we have a semicolon, or the next token starts in or before
--- startcol
-atEnd : (startcol : Int) -> EmptyRule Bool
-atEnd startcol
-    = do symbol ";"
-         pure True
-  <|> do eof
-         pure True
-  <|> do col <- column
-         pure (col <= startcol)
-
--- Fail if this is the end of a block entry or end of file
-continueApp : (startcol : Int) -> EmptyRule ()
-continueApp startcol
-    = if !column > startcol
-         then pure ()
-         else fail "No more apps"
-
--- Parse an entry in a block - the parser for the entry takes the start 
--- column of the block
-blockEntry : Int -> (Int -> Rule ty) -> Rule ty
-blockEntry startcol rule
-    = if !column < startcol
-         then fail "End of block"
-         else rule startcol
-
-block : (Int -> Rule ty) -> EmptyRule (List ty)
-block item
-    = do symbol "{"
-         commit
-         ps <- many (blockEntry 0 item)
-         symbol "}"
-         pure ps
-  <|> many (blockEntry !column item)
-         
-nonEmptyBlock : (Int -> Rule ty) -> Rule (List ty)
-nonEmptyBlock item
-    = do symbol "{"
-         ps <- many (blockEntry 0 item)
-         symbol "}"
-         pure ps
-  <|> some (blockEntry !column item)
-         
-
 mutual
-  appExpr : Int -> Rule (RawImp ())
-  appExpr startcol
-      = do f <- simpleExpr startcol
-           args <- many (argExpr startcol)
+  appExpr : IndentInfo -> Rule (RawImp ())
+  appExpr indents
+      = do f <- simpleExpr indents
+           args <- many (argExpr indents)
            pure (applyExpImp f args)
     where
       applyExpImp : RawImp () -> 
@@ -101,155 +64,155 @@ mutual
       applyExpImp f (Right (n, imp) :: args) 
           = applyExpImp (IImplicitApp () f n imp) args
 
-  argExpr : Int -> Rule (Either (RawImp ()) (Name, RawImp ()))
-  argExpr startcol
-      = do continueApp startcol
-           arg <- simpleExpr startcol
+  argExpr : IndentInfo -> Rule (Either (RawImp ()) (Name, RawImp ()))
+  argExpr indents
+      = do continue indents
+           arg <- simpleExpr indents
            pure (Left arg)
-    <|> do continueApp startcol
-           arg <- implicitArg startcol
+    <|> do continue indents
+           arg <- implicitArg indents
            pure (Right arg)
 
-  implicitArg : Int -> Rule (Name, RawImp ())
-  implicitArg startcol
+  implicitArg : IndentInfo -> Rule (Name, RawImp ())
+  implicitArg indents
       = do symbol "{"
            x <- unqualifiedName
            symbol "="
            commit
-           tm <- expr startcol
+           tm <- expr indents
            symbol "}"
            pure (UN x, tm)
 
-  simpleExpr : Int -> Rule (RawImp ())
-  simpleExpr startcol
+  simpleExpr : IndentInfo -> Rule (RawImp ())
+  simpleExpr indents
       = do x <- unqualifiedName
            symbol "@"
            commit
-           expr <- simpleExpr startcol
+           expr <- simpleExpr indents
            pure (IAs () x expr)
     <|> atom 
-    <|> binder startcol
+    <|> binder indents
     <|> do symbol ".("
            commit
-           e <- expr startcol
+           e <- expr indents
            symbol ")"
            pure (IMustUnify () e)
     <|> do symbol "(|"
            commit
-           alts <- sepBy1 (symbol ",") (expr startcol)
+           alts <- sepBy1 (symbol ",") (expr indents)
            symbol "|)"
            pure (IAlternative () True alts)
     <|> do symbol "("
-           e <- expr startcol
+           e <- expr indents
            symbol ")"
            pure e
 
-  explicitPi : Int -> Rule (RawImp ())
-  explicitPi startcol
+  explicitPi : IndentInfo -> Rule (RawImp ())
+  explicitPi indents
       = do symbol "("
            n <- name
            symbol ":"
            commit
-           ty <- expr startcol
+           ty <- expr indents
            symbol ")"
            symbol "->"
-           scope <- typeExpr startcol
+           scope <- typeExpr indents
            pure (IPi () Explicit (Just n) ty scope)
 
-  autoImplicitPi : Int -> Rule (RawImp ())
-  autoImplicitPi startcol
+  autoImplicitPi : IndentInfo -> Rule (RawImp ())
+  autoImplicitPi indents
       = do symbol "{"
            keyword "auto"
            commit
            n <- name
            symbol ":"
-           ty <- expr startcol
+           ty <- expr indents
            symbol "}"
            symbol "->"
-           scope <- typeExpr startcol
+           scope <- typeExpr indents
            pure (IPi () AutoImplicit (Just n) ty scope)
 
-  implicitPi : Int -> Rule (RawImp ())
-  implicitPi startcol
+  implicitPi : IndentInfo -> Rule (RawImp ())
+  implicitPi indents
       = do symbol "{"
            n <- name
            symbol ":"
            commit
-           ty <- expr startcol
+           ty <- expr indents
            symbol "}"
            symbol "->"
-           scope <- typeExpr startcol
+           scope <- typeExpr indents
            pure (IPi () Implicit (Just n) ty scope)
 
-  lam : Int -> Rule (RawImp ())
-  lam startcol
+  lam : IndentInfo -> Rule (RawImp ())
+  lam indents
       = do symbol "\\"
            n <- name
            ty <- option 
                     (Implicit ())
                     (do symbol ":"
-                        expr startcol)
+                        expr indents)
            symbol "=>"
-           scope <- typeExpr startcol
+           continue indents
+           scope <- typeExpr indents
            pure (ILam () Explicit n ty scope)
 
-  let_ : Int -> Rule (RawImp ())
-  let_ startcol
+  let_ : IndentInfo -> Rule (RawImp ())
+  let_ indents
       = do keyword "let"
            n <- name
-           commit
-           ty <- option 
-                    (Implicit ())
-                    (do symbol ":"
-                        expr startcol)
            symbol "="
-           val <- expr startcol
+           commit
+           val <- expr indents
+           continue indents
            keyword "in"
-           scope <- typeExpr startcol
-           pure (ILet () n ty val scope)
+           scope <- typeExpr indents
+           pure (ILet () n (Implicit ()) val scope)
     <|> do keyword "let"
            ds <- block topDecl
+           continue indents
            keyword "in"
-           scope <- typeExpr startcol
+           scope <- typeExpr indents
            pure (ILocal () (collectDefs ds) scope)
-  
-  case_ : Int -> Rule (RawImp ())
-  case_ startcol
+
+  case_ : IndentInfo -> Rule (RawImp ())
+  case_ indents
       = do keyword "case"
-           scr <- expr startcol
+           scr <- expr indents
            keyword "of"
            alts <- block caseAlt
            pure (ICase () scr alts)
 
-  caseAlt : Int -> Rule (ImpClause ())
-  caseAlt startcol
-      = do lhs <- expr startcol
-           caseRHS startcol lhs
+  caseAlt : IndentInfo -> Rule (ImpClause ())
+  caseAlt indents
+      = do lhs <- expr indents
+           caseRHS indents lhs
           
-  caseRHS : Int -> RawImp () -> Rule (ImpClause ())
-  caseRHS startcol lhs
+  caseRHS : IndentInfo -> RawImp () -> Rule (ImpClause ())
+  caseRHS indents lhs
       = do symbol "=>"
-           rhs <- expr (startcol + 1)
-           atEnd startcol 
+           continue indents
+           rhs <- expr indents
+           atEnd indents 
            pure (PatClause () (mkLCPatVars lhs) rhs)
     <|> do keyword "impossible"
-           atEnd startcol
+           atEnd indents
            pure (ImpossibleClause () (mkLCPatVars lhs))
 
-  binder : Int -> Rule (RawImp ())
-  binder startcol
-      = autoImplicitPi startcol
-    <|> implicitPi startcol
-    <|> explicitPi startcol
-    <|> lam startcol
-    <|> let_ startcol
-    <|> case_ startcol
+  binder : IndentInfo -> Rule (RawImp ())
+  binder indents
+      = autoImplicitPi indents
+    <|> implicitPi indents
+    <|> explicitPi indents
+    <|> lam indents
+    <|> let_ indents
+    <|> case_ indents
 
-  typeExpr : Int -> Rule (RawImp ())
-  typeExpr startcol
-      = do arg <- appExpr startcol
+  typeExpr : IndentInfo -> Rule (RawImp ())
+  typeExpr indents
+      = do arg <- appExpr indents
            (do symbol "->"
-               rest <- sepBy (symbol "->") (appExpr startcol)
+               rest <- sepBy (symbol "->") (appExpr indents)
                pure (mkPi arg rest))
              <|> pure arg
     where
@@ -258,29 +221,29 @@ mutual
       mkPi arg (a :: as) = IPi () Explicit Nothing arg (mkPi a as)
 
   export
-  expr : Int -> Rule (RawImp ())
+  expr : IndentInfo -> Rule (RawImp ())
   expr = typeExpr
 
-tyDecl : Int -> Rule (ImpTy ())
-tyDecl startcol
+tyDecl : IndentInfo -> Rule (ImpTy ())
+tyDecl indents
     = do n <- name
          symbol ":"
-         ty <- expr startcol
-         atEnd startcol
+         ty <- expr indents
+         atEnd indents
          pure (MkImpTy () n ty)
 
-parseRHS : Int -> (lhs : RawImp ()) -> Rule (Name, ImpClause ())
-parseRHS startcol lhs
+parseRHS : IndentInfo -> (lhs : RawImp ()) -> Rule (Name, ImpClause ())
+parseRHS indents lhs
      = do symbol "="
           commit
-          rhs <- expr (startcol + 1)
-          atEnd startcol
+          rhs <- expr indents
+          atEnd indents
           fn <- getFn lhs
           -- Turn lower case names on lhs into IBindVar pattern variables
           -- before returning
           pure (fn, PatClause () (mkLCPatVars lhs) rhs)
    <|> do keyword "impossible"
-          atEnd startcol
+          atEnd indents
           fn <- getFn lhs
           pure (fn, ImpossibleClause () (mkLCPatVars lhs))
   where
@@ -291,27 +254,27 @@ parseRHS startcol lhs
     getFn _ = fail "Not a function application" 
 
 
-clause : Int -> Rule (Name, ImpClause ())
-clause startcol
-    = do lhs <- expr startcol
-         parseRHS startcol lhs
+clause : IndentInfo -> Rule (Name, ImpClause ())
+clause indents
+    = do lhs <- expr indents
+         parseRHS indents lhs
 
-dataDecl : Int -> Rule (ImpData ())
-dataDecl startcol
+dataDecl : IndentInfo -> Rule (ImpData ())
+dataDecl indents
     = do keyword "data"
          n <- name
          symbol ":"
-         ty <- expr startcol
+         ty <- expr indents
          keyword "where"
          cs <- block tyDecl 
          pure (MkImpData () n ty cs)
 
-implicitsDecl : Int -> Rule (List (String, RawImp ()))
-implicitsDecl startcol
+implicitsDecl : IndentInfo -> Rule (List (String, RawImp ()))
+implicitsDecl indents
     = do keyword "implicit"
          commit
          ns <- sepBy1 (symbol ",") impDecl
-         atEnd startcol
+         atEnd indents
          pure ns
   where
     impDecl : Rule (String, RawImp ())
@@ -319,45 +282,45 @@ implicitsDecl startcol
         = do x <- unqualifiedName
              ty <- option (Implicit ())
                           (do symbol ":"
-                              expr startcol)
+                              expr indents)
              pure (x, ty)
 
-namespaceDecl : Int -> Rule (List String)
-namespaceDecl startcol
+namespaceDecl : IndentInfo -> Rule (List String)
+namespaceDecl indents
     = do keyword "namespace"
          commit
          ns <- namespace_
-         atEnd startcol
+         atEnd indents
          pure ns
 
-directive : Int -> Rule (ImpDecl ())
-directive startcol
+directive : IndentInfo -> Rule (ImpDecl ())
+directive indents
     = do exactIdent "logging"
          lvl <- intLit
-         atEnd startcol
+         atEnd indents
          pure (ILog (cast lvl))
   <|> do exactIdent "hint"
          h <- name
          ty <- option Nothing
                       (do n <- name
                           pure (Just n))
-         atEnd startcol
+         atEnd indents
          pure (IHint () h ty)
 
 -- Declared at the top
 -- topDecl : Rule (ImpDecl ())
-topDecl startcol
-    = do dat <- dataDecl startcol
+topDecl indents
+    = do dat <- dataDecl indents
          pure (IData () dat)
-  <|> do ns <- namespaceDecl startcol
+  <|> do ns <- namespaceDecl indents
          pure (INamespace () ns)
-  <|> do ns <- implicitsDecl startcol
+  <|> do ns <- implicitsDecl indents
          pure (ImplicitNames () ns)
   <|> do symbol "%"; commit
-         directive startcol
-  <|> do claim <- tyDecl startcol
+         directive indents
+  <|> do claim <- tyDecl indents
          pure (IClaim () claim)
-  <|> do nd <- clause startcol
+  <|> do nd <- clause indents
          pure (IDef () (fst nd) [snd nd])
 
 -- All the clauses get parsed as one-clause definitions. Collect any
@@ -388,3 +351,4 @@ prog : Rule (List (ImpDecl ()))
 prog 
     = do ds <- nonEmptyBlock topDecl
          pure (collectDefs ds)
+

@@ -1,30 +1,31 @@
+-- There is some gratuitous strange indentation in this file. Please
+-- leave it as it is to test the parser!
+
 -- Some small sample definitions to illustrate TTImp, a dependent type
 -- theory with implicit arguments and implicit name binding in patterns/types.
 -- This elaborates to TT, which is also the core type theory of Idris.
 
 -- A simple type, defined by a type constructor and a set of data
 -- constructors
-data Nat : Type where {
-     Z : Nat;
-     S : Nat -> Nat;
-}
+data Nat : Type where
+     Z : Nat; S : Nat -> Nat
 
 -- A function definition, defined by a type declaration and a list of
 -- pattern clauses.
 
-plus : Nat -> Nat -> Nat;
-plus Z     y = y;
-plus (S k) y = S (plus k y);
+plus : Nat -> Nat -> Nat
+plus Z     y = y
+plus (S k) y = S (plus k y)
 
 -- We need to declare which names can be used as implicit arguments. This
 -- avoids any possibility of confusion with function names.
 
-implicit n, a, b, c, k, ty;
-implicit i; -- : Fin k;
+implicit n, a, b, c, k, ty
+implicit i
 
 data Vect : Nat -> Type -> Type where {
-     Nil  : Vect Z a;
-     Cons : a -> Vect k a -> Vect (S k) a;
+     Nil  : Vect Z a
+  Cons : a -> Vect k a -> Vect (S k) a
 }
 
 -- Finite sets
@@ -43,16 +44,15 @@ lookup (FS i) (Cons t ts) = lookup i ts;
 -- As a larger example, we'll implement the well-typed interpreter.
 -- So we'll need to represent the types of our expression language:
 
-data Ty : Type where {
-     Base : Type -> Ty;
-     Arrow : Ty -> Ty -> Ty;
-}
+data Ty : Type where
+     Base : Type -> Ty
+     Arrow : Ty -> Ty -> Ty
 
 -- Ty can be translated to a host language type
 
-interpTy : Ty -> Type;
-interpTy (Base t) = t;
-interpTy (Arrow s t) = interpTy s -> interpTy t;
+interpTy : Ty -> Type
+interpTy (Base t) = t
+interpTy (Arrow s t) = interpTy s -> interpTy t
 
 -- Declare some more implicits. We also give the type for 'gam', since it
 -- uses more implicit names itself.
@@ -70,12 +70,12 @@ data HasType : Fin k -> Ty -> Vect k Ty -> Type where {
 -- Expressions in our language, indexed by their contexts and types:
 
 data Lang : Vect k Ty -> Ty -> Type where {
-     Var : HasType i t gam -> Lang gam t;
-     Val : (x : interpTy a) -> Lang gam a;
-     Lam : (scope : Lang (Cons s gam) t) -> Lang gam (Arrow s t);
+     Var : HasType i t gam -> Lang gam t
+     Val : (x : interpTy a) -> Lang gam a
+     Lam : (scope : Lang (Cons s gam) t) -> Lang gam (Arrow s t)
      App : Lang gam (Arrow s t) -> Lang gam s -> Lang gam t;
-     Op : (interpTy a -> interpTy b -> interpTy c) ->
-          Lang gam a -> Lang gam b -> Lang gam c;
+      Op : (interpTy a -> interpTy b -> interpTy c) ->
+           Lang gam a -> Lang gam b -> Lang gam c;
 }
 
 -- To evaluate expressions, we'll need an environment to keep track of
@@ -106,8 +106,8 @@ interp env (Op fn x y) = fn (interp env x) (interp env y);
 
 -- A couple of tests:
 
-testId : Lang Nil (Arrow (Base Nat) (Base Nat));
-testId = Lam (Var Stop);
+testId : Lang Nil (Arrow (Base Nat) (Base Nat))
+testId = Lam (Var Stop)
 
-testAdd : Lang gam (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)));
-testAdd = Lam (Lam (Op plus (Var Stop) (Var (Pop Stop))));
+testAdd : Lang gam (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)))
+testAdd = Lam (Lam (Op plus (Var Stop) (Var (Pop Stop))))
