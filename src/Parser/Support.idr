@@ -211,19 +211,32 @@ terminator valid laststart
          afterDedent valid col
   <|> pure EndOfBlock
  where
+   -- Expected indentation for the next token can either be anything (if 
+   -- we're inside a brace delimited block) or anywhere after the initial 
+   -- column (if we're inside an indentation delimited block)
    afterSemi : ValidIndent -> ValidIndent
    afterSemi AnyIndent = AnyIndent -- in braces, anything goes
-   afterSemi _ = AfterPos laststart -- not in braces, after the last start position
+   afterSemi (AtPos c) = AfterPos c -- not in braces, after the last start position
+   afterSemi (AfterPos c) = AfterPos c
+   afterSemi EndOfBlock = EndOfBlock
 
+   -- Expected indentation for the next token can either be anything (if 
+   -- we're inside a brace delimited block) or in exactly the initial column 
+   -- (if we're inside an indentation delimited block)
    afterDedent : ValidIndent -> Int -> EmptyRule ValidIndent
    afterDedent AnyIndent col
        = if col <= laststart
             then pure AnyIndent
             else fail "Not the end of a block entry"
-   afterDedent _ col
+   afterDedent (AfterPos c) col
        = if col <= laststart
-            then pure (AtPos laststart)
+            then pure (AtPos c)
             else fail "Not the end of a block entry"
+   afterDedent (AtPos c) col
+       = if col <= laststart
+            then pure (AtPos c)
+            else fail "Not the end of a block entry"
+   afterDedent EndOfBlock col = pure EndOfBlock
 
 -- Parse an entry in a block
 blockEntry : ValidIndent -> (IndentInfo -> Rule ty) -> 
