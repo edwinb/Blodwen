@@ -444,7 +444,11 @@ mutual
                                                (NApp (NRef nt var) args')
   unifyApp loc env (NLocal x) [] (NApp (NLocal y) [])
       = if sameVar x y then pure []
-           else postpone loc env
+           else do log 10 $ "Postponing var constraint " ++
+                            show (quote empty env (NApp (NLocal x) [])) ++ 
+                            " =?= " ++ 
+                            show (quote empty env (NApp (NLocal y) []))
+                   postpone loc env
                      (quote empty env (NApp (NLocal x) [])) 
                      (quote empty env (NApp (NLocal y) []))
   unifyApp loc env hd args (NApp hd' args')
@@ -471,7 +475,7 @@ mutual
            if convert gam env (quote empty env (NApp hd args))
                               (quote empty env tm)
               then pure []
-              else do log 0 $ "Catch all case: Postponing constraint " ++
+              else do log 10 $ "Catch all case: Postponing constraint " ++
                             show (quote empty env (NApp hd args)) ++ " =?= " ++
                             show (quote empty env tm)
                       postpone loc env
@@ -484,6 +488,13 @@ mutual
              NHead vars -> List (Closure vars) -> 
              NHead vars -> List (Closure vars) ->
              Core annot (List Name)
+  unifyBothApps _ loc env (NLocal xv) [] (NLocal yv) []
+     = if sameVar xv yv
+          then pure []
+          else ufail loc $ "Can't unify " ++ 
+                           show (quote empty env (NApp (NLocal xv) []))
+                           ++ " and " ++
+                           show (quote empty env (NApp (NLocal yv) []))
   -- Locally bound things, in a term (not LHS). Since we have to unify
   -- for *all* possible values, we can safely unify the arguments.
   unifyBothApps InTerm loc env (NLocal xv) argsx (NLocal yv) argsy
@@ -496,8 +507,12 @@ mutual
                   postpone loc env (quote empty env (NApp (NLocal xv) argsx))
                                    (quote empty env (NApp (NLocal yv) argsy))
   unifyBothApps _ loc env (NLocal xv) argsx (NLocal yv) argsy
-      = postpone loc env (quote empty env (NApp (NLocal xv) argsx))
-                         (quote empty env (NApp (NLocal yv) argsy))
+      = do log 10 $ "Postponing constraint (locals, LHS) " ++
+                     show (quote empty env (NApp (NLocal xv) argsx))
+                     ++ " =?= " ++
+                     show (quote empty env (NApp (NLocal yv) argsy))
+           postpone loc env (quote empty env (NApp (NLocal xv) argsx))
+                            (quote empty env (NApp (NLocal yv) argsy))
   -- If they're both holes, solve the one with the bigger context with
   -- the other
   unifyBothApps mode loc env (NRef xt hdx) argsx (NRef yt hdy) argsy
@@ -699,7 +714,8 @@ retry mode cname
                                           ++ " and " ++ show (normalise gam env y)
                       cs <- unify mode loc env x y
                       case cs of
-                           [] => do setConstraint cname Resolved
+                           [] => do log 5 "Success!"
+                                    setConstraint cname Resolved
                                     pure []
                            _ => pure cs
               Just (MkSeqConstraint loc env xs ys) =>

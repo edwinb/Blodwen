@@ -1,1 +1,2 @@
 ../../blodwen cases.blod < input
+rm -f *.tti

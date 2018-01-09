@@ -1,0 +1,2 @@
+../../blodwen testlet.blod < input
+rm -f *.tti

@@ -1,0 +1,6 @@
+Welcome to Blodwen. Good luck.
+Loading testlet.blod
+Processing as TTImp
+Blodwen> Main.Z : Main.Nat
+Blodwen> (Main.S (Main.S (Main.S Main.Z))) : Main.Nat
+Blodwen> Bye for now!
