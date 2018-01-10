@@ -253,10 +253,18 @@ mutual
                                      toBind $= ((n, (tm, expected)) :: ) } est)
                        pure (tm, expected)
                   Just (tm, ty) =>
-                       checkExp process loc elabinfo env nest tm ty (Just expected)
+                       if repeatBindOK (dotted elabinfo) (elabMode elabinfo)
+                          then checkExp process loc elabinfo env nest tm ty (Just expected)
+                          else throw (NonLinearPattern loc n)
+      where
+        repeatBindOK : Bool -> ElabMode -> Bool
+        repeatBindOK False InLHS = False
+        repeatBindOK _ _ = True
   checkImp process elabinfo env nest (IMustUnify loc tm) (Just expected) with (elabMode elabinfo)
     checkImp process elabinfo env nest (IMustUnify loc tm) (Just expected) | InLHS
-      = do (wantedTm, wantedTy) <- checkImp process elabinfo env nest tm (Just expected)
+      = do (wantedTm, wantedTy) <- checkImp process 
+                                            (record { dotted = True } elabinfo)
+                                            env nest tm (Just expected)
            n <- addHole loc env expected
            gam <- getCtxt
            let tm = mkConstantApp n env
@@ -328,6 +336,11 @@ mutual
                          ns => exactlyOne loc (map (\ (n, def, ty) =>
                                        resolveRef n def gam (embed ty)) ns)
     where
+      defOK : Bool -> ElabMode -> NameType -> Bool
+      defOK False InLHS (DataCon _ _) = True
+      defOK False InLHS _ = False
+      defOK _ _ _ = True
+
       resolveRef : Name -> Def -> Gamma -> Term vars -> 
                    Core annot (Term vars, Term vars)
       resolveRef n def gam varty
@@ -338,8 +351,11 @@ mutual
                              TCon tag arity _ _ => TyCon tag arity
                              _ => Func
                (ty, imps) <- getImps process loc env nest elabinfo (nf gam env varty) []
-               checkExp process loc elabinfo env nest (apply (Ref nt n) imps) 
+               if topLevel elabinfo ||
+                    defOK (dotted elabinfo) (elabMode elabinfo) nt
+                  then checkExp process loc elabinfo env nest (apply (Ref nt n) imps) 
                             (quote empty env ty) expected
+                  else throw (BadPattern loc n)
 
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->

@@ -56,10 +56,11 @@ record ElabInfo annot where
   implicitMode : ImplicitMode
   elabMode : ElabMode
   implicitsGiven : List (Name, RawImp annot)
+  dotted : Bool -- are with under a dot pattern? (IMustUnify)
 
 export
 initElabInfo : ImplicitMode -> ElabMode -> ElabInfo annot
-initElabInfo imp elab = MkElabInfo True imp elab []
+initElabInfo imp elab = MkElabInfo True imp elab [] False
 
 -- A label for the internal elaborator state
 export

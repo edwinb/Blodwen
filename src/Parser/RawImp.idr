@@ -43,11 +43,6 @@ atom
   <|> do x <- name
          pure (IVar () x)
 
-column : EmptyRule Int
-column
-    = do (line, col) <- location
-         pure col
-
 mutual
   appExpr : IndentInfo -> Rule (RawImp ())
   appExpr indents

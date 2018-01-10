@@ -29,6 +29,8 @@ data Error annot
     | AllFailed (List (Error annot))
     | InvalidImplicit annot Name (Term vars)
     | CantSolveGoal annot (Env Term vars) (Term vars)
+    | NonLinearPattern annot Name
+    | BadPattern annot Name
     | NoDeclaration annot Name
     | AlreadyDefined annot Name
     | NotFunctionType annot (Term vars)
@@ -67,6 +69,8 @@ Show (Error annot) where
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
   show (InvalidImplicit _ n tm) = show n ++ " is not a valid implicit argument in " ++ show tm
   show (CantSolveGoal _ env g) = "Can't solve goal " ++ assert_total (show g)
+  show (NonLinearPattern _ n) = "Non linear pattern variable " ++ show n
+  show (BadPattern _ n) = "Pattern not allowed here: " ++ show n
   show (NoDeclaration _ x) = "No type declaration for " ++ show x
   show (AlreadyDefined _ x) = show x ++ " is already defined"
   show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
