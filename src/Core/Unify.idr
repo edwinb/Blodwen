@@ -171,6 +171,10 @@ instantiate : {auto c : Ref Ctxt Defs} ->
               Core annot ()
 instantiate loc metavar smvs tm {newvars}
      = do gam <- getCtxt
+          -- If the name is user defined, it means we've solved a ?hole by
+          -- unification, which is not what we want!
+          when (isUserName metavar) $
+               throw (SolvedNamedHole loc metavar)
           case lookupDefTyExact metavar gam of
                Nothing => ufail loc $ "No such metavariable " ++ show metavar
                Just (_, ty) => 

@@ -139,7 +139,7 @@ Show Def where
       = showHole hole ++"; " ++ show args ++ ";" ++ show tree
     where
       showHole : Bool -> String
-      showHole h = if h then "Hole" else "Def"
+      showHole h = if h then "Solved hole" else "Def"
   show (TCon tag arity params cons)
 	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ "; params " ++
         show params ++ "; constructors " ++ show cons
