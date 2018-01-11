@@ -16,10 +16,12 @@ checkCon : {auto c : Ref Ctxt Defs} ->
            Elaborator annot -> 
            Env Term vars -> NestedNames vars -> ImpTy annot ->
            Core annot Constructor
-checkCon elab env nest (MkImpTy annot cn_in ty_raw)
+checkCon elab env nest (MkImpTy loc cn_in ty_raw)
     = do cn <- inCurrentNS cn_in
          ty_imp <- mkBindImps env ty_raw
          ty <- checkTerm elab cn env nest (PI False) InType ty_imp TType
+         checkUserHoles loc False
+
          let ty' = abstractEnvType env ty
          log 3 $ show cn ++ " : " ++ show ty'
          -- TODO: Check 'ty' returns something in the right family
@@ -34,10 +36,12 @@ processData : {auto c : Ref Ctxt Defs} ->
               Elaborator annot ->
               Env Term vars -> NestedNames vars -> ImpData annot -> 
               Core annot ()
-processData elab env nest (MkImpData annot n_in ty_raw cons_raw)
+processData elab env nest (MkImpData loc n_in ty_raw cons_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
          ty <- checkTerm elab n env nest (PI False) InType ty_imp TType
+         checkUserHoles loc False
+
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty
          log 3 $ show n ++ " : " ++ show ty'
@@ -47,6 +51,9 @@ processData elab env nest (MkImpData annot n_in ty_raw cons_raw)
          -- data constructors (tag is meaningless here, so just set to 0)
          addDef n (newDef ty' Public (TCon 0 arity [] []))
          cons <- traverse (\x => checkCon elab env nest x) cons_raw
+
+         -- Any non user defined holes should be resolved by now
+         checkUserHoles loc True
          let def = MkData (MkCon n arity ty') cons
          addData Public def
          addToSave n

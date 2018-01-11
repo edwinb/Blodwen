@@ -636,7 +636,7 @@ toPatClause : {auto x : Ref Ctxt Defs} ->
 toPatClause loc n (lhs, rhs) with (unapply lhs)
   toPatClause loc n (apply (Ref Func fn) args, rhs) | ArgsList 
       = case nameEq n fn of
-             Nothing => throw (GenericMsg loc "Wrong function name in pattern LHS")
+             Nothing => throw (GenericMsg loc ("Wrong function name in pattern LHS " ++ show (n, fn)))
              Just Refl => do -- putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
                              pure (map argToPat args, rhs)
   toPatClause loc n (apply f args, rhs) | ArgsList 

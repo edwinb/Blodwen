@@ -54,6 +54,8 @@ TTI annot annot => TTI annot (Constraint annot) where
 
 -- Currently unsolved constraints - the 'constraints' in the 'Guess'
 -- definitions in Gamma refer into this unification state
+-- "session" refers to the current top level elaborator call (so the current
+-- term being elaborated)
 public export
 record UnifyState annot where
      constructor MkUnifyState
@@ -62,15 +64,31 @@ record UnifyState annot where
             -- unsolved metavariables in gamma (holes and guarded constants)
             -- along with where they were introduced
      currentHoles : List Name -- unsolved metavariables in this session
+     delayedHoles : List Name -- unsolved metavariables which must be resolved 
+                              -- but not necessarily in
+                              -- the current session (any time later in the
+                              -- source file is okay)
+                              -- Differs from 'holes' in that holes may
+                              -- contain named holes given by the user and
+                              -- their dependencies, which don't have to be 
+                              -- resolved
      constraints : Context (Constraint annot) -- metavariable constraints 
      dotConstraints : List (Constraint annot) -- dot pattern constraints
                           -- after elaboration, we check that the equations
                           -- are already solved, which shows that the term
                           -- in the pattern is valid by unification
 
+{- Note on when holes must be resolved:
+   - in a LHS, there must be no constraints generated or holes left over,
+     not even named holes
+   - anywhere else, if there are named holes, holes and constraints are
+     fine, but they must be resolved by the end of the current block
+     (meaning: pattern matching definition or data definition)
+-}
+
 export
 initUState : UnifyState annot
-initUState = MkUnifyState 0 [] [] empty []
+initUState = MkUnifyState 0 [] [] [] empty []
 
 public export
 UState : Type -> Type
@@ -125,6 +143,13 @@ getCurrentHoleNames
          pure (currentHoles ust)
 
 export
+getDelayedHoleNames : {auto u : Ref UST (UState annot)} ->
+                   Core annot (List Name)
+getDelayedHoleNames 
+    = do ust <- get UST
+         pure (delayedHoles ust)
+
+export
 resetHoles : {auto u : Ref UST (UState annot)} ->
              Core annot ()
 resetHoles 
@@ -140,6 +165,15 @@ addHoleName loc n
          put UST (record { holes $= ((loc, n) ::),
                            currentHoles $= (n ::) } ust)
 
+-- Note that the given hole name arises from a type declaration, so needs
+-- to be resolved later
+export
+addDelayedHoleName : {auto u : Ref UST (UState annot)} ->
+                  Name -> Core annot ()
+addDelayedHoleName n
+    = do ust <- get UST
+         put UST (record { delayedHoles $= (n ::) } ust)
+
 dropFirst : (a -> b -> Bool) -> a -> List b -> List b
 dropFirst f x [] = []
 dropFirst f x (y :: ys) = if f x y then ys else y :: dropFirst f x ys
@@ -150,7 +184,21 @@ removeHoleName : {auto u : Ref UST (UState annot)} ->
 removeHoleName n
     = do ust <- get UST
          put UST (record { holes $= dropFirst (\x, y => x == snd y) n,
-                           currentHoles $= dropFirst (==) n } ust)
+                           currentHoles $= dropFirst (==) n,
+                           delayedHoles $= dropFirst (==) n } ust)
+
+export
+checkUserHoles : {auto u : Ref UST (UState annot)} ->
+                 annot -> Bool -> Core annot ()
+checkUserHoles loc now
+    = do hs <- getCurrentHoleNames
+         let hs' = if any isUserName hs then [] else hs
+         when (not (isNil hs') && now) $ throw (UnsolvedHoles loc hs)
+         -- Note the hole names, to ensure they are resolved
+         -- by the end of elaborating the current source file
+         hs <- getCurrentHoleNames
+         traverse addDelayedHoleName hs
+         pure ()
 
 -- Make a new constant by applying a term to everything in the current
 -- environment

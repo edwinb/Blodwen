@@ -63,11 +63,19 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          log 5 ("Checking LHS: " ++ show lhs_raw)
          (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
          gam <- getCtxt
+         -- Check there's no holes or constraints in the left hand side
+         -- we've just checked - they must be resolved now (that's what
+         -- True means)
+         checkUserHoles loc True
+
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs lhsty
          log 3 ("LHS: " ++ show lhs ++ " : " ++ show reqty)
          rhs <- checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
+
+         checkUserHoles loc False
+
          log 3 ("Clause: " ++ show lhs ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs))
   where
@@ -102,6 +110,8 @@ processDef elab env nest loc n_in cs_raw
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
+                   -- Any non user defined holes should be resolved by now
+                   checkUserHoles loc True
                    addFnDef loc Public (MkFn n ty (mapMaybe id cs))
                    addToSave n
                    gam <- getCtxt

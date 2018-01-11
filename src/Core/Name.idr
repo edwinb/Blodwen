@@ -41,6 +41,12 @@ mutual
   userNameRoot (GN x) = Nothing
 
 export
+isUserName : Name -> Bool
+isUserName (UN _) = True
+isUserName (NS _ n) = isUserName n
+isUserName _ = False
+
+export
 dropNS : Name -> Name
 dropNS (NS _ n) = n
 dropNS n = n

@@ -495,8 +495,8 @@ inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                annot -> Env Term vars -> (bname : Name) ->
                Core annot (Term vars, Term (bname :: vars))
 inventFnType loc env bname
-    = do an <- genName "argh"
-         scn <- genName "sch"
+    = do an <- genName "arg_type"
+         scn <- genName "res_type"
          argTy <- addBoundName loc an False env TType
          scTy <- addBoundName loc scn False (Pi Explicit argTy :: env) TType
          pure (argTy, scTy)

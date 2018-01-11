@@ -12,7 +12,7 @@ data Nat : Type where
 -- A function definition, defined by a type declaration and a list of
 -- pattern clauses.
 
-plus : Nat -> Nat -> Nat
+plus : Nat -> Nat -> _
 plus Z     y = y
 plus (S k) y = S (plus k y)
 
