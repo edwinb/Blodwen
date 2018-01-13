@@ -1,0 +1,51 @@
+package ttimp
+
+pkgs = contrib
+
+modules = Core.AutoSearch,
+          Core.Binary,
+          Core.CaseTree,
+          Core.Context, 
+          Core.Core,
+          Core.Name,
+          Core.Normalise,
+          Core.ProcessTT,
+          Core.TT,
+          Core.TTI,
+          Core.Typecheck,
+          Core.Unify,
+          Core.UnifyState,
+
+          Control.Monad.StateE,
+
+          Data.CMap,
+          Data.CSet,
+          Data.StringMap,
+
+          Interfaces.FileIO,
+          Interfaces.SystemIO,
+
+          Parser.Lexer,
+          Parser.Raw,
+          Parser.RawImp,
+          Parser.REPL,
+          Parser.Support,
+
+          TTImp.Elab,
+          TTImp.Elab.State,
+          TTImp.Elab.Term,
+          TTImp.ProcessData,
+          TTImp.ProcessDef,
+          TTImp.ProcessType,
+          TTImp.ProcessTTImp,
+          TTImp.REPL,
+          TTImp.TTImp,
+
+          Utils.Binary
+
+sourcedir = src
+executable = ttimp
+opts = "--warnreach --partial-eval"
+
+main = TTImp.Main
+

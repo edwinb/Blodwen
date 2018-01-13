@@ -3,7 +3,7 @@ module Core.Context
 import Core.CaseTree
 import public Core.Core
 import Core.TT
-import Core.TTI
+import Core.TTC
 import Core.Options
 
 import Utils.Binary
@@ -101,7 +101,7 @@ toList : Context a -> List (Name, a)
 toList = toList . exactNames
 
 export
-TTI annot a => TTI annot (Context a) where
+TTC annot a => TTC annot (Context a) where
   toBuf b ctxt = toBuf b (toList (exactNames ctxt))
   fromBuf s b
       = do xs <- fromBuf s b
@@ -155,7 +155,7 @@ Show Def where
   show ImpBind = "Implicitly bound name"
   show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
 
-TTI annot Def where
+TTC annot Def where
   toBuf b None = tag 0
   toBuf b (PMDef ishole args sc) 
       = do tag 1; toBuf b ishole; toBuf b args; toBuf b sc
@@ -209,7 +209,7 @@ data PartialReason = NotCovering | NotStrictlyPositive
 public export
 data Totality = Partial PartialReason | Unchecked | Covering | Total 
 
-TTI annot Visibility where
+TTC annot Visibility where
   toBuf b Public = tag 0
   toBuf b Export = tag 1
   toBuf b Private = tag 2
@@ -221,7 +221,7 @@ TTI annot Visibility where
              2 => pure Private
              _ => corrupt "Visibility"
 
-TTI annot DefFlag where
+TTC annot DefFlag where
   toBuf b (TypeHint x) = do tag 0; toBuf b x
   toBuf b GlobalHint = tag 1
   toBuf b Inline = tag 2
@@ -233,7 +233,7 @@ TTI annot DefFlag where
              2 => pure Inline
              _ => corrupt "DefFlag"
 
-TTI annot PartialReason where
+TTC annot PartialReason where
   toBuf b NotCovering = tag 0
   toBuf b NotStrictlyPositive = tag 1
   toBuf b (Calling xs) = do tag 2; toBuf b xs
@@ -246,7 +246,7 @@ TTI annot PartialReason where
                      pure (Calling xs)
              _ => corrupt "PartialReason"
 
-TTI annot Totality where
+TTC annot Totality where
   toBuf b (Partial x) = do tag 0; toBuf b x
   toBuf b Unchecked = tag 1
   toBuf b Covering = tag 2
@@ -272,7 +272,7 @@ record GlobalDef where
      definition : Def
      refersTo : List Name
 
-TTI annot GlobalDef where
+TTC annot GlobalDef where
   toBuf b def
       = do toBuf b (type def)
            toBuf b (visibility def)
@@ -327,7 +327,7 @@ record Defs where
 -- Just write out what's in "gamma" - everything else is either reconstructed
 -- from that, or not used when reading from a file
 export
-TTI annot Defs where
+TTC annot Defs where
   toBuf b val 
       = toBuf b (CMap.toList (exactNames (gamma val)))
   fromBuf s b 

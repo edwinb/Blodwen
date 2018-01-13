@@ -2,50 +2,12 @@ package blodwen
 
 pkgs = contrib
 
-modules = Core.AutoSearch,
-          Core.Binary,
-          Core.CaseTree,
-          Core.Context, 
-          Core.Core,
-          Core.Name,
-          Core.Normalise,
-          Core.ProcessTT,
-          Core.TT,
-          Core.TTI,
-          Core.Typecheck,
-          Core.Unify,
-          Core.UnifyState,
-
-          Control.Monad.StateE,
-
-          Data.CMap,
-          Data.CSet,
-          Data.StringMap,
-
-          Interfaces.FileIO,
-          Interfaces.SystemIO,
-
-          Parser.Lexer,
-          Parser.Raw,
-          Parser.RawImp,
-          Parser.REPL,
-          Parser.Support,
-
-          TTImp.Elab,
-          TTImp.Elab.State,
-          TTImp.Elab.Term,
-          TTImp.ProcessData,
-          TTImp.ProcessDef,
-          TTImp.ProcessType,
-          TTImp.ProcessTTImp,
-          TTImp.REPL,
-          TTImp.TTImp,
-
-          Utils.Binary
+modules = Idris.Syntax,
+          Idris.ProcessIdr
 
 sourcedir = src
 executable = blodwen
-opts = "--warnreach --partial-eval --dumpcases blodwen.dc"
+opts = "--warnreach --partial-eval"
 
-main = Main
+main = Idris.Main
 

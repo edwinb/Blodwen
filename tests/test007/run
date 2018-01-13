@@ -1,2 +1,2 @@
-../../blodwen cases.blod < input
-rm -f *.tti
+../../ttimp cases.tti < input
+rm -f *.ttc

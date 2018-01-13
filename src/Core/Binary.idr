@@ -3,7 +3,7 @@ module Core.Binary
 import Core.Context
 import Core.Core
 import Core.TT
-import Core.TTI
+import Core.TTC
 import Core.UnifyState
 
 -- Reading and writing 'Defs' from/to  a binary file
@@ -18,31 +18,31 @@ import Data.Buffer
 %default covering
 
 -- increment this when changing anything in the data format
--- NOTE: TTI files are only compatible if the version number is the same,
+-- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 ttiVersion : Int
 ttiVersion = 1
 
-checkTTIVersion : Int -> Int -> Core annot ()
-checkTTIVersion ver exp
+checkTTCVersion : Int -> Int -> Core annot ()
+checkTTCVersion ver exp
   = if ver < exp
-       then throw (TTIError FormatOlder)
+       then throw (TTCError FormatOlder)
        else if ver > exp
-            then throw (TTIError FormatNewer)
+            then throw (TTCError FormatNewer)
             else pure ()
 
-record TTIFile annot where
-  constructor MkTTIFile
+record TTCFile annot where
+  constructor MkTTCFile
   version : Int
   holes : List (annot, Name)
   constraints : Context (Constraint annot)
   context : Defs
 
--- NOTE: TTI files are only compatible if the version number is the same,
+-- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
-TTI annot annot => TTI annot (TTIFile annot) where
+TTC annot annot => TTC annot (TTCFile annot) where
   toBuf b file
-      = do toBuf b "TTI"
+      = do toBuf b "TTC"
            toBuf b (version file)
            toBuf b (holes file)
            toBuf b (constraints file)
@@ -50,13 +50,13 @@ TTI annot annot => TTI annot (TTIFile annot) where
 
   fromBuf s b
       = do hdr <- fromBuf s b
-           when (hdr /= "TTI") $ corrupt "header"
+           when (hdr /= "TTC") $ corrupt "header"
            ver <- fromBuf s b
-           checkTTIVersion ver ttiVersion
+           checkTTCVersion ver ttiVersion
            holes <- fromBuf s b
            constraints <- fromBuf s b
            defs <- fromBuf s b
-           pure (MkTTIFile ver holes constraints defs)
+           pure (MkTTCFile ver holes constraints defs)
 
 -- Update the various fields in Defs affected by the name's flags
 processFlags : Name -> List DefFlag -> Defs -> Defs
@@ -83,29 +83,29 @@ mkSaveDefs (n :: ns) acc defs
 -- Write out the things in the context which have been defined in the
 -- current source file
 export
-writeToTTI : TTI annot annot =>
+writeToTTC : TTC annot annot =>
              {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              (fname : String) ->
              Core annot ()
-writeToTTI fname
+writeToTTC fname
     = do buf <- initBinary
          defs <- get Ctxt
          ust <- get UST
          let defs' = mkSaveDefs (getSave defs) initCtxt defs
-         toBuf buf (MkTTIFile ttiVersion (holes ust) (constraints ust) defs')
+         toBuf buf (MkTTCFile ttiVersion (holes ust) (constraints ust) defs')
          Right ok <- coreLift $ writeToFile fname !(get Bin)
                | Left err => throw (InternalError (fname ++ ": " ++ show err))
          pure ()
 
 -- Add definitions from a binary file to the current context
 export
-readFromTTI : TTI annot annot =>
+readFromTTC : TTC annot annot =>
               {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               (fname : String) ->
               Core annot ()
-readFromTTI fname
+readFromTTC fname
     = do Right buf <- coreLift $ readFromFile fname
                | Left err => throw (InternalError (fname ++ ": " ++ show err))
          bin <- newRef Bin buf -- for reading the file into

@@ -7,7 +7,7 @@ import public Data.IORef
 import public Control.Catchable
 
 public export
-data TTIErrorMsg
+data TTCErrorMsg
     = FormatOlder
     | FormatNewer
     | EndOfBuffer String
@@ -40,16 +40,16 @@ data Error annot
     | BadDotPattern annot (Term vars) (Term vars)
     | BadImplicit annot String
     | GenericMsg annot String
-    | TTIError TTIErrorMsg
+    | TTCError TTCErrorMsg
     | FileErr String FileError
     | InternalError String
 
 export
-Show TTIErrorMsg where
-  show FormatOlder = "TTI data is in an older format"
-  show FormatNewer = "TTI data is in a newer format"
+Show TTCErrorMsg where
+  show FormatOlder = "TTC data is in an older format"
+  show FormatNewer = "TTC data is in a newer format"
   show (EndOfBuffer when) = "End of buffer when reading " ++ when
-  show (Corrupt ty) = "Corrupt TTI data for " ++ ty
+  show (Corrupt ty) = "Corrupt TTC data for " ++ ty
 
 -- Simplest possible display - higher level languages should unelaborate names
 -- and display annotations appropriately
@@ -84,7 +84,7 @@ Show (Error annot) where
       = "Can't match on " ++ show x
   show (BadImplicit _ str) = str ++ " can't be bound here"
   show (GenericMsg _ str) = str
-  show (TTIError msg) = "Error in TTI file: " ++ show msg
+  show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
   show (InternalError str) = "INTERNAL ERROR: " ++ str
 

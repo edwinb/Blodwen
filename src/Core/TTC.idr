@@ -1,4 +1,4 @@
-module Core.TTI
+module Core.TTC
 
 import Core.CaseTree
 import Core.Core
@@ -9,11 +9,11 @@ import Data.List
 
 %default total
 
--- TTI instances for TT primitives
+-- TTC instances for TT primitives
 
 mutual
   export
-	TTI annot GenName where
+	TTC annot GenName where
     toBuf b (Nested x y) 
         = do tag 0
              toBuf b x
@@ -38,10 +38,10 @@ mutual
                2 => do x <- fromBuf s b
                        y <- fromBuf s b
                        pure (WithBlock x y)
-               _ => throw (TTIError (Corrupt "GenName"))
+               _ => throw (TTCError (Corrupt "GenName"))
 
   export
-	TTI annot Name where
+	TTC annot Name where
     toBuf b (UN x) 
         = do tag 0
              toBuf b x
@@ -81,10 +81,10 @@ mutual
                        pure (PV x)
                5 => do x <- fromBuf s b
                        pure (GN x)
-               _ => throw (TTIError (Corrupt "Name"))
+               _ => throw (TTCError (Corrupt "Name"))
 
 export
-TTI annot NameType where
+TTC annot NameType where
   toBuf b Bound = tag 0
   toBuf b Func = tag 1
   toBuf b (DataCon t arity) = do tag 2; toBuf b t; toBuf b arity
@@ -99,7 +99,7 @@ TTI annot NameType where
              _ => corrupt "NameType"
 
 export
-TTI annot PiInfo where
+TTC annot PiInfo where
   toBuf b Implicit = tag 0
   toBuf b Explicit = tag 1
   toBuf b AutoImplicit = tag 2
@@ -112,7 +112,7 @@ TTI annot PiInfo where
              _ => corrupt "PiInfo"
 
 export
-TTI annot ty => TTI annot (Binder ty) where
+TTC annot ty => TTC annot (Binder ty) where
   toBuf b (Lam x ty) = do tag 0; toBuf b x; toBuf b ty
   toBuf b (Let val ty) = do tag 1; toBuf b val; toBuf b ty
   toBuf b (Pi x ty) = do tag 2; toBuf b x; toBuf b ty
@@ -131,7 +131,7 @@ TTI annot ty => TTI annot (Binder ty) where
              _ => corrupt "Binder"
 
 export
-TTI annot Constant where
+TTC annot Constant where
   toBuf b (I x) = do tag 0; toBuf b x
   toBuf b IntType = tag 1
 
@@ -142,7 +142,7 @@ TTI annot Constant where
              _ => corrupt "Constant"
 
 export
-TTI annot (Term vars) where
+TTC annot (Term vars) where
   toBuf b (Local {x} h) = do tag 0; toBuf b x; toBuf b h
   toBuf b (Ref nt fn) = do tag 1; toBuf b nt; toBuf b fn
   toBuf b (Bind x bnd tm) 
@@ -171,7 +171,7 @@ TTI annot (Term vars) where
            _ => corrupt "Term"
 
 export
-TTI annot (Env Term vars) where
+TTC annot (Env Term vars) where
   toBuf b [] = pure ()
   toBuf b ((::) bnd env) 
       = do toBuf b bnd; toBuf b env
@@ -185,7 +185,7 @@ TTI annot (Env Term vars) where
 
 mutual
   export
-  TTI annot (CaseAlt vars) where
+  TTC annot (CaseAlt vars) where
     toBuf b (ConCase x t args sc) 
         = do tag 0; toBuf b x; toBuf b t
              toBuf b args
@@ -207,7 +207,7 @@ mutual
                _ => corrupt "CaseAlt"
 
   export
-  TTI annot (CaseTree vars) where
+  TTC annot (CaseTree vars) where
     toBuf b (Case {var} x xs) 
         = do tag 0; toBuf b var; toBuf b x
              assert_total (toBuf b xs)

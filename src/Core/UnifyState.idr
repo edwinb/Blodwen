@@ -4,7 +4,7 @@ import Core.CaseTree
 import Core.Context
 import Core.Normalise
 import Core.TT
-import Core.TTI
+import Core.TTC
 import Utils.Binary
 
 import Data.List
@@ -32,7 +32,7 @@ data Constraint : Type -> Type where
      Resolved : Constraint annot
 
 export
-TTI annot annot => TTI annot (Constraint annot) where
+TTC annot annot => TTC annot (Constraint annot) where
   toBuf b (MkConstraint {vars} x env tm y) 
       = do tag 0; toBuf b vars; toBuf b x; toBuf b env; toBuf b tm; toBuf b y
   toBuf b (MkSeqConstraint {vars} x env xs ys) 

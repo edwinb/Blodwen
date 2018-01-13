@@ -1,4 +1,4 @@
-../../blodwen vect.blod < input
-../../blodwen vect.tti < input
+../../ttimp vect.tti < input
+../../ttimp vect.ttc < input
 
-rm -f *.tti
+rm -f *.ttc

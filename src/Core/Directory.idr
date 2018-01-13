@@ -34,7 +34,7 @@ defaultDirs : Dirs
 defaultDirs = MkDirs "." "build" []
 
 export
-getTTIFileName : String -> String
-getTTIFileName inp = dropExtension inp ++ ".tti"
+getTTCFileName : String -> String
+getTTCFileName inp = dropExtension inp ++ ".ttc"
 
 -- findFile : String -> Dirs -> Core annot 

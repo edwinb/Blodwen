@@ -1,5 +1,5 @@
-Welcome to Blodwen. Good luck.
-Loading testlet.blod
+Welcome to TTImp. Good luck.
+Loading testlet.tti
 Processing as TTImp
 Blodwen> Main.Z : Main.Nat
 Blodwen> (Main.S (Main.S (Main.S Main.Z))) : Main.Nat

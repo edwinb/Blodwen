@@ -5,7 +5,7 @@ import Data.Buffer
 import Data.List
 import public Data.StringMap
 
--- Serialising data as binary. Provides an interface TTI which allows
+-- Serialising data as binary. Provides an interface TTC which allows
 -- reading and writing to chunks of memory, "Binary", which can be written
 -- to and read from files.
 
@@ -123,7 +123,7 @@ readFromFile fname
          pure (Right (MkBin [] (MkChunk b 0 max max) []))
 
 public export
-interface TTI annot a | a where -- TTI = TT intermediate code/interface file
+interface TTC annot a | a where -- TTC = TT intermediate code/interface file
   -- Add binary data representing the value to the given buffer
   toBuf : Ref Bin Binary -> a -> Core annot ()
   -- Return the data representing a thing of type 'a' from the given buffer.
@@ -157,13 +157,13 @@ initShare = newRef Share empty
 
 export
 corrupt : String -> Core annot a
-corrupt ty = throw (TTIError (Corrupt ty))
+corrupt ty = throw (TTCError (Corrupt ty))
 
 -- Primitives; these are the only things that have to deal with growing
 -- the buffer list
 
 export
-TTI annot Bits8 where
+TTC annot Bits8 where
   toBuf b val 
     = do MkBin done chunk rest <- get Bin
          if avail chunk >= 1
@@ -187,7 +187,7 @@ TTI annot Bits8 where
                  pure val
               else
                 case rest of
-                     [] => throw (TTIError (EndOfBuffer "Byte"))
+                     [] => throw (TTCError (EndOfBuffer "Byte"))
                      (next :: rest) =>
                         do val <- coreLift $ getByte (buf next) 0
                            put Bin (MkBin (chunk :: done) (incLoc 1 next) rest)
@@ -203,7 +203,7 @@ getTag : {auto s : Ref Share (StringMap String)} ->
 getTag {s} {b} = fromBuf s b
 
 export
-TTI annot Int where
+TTC annot Int where
   toBuf b val
     = do MkBin done chunk rest <- get Bin
          if avail chunk >= 4
@@ -226,14 +226,14 @@ TTI annot Int where
                  pure val
               else
                 case rest of
-                     [] => throw (TTIError (EndOfBuffer "Int"))
+                     [] => throw (TTCError (EndOfBuffer "Int"))
                      (next :: rest) =>
                         do val <- coreLift $ getInt (buf next) 0
                            put Bin (MkBin (chunk :: done) (incLoc 4 next) rest)
                            pure val
 
 export
-TTI annot String where
+TTC annot String where
   toBuf b val
       = do let req : Int = cast (length val)
            toBuf b req
@@ -260,7 +260,7 @@ TTI annot String where
                    findString val
               else 
                 case rest of
-                     [] => throw (TTIError (EndOfBuffer "String"))
+                     [] => throw (TTCError (EndOfBuffer "String"))
                      (next :: rest) =>
                         do val <- coreLift $ getString (buf next) 0 len
                            put Bin (MkBin (chunk :: done)
@@ -270,7 +270,7 @@ TTI annot String where
 -- Some useful types from the prelude
 
 export
-TTI annot Bool where
+TTC annot Bool where
   toBuf b False = tag 0
   toBuf b True = tag 1
   fromBuf s b
@@ -280,7 +280,7 @@ TTI annot Bool where
              _ => corrupt "Bool"
 
 export
-(TTI annot a, TTI annot b) => TTI annot (a, b) where
+(TTC annot a, TTC annot b) => TTC annot (a, b) where
   toBuf b (x, y)
      = do toBuf b x
           toBuf b y
@@ -290,12 +290,12 @@ export
           pure (x, y)
 
 export
-TTI annot () where
+TTC annot () where
   toBuf b () = pure ()
   fromBuf s b = pure ()
 
 export
-TTI annot a => TTI annot (Maybe a) where
+TTC annot a => TTC annot (Maybe a) where
   toBuf b Nothing
      = tag 0
   toBuf b (Just val)
@@ -310,7 +310,7 @@ TTI annot a => TTI annot (Maybe a) where
             _ => corrupt "Maybe"
 
 export
-TTI annot a => TTI annot (List a) where
+TTC annot a => TTC annot (List a) where
   toBuf b xs
       = do toBuf b (cast {to=Int} (length xs))
            traverse (toBuf b) xs
@@ -339,7 +339,7 @@ mkPrf i {x} {xs}
                 else believe_me (There {y=x} (mkPrf {x} {xs} (i-1)))
 
 export
-TTI annot (Elem x xs) where
+TTC annot (Elem x xs) where
   toBuf b prf = toBuf b (count prf)
   fromBuf s b
     = do val <- fromBuf s b {a = Int}
@@ -360,7 +360,7 @@ fromLimbs [] = 0
 fromLimbs (x :: xs) = cast x + prim__shlBigInt (fromLimbs xs) 8
 
 export
-TTI annot Integer where
+TTC annot Integer where
   toBuf b val
     = assert_total $ if val < 0
          then do toBuf b (the Bits8 0)
@@ -377,7 +377,7 @@ TTI annot Integer where
               _ => corrupt "Integer"
 
 export
-TTI annot Nat where
+TTC annot Nat where
   toBuf b val = toBuf b (cast {to=Integer} val)
   fromBuf s b 
      = do val <- fromBuf s b

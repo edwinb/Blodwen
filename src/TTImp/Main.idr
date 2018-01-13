@@ -19,7 +19,7 @@ import TTImp.REPL
 import Parser.RawImp
 
 usageMsg : Core () ()
-usageMsg = coreLift $ putStrLn "Usage: blodwen [source file]"
+usageMsg = coreLift $ putStrLn "Usage: ttimp [source file]"
 
 stMain : Core () ()
 stMain 
@@ -30,17 +30,17 @@ stMain
          case span (/= '.') fname of
               (_, ".tt") => do coreLift $ putStrLn "Processing as TT"
                                ProcessTT.process fname
-                               writeToTTI (getTTIFileName fname)
-              (_, ".tti") => do coreLift $ putStrLn "Processing as TTI"
-                                readFromTTI fname
+                               writeToTTC (getTTCFileName fname)
+              (_, ".ttc") => do coreLift $ putStrLn "Processing as TTC"
+                                readFromTTC fname
                                 dumpConstraints 0 True
               _ => do coreLift $ putStrLn "Processing as TTImp"
                       ProcessTTImp.process fname
-                      writeToTTI (getTTIFileName fname)
+                      writeToTTC (getTTCFileName fname)
          repl {c} {u}
 
 main : IO ()
-main = do putStrLn "Welcome to Blodwen. Good luck."
+main = do putStrLn "Welcome to TTImp. Good luck."
           coreRun stMain
                (\err : Error () => putStrLn ("Uncaught error: " ++ show err))
                (\res => pure ())

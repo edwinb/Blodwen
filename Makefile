@@ -1,4 +1,7 @@
-.PHONY: blodwen test
+.PHONY: ttimp blodwen test
+
+ttimp:
+	idris --build ttimp.ipkg
 
 blodwen:
 	idris --build blodwen.ipkg
