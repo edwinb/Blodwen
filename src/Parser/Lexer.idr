@@ -13,6 +13,7 @@ data Token = Ident String
            | Keyword String
            | Unrecognised String
            | Comment String
+           | EndInput
 
 export
 Show Token where
@@ -24,6 +25,7 @@ Show Token where
   show (Keyword x) = "Keyword " ++ x
   show (Unrecognised x) = "BAD_TOKEN " ++ x
   show (Comment x) = "Comment"
+  show EndInput = "EndInput"
 
 comment : Lexer
 comment = is '-' <+> is '-' <+> some (isNot '\n') <+> is '\n'
@@ -77,7 +79,10 @@ export
 lex : String -> Either (Int, Int, String) (List (TokenData Token))
 lex str 
     = case lex rawTokens str of
-           (tok, (_, _, "")) => Right (filter notComment tok)
+           -- Add the EndInput token so that we'll have a line and column
+           -- number to read when storing spans in the file
+           (tok, (l, c, "")) => Right (filter notComment tok ++ 
+                                      [MkToken l c EndInput])
            (_, fail) => Left fail
     where
       notComment : TokenData Token -> Bool

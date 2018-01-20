@@ -1,6 +1,8 @@
 module Idris.Syntax
 
+import public Core.Core
 import public Core.TT
+import public Core.Binary
 
 %hide Elab.Fixity
 
@@ -9,11 +11,30 @@ FilePos : Type
 FilePos = (Int, Int)
 
 public export
+FileName : Type
+FileName = String
+
+public export
 record FC where
   constructor MkFC
-  file : String
+  file : FileName
   startPos : FilePos
   endPos : FilePos
+
+%name FC fc
+
+export
+TTC FC FC where
+  toBuf b (MkFC fl st end)
+      = do toBuf b fl
+           toBuf b st
+           toBuf b end
+
+  fromBuf s b
+      = do fl <- fromBuf s b
+           st <- fromBuf s b
+           end <- fromBuf s b
+           pure (MkFC fl st end)
 
 public export
 data Fixity = InfixL | InfixR | Infix
@@ -58,9 +79,29 @@ mutual
        MkImpossible : FC -> (lhs : PTerm) -> PClause
 
   public export
+  data Directive : Type where
+       Logging : Nat -> Directive
+
+  public export
   data PDecl : Type where
        PClaim : FC -> PTypeDecl -> PDecl
        PDef : FC -> Name -> List PClause -> PDecl
        PData : FC -> PDataDecl -> PDecl
        PInfix : FC -> Fixity -> Nat -> Name -> PDecl
-       
+       PDirective : FC -> Directive -> PDecl
+
+public export
+data REPLCmd : Type where
+     Eval : PTerm -> REPLCmd
+     Check : PTerm -> REPLCmd
+     ProofSearch : Name -> REPLCmd
+     DebugInfo : Name -> REPLCmd
+     Quit : REPLCmd
+
+public export
+record Module where
+  constructor MkModule
+  moduleNS : List String
+  imports : List (List String)
+  decls : List PDecl
+

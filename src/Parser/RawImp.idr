@@ -13,12 +13,6 @@ import Debug.Trace
 
 %default covering
 
--- export
--- record IndentInfo where
---   constructor MkIndent 
---   levels : List Int
---   braces : Bool
-
 -- Forward declare since they're used in the parser
 topDecl : IndentInfo -> Rule (ImpDecl ())
 collectDefs : List (ImpDecl ()) -> List (ImpDecl ())

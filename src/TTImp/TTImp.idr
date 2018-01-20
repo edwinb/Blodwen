@@ -56,6 +56,7 @@ mutual
        PatClause : annot -> (lhs : RawImp annot) -> (rhs : RawImp annot) ->
                    ImpClause annot
        ImpossibleClause : annot -> (lhs : RawImp annot) -> ImpClause annot
+       -- To add: WithClause
 
   public export
   data ImpData : Type -> Type where
@@ -72,6 +73,7 @@ mutual
        IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
                ImpDecl annot
        ILog : Nat -> ImpDecl annot
+       -- To add: IRecord
 
 -- REPL commands for TTImp interaction
 public export

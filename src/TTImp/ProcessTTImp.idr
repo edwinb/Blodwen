@@ -26,6 +26,7 @@ import Interfaces.FileIO
 -- Need to propagate the top level elaborator 'processDecl' throughout
 -- the rest of the elaborator, since otherwise we'd need cyclic modules
 -- (that is, TTImp.Elab needs to call processDecl for nested constructs)
+export
 processDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->

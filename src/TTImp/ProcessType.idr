@@ -7,8 +7,6 @@ import Core.Context
 import TTImp.Elab
 import TTImp.TTImp
 
-import Control.Catchable
-
 export
 processType : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->

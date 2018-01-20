@@ -30,13 +30,13 @@ stMain
          case span (/= '.') fname of
               (_, ".tt") => do coreLift $ putStrLn "Processing as TT"
                                ProcessTT.process fname
-                               writeToTTC (getTTCFileName fname)
+                               writeToTTC () (getTTCFileName fname)
               (_, ".ttc") => do coreLift $ putStrLn "Processing as TTC"
-                                readFromTTC fname
+                                readFromTTC {extra = ()} fname
                                 dumpConstraints 0 True
               _ => do coreLift $ putStrLn "Processing as TTImp"
                       ProcessTTImp.process fname
-                      writeToTTC (getTTCFileName fname)
+                      writeToTTC () (getTTCFileName fname)
          repl {c} {u}
 
 main : IO ()

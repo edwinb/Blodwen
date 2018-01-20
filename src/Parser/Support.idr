@@ -30,12 +30,22 @@ Show ParseError where
       = "File error: " ++ show err
 
 export
+eoi : EmptyRule ()
+eoi 
+    = do nextIs (isEOI . tok)
+         pure ()
+  where
+    isEOI : Token -> Bool
+    isEOI EndInput = True
+    isEOI _ = False
+
+export
 runParser : String -> Rule ty -> Either ParseError ty
 runParser str p 
     = case lex str of
            Left err => Left $ LexFail err
            Right toks => 
-              case parse (do res <- p; eof; pure res) toks of
+              case parse (do res <- p; eoi; pure res) toks of
                    Left (Error err []) => 
                           Left $ ParseFail err Nothing []
                    Left (Error err (t :: ts)) => 
@@ -156,7 +166,8 @@ column
 export
 continue : (indent : IndentInfo) -> EmptyRule ()
 continue indent
-    = do col <- column
+    = do eoi; fail {c=False} "End of input"
+  <|> do col <- column
          if (col <= indent)
             then fail "No more args"
             else pure ()
@@ -166,6 +177,12 @@ data ValidIndent
      | AtPos Int -- Entry must begin in a specific column
      | AfterPos Int -- Entry can begin in this column or later
      | EndOfBlock -- Block is finished
+
+Show ValidIndent where
+  show AnyIndent = "[any]"
+  show (AtPos i) = "[col " ++ show i ++ "]"
+  show (AfterPos i) = "[after " ++ show i ++ "]"
+  show EndOfBlock = "[EOB]"
 
 checkValid : ValidIndent -> Int -> EmptyRule ()
 checkValid AnyIndent c = pure ()
@@ -182,6 +199,7 @@ isTerminator : Token -> Bool
 isTerminator (Symbol ";") = True
 isTerminator (Symbol "}") = True
 isTerminator (Keyword "in") = True
+isTerminator EndInput = True
 isTerminator _ = False
 
 -- Check we're at the end of a block entry, given the start column
@@ -191,7 +209,7 @@ isTerminator _ = False
 export
 atEnd : (indent : IndentInfo) -> EmptyRule ()
 atEnd indent
-    = eof
+    = eoi
   <|> do nextIs (isTerminator . tok)
          pure ()
   <|> do col <- column
@@ -203,7 +221,7 @@ atEnd indent
 -- must start, given where the current block entry started
 terminator : ValidIndent -> Int -> EmptyRule ValidIndent
 terminator valid laststart
-    = do eof
+    = do eoi
          pure EndOfBlock
   <|> do symbol ";"
          pure (afterSemi valid)
