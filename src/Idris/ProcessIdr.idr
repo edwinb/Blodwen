@@ -19,21 +19,19 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto i : Ref ImpST (ImpState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
-              Env Term vars -> NestedNames vars ->
               PDecl -> Core FC ()
-processDecl env nest decl
+processDecl decl
     = do impdecls <- desugarDecl decl 
-         traverse (ProcessTTImp.processDecl env nest) impdecls
+         traverse (ProcessTTImp.processDecl [] (MkNested [])) impdecls
          pure ()
 
 processDecls : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto i : Ref ImpST (ImpState FC)} ->
                {auto s : Ref Syn SyntaxInfo} ->
-               Env Term vars -> NestedNames vars ->
                List PDecl -> Core FC ()
-processDecls env nest decls
-    = do xs <- traverse (processDecl env nest) decls
+processDecls decls
+    = do xs <- traverse processDecl decls
          hs <- getHoleNames
          traverse addToSave hs
          pure ()
@@ -52,7 +50,7 @@ processMod mod
          -- a phase before this which builds the dependency graph
          -- (also that we only build child dependencies if rebuilding
          -- changes the interface - will need to store a hash in .ttc!)
-         processDecls [] (MkNested []) (decls mod)
+         processDecls (decls mod)
          get Syn
 
 export

@@ -60,21 +60,62 @@ initSyntax = MkSyntax empty
 export
 data Syn : Type where
 
+-- Whether names are turned into IBindVar or not
+-- on the lhs and in types, by default, lower case variable names which
+-- are not bound explicitly are turned ito IBindVar
+public export
+data BindMode = LowerCase | None
+
+lowerFirst : String -> Bool
+lowerFirst "" = False
+lowerFirst str = assert_total (isLower (strHead str))
+
+-- Bind lower case names in argument position
+-- Don't go under lambda, case let, or local bindings, or IAlternative
+bindNames : (arg : Bool) -> List Name -> RawImp annot -> RawImp annot
+bindNames True env (IVar fc (UN n))
+    = if not (UN n `elem` env) && lowerFirst n
+         then IBindVar fc n
+         else IVar fc (UN n)
+bindNames arg env (IPi fc p mn aty retty)
+    = let env' = case mn of
+                      Nothing => env
+                      Just n => n :: env in
+          IPi fc p mn (bindNames True env' aty) (bindNames True env' retty)
+bindNames arg env (IApp fc fn av)
+    = IApp fc (bindNames False env fn) (bindNames True env av)
+bindNames arg env (IImplicitApp fc fn n av)
+    = IImplicitApp fc (bindNames False env fn) n (bindNames True env av)
+bindNames arg env (IAs fc n pat)
+    = IAs fc n (bindNames arg env pat)
+-- We've skipped lambda, case, let and local - rather than guess where the
+-- name should be bound, leave it to the programmer
+bindNames arg env tm = tm
+
+-- Add 'IMustUnify' for any duplicated names, and any function application
+addDots : RawImp annot -> RawImp annot
+addDots tm = tm
+
 mutual
   export
   desugar : {auto s : Ref Syn SyntaxInfo} ->
             PTerm -> Core FC (RawImp FC)
   desugar (PRef fc x) = pure $ IVar fc x
-  desugar (PPi fc p n argTy retTy) 
-      = pure $ IPi fc p n !(desugar argTy) !(desugar retTy)
+  desugar (PPi fc p mn argTy retTy) 
+      = pure $ IPi fc p mn !(desugar argTy) 
+                           !(desugar retTy)
   desugar (PLam fc p n argTy scope) 
-      = pure $ ILam fc p n !(desugar argTy) !(desugar scope)
+      = pure $ ILam fc p n !(desugar argTy) 
+                           !(desugar scope)
   desugar (PLet fc n nTy nVal scope) 
-      = pure $ ILet fc n !(desugar nTy) !(desugar nVal) !(desugar scope)
+      = pure $ ILet fc n !(desugar nTy) !(desugar nVal) 
+                         !(desugar scope)
   desugar (PCase fc x xs) 
-      = pure $ ICase fc !(desugar x) !(traverse desugarClause xs)
+      = pure $ ICase fc !(desugar x) 
+                        !(traverse desugarClause xs)
   desugar (PLocal fc xs scope) 
-      = pure $ ILocal fc (concat !(traverse desugarDecl xs)) !(desugar scope)
+      = pure $ ILocal fc (concat !(traverse desugarDecl xs)) 
+                         !(desugar scope)
   desugar (PApp fc x y) 
       = pure $ IApp fc !(desugar x) !(desugar y)
   desugar (PImplicitApp fc x argn y) 
@@ -89,24 +130,23 @@ mutual
       = pure $ IMustUnify fc !(desugar x)
   desugar (PImplicit fc) = pure $ Implicit fc
 
-  export
   desugarType : {auto s : Ref Syn SyntaxInfo} ->
                 PTypeDecl -> Core FC (ImpTy FC)
-  desugarType (MkPTy fc n ty) = pure $ MkImpTy fc n !(desugar ty)
+  desugarType (MkPTy fc n ty) 
+      = pure $ MkImpTy fc n (bindNames True [] !(desugar ty))
 
-  export
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
                   PClause -> Core FC (ImpClause FC)
   desugarClause (MkPatClause fc lhs rhs) 
-      = pure $ PatClause fc !(desugar lhs) !(desugar rhs)
+      = pure $ PatClause fc (bindNames False [] !(desugar lhs)) !(desugar rhs)
   desugarClause (MkImpossible fc lhs) 
-      = pure $ ImpossibleClause fc !(desugar lhs)
+      = pure $ ImpossibleClause fc (bindNames False [] !(desugar lhs))
 
-  export
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
                 PDataDecl -> Core FC (ImpData FC)
   desugarData (MkPData fc n tycon datacons) 
-      = pure $ MkImpData fc n !(desugar tycon) !(traverse desugarType datacons)
+      = pure $ MkImpData fc n (bindNames True [] !(desugar tycon))
+                              !(traverse desugarType datacons)
 
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
