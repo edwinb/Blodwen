@@ -2,8 +2,11 @@ package blodwen
 
 pkgs = contrib
 
-modules = Idris.Syntax,
-          Idris.ProcessIdr
+modules = Idris.Desugar,
+          Idris.Syntax,
+          Idris.Parser,
+          Idris.ProcessIdr,
+          Idris.REPL
 
 sourcedir = src
 executable = blodwen

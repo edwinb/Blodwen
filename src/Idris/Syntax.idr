@@ -10,6 +10,9 @@ public export
 FilePos : Type
 FilePos = (Int, Int)
 
+showPos : FilePos -> String
+showPos (l, c) = show (l + 1) ++ ":" ++ show (c + 1)
+
 public export
 FileName : Type
 FileName = String
@@ -22,6 +25,12 @@ record FC where
   endPos : FilePos
 
 %name FC fc
+
+export
+Show FC where
+  show loc = file loc ++ ":" ++ 
+             showPos (startPos loc) ++ "--" ++ 
+             showPos (endPos loc)
 
 export
 TTC FC FC where

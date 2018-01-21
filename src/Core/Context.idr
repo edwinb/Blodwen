@@ -766,7 +766,7 @@ getHintsFor loc target
               _ => throw (UndefinedName loc target)
 
 export
-runWithCtxt : Core annot () -> IO ()
+runWithCtxt : Show annot => Core annot () -> IO ()
 runWithCtxt prog = coreRun prog 
                            (\err => printLn err)
                            (\ok => pure ())

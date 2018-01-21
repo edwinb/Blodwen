@@ -61,20 +61,22 @@ checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
 checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
     = do lhs_raw <- lhsInCurrentNS nest lhs_raw
          log 5 ("Checking LHS: " ++ show lhs_raw)
-         (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
+         (lhs_in, lhsty_in) <- wrapError (InLHS loc defining) $
+              inferTerm elab defining env nest PATTERN InLHS lhs_raw
          gam <- getCtxt
          -- Check there's no holes or constraints in the left hand side
          -- we've just checked - they must be resolved now (that's what
          -- True means)
-         checkUserHoles loc True
+         wrapError (InLHS loc defining) $ checkUserHoles loc True
 
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs lhsty
          log 3 ("LHS: " ++ show lhs ++ " : " ++ show reqty)
-         rhs <- checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
+         rhs <- wrapError (InRHS loc defining) $
+                checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
 
-         checkUserHoles loc False
+         wrapError (InRHS loc defining) $ checkUserHoles loc False
 
          log 3 ("Clause: " ++ show lhs ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs))

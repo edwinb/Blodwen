@@ -19,8 +19,9 @@ checkCon : {auto c : Ref Ctxt Defs} ->
 checkCon elab env nest (MkImpTy loc cn_in ty_raw)
     = do cn <- inCurrentNS cn_in
          ty_imp <- mkBindImps env ty_raw
-         ty <- checkTerm elab cn env nest (PI False) InType ty_imp TType
-         checkUserHoles loc False
+         ty <- wrapError (InCon loc cn) $
+                  checkTerm elab cn env nest (PI False) InType ty_imp TType
+         wrapError (InCon loc cn) $ checkUserHoles loc False
 
          let ty' = abstractEnvType env ty
          log 3 $ show cn ++ " : " ++ show ty'
@@ -39,8 +40,9 @@ processData : {auto c : Ref Ctxt Defs} ->
 processData elab env nest (MkImpData loc n_in ty_raw cons_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
-         ty <- checkTerm elab n env nest (PI False) InType ty_imp TType
-         checkUserHoles loc False
+         ty <- wrapError (InCon loc n) $
+                  checkTerm elab n env nest (PI False) InType ty_imp TType
+         wrapError (InCon loc n) $ checkUserHoles loc False
 
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty
@@ -53,7 +55,7 @@ processData elab env nest (MkImpData loc n_in ty_raw cons_raw)
          cons <- traverse (\x => checkCon elab env nest x) cons_raw
 
          -- Any non user defined holes should be resolved by now
-         checkUserHoles loc True
+         wrapError (InCon loc n) $ checkUserHoles loc True
          let def = MkData (MkCon n arity ty') cons
          addData Public def
          addToSave n

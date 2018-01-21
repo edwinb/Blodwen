@@ -1,5 +1,6 @@
 Welcome to TTImp. Good luck.
 Loading dotpatterns.tti
 Processing as TTImp
-Can't match on (Main.plus {P:n} {P:m})
+():When elaborating left hand side of Main.silly:
+():Can't match on (Main.plus {P:n} {P:m})
 Blodwen> Bye for now!

@@ -44,6 +44,11 @@ data Error annot
     | FileErr String FileError
     | InternalError String
 
+    | InType annot Name (Error annot)
+    | InCon annot Name (Error annot)
+    | InLHS annot Name (Error annot)
+    | InRHS annot Name (Error annot)
+
 export
 Show TTCErrorMsg where
   show FormatOlder = "TTC data is in an older format"
@@ -54,39 +59,55 @@ Show TTCErrorMsg where
 -- Simplest possible display - higher level languages should unelaborate names
 -- and display annotations appropriately
 export
-Show (Error annot) where
-  show (CantConvert _ env x y) 
-      = "Type mismatch: " ++ show x ++ " and " ++ show y
-  show (Cycle _ env x y) 
-      = "Occurs check failed: " ++ show x ++ " and " ++ show y
-  show (WhenUnifying _ _ x y err)
-      = "When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++ show err
-  show (ValidCase _ _ prob)
-      = case prob of
+Show annot => Show (Error annot) where
+  show (CantConvert fc env x y) 
+      = show fc ++ ":Type mismatch: " ++ show x ++ " and " ++ show y
+  show (Cycle fc env x y) 
+      = show fc ++ ":Occurs check failed: " ++ show x ++ " and " ++ show y
+  show (WhenUnifying fc _ x y err)
+      = show fc ++ ":When unifying: " ++ show x ++ " and " ++ show y ++ "\n\t" ++ show err
+  show (ValidCase fc _ prob)
+      = show fc ++ ":" ++ 
+           case prob of
              Left tm => assert_total (show tm) ++ " is not a valid impossible pattern because it typechecks"
              Right err => "Not a valid impossible pattern:\n\t" ++ assert_total (show err)
-  show (UndefinedName _ x) = "Undefined name " ++ show x
-  show (AmbiguousName _ ns) = "Ambiguous name " ++ show ns
-  show (AmbiguousElab _ ts) = "Ambiguous elaboration " ++ show ts
+  show (UndefinedName fc x) = show fc ++ ":Undefined name " ++ show x
+  show (AmbiguousName fc ns) = show fc ++ ":Ambiguous name " ++ show ns
+  show (AmbiguousElab fc ts) = show fc ++ ":Ambiguous elaboration " ++ show ts
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
-  show (InvalidImplicit _ n tm) = show n ++ " is not a valid implicit argument in " ++ show tm
-  show (CantSolveGoal _ env g) = "Can't solve goal " ++ assert_total (show g)
-  show (UnsolvedHoles _ hs) = "Unsolved holes " ++ show hs
-  show (SolvedNamedHole _ h) = "Named hole " ++ show h ++ " is solved by unification"
-  show (NonLinearPattern _ n) = "Non linear pattern variable " ++ show n
-  show (BadPattern _ n) = "Pattern not allowed here: " ++ show n
-  show (NoDeclaration _ x) = "No type declaration for " ++ show x
-  show (AlreadyDefined _ x) = show x ++ " is already defined"
-  show (NotFunctionType _ tm) = "Not a function type: " ++ show tm
-  show (CaseCompile _ n DifferingArgNumbers) 
-      = "Patterns for " ++ show n ++ " have different numbers of arguments"
-  show (BadDotPattern _ x y)
-      = "Can't match on " ++ show x
-  show (BadImplicit _ str) = str ++ " can't be bound here"
-  show (GenericMsg _ str) = str
+  show (InvalidImplicit fc n tm) 
+      = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm
+  show (CantSolveGoal fc env g) 
+      = show fc ++ ":Can't solve goal " ++ assert_total (show g)
+  show (UnsolvedHoles fc hs) = show fc ++ ":Unsolved holes " ++ show hs
+  show (SolvedNamedHole fc h) = show fc ++ ":Named hole " ++ show h ++ " is solved by unification"
+  show (NonLinearPattern fc n) = show fc ++ ":Non linear pattern variable " ++ show n
+  show (BadPattern fc n) = show fc ++ ":Pattern not allowed here: " ++ show n
+  show (NoDeclaration fc x) = show fc ++ ":No type declaration for " ++ show x
+  show (AlreadyDefined fc x) = show fc ++ ":" ++ show x ++ " is already defined"
+  show (NotFunctionType fc tm) = show fc ++ ":Not a function type: " ++ show tm
+  show (CaseCompile fc n DifferingArgNumbers) 
+      = show fc ++ ":Patterns for " ++ show n ++ " have different numbers of arguments"
+  show (BadDotPattern fc x y)
+      = show fc ++ ":Can't match on " ++ show x
+  show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"
+  show (GenericMsg fc str) = str
   show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
   show (InternalError str) = "INTERNAL ERROR: " ++ str
+
+  show (InType fc n err)
+       = show fc ++ ":When elaborating type of " ++ show n ++ ":\n" ++
+         show err
+  show (InCon fc n err)
+       = show fc ++ ":When elaborating type of constructor " ++ show n ++ ":\n" ++
+         show err
+  show (InLHS fc n err)
+       = show fc ++ ":When elaborating left hand side of " ++ show n ++ ":\n" ++
+         show err
+  show (InRHS fc n err)
+       = show fc ++ ":When elaborating right hand side of " ++ show n ++ ":\n" ++
+         show err
 
 export
 error : Error annot -> Either (Error annot) a
@@ -105,6 +126,14 @@ coreRun (MkCore act) err ok = either err ok !act
 export
 coreFail : Error annot -> Core annot a
 coreFail e = MkCore $ pure (Left e)
+
+export
+wrapError : (Error annot -> Error annot) -> Core annot a -> Core annot a
+wrapError fe (MkCore prog)
+    = MkCore $ prog >>=
+         (\x => case x of
+                     Left err => pure (Left (fe err))
+                     Right val => pure (Right val))
 
 -- This would be better if we restrict it to a limited set of IO operations
 export
