@@ -27,9 +27,26 @@ Show Token where
   show (Comment x) = "Comment"
   show EndInput = "EndInput"
 
+export
+Show (TokenData Token) where
+  show t = show (line t, col t, tok t)
+
 comment : Lexer
 comment = is '-' <+> is '-' <+> some (isNot '\n') <+> is '\n'
 
+toEndComment : (k : Nat) -> Recognise (k /= 0)
+toEndComment Z = empty
+toEndComment (S k) 
+             = some (pred (\c => c /= '-' && c /= '{')) 
+                      <+> toEndComment (S k)
+           <|> is '{' <+> is '-' <+> toEndComment (S (S k))
+           <|> is '-' <+> is '}' <+> toEndComment k
+           <|> is '{' <+> toEndComment (S k)
+           <|> is '-' <+> toEndComment (S k)
+
+blockComment : Lexer
+blockComment = is '{' <+> is '-' <+> toEndComment 1
+              
 ident : Lexer
 ident = pred startIdent <+> many (pred validIdent)
   where
@@ -64,6 +81,8 @@ validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
 
 rawTokens : TokenMap Token
 rawTokens = 
+    [(comment, Comment),
+     (blockComment, Comment)] ++
    map (\x => (exact x, Keyword)) special ++
    map (\x => (exact x, Symbol)) symbols ++
     [(intLit, \x => Literal (cast x)),
@@ -71,7 +90,6 @@ rawTokens =
      (charLit, CharLit),
      (ident, \x => if x `elem` keywords then Keyword x else Ident x),
      (space, Comment),
-     (comment, Comment),
      (validSymbol, Symbol),
      (symbol, Unrecognised)]
 
@@ -89,4 +107,3 @@ lex str
       notComment t = case tok t of
                           Comment _ => False
                           _ => True
-

@@ -1,9 +1,10 @@
--- There is some gratuitous strange indentation in this file. Please
+{- There is some gratuitous strange indentation in this file. Please
 -- leave it as it is to test the parser!
 
 -- Some small sample definitions to illustrate TTImp, a dependent type
 -- theory with implicit arguments and implicit name binding in patterns/types.
 -- This elaborates to TT, which is also the core type theory of Idris.
+-}
 
 -- A simple type, defined by a type constructor and a set of data
 -- constructors
