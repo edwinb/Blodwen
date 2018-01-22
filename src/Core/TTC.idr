@@ -133,12 +133,29 @@ TTC annot ty => TTC annot (Binder ty) where
 export
 TTC annot Constant where
   toBuf b (I x) = do tag 0; toBuf b x
-  toBuf b IntType = tag 1
+  toBuf b (BI x) = do tag 1; toBuf b x
+  toBuf b (Str x) = do tag 2; toBuf b x
+  toBuf b (Ch x) = do tag 3; toBuf b x
+  toBuf b (Db x) = do tag 4; toBuf b x
+  
+  toBuf b IntType = tag 5
+  toBuf b IntegerType = tag 6 
+  toBuf b StringType = tag 7
+  toBuf b CharType = tag 8
+  toBuf b DoubleType = tag 9
 
   fromBuf s b
       = case !getTag of
              0 => do x <- fromBuf s b; pure (I x)
-             1 => pure IntType
+             1 => do x <- fromBuf s b; pure (BI x)
+             2 => do x <- fromBuf s b; pure (Str x)
+             3 => do x <- fromBuf s b; pure (Ch x)
+             4 => do x <- fromBuf s b; pure (Db x)
+             5 => pure IntType
+             6 => pure IntegerType
+             7 => pure StringType
+             8 => pure CharType
+             9 => pure DoubleType
              _ => corrupt "Constant"
 
 export

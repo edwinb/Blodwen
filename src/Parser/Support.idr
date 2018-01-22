@@ -69,12 +69,85 @@ location
     = do tok <- peek
          pure (line tok, col tok)
 
+hex : Char -> Maybe Int
+hex '0' = Just 0
+hex '1' = Just 1
+hex '2' = Just 2
+hex '3' = Just 3
+hex '4' = Just 4
+hex '5' = Just 5
+hex '6' = Just 6
+hex '7' = Just 7
+hex '8' = Just 8
+hex '9' = Just 9
+hex 'a' = Just 10
+hex 'b' = Just 11
+hex 'c' = Just 12
+hex 'd' = Just 13
+hex 'e' = Just 14
+hex 'f' = Just 15
+hex _ = Nothing
+
+dec : Char -> Maybe Int
+dec '0' = Just 0
+dec '1' = Just 1
+dec '2' = Just 2
+dec '3' = Just 3
+dec '4' = Just 4
+dec '5' = Just 5
+dec '6' = Just 6
+dec '7' = Just 7
+dec '8' = Just 8
+dec '9' = Just 9
+dec _ = Nothing
+
+escape' : List Char -> Maybe (List Char)
+escape' [] = pure []
+escape' ('\\' :: '\\' :: xs) = pure $ '\\' :: !(escape' xs)
+escape' ('\\' :: 'a' :: xs) = pure $ '\a' :: !(escape' xs)
+escape' ('\\' :: 'b' :: xs) = pure $ '\b' :: !(escape' xs)
+escape' ('\\' :: 'f' :: xs) = pure $ '\f' :: !(escape' xs)
+escape' ('\\' :: 'n' :: xs) = pure $ '\n' :: !(escape' xs)
+escape' ('\\' :: 'r' :: xs) = pure $ '\r' :: !(escape' xs)
+escape' ('\\' :: 't' :: xs) = pure $ '\t' :: !(escape' xs)
+escape' ('\\' :: 'v' :: xs) = pure $ '\v' :: !(escape' xs)
+escape' ('\\' :: '\'' :: xs) = pure $ '\'' :: !(escape' xs)
+escape' ('\\' :: '\"' :: xs) = pure $ '\"' :: !(escape' xs)
+escape' ('\\' :: 'x' :: c1 :: c2 :: xs) 
+    = pure $ cast (!(hex (toLower c1)) * 16 + !(hex (toLower c2))) :: !(escape' xs)
+escape' ('\\' :: xs) 
+    = case span isDigit xs of
+           ([], rest) => escape' rest
+           (ds, rest) => pure $ cast (cast {to=Int} (pack ds)) :: !(escape' rest)
+escape' (x :: xs) = pure $ x :: !(escape' xs)
+
+escape : String -> Maybe String
+escape x = pure $ pack !(escape' (unpack x))
+
+getCharLit : String -> Maybe Char
+getCharLit str
+   = do e <- escape str
+        if length e == 1
+           then Just (assert_total (strHead e))
+           else Nothing
+
 export
 constant : Rule Constant
 constant 
     = terminal (\x => case tok x of
-                           Literal i => Just (I i)
+                           Literal i => Just (BI i)
+                           StrLit s => case escape s of
+                                            Nothing => Nothing
+                                            Just s' => Just (Str s')
+                           CharLit c => case getCharLit c of
+                                             Nothing => Nothing
+                                             Just c' => Just (Ch c')
+                           DoubleLit d => Just (Db d)
                            Keyword "Int" => Just IntType
+                           Keyword "Integer" => Just IntegerType
+                           Keyword "String" => Just StringType
+                           Keyword "Char" => Just CharType
+                           Keyword "Double" => Just DoubleType
                            _ => Nothing)
 
 export

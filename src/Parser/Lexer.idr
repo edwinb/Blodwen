@@ -9,6 +9,7 @@ data Token = Ident String
            | Literal Integer
            | StrLit String
            | CharLit String
+           | DoubleLit Double
            | Symbol String
            | Keyword String
            | Unrecognised String
@@ -21,6 +22,7 @@ Show Token where
   show (Literal x) = "Lit " ++ show x
   show (StrLit x) = "Str " ++ show x
   show (CharLit x) = "Char " ++ show x
+  show (DoubleLit x) = "Double " ++ show x
   show (Symbol x) = "Sym " ++ x
   show (Keyword x) = "Keyword " ++ x
   show (Unrecognised x) = "BAD_TOKEN " ++ x
@@ -58,11 +60,17 @@ ident = pred startIdent <+> many (pred validIdent)
     validIdent '_' = True
     validIdent x = isAlphaNum x
 
+doubleLit : Lexer
+doubleLit = digits <+> is '.' <+> digits <+> opt
+               (is 'e' <+> opt (is '-' <|> is '+') <+> digits)
+
 -- Reserved words
 keywords : List String
 keywords = ["data", "module", "where", "let", "in", 
             "auto", "implicit", "namespace", "impossible", "case", "of",
-            "Type", "Int"]
+            "using", "interface", "implementation", "open", "import",
+            "public", "export", "private",
+            "Type", "Int", "Integer", "String", "Char", "Double"]
 
 -- Reserved words for internal syntax
 special : List String
@@ -85,13 +93,18 @@ rawTokens =
      (blockComment, Comment)] ++
    map (\x => (exact x, Keyword)) special ++
    map (\x => (exact x, Symbol)) symbols ++
-    [(intLit, \x => Literal (cast x)),
-     (stringLit, StrLit),
-     (charLit, CharLit),
+    [(doubleLit, \x => DoubleLit (cast x)),
+     (intLit, \x => Literal (cast x)),
+     (stringLit, \x => StrLit (stripQuotes x)),
+     (charLit, \x => CharLit (stripQuotes x)),
      (ident, \x => if x `elem` keywords then Keyword x else Ident x),
      (space, Comment),
      (validSymbol, Symbol),
      (symbol, Unrecognised)]
+  where
+    stripQuotes : String -> String
+    -- ASSUMPTION! Only total because we know we're getting quoted strings.
+    stripQuotes = assert_total (strTail . reverse . strTail . reverse)
 
 export
 lex : String -> Either (Int, Int, String) (List (TokenData Token))
@@ -107,3 +120,6 @@ lex str
       notComment t = case tok t of
                           Comment _ => False
                           _ => True
+
+testLex : String -> String
+testLex inp = show (Lexer.lex inp)

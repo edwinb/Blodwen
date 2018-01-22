@@ -23,27 +23,67 @@ data NameType : Type where
 %name TT.NameType nt
 
 public export
-data Constant = I Integer
-              | IntType
+data Constant 
+	  = I Int
+    | BI Integer
+    | Str String
+    | Ch Char
+    | Db Double
+
+    | IntType
+		| IntegerType
+    | StringType
+    | CharType
+    | DoubleType
 
 export
 constantEq : (x, y : Constant) -> Maybe (x = y)
 constantEq (I x) (I y) = case decEq x y of
                               Yes Refl => Just Refl
                               No contra => Nothing
+constantEq (BI x) (BI y) = case decEq x y of
+                                Yes Refl => Just Refl
+                                No contra => Nothing
+constantEq (Str x) (Str y) = case decEq x y of
+                                  Yes Refl => Just Refl
+                                  No contra => Nothing
+constantEq (Ch x) (Ch y) = case decEq x y of
+                                Yes Refl => Just Refl
+                                No contra => Nothing
+constantEq (Db x) (Db y) = Nothing -- no DecEq for Doubles!
 constantEq IntType IntType = Just Refl
+constantEq IntegerType IntegerType = Just Refl
+constantEq StringType StringType = Just Refl
+constantEq CharType CharType = Just Refl
+constantEq DoubleType DoubleType = Just Refl
 constantEq _ _ = Nothing
 
 export
 Show Constant where
   show (I x) = show x
+  show (BI x) = show x
+  show (Str x) = show x
+  show (Ch x) = show x
+  show (Db x) = show x
   show IntType = "Int"
+  show IntegerType = "Integer"
+  show StringType = "String"
+  show CharType = "Char"
+  show DoubleType = "Double"
 
 export
 Eq Constant where
-   (I x) == (I y) = x == y
-   IntType == IntType = True
-   _ == _ = False
+  (I x) == (I y) = x == y
+  (BI x) == (BI y) = x == y
+  (Str x) == (Str y) = x == y
+  (Ch x) == (Ch y) = x == y
+  (Db x) == (Db y) = x == y
+  IntType == IntType = True
+  IntegerType == IntegerType = True
+  StringType == StringType = True
+  CharType == CharType = True
+  DoubleType == DoubleType = True
+  _ == _ = False
 
 public export
 data PiInfo = Implicit | Explicit | AutoImplicit

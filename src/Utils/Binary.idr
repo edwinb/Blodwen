@@ -202,6 +202,8 @@ getTag : {auto s : Ref Share (StringMap String)} ->
          {auto b : Ref Bin Binary} -> Core annot Bits8
 getTag {s} {b} = fromBuf s b
 
+-- Some useful types from the prelude
+
 export
 TTC annot Int where
   toBuf b val
@@ -267,8 +269,6 @@ TTC annot String where
                                           (incLoc len next) rest)
                            findString val
 
--- Some useful types from the prelude
-
 export
 TTC annot Bool where
   toBuf b False = tag 0
@@ -278,6 +278,45 @@ TTC annot Bool where
              0 => pure False
              1 => pure True
              _ => corrupt "Bool"
+
+export
+TTC annot Char where
+  toBuf b c = toBuf b (cast {to=String} c)
+  fromBuf s b
+      = do str <- fromBuf s b
+           if length str == 1
+              then pure (assert_total (strHead str))
+              else corrupt "Char"
+
+export
+TTC annot Double where
+  toBuf b val
+    = do MkBin done chunk rest <- get Bin
+         if avail chunk >= 8
+            then 
+              do coreLift $ setDouble (buf chunk) (loc chunk) val
+                 put Bin (MkBin done (appended 8 chunk) rest)
+            else 
+              do Just newbuf <- coreLift $ newBuffer 65536
+                    | Nothing => throw (InternalError "Buffer expansion failed")
+                 coreLift $ setDouble newbuf 0 val
+                 put Bin (MkBin (chunk :: done)
+                                (MkChunk newbuf 8 (size newbuf) 8)
+                                rest)
+  fromBuf s b 
+    = do MkBin done chunk rest <- get Bin
+         if toRead chunk >= 8
+            then
+              do val <- coreLift $ getDouble (buf chunk) (loc chunk)
+                 put Bin (MkBin done (incLoc 8 chunk) rest)
+                 pure val
+              else
+                case rest of
+                     [] => throw (TTCError (EndOfBuffer "Double"))
+                     (next :: rest) =>
+                        do val <- coreLift $ getDouble (buf next) 0
+                           put Bin (MkBin (chunk :: done) (incLoc 8 next) rest)
+                           pure val
 
 export
 (TTC annot a, TTC annot b) => TTC annot (a, b) where

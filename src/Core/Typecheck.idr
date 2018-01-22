@@ -100,7 +100,15 @@ parameters (loc : annot, gam : Gamma)
 
     chkConstant : Constant -> (Term vars, Term vars)
     chkConstant (I x) = (PrimVal (I x), PrimVal IntType)
+    chkConstant (BI x) = (PrimVal (BI x), PrimVal IntegerType)
+    chkConstant (Str x) = (PrimVal (Str x), PrimVal StringType)
+    chkConstant (Ch x) = (PrimVal (Ch x), PrimVal CharType)
+    chkConstant (Db x) = (PrimVal (Db x), PrimVal DoubleType)
     chkConstant IntType = (PrimVal IntType, TType)
+    chkConstant IntegerType = (PrimVal IntegerType, TType)
+    chkConstant StringType = (PrimVal StringType, TType)
+    chkConstant CharType = (PrimVal CharType, TType)
+    chkConstant DoubleType = (PrimVal DoubleType, TType)
 
 export
 checkHas : annot -> (gam : Gamma) -> Env Term vars ->
