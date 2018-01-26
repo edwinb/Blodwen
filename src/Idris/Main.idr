@@ -10,8 +10,11 @@ import Idris.Desugar
 import Idris.Syntax
 import Idris.Parser
 import Idris.ProcessIdr
-
 import Idris.REPL
+
+import TTImp.Primitives
+
+import Data.Vect
 
 usageMsg : Core FC ()
 usageMsg = coreLift $ putStrLn "Usage: blodwen [source file]"
@@ -19,10 +22,13 @@ usageMsg = coreLift $ putStrLn "Usage: blodwen [source file]"
 stMain : Core FC ()
 stMain 
     = do c <- newRef Ctxt initCtxt
+         addPrimitives
+
          [_, fname] <- coreLift getArgs | _ => usageMsg
          coreLift $ putStrLn $ "Loading " ++ fname
          u <- newRef UST initUState
          s <- newRef Syn initSyntax
+
          case span (/= '.') fname of
               (_, ".ttc") => do coreLift $ putStrLn "Processing as TTC"
                                 syn <- readFromTTC {extra = SyntaxInfo} fname

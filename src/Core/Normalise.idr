@@ -6,52 +6,21 @@ import Core.CaseTree
 
 -- import Control.Monad.State
 import Data.List
+import Data.Vect
 
 %default covering -- total is hard here, because the things we're evaluating
                   -- might not themselves terminate, but covering is important.
-
-mutual
-  public export
-  data LocalEnv : List Name -> List Name -> Type where
-       Nil  : LocalEnv free []
-       (::) : Closure free -> LocalEnv free vars -> LocalEnv free (x :: vars)
-
-  length : LocalEnv free vars -> Nat
-  length Nil = 0
-  length (x :: xs) = S (length xs)
-
-  public export
-  data Closure : List Name -> Type where
-       MkClosure : (holesonly : Bool) ->
-                   LocalEnv free vars -> 
-                   Env Term free ->
-                   Term (vars ++ free) -> Closure free
 
 export
 toClosure : Bool -> Env Term outer -> Term outer -> Closure outer
 toClosure h env tm = MkClosure h [] env tm
 
+-- Needs 'eval', defined later
+export
+evalClosure : Gamma -> Closure free -> NF free
+
 %name LocalEnv loc, loc1
 %name Closure thunk, thunk1
-
--- Things you can apply arguments to
-public export
-data NHead : List Name -> Type where
-     NLocal : Elem x vars -> NHead vars
-     NRef   : NameType -> Name -> NHead vars
-
-public export
-data NF : List Name -> Type where
-     NBind    : (x : Name) -> Binder (NF vars) ->
-                (Closure vars -> NF vars) -> NF vars
-     NApp     : NHead vars -> List (Closure vars) -> NF vars
-     NDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
-                List (Closure vars) -> NF vars
-     NTCon    : Name -> (tag : Int) -> (arity : Nat) -> 
-                List (Closure vars) -> NF vars
-     NPrimVal : Constant -> NF vars
-     NErased  : NF vars
-     NType    : NF vars
 
 Stack : List Name -> Type
 Stack vars = List (Closure vars)
@@ -88,6 +57,19 @@ parameters (gam : Gamma, holesonly : Bool)
     evalLocal {vars = (x :: xs)} env (_ :: loc) stk (There later) 
         = evalLocal env loc stk later
 
+    evalOp : (Vect arity (NF free) -> Maybe (NF free)) ->
+             NameType -> Name -> Stack free -> NF free
+    evalOp {arity} fn nt n stk
+        = case takeFromStack arity stk of
+               -- Stack must be exactly the right height
+               Just (args, []) => 
+                  let argsnf = map (evalClosure gam) args in
+                      case fn argsnf of
+                           Nothing => NApp (NRef nt n) stk
+                           Just res => res
+               _ => NApp (NRef nt n) stk
+                   
+
     evalRef : Env Term free -> LocalEnv free vars -> Stack free ->
               NameType -> Name -> NF free
     evalRef env loc stk nt fn
@@ -101,6 +83,7 @@ parameters (gam : Gamma, holesonly : Bool)
                                    Nothing => NApp (NRef nt fn) stk
                                    Just val => val
                     else NApp (NRef nt fn) stk
+               Just (Builtin op) => evalOp op nt fn stk
                Just (DCon tag arity _) => NDCon fn tag arity stk
                Just (TCon tag arity _ _) => NTCon fn tag arity stk
                _ => NApp (NRef nt fn) stk
@@ -108,15 +91,18 @@ parameters (gam : Gamma, holesonly : Bool)
     -- Take arguments from the stack, as long as there's enough.
     -- Returns the arguments, and the rest of the stack
     takeFromStack : (arity : Nat) -> Stack free ->
-                    Maybe (List (Closure free), Stack free)
+                    Maybe (Vect arity (Closure free), Stack free)
     takeFromStack arity stk = takeStk arity stk []
       where
         takeStk : (remain : Nat) -> Stack free -> 
-                  List (Closure free) -> 
-                  Maybe (List (Closure free), Stack free)
-        takeStk Z stk acc = Just (reverse acc, stk)
+                  Vect got (Closure free) -> 
+                  Maybe (Vect (got + remain) (Closure free), Stack free)
+        takeStk {got} Z stk acc = Just (rewrite plusZeroRightNeutral got in
+                                    reverse acc, stk)
         takeStk (S k) [] acc = Nothing
-        takeStk (S k) (arg :: stk) acc = takeStk k stk (arg :: acc)
+        takeStk {got} (S k) (arg :: stk) acc 
+           = rewrite sym (plusSuccRightSucc got k) in
+                     takeStk k stk (arg :: acc)
 
     extendFromStack : (args : List Name) -> 
                       LocalEnv free vars -> Stack free ->
@@ -185,8 +171,6 @@ parameters (gam : Gamma, holesonly : Bool)
     evalTree env loc stk (Unmatched msg) = Nothing
     evalTree env loc stk Impossible = Nothing
     
-export
-evalClosure : Gamma -> Closure free -> NF free
 evalClosure gam (MkClosure h loc env tm)
     = eval gam h env loc [] tm
     

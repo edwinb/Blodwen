@@ -161,6 +161,7 @@ data Term : List Name -> Type where
      Erased : Term vars
      TType : Term vars
 
+
 data SameElem : Elem x xs -> Elem x' xs -> Type where
      SameHere : SameElem Here Here
      SameThere : SameElem p1 p2 -> SameElem (There p1) (There p2)
@@ -212,6 +213,46 @@ namespace Env
   length : Env tm xs -> Nat
   length [] = 0
   length (x :: xs) = S (length xs)
+
+-- Also define Values here - NF represents a term in head normal form.
+-- That is - the top level constructor is known but the arguments aren't
+-- evaluted. Terms are evaluated to NF in Core.Normalise.
+
+-- Closures are terms linked with the environment they evaluate in.
+-- That's a local environment - local variables in the evaluation itself -
+-- and an environment describing the free variables
+mutual
+  public export
+  data LocalEnv : List Name -> List Name -> Type where
+       Nil  : LocalEnv free []
+       (::) : Closure free -> LocalEnv free vars -> LocalEnv free (x :: vars)
+
+  public export
+  data Closure : List Name -> Type where
+       MkClosure : (holesonly : Bool) ->
+                   LocalEnv free vars -> 
+                   Env Term free ->
+                   Term (vars ++ free) -> Closure free
+
+-- The head of a value: things you can apply arguments to
+public export
+data NHead : List Name -> Type where
+     NLocal : Elem x vars -> NHead vars
+     NRef   : NameType -> Name -> NHead vars
+
+-- Values themselves
+public export
+data NF : List Name -> Type where
+     NBind    : (x : Name) -> Binder (NF vars) ->
+                (Closure vars -> NF vars) -> NF vars
+     NApp     : NHead vars -> List (Closure vars) -> NF vars
+     NDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
+                List (Closure vars) -> NF vars
+     NTCon    : Name -> (tag : Int) -> (arity : Nat) -> 
+                List (Closure vars) -> NF vars
+     NPrimVal : Constant -> NF vars
+     NErased  : NF vars
+     NType    : NF vars
 
 %name Env env
 
@@ -529,6 +570,11 @@ export
 apply : Term vars -> List (Term vars) -> Term vars
 apply fn [] = fn
 apply fn (arg :: args) = apply (App fn arg) args
+
+-- Build a simple function type
+export
+fnType : Term vars -> Term vars -> Term vars
+fnType arg scope = Bind (MN "_" 0) (Pi Explicit arg) (weaken scope)
 
 public export
 data Unapply : Term vars -> Type where

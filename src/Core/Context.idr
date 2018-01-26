@@ -14,6 +14,7 @@ import Data.CMap
 import Data.StringMap
 import Data.CSet
 import Data.List
+import Data.Vect
 
 %default total
 
@@ -107,11 +108,12 @@ TTC annot a => TTC annot (Context a) where
       = do xs <- fromBuf s b
            pure (fromList xs)
 
-
 public export
 data Def : Type where
      None  : Def -- Not yet defined
      PMDef : (ishole : Bool) -> (args : List Name) -> CaseTree args -> Def
+     Builtin : ({vars : List Name} ->
+                Vect arity (NF vars) -> Maybe (NF vars)) -> Def
      DCon  : (tag : Int) -> (arity : Nat) -> 
 						 (forcedpos : List Nat) -> -- argument positions whose value is
 			                         -- forced by the constructors type
@@ -140,6 +142,8 @@ Show Def where
     where
       showHole : Bool -> String
       showHole h = if h then "Solved hole" else "Def"
+  show (Builtin {arity} f)
+      = "<<builtin with " ++ show arity ++ " arguments>>"
   show (TCon tag arity params cons)
 	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ "; params " ++
         show params ++ "; constructors " ++ show cons
@@ -159,6 +163,8 @@ TTC annot Def where
   toBuf b None = tag 0
   toBuf b (PMDef ishole args sc) 
       = do tag 1; toBuf b ishole; toBuf b args; toBuf b sc
+  toBuf b (Builtin _)
+      = throw (InternalError "Trying to serialise a Builtin")
   toBuf b (DCon t arity forcedpos) 
       = do tag 2; toBuf b t; toBuf b arity; toBuf b forcedpos
   toBuf b (TCon t arity parampos datacons) 
@@ -293,6 +299,7 @@ TTC annot GlobalDef where
 getRefs : Def -> List Name
 getRefs None = []
 getRefs (PMDef ishole args sc) = getRefs sc
+getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
 getRefs (TCon tag arity params datacons) = []
 getRefs (Hole numlocs _) = []
@@ -531,6 +538,14 @@ addDef : {auto x : Ref Ctxt Defs} -> Name -> GlobalDef -> Core annot ()
 addDef n def
     = do g <- getCtxt 
          setCtxt (addCtxt n def g)
+
+export
+addBuiltin : {auto x : Ref Ctxt Defs} -> 
+             Name -> ClosedTerm -> Totality ->
+             ({vars : List Name} -> Vect arity (NF vars) -> Maybe (NF vars)) ->
+             Core annot ()
+addBuiltin n ty tot op 
+    = addDef n (MkGlobalDef ty Public tot [] (Builtin op) [])
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->

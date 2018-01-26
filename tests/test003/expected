@@ -2,16 +2,16 @@ Welcome to TTImp. Good luck.
 Loading auto.tti
 Processing as TTImp
 LOG 0: Auto implicit search: List.{h:84} for (List.Elem {a:79} y xs)
-Blodwen> LOG 0: Auto implicit search: List.{h:126} for (List.Elem Int 3 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
-3 : Int
-Blodwen> LOG 0: Auto implicit search: List.{h:140} for (List.Elem Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
-(List.posi Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))) List.{h:140}) : Int
+Blodwen> LOG 0: Auto implicit search: List.{h:126} for (List.Elem Integer 3 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
+3 : Integer
+Blodwen> LOG 0: Auto implicit search: List.{h:140} for (List.Elem Integer 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
+(List.posi Integer 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))) List.{h:140}) : Integer
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
 Loading auto.ttc
 Processing as TTC
-Blodwen> LOG 0: Auto implicit search: Main.{h:5} for (List.Elem Int 3 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
-3 : Int
-Blodwen> LOG 0: Auto implicit search: Main.{h:19} for (List.Elem Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
-(List.posi Int 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))) Main.{h:19}) : Int
+Blodwen> LOG 0: Auto implicit search: Main.{h:5} for (List.Elem Integer 3 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
+3 : Integer
+Blodwen> LOG 0: Auto implicit search: Main.{h:19} for (List.Elem Integer 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))))
+(List.posi Integer 1 (List.Cons __ 2 (List.Cons __ 3 (List.Cons __ 4 (List.Nil __)))) Main.{h:19}) : Integer
 Blodwen> Bye for now!

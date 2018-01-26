@@ -7,6 +7,8 @@ import public Text.Parser
 import Core.TT
 import Data.List.Views
 
+%default total
+
 public export
 Rule : Type -> Type
 Rule ty = Grammar (TokenData Token) True ty
@@ -114,11 +116,13 @@ escape' ('\\' :: 'v' :: xs) = pure $ '\v' :: !(escape' xs)
 escape' ('\\' :: '\'' :: xs) = pure $ '\'' :: !(escape' xs)
 escape' ('\\' :: '\"' :: xs) = pure $ '\"' :: !(escape' xs)
 escape' ('\\' :: 'x' :: c1 :: c2 :: xs) 
-    = pure $ cast (!(hex (toLower c1)) * 16 + !(hex (toLower c2))) :: !(escape' xs)
+    = pure $ cast (!(hex (toLower c1)) * 16 + !(hex (toLower c2))) :: 
+           !(escape' xs)
 escape' ('\\' :: xs) 
     = case span isDigit xs of
-           ([], rest) => escape' rest
-           (ds, rest) => pure $ cast (cast {to=Int} (pack ds)) :: !(escape' rest)
+           ([], rest) => assert_total (escape' rest)
+           (ds, rest) => pure $ cast (cast {to=Int} (pack ds)) :: 
+                                 !(assert_total (escape' rest))
 escape' (x :: xs) = pure $ x :: !(escape' xs)
 
 escape : String -> Maybe String

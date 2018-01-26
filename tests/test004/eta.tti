@@ -5,7 +5,7 @@ data Eq : a -> b -> Type where {
 }
 
 data Test : Type where {
-     MkTest : Int -> Int -> Test;
+     MkTest : Integer -> Integer -> Test;
 }
 
 eta1: Eq MkTest (\x => \y => MkTest _ _);
