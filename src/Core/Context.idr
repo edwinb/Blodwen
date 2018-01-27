@@ -112,8 +112,7 @@ public export
 data Def : Type where
      None  : Def -- Not yet defined
      PMDef : (ishole : Bool) -> (args : List Name) -> CaseTree args -> Def
-     Builtin : ({vars : List Name} ->
-                Vect arity (NF vars) -> Maybe (NF vars)) -> Def
+     Builtin : PrimFn arity -> Def
      DCon  : (tag : Int) -> (arity : Nat) -> 
 						 (forcedpos : List Nat) -> -- argument positions whose value is
 			                         -- forced by the constructors type
@@ -542,8 +541,7 @@ addDef n def
 export
 addBuiltin : {auto x : Ref Ctxt Defs} -> 
              Name -> ClosedTerm -> Totality ->
-             ({vars : List Name} -> Vect arity (NF vars) -> Maybe (NF vars)) ->
-             Core annot ()
+             PrimFn arity -> Core annot ()
 addBuiltin n ty tot op 
     = addDef n (MkGlobalDef ty Public tot [] (Builtin op) [])
 

@@ -4,6 +4,7 @@ import Core.Binary
 import Core.Context
 import Core.Core
 import Core.Directory
+import Core.Primitives
 import Core.Unify
 
 import Idris.Desugar
@@ -12,7 +13,6 @@ import Idris.Parser
 import Idris.ProcessIdr
 import Idris.REPL
 
-import TTImp.Primitives
 
 import Data.Vect
 

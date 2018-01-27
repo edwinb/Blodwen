@@ -1,8 +1,9 @@
 module Core.Normalise
 
-import Core.TT
-import Core.Context
 import Core.CaseTree
+import Core.Context
+import Core.Primitives
+import Core.TT
 
 -- import Control.Monad.State
 import Data.List
@@ -83,7 +84,7 @@ parameters (gam : Gamma, holesonly : Bool)
                                    Nothing => NApp (NRef nt fn) stk
                                    Just val => val
                     else NApp (NRef nt fn) stk
-               Just (Builtin op) => evalOp op nt fn stk
+               Just (Builtin op) => evalOp (getOp op) nt fn stk
                Just (DCon tag arity _) => NDCon fn tag arity stk
                Just (TCon tag arity _ _) => NTCon fn tag arity stk
                _ => NApp (NRef nt fn) stk
