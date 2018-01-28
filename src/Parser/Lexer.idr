@@ -70,6 +70,7 @@ keywords = ["data", "module", "where", "let", "in",
             "auto", "implicit", "namespace", "impossible", "case", "of",
             "using", "interface", "implementation", "open", "import",
             "public", "export", "private",
+            "infixl", "infixr", "infix", "prefix",
             "Type", "Int", "Integer", "String", "Char", "Double"]
 
 -- Reserved words for internal syntax
@@ -77,12 +78,13 @@ special : List String
 special = ["%lam", "%pi", "%imppi", "%let"]
 
 -- Reserved symbols (thing which can't be used a a prefix of other symbols)
+export
 symbols : List String
 symbols = [".(", -- for things such as Foo.Bar.(+)
            "(|", "|)",
            ".", "%",
            "(", ")", "{", "}", "[", "]", "`", ",", "|", ";", "_",
-           "->", "=>"]
+           "->", "=>", "="]
 
 validSymbol : Lexer
 validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
@@ -94,7 +96,7 @@ rawTokens =
    map (\x => (exact x, Keyword)) special ++
    map (\x => (exact x, Symbol)) symbols ++
     [(doubleLit, \x => DoubleLit (cast x)),
-     (intLit, \x => Literal (cast x)),
+     (digits, \x => Literal (cast x)),
      (stringLit, \x => StrLit (stripQuotes x)),
      (charLit, \x => CharLit (stripQuotes x)),
      (ident, \x => if x `elem` keywords then Keyword x else Ident x),

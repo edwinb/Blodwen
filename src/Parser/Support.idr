@@ -185,10 +185,14 @@ exactIdent req
                                                   else Nothing
                            _ => Nothing)
 
+export
 operator : Rule String
 operator
     = terminal (\x => case tok x of
-                           Symbol s => Just s
+                           Symbol s => 
+                                if s `elem` symbols 
+                                   then Nothing
+                                   else Just s
                            _ => Nothing)
 
 identPart : Rule String

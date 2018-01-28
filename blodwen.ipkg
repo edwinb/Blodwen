@@ -3,6 +3,7 @@ package blodwen
 pkgs = contrib
 
 modules = Idris.Desugar,
+          Idris.Desugar.Shunting,
           Idris.Syntax,
           Idris.Parser,
           Idris.ProcessIdr,

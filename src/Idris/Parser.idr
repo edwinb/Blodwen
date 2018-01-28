@@ -10,7 +10,7 @@ import Data.List.Views
 %default covering
 
 -- Forward declare since they're used in the parser
-topDecl : FileName -> IndentInfo -> Rule PDecl
+topDecl : FileName -> IndentInfo -> Rule (List PDecl)
 collectDefs : List PDecl -> List PDecl
 
 atom : FileName -> Rule PTerm
@@ -50,6 +50,11 @@ mutual
            args <- many (argExpr fname indents)
            end <- location
            pure (applyExpImp start end f args)
+    <|> do start <- location
+           op <- operator
+           arg <- expr fname indents
+           end <- location
+           pure (PPrefixOp (MkFC fname start end) op arg)
     where
       applyExpImp : FilePos -> FilePos -> PTerm -> 
                     List (Either PTerm (Name, PTerm)) -> 
@@ -80,6 +85,18 @@ mutual
            symbol "}"
            pure (UN x, tm)
 
+  opExpr : FileName -> IndentInfo -> Rule PTerm
+  opExpr fname indents
+      = do start <- location
+           l <- appExpr fname indents
+           (do continue indents
+               op <- operator
+               commit
+               r <- opExpr fname indents
+               end <- location
+               pure (POp (MkFC fname start end) op l r))
+             <|> pure l
+
   simpleExpr : FileName -> IndentInfo -> Rule PTerm
   simpleExpr fname indents
       = do start <- location
@@ -98,10 +115,12 @@ mutual
            symbol ")"
            end <- location
            pure (PDotted (MkFC fname start end) e)
-    <|> do symbol "("
+    <|> do start <- location
+           symbol "("
            e <- expr fname indents
            symbol ")"
-           pure e
+           end <- location
+           pure (PBracketed (MkFC fname start end) e)
 
   explicitPi : FileName -> IndentInfo -> Rule PTerm
   explicitPi fname indents
@@ -181,7 +200,7 @@ mutual
            keyword "in"
            scope <- typeExpr fname indents
            end <- location
-           pure (PLocal (MkFC fname start end) (collectDefs ds) scope)
+           pure (PLocal (MkFC fname start end) (collectDefs (concat ds)) scope)
 
   case_ : FileName -> IndentInfo -> Rule PTerm
   case_ fname indents
@@ -224,9 +243,9 @@ mutual
   typeExpr : FileName -> IndentInfo -> Rule PTerm
   typeExpr fname indents
       = do start <- location
-           arg <- appExpr fname indents
+           arg <- opExpr fname indents
            (do symbol "->"
-               rest <- sepBy (symbol "->") (appExpr fname indents)
+               rest <- sepBy (symbol "->") (opExpr fname indents)
                end <- location
                pure (mkPi start end arg rest))
              <|> pure arg
@@ -298,26 +317,40 @@ directive indents
          atEnd indents
          pure (Logging (cast lvl))
 
+fixDecl : Rule Fixity
+fixDecl
+    = do keyword "infixl"; pure InfixL
+  <|> do keyword "infixr"; pure InfixR
+  <|> do keyword "infix"; pure Infix
+  <|> do keyword "prefix"; pure Prefix
+
 -- Declared at the top
 -- topDecl : FileName -> IndentInfo -> Rule PDecl
 topDecl fname indents
     = do start <- location
          dat <- dataDecl fname indents
          end <- location
-         pure (PData (MkFC fname start end) dat)
+         pure [PData (MkFC fname start end) dat]
   <|> do start <- location
          symbol "%"; commit
          d <- directive indents
          end <- location
-         pure (PDirective (MkFC fname start end) d)
+         pure [PDirective (MkFC fname start end) d]
+  <|> do start <- location
+         fixity <- fixDecl
+         commit
+         prec <- intLit
+         ops <- sepBy1 (symbol ",") operator
+         end <- location
+         pure (map (PInfix (MkFC fname start end) fixity (cast prec)) ops)
   <|> do start <- location
          claim <- tyDecl fname indents
          end <- location
-         pure (PClaim (MkFC fname start end) claim)
+         pure [PClaim (MkFC fname start end) claim]
   <|> do start <- location
          nd <- clause fname indents
          end <- location
-         pure (PDef (MkFC fname start end) (fst nd) [snd nd])
+         pure [PDef (MkFC fname start end) (fst nd) [snd nd]]
 
 -- All the clauses get parsed as one-clause definitions. Collect any
 -- neighbouring clauses with the same function name into one definition.
@@ -350,7 +383,7 @@ prog fname
                           namespace_)
          l <- location
          ds <- nonEmptyBlock (topDecl fname)
-         pure (MkModule nspace [] (collectDefs ds))
+         pure (MkModule nspace [] (collectDefs (concat ds)))
 
 export
 command : Rule REPLCmd

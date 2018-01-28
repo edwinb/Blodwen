@@ -20,6 +20,12 @@ binOp fn [NPrimVal x, NPrimVal y]
     = map NPrimVal (fn x y)
 binOp _ _ = Nothing
 
+unaryOp : (Constant -> Maybe Constant) ->
+          {vars : _} -> Vect 1 (NF vars) -> Maybe (NF vars)
+unaryOp fn [NPrimVal x]
+    = map NPrimVal (fn x)
+unaryOp _ _ = Nothing
+
 strLength : Vect 1 (NF vars) -> Maybe (NF vars)
 strLength [NPrimVal (Str s)] = Just (NPrimVal (I (cast (length s))))
 strLength _ = Nothing
@@ -70,6 +76,12 @@ mod (BI x) (BI y) = pure $ BI (assert_total (x `mod` y))
 mod (I x) (I 0) = Nothing
 mod (I x) (I y) = pure $ I (assert_total (x `mod` y))
 mod _ _ = Nothing
+
+neg : Constant -> Maybe Constant
+neg (BI x) = pure $ BI (-x)
+neg (I x) = pure $ I (-x)
+neg (Db x) = pure $ Db (-x)
+neg _ = Nothing
 
 toInt : Bool -> Constant
 toInt True = I 1
@@ -135,6 +147,7 @@ getOp (Sub ty) = binOp sub
 getOp (Mul ty) = binOp mul
 getOp (Div ty) = binOp div
 getOp (Mod ty) = binOp div
+getOp (Neg ty) = unaryOp neg
 
 getOp (LT ty) = binOp lt
 getOp (LTE ty) = binOp lte
@@ -157,6 +170,7 @@ opName (Sub ty) = prim $ "sub_" ++ show ty
 opName (Mul ty) = prim $ "mul_" ++ show ty
 opName (Div ty) = prim $ "div_" ++ show ty
 opName (Mod ty) = prim $ "mod_" ++ show ty
+opName (Neg ty) = prim $ "negate_" ++ show ty
 opName (LT ty) = prim $ "lt_" ++ show ty
 opName (LTE ty) = prim $ "lte_" ++ show ty
 opName (EQ ty) = prim $ "eq_" ++ show ty
@@ -173,6 +187,7 @@ allPrimitives =
     map (\t => MkPrim (Mul t) (arithTy t) Total) [IntType, IntegerType, DoubleType] ++
     map (\t => MkPrim (Div t) (arithTy t) (Partial NotCovering)) [IntType, IntegerType, DoubleType] ++
     map (\t => MkPrim (Mod t) (arithTy t) (Partial NotCovering)) [IntType, IntegerType] ++
+    map (\t => MkPrim (Neg t) (predTy t t) Total) [IntType, IntegerType, DoubleType] ++
     
     map (\t => MkPrim (LT t) (cmpTy t) Total) [IntType, IntegerType, CharType, DoubleType, StringType] ++
     map (\t => MkPrim (LTE t) (cmpTy t) Total) [IntType, IntegerType, CharType, DoubleType, StringType] ++

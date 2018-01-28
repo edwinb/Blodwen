@@ -1,0 +1,15 @@
+infixl 8 +, -
+infixl 9 *, /
+
+(+) : Integer -> Integer -> Integer
+(+) = prim__add_Integer
+
+(-) : Integer -> Integer -> Integer
+(-) = prim__sub_Integer
+
+(*) : Integer -> Integer -> Integer
+(*) = prim__mul_Integer
+
+(/) : Integer -> Integer -> Integer
+(/) = prim__div_Integer
+

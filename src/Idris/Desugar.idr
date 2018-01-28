@@ -7,6 +7,7 @@ import Core.TT
 
 import Data.StringMap
 
+import Idris.Desugar.Shunting
 import Idris.Syntax
 
 import TTImp.TTImp
@@ -37,12 +38,14 @@ TTC annot Fixity where
   toBuf b InfixL = tag 0
   toBuf b InfixR = tag 1
   toBuf b Infix = tag 2
+  toBuf b Prefix = tag 3
 
   fromBuf s b 
       = case !getTag of
              0 => pure InfixL
              1 => pure InfixR
              2 => pure Infix
+             3 => pure Prefix
              _ => corrupt "Fixity"
 
 export
@@ -96,6 +99,34 @@ bindNames arg env tm = tm
 addDots : RawImp annot -> RawImp annot
 addDots tm = tm
 
+mkPrec : Fixity -> Nat -> OpPrec
+mkPrec InfixL p = AssocL p
+mkPrec InfixR p = AssocR p
+mkPrec Infix p = NonAssoc p
+mkPrec Prefix p = Prefix p
+
+toTokList : {auto s : Ref Syn SyntaxInfo} ->
+            PTerm -> Core FC (List (Tok FC PTerm))
+toTokList (POp fc op l r)
+    = do syn <- get Syn
+         case lookup op (infixes syn) of
+              Nothing => throw (GenericMsg fc $ "Unknown operator '" ++ op ++ "'")
+              Just (Prefix, _) =>
+                      throw (GenericMsg fc $ "'" ++ op ++ "' is a prefix operator")
+              Just (fix, prec) =>
+                   do rtoks <- toTokList r
+                      pure (Expr l :: Op fc op (mkPrec fix prec) :: rtoks)
+toTokList (PPrefixOp fc op arg)
+    = do syn <- get Syn
+         case lookup op (infixes syn) of
+              Nothing => throw (GenericMsg fc $ "Unknown operator '" ++ op ++ "'")
+              Just (Prefix, prec) =>
+                   do rtoks <- toTokList arg
+                      pure (Op fc op (Prefix prec) :: rtoks)
+              Just (fix, prec) =>
+                      throw (GenericMsg fc $ "'" ++ op ++ "' is not a prefix operator")
+toTokList t = pure [Expr t]
+
 mutual
   export
   desugar : {auto s : Ref Syn SyntaxInfo} ->
@@ -120,6 +151,15 @@ mutual
       = pure $ IApp fc !(desugar x) !(desugar y)
   desugar (PImplicitApp fc x argn y) 
       = pure $ IImplicitApp fc !(desugar x) argn !(desugar y)
+  desugar (PBracketed fc e) = desugar e
+  desugar (POp fc op l r) 
+      = do ts <- toTokList (POp fc op l r)
+           desugarTree !(parseOps ts)
+  desugar (PPrefixOp fc op arg) 
+      = do ts <- toTokList (PPrefixOp fc op arg)
+           desugarTree !(parseOps ts)
+  desugar (PSectionL fc op arg) = throw (InternalError "Operator sections not implemented yet")
+  desugar (PSectionR fc arg op) = throw (InternalError "Operator sections not implemented yet")
   desugar (PSearch fc depth) = pure $ ISearch fc depth
   desugar (PPrimVal fc x) = pure $ IPrimVal fc x
   desugar (PHole fc holename) = pure $ IHole fc holename
@@ -129,6 +169,17 @@ mutual
   desugar (PDotted fc x) 
       = pure $ IMustUnify fc !(desugar x)
   desugar (PImplicit fc) = pure $ Implicit fc
+  
+  desugarTree : {auto s : Ref Syn SyntaxInfo} ->
+                Tree FC PTerm -> Core FC (RawImp FC)
+  desugarTree (Inf loc op l r)
+      = do l' <- desugarTree l
+           r' <- desugarTree r
+           pure (IApp loc (IApp loc (IVar loc (UN op)) l') r')
+  desugarTree (Pre loc op arg)
+      = do arg' <- desugarTree arg
+           pure (IApp loc (IVar loc (UN op)) arg')
+  desugarTree (Leaf t) = desugar t
 
   desugarType : {auto s : Ref Syn SyntaxInfo} ->
                 PTypeDecl -> Core FC (ImpTy FC)
@@ -160,7 +211,9 @@ mutual
   desugarDecl (PData fc ddecl) 
       = pure [IData fc !(desugarData ddecl)]
   desugarDecl (PInfix fc fix prec n) 
-      = pure []
+      = do syn <- get Syn
+           put Syn (record { infixes $= insert n (fix, prec) } syn)
+           pure []
   desugarDecl (PDirective fc d) 
       = case d of
              Logging i => pure [ILog i]

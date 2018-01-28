@@ -46,7 +46,11 @@ TTC FC FC where
            pure (MkFC fl st end)
 
 public export
-data Fixity = InfixL | InfixR | Infix
+data Fixity = InfixL | InfixR | Infix | Prefix
+
+public export
+OpStr : Type
+OpStr = String
 
 mutual
   -- The full high level source language
@@ -65,6 +69,11 @@ mutual
        PLocal : FC -> List PDecl -> (scope : PTerm) -> PTerm
        PApp : FC -> PTerm -> PTerm -> PTerm
        PImplicitApp : FC -> PTerm -> (argn : Name) -> PTerm -> PTerm
+       PBracketed : FC -> PTerm -> PTerm
+       POp : FC -> OpStr -> PTerm -> PTerm -> PTerm
+       PPrefixOp : FC -> OpStr -> PTerm -> PTerm
+       PSectionL : FC -> OpStr -> PTerm -> PTerm
+       PSectionR : FC -> PTerm -> OpStr -> PTerm
        PSearch : FC -> (depth : Nat) -> PTerm
        PPrimVal : FC -> Constant -> PTerm
        PHole : FC -> (holename : String) -> PTerm
@@ -96,7 +105,7 @@ mutual
        PClaim : FC -> PTypeDecl -> PDecl
        PDef : FC -> Name -> List PClause -> PDecl
        PData : FC -> PDataDecl -> PDecl
-       PInfix : FC -> Fixity -> Nat -> Name -> PDecl
+       PInfix : FC -> Fixity -> Nat -> OpStr -> PDecl
        PDirective : FC -> Directive -> PDecl
 
 public export

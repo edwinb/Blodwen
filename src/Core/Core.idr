@@ -91,7 +91,7 @@ Show annot => Show (Error annot) where
   show (BadDotPattern fc x y)
       = show fc ++ ":Can't match on " ++ show x
   show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"
-  show (GenericMsg fc str) = str
+  show (GenericMsg fc str) = show fc ++ ":" ++ str
   show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
   show (InternalError str) = "INTERNAL ERROR: " ++ str

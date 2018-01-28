@@ -93,6 +93,7 @@ data PrimFn : Nat -> Type where
      Mul : (ty : Constant) -> PrimFn 2
      Div : (ty : Constant) -> PrimFn 2
      Mod : (ty : Constant) -> PrimFn 2
+     Neg : (ty : Constant) -> PrimFn 1
 
      LT  : (ty : Constant) -> PrimFn 2
      LTE : (ty : Constant) -> PrimFn 2
