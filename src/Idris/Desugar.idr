@@ -7,7 +7,7 @@ import Core.TT
 
 import Data.StringMap
 
-import Idris.Desugar.Shunting
+import Utils.Shunting
 import Idris.Syntax
 
 import TTImp.TTImp

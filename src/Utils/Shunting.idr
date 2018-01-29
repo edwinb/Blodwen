@@ -1,4 +1,4 @@
-module Idris.Parser.Shunting
+module Utils.Shunting
 
 import Core.Core
 
