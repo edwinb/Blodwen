@@ -302,7 +302,8 @@ topDecl indents
     = do dat <- dataDecl indents
          pure (IData () dat)
   <|> do ns <- namespaceDecl indents
-         pure (INamespace () ns)
+         ds <- assert_total (nonEmptyBlock topDecl)
+         pure (INamespace () ns ds)
   <|> do ns <- implicitsDecl indents
          pure (ImplicitNames () ns)
   <|> do symbol "%"; commit

@@ -91,11 +91,31 @@ mutual
            l <- appExpr fname indents
            (do continue indents
                op <- operator
-               commit
                r <- opExpr fname indents
                end <- location
                pure (POp (MkFC fname start end) op l r))
              <|> pure l
+
+  bracketedExpr : FileName -> FilePos -> IndentInfo -> Rule PTerm
+  bracketedExpr fname start indents
+      -- left section. This may also be a prefix operator, but we'll sort
+      -- that out when desugaring: if the operator is infix, treat it as a
+      -- section otherwise treat it as prefix
+      = do op <- operator
+           e <- expr fname indents
+           symbol ")"
+           end <- location
+           pure (PSectionL (MkFC fname start end) op e)
+      -- bracketed expression or right section
+    <|> do e <- expr fname indents
+           (do op <- operator
+               symbol ")"
+               end <- location
+               pure (PSectionR (MkFC fname start end) e op)
+             <|>
+            do symbol ")"
+               end <- location
+               pure (PBracketed (MkFC fname start end) e))
 
   simpleExpr : FileName -> IndentInfo -> Rule PTerm
   simpleExpr fname indents
@@ -117,10 +137,7 @@ mutual
            pure (PDotted (MkFC fname start end) e)
     <|> do start <- location
            symbol "("
-           e <- expr fname indents
-           symbol ")"
-           end <- location
-           pure (PBracketed (MkFC fname start end) e)
+           bracketedExpr fname start indents
 
   explicitPi : FileName -> IndentInfo -> Rule PTerm
   explicitPi fname indents
@@ -324,13 +341,26 @@ fixDecl
   <|> do keyword "infix"; pure Infix
   <|> do keyword "prefix"; pure Prefix
 
+namespaceDecl : IndentInfo -> Rule (List String)
+namespaceDecl indents
+    = do keyword "namespace"
+         commit
+         ns <- namespace_
+         atEnd indents
+         pure ns
+
 -- Declared at the top
--- topDecl : FileName -> IndentInfo -> Rule PDecl
+-- topDecl : FileName -> IndentInfo -> Rule (List PDecl)
 topDecl fname indents
     = do start <- location
          dat <- dataDecl fname indents
          end <- location
          pure [PData (MkFC fname start end) dat]
+  <|> do start <- location
+         ns <- namespaceDecl indents
+         end <- location
+         ds <- assert_total (nonEmptyBlock (topDecl fname))
+         pure [PNamespace (MkFC fname start end) ns (concat ds)]
   <|> do start <- location
          symbol "%"; commit
          d <- directive indents
@@ -342,7 +372,7 @@ topDecl fname indents
          prec <- intLit
          ops <- sepBy1 (symbol ",") operator
          end <- location
-         pure (map (PInfix (MkFC fname start end) fixity (cast prec)) ops)
+         pure (map (PFixity (MkFC fname start end) fixity (cast prec)) ops)
   <|> do start <- location
          claim <- tyDecl fname indents
          end <- location

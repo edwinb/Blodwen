@@ -105,7 +105,8 @@ mutual
        PClaim : FC -> PTypeDecl -> PDecl
        PDef : FC -> Name -> List PClause -> PDecl
        PData : FC -> PDataDecl -> PDecl
-       PInfix : FC -> Fixity -> Nat -> OpStr -> PDecl
+       PFixity : FC -> Fixity -> Nat -> OpStr -> PDecl
+       PNamespace : FC -> List String -> List PDecl -> PDecl
        PDirective : FC -> Directive -> PDecl
 
 public export

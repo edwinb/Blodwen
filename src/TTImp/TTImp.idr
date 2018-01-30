@@ -68,7 +68,8 @@ mutual
        IClaim : annot -> ImpTy annot -> ImpDecl annot
        IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
        IData : annot -> ImpData annot -> ImpDecl annot
-       INamespace : annot -> List String -> ImpDecl annot
+       INamespace : annot -> List String -> List (ImpDecl annot) ->
+                    ImpDecl annot
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
                ImpDecl annot
@@ -204,7 +205,9 @@ mutual
     show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                          showSep "\n\t" (map show cs)
     show (IData _ d) = show d
-    show (INamespace _ ns) = "namespace " ++ show ns
+    show (INamespace _ ns decls) 
+        = "namespace " ++ show ns ++ 
+          showSep "\n" (assert_total $ map show decls)
     show (ImplicitNames _ ns) = "implicit " ++ show ns
     show (IHint _ n t) = "%hint " ++ show n ++ " " ++ show t
     show (ILog lvl) = "%logging " ++ show lvl

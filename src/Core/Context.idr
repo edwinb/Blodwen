@@ -443,6 +443,14 @@ setNS ns
     = do defs <- get Ctxt
          put Ctxt (record { currentNS = ns } defs)
 
+-- Get the default namespace for new definitions
+export
+getNS : {auto c : Ref Ctxt Defs} ->
+        Core annot (List String)
+getNS 
+    = do defs <- get Ctxt
+         pure (currentNS defs)
+
 -- Add a new nested namespace to the current namespace for new definitions
 -- e.g. extendNS ["Data"] when namespace is "Prelude.List" leads to
 -- current namespace of "Prelude.List.Data"

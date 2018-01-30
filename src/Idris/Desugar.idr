@@ -31,7 +31,10 @@ import TTImp.TTImp
 export
 record SyntaxInfo where
   constructor MkSyntax
+  -- Keep infix/prefix, then we can define operators which are both
+  -- (most obviously, -)
   infixes : StringMap (Fixity, Nat)
+  prefixes : StringMap Nat
 
 export
 TTC annot Fixity where
@@ -50,14 +53,18 @@ TTC annot Fixity where
 
 export
 TTC annot SyntaxInfo where
-  toBuf b syn = toBuf b (toList (infixes syn))
+  toBuf b syn 
+      = do toBuf b (toList (infixes syn))
+           toBuf b (toList (prefixes syn))
+
   fromBuf s b 
       = do inf <- fromBuf s b
-           pure (MkSyntax (fromList inf))
+           pre <- fromBuf s b
+           pure (MkSyntax (fromList inf) (fromList pre))
 
 export
 initSyntax : SyntaxInfo
-initSyntax = MkSyntax empty
+initSyntax = MkSyntax empty empty
 
 -- A label for Syntax info in the global state
 export
@@ -210,10 +217,12 @@ mutual
       = pure [IDef fc n !(traverse desugarClause clauses)]
   desugarDecl (PData fc ddecl) 
       = pure [IData fc !(desugarData ddecl)]
-  desugarDecl (PInfix fc fix prec n) 
+  desugarDecl (PFixity fc fix prec n) 
       = do syn <- get Syn
            put Syn (record { infixes $= insert n (fix, prec) } syn)
            pure []
+  desugarDecl (PNamespace fc ns decls)
+      = pure [INamespace fc ns (concat !(traverse desugarDecl decls))]
   desugarDecl (PDirective fc d) 
       = case d of
              Logging i => pure [ILog i]

@@ -43,8 +43,11 @@ processDecl env nest (IDef loc n cs)
 processDecl env nest (IData loc d) 
     = processData (\c, u, i => processDecl {c} {u} {i})
                   env nest d
-processDecl env nest (INamespace loc ns)
-    = setNS ns
+processDecl env nest (INamespace loc ns ds)
+    = do oldns <- getNS
+         extendNS (reverse ns)
+         traverse (processDecl env nest) ds
+         setNS oldns
 processDecl env nest (ImplicitNames loc ns) 
     = do traverse (\ x => addImp (fst x) (snd x)) ns
          pure ()
@@ -60,7 +63,7 @@ processDecls : {auto c : Ref Ctxt Defs} ->
                Core annot ()
 processDecls env nest decls
     = do i <- newRef ImpST (initImpState {annot})
-         xs <- traverse (processDecl env nest) decls
+         traverse (processDecl env nest) decls
          dumpConstraints 0 True
          hs <- getHoleNames
          traverse addToSave hs
