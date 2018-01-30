@@ -82,19 +82,17 @@ data Lang : Vect k Ty -> Ty -> Type where {
 -- To evaluate expressions, we'll need an environment to keep track of
 -- the value of each variable:
 
-namespace Env;
+namespace Env
 
-data Env : Vect n Ty -> Type where {
-     Nil : Env Nil;
-     Cons : (x : interpTy a) -> Env gam -> Env (Cons a gam);
-}
+    data Env : Vect n Ty -> Type where {
+         Nil : Env Nil;
+         Cons : (x : interpTy a) -> Env gam -> Env (Cons a gam);
+    }
 
--- Find a value in an environment
-lookupEnv : HasType i t gam -> Env gam -> interpTy t;
-lookupEnv Stop (Cons x xs) = x;
-lookupEnv (Pop var) (Cons x xs) = lookupEnv var xs;
-
-namespace Main;
+    -- Find a value in an environment
+    lookupEnv : HasType i t gam -> Env gam -> interpTy t;
+    lookupEnv Stop (Cons x xs) = x;
+    lookupEnv (Pop var) (Cons x xs) = lookupEnv var xs;
 
 -- Finally, interpret Lang expressions as host language expressions.
 

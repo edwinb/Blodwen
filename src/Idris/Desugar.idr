@@ -125,13 +125,12 @@ toTokList (POp fc op l r)
                       pure (Expr l :: Op fc op (mkPrec fix prec) :: rtoks)
 toTokList (PPrefixOp fc op arg)
     = do syn <- get Syn
-         case lookup op (infixes syn) of
-              Nothing => throw (GenericMsg fc $ "Unknown operator '" ++ op ++ "'")
-              Just (Prefix, prec) =>
+         case lookup op (prefixes syn) of
+              Nothing =>
+                   throw (GenericMsg fc $ "'" ++ op ++ "' is not a prefix operator")
+              Just prec =>
                    do rtoks <- toTokList arg
                       pure (Op fc op (Prefix prec) :: rtoks)
-              Just (fix, prec) =>
-                      throw (GenericMsg fc $ "'" ++ op ++ "' is not a prefix operator")
 toTokList t = pure [Expr t]
 
 mutual
@@ -217,6 +216,10 @@ mutual
       = pure [IDef fc n !(traverse desugarClause clauses)]
   desugarDecl (PData fc ddecl) 
       = pure [IData fc !(desugarData ddecl)]
+  desugarDecl (PFixity fc Prefix prec n) 
+      = do syn <- get Syn
+           put Syn (record { prefixes $= insert n prec } syn)
+           pure []
   desugarDecl (PFixity fc fix prec n) 
       = do syn <- get Syn
            put Syn (record { infixes $= insert n (fix, prec) } syn)

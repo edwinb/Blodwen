@@ -274,12 +274,11 @@ implicitsDecl indents
                               expr indents)
              pure (x, ty)
 
-namespaceDecl : IndentInfo -> Rule (List String)
-namespaceDecl indents
+namespaceDecl : Rule (List String)
+namespaceDecl
     = do keyword "namespace"
          commit
          ns <- namespace_
-         atEnd indents
          pure ns
 
 directive : IndentInfo -> Rule (ImpDecl ())
@@ -301,7 +300,7 @@ directive indents
 topDecl indents
     = do dat <- dataDecl indents
          pure (IData () dat)
-  <|> do ns <- namespaceDecl indents
+  <|> do ns <- namespaceDecl
          ds <- assert_total (nonEmptyBlock topDecl)
          pure (INamespace () ns ds)
   <|> do ns <- implicitsDecl indents
@@ -333,6 +332,8 @@ collectDefs (IDef annot fn cs :: ds)
     isClause n (IDef annot n' cs) 
         = if n == n' then Just cs else Nothing
     isClause n _ = Nothing
+collectDefs (INamespace annot ns nds :: ds)
+    = INamespace annot ns (collectDefs nds) :: collectDefs ds
 collectDefs (d :: ds)
     = d :: collectDefs ds
 

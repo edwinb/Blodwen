@@ -1,6 +1,8 @@
 infixl 8 +, -
 infixl 9 *, /
 
+prefix 10 -
+
 (+) : Integer -> Integer -> Integer
 (+) = prim__add_Integer
 
@@ -13,3 +15,8 @@ infixl 9 *, /
 (/) : Integer -> Integer -> Integer
 (/) = prim__div_Integer
 
+-- Doesn't quite work yet - ambiguity resolution can't handle this, and maybe
+-- it shouldn't. Maybe it's best to turn -x into negate x
+-- namespace Minus
+--   (-) : Integer -> Integer
+--   (-) x = prim__sub_Integer 0 x

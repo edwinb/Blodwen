@@ -68,7 +68,7 @@ mutual
   Show Name where
     show (UN str) = str
     show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
-    show (NS ns n) = showSep "." ns ++ "." ++ show n
+    show (NS ns n) = showSep "." (reverse ns) ++ "." ++ show n
     show (HN str int) = "?" ++ str ++ "_" ++ show int
     show (PV str) = "{P:" ++ str ++ "}"
     show (GN gn) = show gn

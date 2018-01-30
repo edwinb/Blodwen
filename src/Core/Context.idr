@@ -460,7 +460,7 @@ extendNS : {auto c : Ref Ctxt Defs} ->
            List String -> Core annot ()
 extendNS ns
     = do defs <- get Ctxt
-         put Ctxt (record { currentNS $= (++ (reverse ns)) } defs)
+         put Ctxt (record { currentNS $= ((reverse ns) ++) } defs)
 
 -- Get the name as it would be defined in the current namespace
 -- i.e. if it doesn't have an explicit namespace already, add it,

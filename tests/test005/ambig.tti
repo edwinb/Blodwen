@@ -22,36 +22,36 @@ plus (S k) y = S (plus k y);
 
 implicit n, m, k, a, x, y;
 
-namespace List;
+namespace List
 
-data List : Type -> Type where {
-     Nil  : List a;
-     Cons : a -> List a -> List a;
-}
+    data List : Type -> Type where {
+         Nil  : List a;
+         Cons : a -> List a -> List a;
+    }
 
-length : List a -> Nat;
-length Nil = Z;
-length (Cons x xs) = S (length xs);
+    length : List a -> Nat;
+    length Nil = Z;
+    length (Cons x xs) = S (length xs);
 
-append : List a -> List a -> List a;
-append Nil         ys = ys;
-append (Cons x xs) ys = Cons x (append xs ys);
+    append : List a -> List a -> List a;
+    append Nil         ys = ys;
+    append (Cons x xs) ys = Cons x (append xs ys);
 
-namespace Vect;
+namespace Vect
 
-data Vect : Nat -> Type -> Type where {
-     Nil  : Vect Z a;
-     Cons : a -> Vect k a -> Vect (S k) a;
-}
+    data Vect : Nat -> Type -> Type where {
+         Nil  : Vect Z a;
+         Cons : a -> Vect k a -> Vect (S k) a;
+    }
 
-length : Vect n a -> Nat;
-length Nil = Z;
-length (Cons x xs) = S (length xs);
+    length : Vect n a -> Nat;
+    length Nil = Z;
+    length (Cons x xs) = S (length xs);
 
-append : Vect n a -> Vect m a -> Vect (plus n m) a;
-append Nil         ys = ys;
-append (Cons x xs) ys = Cons x (append xs ys);
+    append : Vect n a -> Vect m a -> Vect (plus n m) a;
+    append Nil         ys = ys;
+    append (Cons x xs) ys = Cons x (append xs ys);
 
-the : (a : Type) -> a -> _;
-the _ x = x;
+    the : (a : Type) -> a -> _;
+    the _ x = x;
 

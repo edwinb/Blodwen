@@ -341,12 +341,11 @@ fixDecl
   <|> do keyword "infix"; pure Infix
   <|> do keyword "prefix"; pure Prefix
 
-namespaceDecl : IndentInfo -> Rule (List String)
-namespaceDecl indents
+namespaceDecl : Rule (List String)
+namespaceDecl 
     = do keyword "namespace"
          commit
          ns <- namespace_
-         atEnd indents
          pure ns
 
 -- Declared at the top
@@ -357,7 +356,7 @@ topDecl fname indents
          end <- location
          pure [PData (MkFC fname start end) dat]
   <|> do start <- location
-         ns <- namespaceDecl indents
+         ns <- namespaceDecl
          end <- location
          ds <- assert_total (nonEmptyBlock (topDecl fname))
          pure [PNamespace (MkFC fname start end) ns (concat ds)]
@@ -402,6 +401,8 @@ collectDefs (PDef annot fn cs :: ds)
     isClause n (PDef annot n' cs) 
         = if n == n' then Just cs else Nothing
     isClause n _ = Nothing
+collectDefs (PNamespace annot ns nds :: ds)
+    = PNamespace annot ns (collectDefs nds) :: collectDefs ds
 collectDefs (d :: ds)
     = d :: collectDefs ds
 
