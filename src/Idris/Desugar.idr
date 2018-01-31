@@ -164,8 +164,18 @@ mutual
   desugar (PPrefixOp fc op arg) 
       = do ts <- toTokList (PPrefixOp fc op arg)
            desugarTree !(parseOps ts)
-  desugar (PSectionL fc op arg) = throw (InternalError "Operator sections not implemented yet")
-  desugar (PSectionR fc arg op) = throw (InternalError "Operator sections not implemented yet")
+  desugar (PSectionL fc op arg) 
+      = do syn <- get Syn
+           -- It might actually be a prefix argument rather than a section
+           -- so check that first, otherwise desugar as a lambda
+           case lookup op (prefixes syn) of
+                Nothing => 
+                   desugar (PLam fc Explicit (MN "arg" 0) (PImplicit fc)
+                               (POp fc op (PRef fc (MN "arg" 0)) arg))
+                Just prec => desugar (PPrefixOp fc op arg)
+  desugar (PSectionR fc arg op)
+      = desugar (PLam fc Explicit (MN "arg" 0) (PImplicit fc)
+                 (POp fc op arg (PRef fc (MN "arg" 0))))
   desugar (PSearch fc depth) = pure $ ISearch fc depth
   desugar (PPrimVal fc x) = pure $ IPrimVal fc x
   desugar (PHole fc holename) = pure $ IHole fc holename
