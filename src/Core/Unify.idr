@@ -194,10 +194,10 @@ instantiate loc metavar smvs tm {newvars}
             Term rest -> Term (newvars ++ got) -> Maybe (Term rest)
     mkRHS got ns cvs ty tm with (snocList ns)
       mkRHS got [] cvs ty tm | Empty = Just (renameVars cvs tm)
-      mkRHS got (ns ++ [n]) cvs (Bind x (Pi _ ty) sc) tm | (Snoc rec) 
+      mkRHS got (ns ++ [n]) cvs (Bind x (Pi c _ ty) sc) tm | (Snoc rec) 
            = do sc' <- mkRHS (n :: got) ns (CompatExt cvs) sc 
                            (rewrite appendAssociative ns [n] got in tm)
-                pure (Bind x (Lam Explicit ty) sc')
+                pure (Bind x (Lam c Explicit ty) sc')
       -- Run out of variables to bind
       mkRHS got (ns ++ [n]) cvs ty tm | (Snoc rec) = Nothing
 
@@ -232,7 +232,7 @@ occursCheck gam n tm
                         if n `elem` ns
                            then Nothing
                            else Just (insert var chk)
-    oc chk (Bind n (Let val ty) sc)
+    oc chk (Bind n (Let _ val ty) sc)
         = do vchk <- oc chk val
              tchk <- oc vchk ty
              oc tchk sc
@@ -255,11 +255,11 @@ mutual
                 annot -> Env Term vars ->
                 List (Term vars) -> Term vars ->
                 Core annot (Term vars)
-  shrinkHoles loc env args (Bind x (Let val ty) sc) 
+  shrinkHoles loc env args (Bind x (Let c val ty) sc) 
       = do val' <- shrinkHoles loc env args val
            ty' <- shrinkHoles loc env args ty
-           sc' <- shrinkHoles loc (Let val ty :: env) (map weaken args) sc
-           pure (Bind x (Let val' ty') sc')
+           sc' <- shrinkHoles loc (Let c val ty :: env) (map weaken args) sc
+           pure (Bind x (Let c val' ty') sc')
   shrinkHoles loc env args (Bind x b sc) 
       = do let bty = binderType b
            bty' <- shrinkHoles loc env args bty
@@ -337,23 +337,23 @@ mutual
   -- the name is not used in the scope
   dropBinders : SubVars vars (drop ++ vars) -> 
                 Term (drop ++ vars) -> Maybe (Term vars)
-  dropBinders {drop} subprf (Bind n (Pi imp ty) scope)
+  dropBinders {drop} subprf (Bind n (Pi _ imp ty) scope)
     = dropBinders {drop = n :: drop} (DropCons subprf) scope
   dropBinders subprf tm = shrinkTerm tm subprf
 
   newHoleType : List (Term vars) -> Term hvars -> Maybe (Term hvars)
   newHoleType [] tm = dropBinders {drop = []} SubRefl tm
-  newHoleType (x :: xs) (Bind n (Pi imp ty) scope) 
+  newHoleType (x :: xs) (Bind n (Pi c imp ty) scope) 
       = do scope' <- newHoleType xs scope
-           pure (Bind n (Pi imp ty) scope')
+           pure (Bind n (Pi c imp ty) scope')
   newHoleType _ _ = Nothing
 
   mkOldHoleDef : Term hargs -> Name ->
                  List (Term vars) -> List (Term vars) ->
                  Maybe (Term hargs)
-  mkOldHoleDef (Bind x (Pi _ ty) sc) newh sofar (a :: args)
+  mkOldHoleDef (Bind x (Pi c _ ty) sc) newh sofar (a :: args)
       = do sc' <- mkOldHoleDef sc newh sofar args
-           pure (Bind x (Lam Explicit ty) sc')
+           pure (Bind x (Lam c Explicit ty) sc')
   mkOldHoleDef {hargs} {vars} ty newh sofar args
       = do compat <- areVarsCompatible vars hargs
            let newargs = map (renameVars compat) sofar
@@ -544,18 +544,18 @@ mutual
              Name -> Binder (NF vars) -> (Closure vars -> NF vars) ->
              Name -> Binder (NF vars) -> (Closure vars -> NF vars) ->
              Core annot (List Name)
-  unifyBothBinders mode loc env x (Pi ix tx) scx y (Pi iy ty) scy
-      = if ix /= iy
+  unifyBothBinders mode loc env x (Pi cx ix tx) scx y (Pi cy iy ty) scy
+      = if ix /= iy && cx /= cy
            then ufail loc $ "Can't unify " ++ show (quote empty env
-                                                   (NBind x (Pi ix tx) scx))
+                                                   (NBind x (Pi cx ix tx) scx))
                                        ++ " and " ++
                                           show (quote empty env
-                                                   (NBind y (Pi iy ty) scy))
+                                                   (NBind y (Pi cy iy ty) scy))
            else
              do ct <- unify mode loc env tx ty
                 xn <- genName "x"
                 let env' : Env Term (x :: _)
-                         = Pi ix (quote empty env tx) :: env
+                         = Pi cx ix (quote empty env tx) :: env
                 case ct of
                      [] => -- no constraints, check the scope
                            do let tscx = scx (toClosure False env (Ref Bound xn))
@@ -567,8 +567,8 @@ mutual
                            do let txtm = quote empty env tx
                               let tytm = quote empty env ty
                               c <- addConstant loc env
-                                     (Bind x (Lam Explicit txtm) (Local Here))
-                                     (Bind x (Pi Explicit txtm)
+                                     (Bind x (Lam cx Explicit txtm) (Local Here))
+                                     (Bind x (Pi cx Explicit txtm)
                                          (weaken tytm)) cs
                               let tscx = scx (toClosure False env (Ref Bound xn))
                               let tscy = scy (toClosure False env 
@@ -577,18 +577,18 @@ mutual
                               let termy = refToLocal xn x (quote empty env tscy)
                               cs' <- unify mode loc env' termx termy
                               pure (union cs cs')
-  unifyBothBinders mode loc env x (Lam ix tx) scx y (Lam iy ty) scy 
-      = if ix /= iy
+  unifyBothBinders mode loc env x (Lam cx ix tx) scx y (Lam cy iy ty) scy 
+      = if ix /= iy && cx /= cy
            then ufail loc $ "Can't unify " ++ show (quote empty env
-                                                   (NBind x (Pi ix tx) scx))
+                                                   (NBind x (Lam cx ix tx) scx))
                                        ++ " and " ++
                                           show (quote empty env
-                                                   (NBind y (Pi iy ty) scy))
+                                                   (NBind y (Lam cy iy ty) scy))
            else
              do csty <- unify mode loc env tx ty
                 xn <- genName "x"
                 let env' : Env Term (x :: _)
-                         = Lam ix (quote empty env tx) :: env
+                         = Lam cx ix (quote empty env tx) :: env
                 let tscx = scx (toClosure False env (Ref Bound xn))
                 let tscy = scy (toClosure False env (Ref Bound xn))
                 let termx = refToLocal xn x (quote empty env tscx)
@@ -633,16 +633,16 @@ mutual
         = unifyBothBinders mode loc env x bx scx y by scy
     -- If one thing is a lambda and the other is a name applied to some
     -- arguments, eta expand and try again
-    unifyD _ _ mode loc env tmx@(NBind x (Lam ix tx) scx) tmy
+    unifyD _ _ mode loc env tmx@(NBind x (Lam cx ix tx) scx) tmy
         = do gam <- getCtxt
              let etay = nf gam env 
-                           (Bind x (Lam ix (quote empty env tx))
+                           (Bind x (Lam cx ix (quote empty env tx))
                                    (App (weaken (quote empty env tmy)) (Local Here)))
              unify mode loc env tmx etay
-    unifyD _ _ mode loc env tmx tmy@(NBind y (Lam iy ty) scy)
+    unifyD _ _ mode loc env tmx tmy@(NBind y (Lam cy iy ty) scy)
         = do gam <- getCtxt
              let etax = nf gam env 
-                           (Bind y (Lam iy (quote empty env ty))
+                           (Bind y (Lam cy iy (quote empty env ty))
                                    (App (weaken (quote empty env tmx)) (Local Here)))
              unify mode loc env etax tmy
     unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)

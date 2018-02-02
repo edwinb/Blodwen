@@ -28,7 +28,7 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
 elabTerm process defining env nest impmode elabmode tm tyin
     = do resetHoles
          e <- newRef EST (initEState defining)
-         (chktm, ty) <- check {e} process (initElabInfo impmode elabmode) env nest tm tyin
+         (chktm, ty) <- check {e} Rig1 process (initElabInfo impmode elabmode) env nest tm tyin
          log 10 $ "Initial check: " ++ show chktm ++ " : " ++ show ty
          solveConstraints (case elabmode of
                                 InLHS => InLHS

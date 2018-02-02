@@ -54,7 +54,7 @@ checkClause loc (MkRawClause pvars lhs rhs)
   where
     bind : List (Name, Raw) -> Raw -> Raw
     bind [] tm = tm
-    bind ((n, ty) :: ps) tm = RBind n (PVar ty) (bind ps tm)
+    bind ((n, ty) :: ps) tm = RBind n (PVar RigW ty) (bind ps tm)
 
 addFn : {auto c : Ref Ctxt Defs} ->
         annot -> (def : RawFnDef) -> Core annot ()

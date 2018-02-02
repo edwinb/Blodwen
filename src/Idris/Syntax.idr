@@ -59,11 +59,11 @@ mutual
   public export
   data PTerm : Type where
        PRef : FC -> Name -> PTerm
-       PPi : FC -> PiInfo -> Maybe Name -> 
+       PPi : FC -> RigCount -> PiInfo -> Maybe Name -> 
              (argTy : PTerm) -> (retTy : PTerm) -> PTerm
-       PLam : FC -> PiInfo -> Name ->
+       PLam : FC -> RigCount -> PiInfo -> Name ->
               (argTy : PTerm) -> (scope : PTerm) -> PTerm
-       PLet : FC -> Name ->
+       PLet : FC -> RigCount -> Name ->
               (nTy : PTerm) -> (nVal : PTerm) -> (scope : PTerm) -> PTerm
        PCase : FC -> PTerm -> List PClause -> PTerm
        PLocal : FC -> List PDecl -> (scope : PTerm) -> PTerm

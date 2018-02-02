@@ -87,11 +87,11 @@ bindNames True env (IVar fc (UN n))
     = if not (UN n `elem` env) && lowerFirst n
          then IBindVar fc n
          else IVar fc (UN n)
-bindNames arg env (IPi fc p mn aty retty)
+bindNames arg env (IPi fc rig p mn aty retty)
     = let env' = case mn of
                       Nothing => env
                       Just n => n :: env in
-          IPi fc p mn (bindNames True env' aty) (bindNames True env' retty)
+          IPi fc rig p mn (bindNames True env' aty) (bindNames True env' retty)
 bindNames arg env (IApp fc fn av)
     = IApp fc (bindNames False env fn) (bindNames True env av)
 bindNames arg env (IImplicitApp fc fn n av)
@@ -138,15 +138,15 @@ mutual
   desugar : {auto s : Ref Syn SyntaxInfo} ->
             PTerm -> Core FC (RawImp FC)
   desugar (PRef fc x) = pure $ IVar fc x
-  desugar (PPi fc p mn argTy retTy) 
-      = pure $ IPi fc p mn !(desugar argTy) 
-                           !(desugar retTy)
-  desugar (PLam fc p n argTy scope) 
-      = pure $ ILam fc p n !(desugar argTy) 
-                           !(desugar scope)
-  desugar (PLet fc n nTy nVal scope) 
-      = pure $ ILet fc n !(desugar nTy) !(desugar nVal) 
-                         !(desugar scope)
+  desugar (PPi fc rig p mn argTy retTy) 
+      = pure $ IPi fc rig p mn !(desugar argTy) 
+                               !(desugar retTy)
+  desugar (PLam fc rig p n argTy scope) 
+      = pure $ ILam fc rig p n !(desugar argTy) 
+                               !(desugar scope)
+  desugar (PLet fc rig n nTy nVal scope) 
+      = pure $ ILet fc rig n !(desugar nTy) !(desugar nVal) 
+                             !(desugar scope)
   desugar (PCase fc x xs) 
       = pure $ ICase fc !(desugar x) 
                         !(traverse desugarClause xs)

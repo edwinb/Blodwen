@@ -21,11 +21,11 @@ mutual
   public export
   data RawImp : (annotation : Type) -> Type where
        IVar : annot -> Name -> RawImp annot
-       IPi : annot -> PiInfo -> Maybe Name -> 
+       IPi : annot -> RigCount -> PiInfo -> Maybe Name -> 
              (argTy : RawImp annot) -> (retTy : RawImp annot) -> RawImp annot
-       ILam : annot -> PiInfo -> Name -> 
+       ILam : annot -> RigCount -> PiInfo -> Name -> 
               (argTy : RawImp annot) -> (scope : RawImp annot) -> RawImp annot
-       ILet : annot -> Name -> 
+       ILet : annot -> RigCount -> Name -> 
               (nTy : RawImp annot) -> (nVal : RawImp annot) -> 
               (scope : RawImp annot) ->
               RawImp annot
@@ -126,9 +126,9 @@ definedInBlock = concatMap defName
 export
 getAnnot : RawImp a -> a
 getAnnot (IVar x _) = x
-getAnnot (IPi x _ _ _ _) = x
-getAnnot (ILam x _ _ _ _) = x
-getAnnot (ILet x _ _ _ _) = x
+getAnnot (IPi x _ _ _ _ _) = x
+getAnnot (ILam x _ _ _ _ _) = x
+getAnnot (ILet x _ _ _ _ _) = x
 getAnnot (ICase x _ _) = x
 getAnnot (ILocal x _ _) = x
 getAnnot (IApp x _ _) = x
@@ -152,16 +152,16 @@ mutual
   export
   Show (RawImp annot) where
     show (IVar _ nm) = show nm
-    show (IPi _ Implicit n argTy retTy) 
+    show (IPi _ _ Implicit n argTy retTy) 
         = "(%imppi (" ++ show n ++ " " ++ show argTy ++ ") " 
                ++ show retTy ++ ")"
-    show (IPi _ _ n argTy retTy)
+    show (IPi _ _ _ n argTy retTy)
         = "(%pi (" ++ show n ++ " " ++ show argTy ++ ") " 
                ++ show retTy ++ ")"
-    show (ILam _ _ n argTy scope) 
+    show (ILam _ _ _ n argTy scope) 
         = "(%lam (" ++ show n ++ " " ++ show argTy ++ ") " 
                ++ show scope ++ ")"
-    show (ILet _ n nTy nVal scope)
+    show (ILet _ _ n nTy nVal scope)
         = "(%let (" ++ show n ++ " " ++ show nTy ++ " " ++ show nVal ++ ") "
                ++ show scope ++ ")"
     show (ICase _ scr alts)
@@ -279,19 +279,19 @@ addBindImps is used (IVar x (UN n))
                          (\_ => (IVar x (UN n), used))
                          (lookup n used)
 addBindImps is used (IVar x n) = (IVar x n, used)
-addBindImps is used (IPi x y n argTy retTy) 
+addBindImps is used (IPi x c y n argTy retTy) 
     = let (arg', used1) = addBindImps is used argTy
           (ret', used2) = addBindImps (remove n is) used1 retTy in
-          (IPi x y n arg' ret', used2)
-addBindImps is used (ILam x y n argTy scope) 
+          (IPi x c y n arg' ret', used2)
+addBindImps is used (ILam x c y n argTy scope) 
     = let (arg', used1) = addBindImps is used argTy
           (scope', used2) = addBindImps (remove (Just n) is) used1 scope in
-          (ILam x y n arg' scope', used2)
-addBindImps is used (ILet x n nTy nVal scope) 
+          (ILam x c y n arg' scope', used2)
+addBindImps is used (ILet x c n nTy nVal scope) 
     = let (ty', used1) = addBindImps is used nTy
           (val', used2) = addBindImps is used1 nVal 
           (scope', used3) = addBindImps (remove (Just n) is) used2 scope in
-          (ILet x n ty' val' scope', used3)
+          (ILet x c n ty' val' scope', used3)
 addBindImps is used (IApp x fn arg) 
     = let (fn', used1) = addBindImps is used fn
           (arg', used2) = addBindImps is used1 arg in
@@ -311,7 +311,7 @@ bindWith loc ((n, _) :: ns) used tm
     = case lookup n used of
            Nothing => bindWith loc ns used tm
            Just ty => bindWith loc ns used 
-                         (IPi loc Implicit (Just (UN n)) ty tm)
+                         (IPi loc RigW Implicit (Just (UN n)) ty tm)
 
 -- convert any 'impName' without a type to an IBindVar, so that it gets
 -- bound when it's first used.

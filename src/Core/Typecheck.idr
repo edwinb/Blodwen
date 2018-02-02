@@ -42,7 +42,7 @@ parameters (loc : annot, gam : Gamma)
     chk env (RApp f a) 
         = do (f', fty) <- chk env f
              case nf gam env fty of
-                  NBind _ (Pi _ ty) scdone => 
+                  NBind _ (Pi _ _ ty) scdone => 
                         do (a', aty) <- chk env a
                            doConvert loc gam env (quote gam env ty) aty
                            let sc' = scdone (toClosure False env a')
@@ -53,50 +53,50 @@ parameters (loc : annot, gam : Gamma)
 
     chkBinder : Env Term vars -> Binder Raw -> 
                 Either (Error annot) (Binder (Term vars), Term vars)
-    chkBinder env (Lam x ty) 
+    chkBinder env (Lam c x ty) 
         = do (tyv, tyt) <- chk env ty
              doConvert loc gam env tyt TType
-             pure (Lam x tyv, tyt)
-    chkBinder env (Let val ty) 
-        = do (tyv, tyt) <- chk env ty
-             (valv, valt) <- chk env val
-             doConvert loc gam env tyv valt
-             doConvert loc gam env tyt TType
-             pure (Let valv tyv, tyt)
-    chkBinder env (Pi x ty) 
-        = do (tyv, tyt) <- chk env ty
-             doConvert loc gam env tyt TType
-             pure (Pi x tyv, tyt)
-    chkBinder env (PVar ty) 
-        = do (tyv, tyt) <- chk env ty
-             doConvert loc gam env tyt TType
-             pure (PVar tyv, tyt)
-    chkBinder env (PLet val ty) 
+             pure (Lam c x tyv, tyt)
+    chkBinder env (Let c val ty) 
         = do (tyv, tyt) <- chk env ty
              (valv, valt) <- chk env val
              doConvert loc gam env tyv valt
              doConvert loc gam env tyt TType
-             pure (PLet valv tyv, tyt)
-    chkBinder env (PVTy ty) 
+             pure (Let c valv tyv, tyt)
+    chkBinder env (Pi c x ty) 
         = do (tyv, tyt) <- chk env ty
              doConvert loc gam env tyt TType
-             pure (PVTy tyv, tyt)
+             pure (Pi c x tyv, tyt)
+    chkBinder env (PVar c ty) 
+        = do (tyv, tyt) <- chk env ty
+             doConvert loc gam env tyt TType
+             pure (PVar c tyv, tyt)
+    chkBinder env (PLet c val ty) 
+        = do (tyv, tyt) <- chk env ty
+             (valv, valt) <- chk env val
+             doConvert loc gam env tyv valt
+             doConvert loc gam env tyt TType
+             pure (PLet c valv tyv, tyt)
+    chkBinder env (PVTy c ty) 
+        = do (tyv, tyt) <- chk env ty
+             doConvert loc gam env tyt TType
+             pure (PVTy c tyv, tyt)
 
     discharge : (nm : Name) -> Binder (Term vars) -> Term vars ->
                 Term (nm :: vars) -> Term (nm :: vars) -> 
                 (Term vars, Term vars)
-    discharge nm (Lam x ty) bindty scope scopety 
-         = (Bind nm (Lam x ty) scope, Bind nm (Pi x ty) scopety)
-    discharge nm (Let val ty) bindty scope scopety 
-         = (Bind nm (Let val ty) scope, Bind nm (Let val ty) scopety)
-    discharge nm (Pi x ty) bindty scope scopety 
-         = (Bind nm (Pi x ty) scope, bindty)
-    discharge nm (PVar ty) bindty scope scopety 
-         = (Bind nm (PVar ty) scope, Bind nm (PVTy ty) scopety)
-    discharge nm (PLet val ty) bindty scope scopety 
-         = (Bind nm (PLet val ty) scope, Bind nm (PLet val ty) scopety)
-    discharge nm (PVTy ty) bindty scope scopety 
-         = (Bind nm (PVTy ty) scope, bindty)
+    discharge nm (Lam c x ty) bindty scope scopety 
+         = (Bind nm (Lam c x ty) scope, Bind nm (Pi c x ty) scopety)
+    discharge nm (Let c val ty) bindty scope scopety 
+         = (Bind nm (Let c val ty) scope, Bind nm (Let c val ty) scopety)
+    discharge nm (Pi c x ty) bindty scope scopety 
+         = (Bind nm (Pi c x ty) scope, bindty)
+    discharge nm (PVar c ty) bindty scope scopety 
+         = (Bind nm (PVar c ty) scope, Bind nm (PVTy c ty) scopety)
+    discharge nm (PLet c val ty) bindty scope scopety 
+         = (Bind nm (PLet c val ty) scope, Bind nm (PLet c val ty) scopety)
+    discharge nm (PVTy c ty) bindty scope scopety 
+         = (Bind nm (PVTy c ty) scope, bindty)
 
     chkConstant : Constant -> (Term vars, Term vars)
     chkConstant (I x) = (PrimVal (I x), PrimVal IntType)

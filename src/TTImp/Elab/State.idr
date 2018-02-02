@@ -312,18 +312,19 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                           -- otherwise reduce it
                           case n of
                                PV _ =>
-                                  (Bind n' (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                  (Bind n' (PLet RigW (embed (normalise gam [] (Ref Func n))) ty) 
                                            (refToLocal tmpN n' repNameTm), 
                                    Bind n' 
-                                        (PLet (embed (normalise gam [] (Ref Func n))) ty) 
+                                        (PLet RigW (embed (normalise gam [] (Ref Func n))) ty) 
                                               (refToLocal tmpN n' repNameTy))
                                _ => (subst (embed (normalise gam [] (Ref Func n)))
                                            (refToLocal tmpN n repNameTm),
                                      subst (embed (normalise gam [] (Ref Func n)))
                                            (refToLocal tmpN n repNameTy))
                        _ =>
-                          (Bind n' (PVar ty) (refToLocal tmpN n' repNameTm), 
-                           Bind n' (PVTy ty) (refToLocal tmpN n' repNameTy))
+                          (Bind n' (PVar RigW ty) (refToLocal tmpN n' repNameTm), 
+                           Bind n' (PVTy RigW ty) (refToLocal tmpN n' repNameTy))
+               -- unless explicitly given, unbound implicits are RigW
                PI _ =>
                   case lookupDefExact n gam of
                      Just (PMDef _ _ t) =>
@@ -331,8 +332,8 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                                (refToLocal tmpN n repNameTm),
                          subst (embed (normalise gam [] (Ref Func n)))
                                (refToLocal tmpN n repNameTy))
-                     _ => (Bind n' (Pi Implicit ty) (refToLocal tmpN n' repNameTm), ty')
-               _ => (Bind n' (Pi Implicit ty) (refToLocal tmpN n' repNameTm), ty')
+                     _ => (Bind n' (Pi RigW Implicit ty) (refToLocal tmpN n' repNameTm), ty')
+               _ => (Bind n' (Pi RigW Implicit ty) (refToLocal tmpN n' repNameTm), ty')
   where
     -- Replace the name applied to the given number of arguments 
     -- with another term
@@ -408,7 +409,7 @@ findHoles mode env tm exp
     data HVar : Type where -- empty type to label the local state
 
     mkType : (vars : List Name) -> Term hs -> Maybe (Term hs)
-    mkType (v :: vs) (Bind tm (Pi _ ty) sc) 
+    mkType (v :: vs) (Bind tm (Pi _ _ ty) sc) 
         = do sc' <- mkType vs sc
              shrinkTerm sc' (DropCons SubRefl)
     mkType _ tm = pure tm
@@ -441,19 +442,19 @@ findHoles mode env tm exp
              arg' <- holes h arg
              pure (App fn' arg')
     -- Allow implicits under 'Pi', 'PVar', 'PLet' only
-    holes h (Bind y (Pi imp ty) sc)
+    holes h (Bind y (Pi c imp ty) sc)
         = do ty' <- holes h ty
              sc' <- holes h sc
-             pure (Bind y (Pi imp ty') sc')
-    holes h (Bind y (PVar ty) sc)
+             pure (Bind y (Pi c imp ty') sc')
+    holes h (Bind y (PVar c ty) sc)
         = do ty' <- holes h ty
              sc' <- holes h sc
-             pure (Bind y (PVar ty') sc')
-    holes h (Bind y (PLet val ty) sc)
+             pure (Bind y (PVar c ty') sc')
+    holes h (Bind y (PLet c val ty) sc)
         = do val' <- holes h val
              ty' <- holes h ty
              sc' <- holes h sc
-             pure (Bind y (PLet val' ty') sc')
+             pure (Bind y (PLet c val' ty') sc')
     holes h tm = pure tm
 
 export
@@ -498,7 +499,7 @@ inventFnType loc env bname
     = do an <- genName "arg_type"
          scn <- genName "res_type"
          argTy <- addBoundName loc an False env TType
-         scTy <- addBoundName loc scn False (Pi Explicit argTy :: env) TType
+         scTy <- addBoundName loc scn False (Pi RigW Explicit argTy :: env) TType
          pure (argTy, scTy)
 
 -- Given a raw term, collect the explicitly given implicits {x = tm} in the

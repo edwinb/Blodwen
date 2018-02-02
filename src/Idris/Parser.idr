@@ -151,7 +151,7 @@ mutual
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) Explicit (Just n) ty scope)
+           pure (PPi (MkFC fname start end) RigW Explicit (Just n) ty scope)
 
   autoImplicitPi : FileName -> IndentInfo -> Rule PTerm
   autoImplicitPi fname indents
@@ -166,7 +166,7 @@ mutual
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) AutoImplicit (Just n) ty scope)
+           pure (PPi (MkFC fname start end) RigW AutoImplicit (Just n) ty scope)
 
   implicitPi : FileName -> IndentInfo -> Rule PTerm
   implicitPi fname indents
@@ -180,7 +180,7 @@ mutual
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) Implicit (Just n) ty scope)
+           pure (PPi (MkFC fname start end) RigW Implicit (Just n) ty scope)
 
   lam : FileName -> IndentInfo -> Rule PTerm
   lam fname indents
@@ -195,7 +195,7 @@ mutual
            continue indents
            scope <- typeExpr fname indents
            end <- location
-           pure (PLam (MkFC fname start end) Explicit n ty scope)
+           pure (PLam (MkFC fname start end) RigW Explicit n ty scope)
 
   let_ : FileName -> IndentInfo -> Rule PTerm
   let_ fname indents
@@ -209,7 +209,7 @@ mutual
            keyword "in"
            scope <- typeExpr fname indents
            end <- location
-           pure (PLet (MkFC fname start end) n (PImplicit (MkFC fname start end)) val scope)
+           pure (PLet (MkFC fname start end) RigW n (PImplicit (MkFC fname start end)) val scope)
     <|> do start <- location
            keyword "let"
            ds <- block (topDecl fname)
@@ -270,7 +270,7 @@ mutual
       mkPi : FilePos -> FilePos -> PTerm -> List PTerm -> PTerm
       mkPi start end arg [] = arg
       mkPi start end arg (a :: as) 
-            = PPi (MkFC fname start end) Explicit Nothing arg 
+            = PPi (MkFC fname start end) RigW Explicit Nothing arg 
                   (mkPi start end a as)
 
   export

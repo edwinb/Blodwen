@@ -115,57 +115,107 @@ Eq PiInfo where
   (==) AutoImplicit AutoImplicit = True
   (==) _ _ = False
 
+-- Multiplicities on binders, for checking linear and erased types
+-- TODO: This doesn't actually do anything yet, but I wanted to add it to
+-- the representation early so that there's less to change in the data types
+-- Needs updates in: Core.Typecheck and TTImp.Elab.Term, at least, and
+-- dealing with how to bind pattern names in TTImp.Elab.State
+
+-- Also need updating RawImp and PTerm syntax
+public export
+data RigCount = Rig0 | Rig1 | RigW
+
+export
+Eq RigCount where
+  (==) Rig0 Rig0 = True
+  (==) Rig1 Rig1 = True
+  (==) RigW RigW = True
+  (==) _ _ = False
+
+export
+rigPlus : RigCount -> RigCount -> RigCount
+rigPlus Rig0 Rig0 = Rig0
+rigPlus Rig0 Rig1 = Rig1
+rigPlus Rig0 RigW = RigW
+rigPlus Rig1 Rig0 = Rig1
+rigPlus Rig1 Rig1 = RigW
+rigPlus Rig1 RigW = RigW
+rigPlus RigW Rig0 = RigW
+rigPlus RigW Rig1 = RigW
+rigPlus RigW RigW = RigW
+
+export
+rigMult : RigCount -> RigCount -> RigCount
+rigMult Rig0 Rig0 = Rig0
+rigMult Rig0 Rig1 = Rig0
+rigMult Rig0 RigW = Rig0
+rigMult Rig1 Rig0 = Rig0
+rigMult Rig1 Rig1 = Rig1
+rigMult Rig1 RigW = RigW
+rigMult RigW Rig0 = Rig0
+rigMult RigW Rig1 = RigW
+rigMult RigW RigW = RigW
+
 public export
 data Binder : Type -> Type where
 	   -- Lambda bound variables with their implicitness
-     Lam : PiInfo -> (ty : type) -> Binder type
+     Lam : RigCount -> PiInfo -> (ty : type) -> Binder type
 		 -- Let bound variables with their value
-     Let : (val : type) -> (ty : type) -> Binder type
+     Let : RigCount -> (val : type) -> (ty : type) -> Binder type
 		 -- Forall/pi bound variables with their implicitness
-     Pi : PiInfo -> (ty : type) -> Binder type
+     Pi : RigCount -> PiInfo -> (ty : type) -> Binder type
 		 -- pattern bound variables
-     PVar : (ty : type) -> Binder type 
+     PVar : RigCount -> (ty : type) -> Binder type 
 		 -- pattern bound variables with a known value (e.g. @ patterns or
 		 -- variables unified with something else)
 	   -- Like 'Let' but no computational force
-     PLet : (val : type) -> (ty : type) -> Binder type 
+     PLet : RigCount -> (val : type) -> (ty : type) -> Binder type 
 		 -- the type of pattern bound variables
-     PVTy : (ty : type) -> Binder type
+     PVTy : RigCount -> (ty : type) -> Binder type
 
 export
 binderType : Binder tm -> tm
-binderType (Lam x ty) = ty
-binderType (Let val ty) = ty
-binderType (Pi x ty) = ty
-binderType (PVar ty) = ty
-binderType (PLet val ty) = ty
-binderType (PVTy ty) = ty
+binderType (Lam _ x ty) = ty
+binderType (Let _ val ty) = ty
+binderType (Pi _ x ty) = ty
+binderType (PVar _ ty) = ty
+binderType (PLet _ val ty) = ty
+binderType (PVTy _ ty) = ty
+  
+export
+multiplicity : Binder tm -> RigCount
+multiplicity (Lam c x ty) = c
+multiplicity (Let c val ty) = c
+multiplicity (Pi c x ty) = c
+multiplicity (PVar c ty) = c
+multiplicity (PLet c val ty) = c
+multiplicity (PVTy c ty) = c
   
 Show ty => Show (Binder ty) where
-	show (Lam _ t) = "\\" ++ show t
-	show (Pi _ t) = "Pi " ++ show t
-	show (Let v t) = "let " ++ show v ++ " : " ++ show t
-	show (PVar t) = "pat " ++ show t
-	show (PLet v t) = "plet " ++ show v ++ ": " ++ show t
-	show (PVTy t) = "pty " ++ show t
+	show (Lam _ _ t) = "\\" ++ show t
+	show (Pi _ _ t) = "Pi " ++ show t
+	show (Let _ v t) = "let " ++ show v ++ " : " ++ show t
+	show (PVar _ t) = "pat " ++ show t
+	show (PLet _ v t) = "plet " ++ show v ++ ": " ++ show t
+	show (PVTy _ t) = "pty " ++ show t
 
 export
 setType : Binder tm -> tm -> Binder tm
-setType (Lam x _) ty = Lam x ty
-setType (Let val _) ty = Let val ty
-setType (Pi x _) ty = Pi x ty
-setType (PVar _) ty = PVar ty
-setType (PLet val _) ty = PLet val ty
-setType (PVTy _) ty = PVTy ty
+setType (Lam c x _) ty = Lam c x ty
+setType (Let c val _) ty = Let c val ty
+setType (Pi c x _) ty = Pi c x ty
+setType (PVar c _) ty = PVar c ty
+setType (PLet c val _) ty = PLet c val ty
+setType (PVTy c _) ty = PVTy c ty
 
 export
 Functor Binder where
-  map func (Lam x ty) = Lam x (func ty)
-  map func (Let val ty) = Let (func val) (func ty)
-  map func (Pi x ty) = Pi x (func ty)
-  map func (PVar ty) = PVar (func ty)
-  map func (PLet val ty) = PLet (func val) (func ty)
-  map func (PVTy ty) = PVTy (func ty)
+  map func (Lam c x ty) = Lam c x (func ty)
+  map func (Let c val ty) = Let c (func val) (func ty)
+  map func (Pi c x ty) = Pi c x (func ty)
+  map func (PVar c ty) = PVar c (func ty)
+  map func (PLet c val ty) = PLet c (func val) (func ty)
+  map func (PVTy c ty) = PVTy c (func ty)
 
 -- Typechecked terms
 -- These are guaranteed to be well-scoped wrt local variables, because they are
@@ -303,7 +353,7 @@ export
 abstractEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
 abstractEnvType [] tm = tm
 abstractEnvType (b :: env) tm 
-    = abstractEnvType env (Bind _ (Pi Explicit (binderType b)) tm)
+    = abstractEnvType env (Bind _ (Pi (multiplicity b) Explicit (binderType b)) tm)
 
 
 {- Some ugly mangling to allow us to extend the scope of a term - a
@@ -512,20 +562,20 @@ subElem (There later) (KeepCons ds)
 mutual
   shrinkBinder : Binder (Term vars) -> SubVars newvars vars -> 
                  Maybe (Binder (Term newvars))
-  shrinkBinder (Lam x ty) subprf 
-      = Just (Lam x !(shrinkTerm ty subprf))
-  shrinkBinder (Let val ty) subprf 
-      = Just (Let !(shrinkTerm val subprf)
-                  !(shrinkTerm ty subprf))
-  shrinkBinder (Pi x ty) subprf 
-      = Just (Pi x !(shrinkTerm ty subprf))
-  shrinkBinder (PVar ty) subprf 
-      = Just (PVar !(shrinkTerm ty subprf))
-  shrinkBinder (PLet val ty) subprf 
-      = Just (PLet !(shrinkTerm val subprf)
-                   !(shrinkTerm ty subprf))
-  shrinkBinder (PVTy ty) subprf 
-      = Just (PVTy !(shrinkTerm ty subprf))
+  shrinkBinder (Lam c x ty) subprf 
+      = Just (Lam c x !(shrinkTerm ty subprf))
+  shrinkBinder (Let c val ty) subprf 
+      = Just (Let c !(shrinkTerm val subprf)
+                    !(shrinkTerm ty subprf))
+  shrinkBinder (Pi c x ty) subprf 
+      = Just (Pi c x !(shrinkTerm ty subprf))
+  shrinkBinder (PVar c ty) subprf 
+      = Just (PVar c !(shrinkTerm ty subprf))
+  shrinkBinder (PLet c val ty) subprf 
+      = Just (PLet c !(shrinkTerm val subprf)
+                     !(shrinkTerm ty subprf))
+  shrinkBinder (PVTy c ty) subprf 
+      = Just (PVTy c !(shrinkTerm ty subprf))
 
   -- Try to make a term which uses fewer variables, as long as it only uses
   -- the variables given as a subset
@@ -594,7 +644,7 @@ apply fn (arg :: args) = apply (App fn arg) args
 -- Build a simple function type
 export
 fnType : Term vars -> Term vars -> Term vars
-fnType arg scope = Bind (MN "_" 0) (Pi Explicit arg) (weaken scope)
+fnType arg scope = Bind (MN "_" 0) (Pi RigW Explicit arg) (weaken scope)
 
 public export
 data Unapply : Term vars -> Type where
@@ -635,9 +685,9 @@ getRefs tm = getSet empty tm
     getSet : SortedSet -> Term vars -> SortedSet
     getSet ns (Local y) = ns
     getSet ns (Ref nt fn) = insert fn ns
-    getSet ns (Bind x (Let val ty) tm) 
+    getSet ns (Bind x (Let c val ty) tm) 
 		   = assert_total $ getSet (getSet (getSet ns val) ty) tm
-    getSet ns (Bind x (PLet val ty) tm) 
+    getSet ns (Bind x (PLet c val ty) tm) 
 		   = assert_total $ getSet (getSet (getSet ns val) ty) tm
     getSet ns (Bind x b tm) 
 		   = assert_total $ getSet (getSet ns (binderType b)) tm
@@ -653,14 +703,14 @@ getPatternEnv : Env Term vars ->
                 (pvars ** (Env Term (pvars ++ vars),
                            Term (pvars ++ vars),
                            Term (pvars ++ vars)))
-getPatternEnv {vars} env (Bind n (PVar ty) sc) (Bind n' (PVTy ty') sc') 
+getPatternEnv {vars} env (Bind n (PVar c ty) sc) (Bind n' (PVTy c' ty') sc') 
     = case nameEq n n' of -- TODO: They should always be the same, but the
                           -- types don't tell us this. Better in any case to
                           -- rename n' to n since the de Bruijn indices will
                           -- match up okay.
-           Nothing => ([] ** (env, Bind n (PVar ty) sc, Bind n' (PVTy ty') sc'))
+           Nothing => ([] ** (env, Bind n (PVar c ty) sc, Bind n' (PVTy c' ty') sc'))
            Just Refl => let (more ** envtm) 
-                              = getPatternEnv (extend n (PVar ty) env) sc sc' in
+                              = getPatternEnv (extend n (PVar c ty) env) sc sc' in
                             (more ++ [n] ** rewrite sym (appendAssociative more [n] vars) in
                                                     envtm)
 getPatternEnv env tm ty = ([] ** (env, tm, ty))
@@ -673,23 +723,23 @@ Show (Term vars) where
         showApp : Term vars -> List (Term vars) -> String
         showApp (Local {x} y) [] = show x
         showApp (Ref x fn) [] = show fn
-        showApp (Bind n (Lam x ty) sc) [] 
+        showApp (Bind n (Lam _ x ty) sc) [] 
             = assert_total ("\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
-        showApp (Bind n (Let val ty) sc) [] 
+        showApp (Bind n (Let _ val ty) sc) [] 
             = assert_total ("let " ++ show n ++ " : " ++ show ty ++ " = " ++
 							               show val ++ " in " ++ show sc)
-        showApp (Bind n (Pi Explicit ty) sc) [] 
+        showApp (Bind n (Pi _ Explicit ty) sc) [] 
             = assert_total ("(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
-        showApp (Bind n (Pi Implicit ty) sc) [] 
+        showApp (Bind n (Pi _ Implicit ty) sc) [] 
             = assert_total ("{" ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
-        showApp (Bind n (Pi AutoImplicit ty) sc) [] 
+        showApp (Bind n (Pi _ AutoImplicit ty) sc) [] 
             = assert_total ("{auto " ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
-        showApp (Bind n (PVar ty) sc) [] 
+        showApp (Bind n (PVar _ ty) sc) [] 
             = assert_total ("pat " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
-        showApp (Bind n (PLet val ty) sc) [] 
+        showApp (Bind n (PLet _ val ty) sc) [] 
             = assert_total ("plet " ++ show n ++ " : " ++ show ty ++ " = " ++
 							               show val ++ " in " ++ show sc)
-        showApp (Bind n (PVTy ty) sc) [] 
+        showApp (Bind n (PVTy _ ty) sc) [] 
             = assert_total ("pty " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
         showApp (App f args) [] = "Can't happen!"
         showApp (PrimVal x) [] = show x
@@ -720,19 +770,19 @@ data Raw : Type where
 export
 Show Raw where
   show (RVar n) = show n
-  show (RBind n (Lam x ty) sc)
+  show (RBind n (Lam c x ty) sc)
        = "(\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc ++ ")"
-  show (RBind n (Pi _ ty) sc)
+  show (RBind n (Pi c _ ty) sc)
        = "(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc
-  show (RBind n (Let val ty) sc)
+  show (RBind n (Let c val ty) sc)
        = "let " ++ show n ++ " : " ++ show ty ++ " = " ++ show val ++
          " in " ++ show sc
-  show (RBind n (PVar ty) sc)
+  show (RBind n (PVar c ty) sc)
        = "pat " ++ show n ++ " : " ++ show ty ++ ". " ++ show sc
-  show (RBind n (PLet val ty) sc)
+  show (RBind n (PLet c val ty) sc)
        = "plet " ++ show n ++ " : " ++ show ty ++ " = " ++ show val ++
          " in " ++ show sc
-  show (RBind n (PVTy ty) sc)
+  show (RBind n (PVTy c ty) sc)
        = "pty " ++ show n ++ " : " ++ show ty ++ ". " ++ show sc
   show (RApp f a)
        = "(" ++ show f ++ " " ++ show a ++ ")"

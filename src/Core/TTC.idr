@@ -112,22 +112,35 @@ TTC annot PiInfo where
              _ => corrupt "PiInfo"
 
 export
-TTC annot ty => TTC annot (Binder ty) where
-  toBuf b (Lam x ty) = do tag 0; toBuf b x; toBuf b ty
-  toBuf b (Let val ty) = do tag 1; toBuf b val; toBuf b ty
-  toBuf b (Pi x ty) = do tag 2; toBuf b x; toBuf b ty
-  toBuf b (PVar ty) = do tag 3; toBuf b ty
-  toBuf b (PLet val ty) = do tag 4; toBuf b val; toBuf b ty
-  toBuf b (PVTy ty) = do tag 5; toBuf b ty
+TTC annot RigCount where
+  toBuf b Rig0 = tag 0
+  toBuf b Rig1 = tag 1
+  toBuf b RigW = tag 2
 
   fromBuf s b
       = case !getTag of
-             0 => do x <- fromBuf s b; y <- fromBuf s b; pure (Lam x y)
-             1 => do x <- fromBuf s b; y <- fromBuf s b; pure (Let x y)
-             2 => do x <- fromBuf s b; y <- fromBuf s b; pure (Pi x y)
-             3 => do x <- fromBuf s b; pure (PVar x)
-             4 => do x <- fromBuf s b; y <- fromBuf s b; pure (PLet x y)
-             5 => do x <- fromBuf s b; pure (PVTy x)
+             0 => pure Rig0
+             1 => pure Rig1
+             2 => pure RigW
+             _ => corrupt "RigCount"
+
+export
+TTC annot ty => TTC annot (Binder ty) where
+  toBuf b (Lam c x ty) = do tag 0; toBuf b c; toBuf b x; toBuf b ty
+  toBuf b (Let c val ty) = do tag 1; toBuf b c; toBuf b val; toBuf b ty
+  toBuf b (Pi c x ty) = do tag 2; toBuf b c; toBuf b x; toBuf b ty
+  toBuf b (PVar c ty) = do tag 3; toBuf b c; toBuf b ty
+  toBuf b (PLet c val ty) = do tag 4; toBuf b c; toBuf b val; toBuf b ty
+  toBuf b (PVTy c ty) = do tag 5; toBuf b c; toBuf b ty
+
+  fromBuf s b
+      = case !getTag of
+             0 => do c <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; pure (Lam c x y)
+             1 => do c <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; pure (Let c x y)
+             2 => do c <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; pure (Pi c x y)
+             3 => do c <- fromBuf s b; x <- fromBuf s b; pure (PVar c x)
+             4 => do c <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; pure (PLet c x y)
+             5 => do c <- fromBuf s b; x <- fromBuf s b; pure (PVTy c x)
              _ => corrupt "Binder"
 
 export

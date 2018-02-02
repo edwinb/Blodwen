@@ -206,7 +206,7 @@ mkConstant : Env Term vars -> Term vars -> ClosedTerm
 mkConstant [] tm = tm
 mkConstant {vars = x :: _} (b :: env) tm 
     = let ty = binderType b in
-          mkConstant env (Bind x (Lam Explicit ty) tm)
+          mkConstant env (Bind x (Lam (multiplicity b) Explicit ty) tm)
 
 -- Make the type of a new constant which applies a term to everything in
 -- the current environment

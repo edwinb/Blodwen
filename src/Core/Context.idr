@@ -691,8 +691,8 @@ addFnDef loc vis (MkFn n ty clauses)
   where
     close : Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm
     close i plets [] tm = tm
-    close i True (PLet val ty :: bs) tm 
-		    = close (i + 1) True bs (Bind (MN "pat" i) (Let val ty) (renameTop _ tm))
+    close i True (PLet c val ty :: bs) tm 
+		    = close (i + 1) True bs (Bind (MN "pat" i) (Let c val ty) (renameTop _ tm))
     close i plets (b :: bs) tm 
         = close (i + 1) plets bs (subst (Ref Bound (MN "pat" i)) tm)
 
@@ -729,7 +729,7 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
 		-- An argument is forced if it appears guarded by constructors in one
 		-- of the parameters or indices of the constructor's return type
     forcedPos : (pos : Nat) -> AList Nat vars -> Term vars -> List Nat
-    forcedPos p as (Bind x (Pi _ ty) sc)
+    forcedPos p as (Bind x (Pi _ _ ty) sc)
         = forcedPos (p + 1) (p :: as) sc
     forcedPos p as tm = findGuarded as tm
 

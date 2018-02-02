@@ -34,20 +34,20 @@ mutual
   rawAtom 
       = do symbol "\\"; n <- name; symbol ":"; commit
            ty <- raw; symbol "=>"; sc <- raw
-           pure (RBind n (Lam Explicit ty) sc)
+           pure (RBind n (Lam RigW Explicit ty) sc)
     <|> do symbol "("; n <- name; symbol ":"; commit; 
            ty <- raw; symbol ")"
            symbol "->"; sc <- raw
-           pure (RBind n (Pi Explicit ty) sc)
+           pure (RBind n (Pi RigW Explicit ty) sc)
     <|> do symbol "{"; n <- name; symbol ":"; commit; 
            ty <- raw; symbol "}"
            symbol "->"; sc <- raw
-           pure (RBind n (Pi Implicit ty) sc)
+           pure (RBind n (Pi RigW Implicit ty) sc)
     <|> do keyword "let"; commit
            n <- name; symbol ":"; ty <- raw
            symbol "="; val <- raw
            keyword "in"; sc <- raw
-           pure (RBind n (Let val ty) sc)
+           pure (RBind n (Let RigW val ty) sc)
     <|> do symbol "("; commit; 
            tm <- raw; symbol ")"
            pure tm

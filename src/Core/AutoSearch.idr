@@ -33,7 +33,7 @@ mkArgs : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
          annot -> Env Term vars -> Term vars -> 
          Core annot (List (Name, Term vars), Term vars)
-mkArgs loc env (Bind n (Pi info ty) sc)
+mkArgs loc env (Bind n (Pi c info ty) sc)
     = do argName <- addHole loc env ty
          let arg = mkConstantApp argName env
          (rest, restTy) <- mkArgs loc env (subst arg sc)
@@ -93,14 +93,14 @@ searchNames loc depth env ty (n :: ns)
 searchType : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Nat -> Env Term vars -> NF vars -> Core annot (Term vars)
-searchType loc depth env (NBind n (Pi info ty) scfn)
+searchType loc depth env (NBind n (Pi c info ty) scfn)
     = do xn <- genName "x"
          gam <- getCtxt
-         let env' : Env Term (n :: _) = Pi info (quote empty env ty) :: env
+         let env' : Env Term (n :: _) = Pi c info (quote empty env ty) :: env
          let sc = scfn (toClosure False env (Ref Bound xn))
          let tmsc = refToLocal xn n (quote empty env sc)
          scVal <- searchType loc depth env' (nf gam env' tmsc)
-         pure (Bind n (Lam info (quote empty env ty)) scVal)
+         pure (Bind n (Lam c info (quote empty env ty)) scVal)
 searchType loc depth env ty@(NTCon n t ar args)
     = if length args == ar
          then do gam <- getCtxt

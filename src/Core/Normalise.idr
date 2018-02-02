@@ -33,9 +33,9 @@ parameters (gam : Gamma, holesonly : Bool)
     eval env loc stk (Local p) = evalLocal env loc stk p
     eval env loc stk (Ref nt fn)
          = evalRef env loc stk nt fn
-    eval env loc (closure :: stk) (Bind x (Lam _ ty) sc) 
+    eval env loc (closure :: stk) (Bind x (Lam _ _ ty) sc) 
          = eval env (closure :: loc) stk sc
-    eval env loc stk (Bind x (Let val ty) sc) 
+    eval env loc stk (Bind x (Let _ val ty) sc) 
          = eval env (MkClosure holesonly loc env val :: loc) stk sc
     eval env loc stk (Bind x b sc) 
          = NBind x (map (eval env loc stk) b)
@@ -50,7 +50,7 @@ parameters (gam : Gamma, holesonly : Bool)
                 Elem x (vars ++ free) -> NF free
     evalLocal {vars = []} env loc stk p 
         = case getBinder p env of
-               Let val ty => eval env [] stk val
+               Let _ val ty => eval env [] stk val
                b => NApp (NLocal p) stk
     evalLocal {vars = (x :: xs)} 
               env ((MkClosure _ loc' env' tm') :: locs) stk Here 
@@ -218,26 +218,26 @@ mutual
 
   quoteBinder : IORef Int -> Gamma -> Env Term free -> Binder (NF free) -> 
                 IO (Binder (Term free))
-  quoteBinder num gam env (Lam x ty) 
+  quoteBinder num gam env (Lam c x ty) 
       = do ty' <- quoteGen num gam env ty
-           pure (Lam x ty')
-  quoteBinder num gam env (Let val ty) 
+           pure (Lam c x ty')
+  quoteBinder num gam env (Let c val ty) 
       = do val' <- quoteGen num gam env val
            ty' <- quoteGen num gam env ty
-           pure (Let val' ty')
-  quoteBinder num gam env (Pi x ty) 
+           pure (Let c val' ty')
+  quoteBinder num gam env (Pi c x ty) 
       = do ty' <- quoteGen num gam env ty
-           pure (Pi x ty')
-  quoteBinder num gam env (PVar ty) 
+           pure (Pi c x ty')
+  quoteBinder num gam env (PVar c ty) 
       = do ty' <- quoteGen num gam env ty
-           pure (PVar ty')
-  quoteBinder num gam env (PLet val ty) 
+           pure (PVar c ty')
+  quoteBinder num gam env (PLet c val ty) 
       = do val' <- quoteGen num gam env val
            ty' <- quoteGen num gam env ty
-           pure (PLet val' ty')
-  quoteBinder num gam env (PVTy ty) 
+           pure (PLet c val' ty')
+  quoteBinder num gam env (PVTy c ty) 
       = do ty' <- quoteGen num gam env ty
-           pure (PVTy ty')
+           pure (PVTy c ty')
 
   export
   Quote NF where
@@ -278,7 +278,7 @@ normaliseHoles gam env tm = quote gam env (nfHoles gam env tm)
 
 export
 getValArity : Gamma -> Env Term vars -> NF vars -> Nat
-getValArity gam env (NBind x (Pi _ _) sc) 
+getValArity gam env (NBind x (Pi _ _ _) sc) 
     = S (getValArity gam env (sc (MkClosure False [] env Erased)))
 getValArity gam env val = 0
 
@@ -319,13 +319,13 @@ mutual
         = do var <- genName num "convVar"
              let c = MkClosure False [] env (Ref Bound var)
              convGen num gam env (scope c) (scope' c)
-    convGen num gam env tmx@(NBind x (Lam ix tx) scx) tmy
-        = let etay = nf gam env (Bind x (Lam ix (quote empty env tx))
+    convGen num gam env tmx@(NBind x (Lam c ix tx) scx) tmy
+        = let etay = nf gam env (Bind x (Lam c ix (quote empty env tx))
                                    (App (weaken (quote empty env tmy))
                                         (Local Here))) in
               convGen num gam env tmx etay
-    convGen num gam env tmx tmy@(NBind y (Lam iy ty) scy)
-        = let etax = nf gam env (Bind y (Lam iy (quote empty env ty))
+    convGen num gam env tmx tmy@(NBind y (Lam c iy ty) scy)
+        = let etax = nf gam env (Bind y (Lam c iy (quote empty env ty))
                                    (App (weaken (quote empty env tmx))
                                         (Local Here))) in
               convGen num gam env etax tmy

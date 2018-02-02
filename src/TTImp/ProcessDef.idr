@@ -85,16 +85,16 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
              Term vars -> Term vars ->
              Core annot (vars' ** (Env Term vars', NestedNames vars', 
                                    Term vars', Term vars'))
-    extend env nest (Bind n (PVar tmsc) sc) (Bind n' (PVTy _) tysc) with (nameEq n n')
-      extend env nest (Bind n (PVar tmsc) sc) (Bind n' (PVTy _) tysc) | Nothing 
+    extend env nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) with (nameEq n n')
+      extend env nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) | Nothing 
             = throw (InternalError "Names don't match in pattern type")
-      extend env nest (Bind n (PVar tmsc) sc) (Bind n (PVTy _) tysc) | (Just Refl) 
-            = extend (PVar tmsc :: env) (weaken nest) sc tysc
-    extend env nest (Bind n (PLet tmv tmt) sc) (Bind n' (PLet _ _) tysc) with (nameEq n n')
-      extend env nest (Bind n (PLet tmv tmt) sc) (Bind n' (PLet _ _) tysc) | Nothing 
+      extend env nest (Bind n (PVar c tmsc) sc) (Bind n (PVTy _ _) tysc) | (Just Refl) 
+            = extend (PVar c tmsc :: env) (weaken nest) sc tysc
+    extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) with (nameEq n n')
+      extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) | Nothing 
             = throw (InternalError "Names don't match in pattern type")
-      extend env nest (Bind n (PLet tmv tmt) sc) (Bind n (PLet _ _) tysc) | (Just Refl) 
-            = extend (PLet tmv tmt :: env) (weaken nest) sc tysc
+      extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n (PLet _ _ _) tysc) | (Just Refl) 
+            = extend (PLet c tmv tmt :: env) (weaken nest) sc tysc
     extend env nest tm ty = pure (_ ** (env, nest, tm, ty))
 
 export

@@ -106,7 +106,7 @@ mutual
            symbol ")"
            symbol "->"
            scope <- typeExpr indents
-           pure (IPi () Explicit (Just n) ty scope)
+           pure (IPi () RigW Explicit (Just n) ty scope)
 
   autoImplicitPi : IndentInfo -> Rule (RawImp ())
   autoImplicitPi indents
@@ -119,7 +119,7 @@ mutual
            symbol "}"
            symbol "->"
            scope <- typeExpr indents
-           pure (IPi () AutoImplicit (Just n) ty scope)
+           pure (IPi () RigW AutoImplicit (Just n) ty scope)
 
   implicitPi : IndentInfo -> Rule (RawImp ())
   implicitPi indents
@@ -131,7 +131,7 @@ mutual
            symbol "}"
            symbol "->"
            scope <- typeExpr indents
-           pure (IPi () Implicit (Just n) ty scope)
+           pure (IPi () RigW Implicit (Just n) ty scope)
 
   lam : IndentInfo -> Rule (RawImp ())
   lam indents
@@ -144,7 +144,7 @@ mutual
            symbol "=>"
            continue indents
            scope <- typeExpr indents
-           pure (ILam () Explicit n ty scope)
+           pure (ILam () RigW Explicit n ty scope)
 
   let_ : IndentInfo -> Rule (RawImp ())
   let_ indents
@@ -156,7 +156,7 @@ mutual
            continue indents
            keyword "in"
            scope <- typeExpr indents
-           pure (ILet () n (Implicit ()) val scope)
+           pure (ILet () RigW n (Implicit ()) val scope)
     <|> do keyword "let"
            ds <- block topDecl
            continue indents
@@ -207,7 +207,7 @@ mutual
     where
       mkPi : RawImp () -> List (RawImp ()) -> RawImp ()
       mkPi arg [] = arg
-      mkPi arg (a :: as) = IPi () Explicit Nothing arg (mkPi a as)
+      mkPi arg (a :: as) = IPi () RigW Explicit Nothing arg (mkPi a as)
 
   export
   expr : IndentInfo -> Rule (RawImp ())
