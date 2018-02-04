@@ -96,9 +96,21 @@ mutual
            symbol ")"
            pure e
 
+  getMult : Constant -> EmptyRule RigCount
+  getMult (BI 0) = pure Rig0
+  getMult (BI 1) = pure Rig1
+  getMult _ = fail "Invalid multiplicity"
+
+  multiplicity : EmptyRule RigCount
+  multiplicity
+      = do c <- constant
+           getMult c
+    <|> pure RigW
+
   explicitPi : IndentInfo -> Rule (RawImp ())
   explicitPi indents
       = do symbol "("
+           rig <- multiplicity
            n <- name
            symbol ":"
            commit
@@ -106,24 +118,26 @@ mutual
            symbol ")"
            symbol "->"
            scope <- typeExpr indents
-           pure (IPi () RigW Explicit (Just n) ty scope)
+           pure (IPi () rig Explicit (Just n) ty scope)
 
   autoImplicitPi : IndentInfo -> Rule (RawImp ())
   autoImplicitPi indents
       = do symbol "{"
            keyword "auto"
            commit
+           rig <- multiplicity
            n <- name
            symbol ":"
            ty <- expr indents
            symbol "}"
            symbol "->"
            scope <- typeExpr indents
-           pure (IPi () RigW AutoImplicit (Just n) ty scope)
+           pure (IPi () rig AutoImplicit (Just n) ty scope)
 
   implicitPi : IndentInfo -> Rule (RawImp ())
   implicitPi indents
       = do symbol "{"
+           rig <- multiplicity
            n <- name
            symbol ":"
            commit
@@ -131,11 +145,12 @@ mutual
            symbol "}"
            symbol "->"
            scope <- typeExpr indents
-           pure (IPi () RigW Implicit (Just n) ty scope)
+           pure (IPi () rig Implicit (Just n) ty scope)
 
   lam : IndentInfo -> Rule (RawImp ())
   lam indents
       = do symbol "\\"
+           rig <- multiplicity
            n <- name
            ty <- option 
                     (Implicit ())
@@ -144,11 +159,12 @@ mutual
            symbol "=>"
            continue indents
            scope <- typeExpr indents
-           pure (ILam () RigW Explicit n ty scope)
+           pure (ILam () rig Explicit n ty scope)
 
   let_ : IndentInfo -> Rule (RawImp ())
   let_ indents
       = do keyword "let"
+           rig <- multiplicity
            n <- name
            symbol "="
            commit
@@ -156,7 +172,7 @@ mutual
            continue indents
            keyword "in"
            scope <- typeExpr indents
-           pure (ILet () RigW n (Implicit ()) val scope)
+           pure (ILet () rig n (Implicit ()) val scope)
     <|> do keyword "let"
            ds <- block topDecl
            continue indents

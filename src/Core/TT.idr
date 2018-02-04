@@ -133,6 +133,26 @@ Eq RigCount where
   (==) _ _ = False
 
 export
+Ord RigCount where
+  compare Rig0 Rig0 = EQ
+  compare Rig0 Rig1 = LT
+  compare Rig0 RigW = LT
+
+  compare Rig1 Rig0 = GT
+  compare Rig1 Rig1 = EQ
+  compare Rig1 RigW = LT
+
+  compare RigW Rig0 = GT
+  compare RigW Rig1 = GT
+  compare RigW RigW = EQ
+
+export
+Show RigCount where
+  show Rig0 = "Rig0"
+  show Rig1 = "Rig1"
+  show RigW = "RigW"
+
+export
 rigPlus : RigCount -> RigCount -> RigCount
 rigPlus Rig0 Rig0 = Rig0
 rigPlus Rig0 Rig1 = Rig1
@@ -190,6 +210,15 @@ multiplicity (Pi c x ty) = c
 multiplicity (PVar c ty) = c
 multiplicity (PLet c val ty) = c
 multiplicity (PVTy c ty) = c
+  
+export
+setMultiplicity : Binder tm -> RigCount -> Binder tm
+setMultiplicity (Lam c x ty) c' = Lam c' x ty
+setMultiplicity (Let c val ty) c' = Let c' val ty
+setMultiplicity (Pi c x ty) c' = Pi c' x ty
+setMultiplicity (PVar c ty) c' = PVar c' ty
+setMultiplicity (PLet c val ty) c' = PLet c' val ty
+setMultiplicity (PVTy c ty) c' = PVTy c' ty
   
 Show ty => Show (Binder ty) where
 	show (Lam _ _ t) = "\\" ++ show t
@@ -340,13 +369,14 @@ namespace AList
 %name AList as
 
 export
-defined : (n : Name) -> Env Term vars -> Maybe (Elem n vars)
+defined : (n : Name) -> Env Term vars -> Maybe (RigCount, Elem n vars)
 defined n [] = Nothing
 defined {vars = x :: xs} n (b :: env) with (nameEq x n)
   defined {vars = n :: xs} n (b :: env) | (Just Refl) 
-      = Just Here
+      = Just (multiplicity b, Here)
   defined {vars = x :: xs} n (b :: env) | Nothing 
-      = Just (There !(defined n env))
+      = do (m, el) <- defined n env
+           Just (m, There el)
 
 -- Make a type which abstracts over an environment
 export
@@ -720,27 +750,32 @@ Show (Term vars) where
   show tm with (unapply tm)
     show (apply f args) | ArgsList = showApp f args
       where
+        showCount : RigCount -> String
+        showCount Rig0 = "0 "
+        showCount Rig1 = "1 "
+        showCount RigW = ""
+
         showApp : Term vars -> List (Term vars) -> String
         showApp (Local {x} y) [] = show x
         showApp (Ref x fn) [] = show fn
-        showApp (Bind n (Lam _ x ty) sc) [] 
-            = assert_total ("\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
-        showApp (Bind n (Let _ val ty) sc) [] 
-            = assert_total ("let " ++ show n ++ " : " ++ show ty ++ " = " ++
+        showApp (Bind n (Lam c x ty) sc) [] 
+            = assert_total ("\\" ++ showCount c ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
+        showApp (Bind n (Let c val ty) sc) [] 
+            = assert_total ("let " ++ showCount c ++ show n ++ " : " ++ show ty ++ " = " ++
 							               show val ++ " in " ++ show sc)
-        showApp (Bind n (Pi _ Explicit ty) sc) [] 
-            = assert_total ("(" ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
-        showApp (Bind n (Pi _ Implicit ty) sc) [] 
-            = assert_total ("{" ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
-        showApp (Bind n (Pi _ AutoImplicit ty) sc) [] 
-            = assert_total ("{auto " ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
-        showApp (Bind n (PVar _ ty) sc) [] 
-            = assert_total ("pat " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
-        showApp (Bind n (PLet _ val ty) sc) [] 
-            = assert_total ("plet " ++ show n ++ " : " ++ show ty ++ " = " ++
+        showApp (Bind n (Pi c Explicit ty) sc) [] 
+            = assert_total ("(" ++ showCount c ++ show n ++ " : " ++ show ty ++ ") -> " ++ show sc)
+        showApp (Bind n (Pi c Implicit ty) sc) [] 
+            = assert_total ("{" ++ showCount c ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
+        showApp (Bind n (Pi c AutoImplicit ty) sc) [] 
+            = assert_total ("{auto " ++ showCount c ++ show n ++ " : " ++ show ty ++ "} -> " ++ show sc)
+        showApp (Bind n (PVar c ty) sc) [] 
+            = assert_total ("pat " ++ showCount c ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
+        showApp (Bind n (PLet c val ty) sc) [] 
+            = assert_total ("plet " ++ showCount c ++ show n ++ " : " ++ show ty ++ " = " ++
 							               show val ++ " in " ++ show sc)
-        showApp (Bind n (PVTy _ ty) sc) [] 
-            = assert_total ("pty " ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
+        showApp (Bind n (PVTy c ty) sc) [] 
+            = assert_total ("pty " ++ showCount c ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
         showApp (App f args) [] = "Can't happen!"
         showApp (PrimVal x) [] = show x
         showApp TType [] = "Type"

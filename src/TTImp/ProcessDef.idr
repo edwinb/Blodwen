@@ -9,6 +9,7 @@ import Core.Normalise
 import TTImp.Elab
 import TTImp.TTImp
 
+import Data.List
 import Control.Catchable
 
 mutual
@@ -26,6 +27,50 @@ mutual
 
   mismatch : Gamma -> (Closure vars, Closure vars) -> Bool
   mismatch gam (x, y) = mismatchNF gam (evalClosure gam x) (evalClosure gam y)
+
+-- Find names which are applied to a function in a Rig1/Rig0 position,
+-- so that we know how they should be bound on the right hand side of the
+-- pattern.
+-- 'bound' counts the number of variables locally bound; these are the
+-- only ones we're checking linearity of (we may be shadowing names if thos
+-- is a local definition, so we need to leave the earlier ones alone)
+findLinear : Gamma -> Nat -> RigCount -> Term vars -> List (Name, RigCount)
+findLinear gam bound rig (Bind n b sc) = findLinear gam (S bound) rig sc
+findLinear gam bound rig tm with (unapply tm)
+  findLinear gam bound rig (apply (Ref _ n) []) | ArgsList = []
+  findLinear gam bound rig (apply (Ref _ n) args) | ArgsList 
+      = case lookupTyExact n gam of
+             Nothing => []
+             Just nty => findLinArg (nf gam [] nty) args
+    where
+      boundHere : Nat -> Elem x xs -> Bool
+      boundHere Z p = False
+      boundHere (S k) Here = True
+      boundHere (S k) (There p) = boundHere k p
+
+      findLinArg : NF [] -> List (Term vars) -> List (Name, RigCount)
+      findLinArg (NBind x (Pi c _ _) sc) (Local {x=a} prf :: as) 
+          = if boundHere bound prf
+               then (a, rigMult c rig) :: 
+                    findLinArg (sc (toClosure False [] (Ref Bound x))) as
+               else findLinArg (sc (toClosure False [] (Ref Bound x))) as
+      findLinArg (NBind x (Pi c _ _) sc) (a :: as) 
+          = findLinear gam bound (rigMult c rig) a ++
+                findLinArg (sc (toClosure False [] (Ref Bound x))) as
+      findLinArg ty (a :: as) = findLinear gam bound rig a ++ findLinArg ty as
+      findLinArg _ [] = []
+  findLinear gam bound rig (apply f args) | ArgsList = []
+
+setLinear : List (Name, RigCount) -> Term vars -> Term vars
+setLinear vs (Bind x (PVar c ty) sc)
+    = case lookup x vs of
+           Just c' => Bind x (PVar c' ty) (setLinear vs sc)
+           _ => Bind x (PVar c ty) (setLinear vs sc)
+setLinear vs (Bind x (PVTy c ty) sc)
+    = case lookup x vs of
+           Just c' => Bind x (PVTy c' ty) (setLinear vs sc)
+           _ => Bind x (PVTy c ty) (setLinear vs sc)
+setLinear vs tm = tm
 
 -- If the terms have the same type constructor at the head, and one of
 -- the argument positions has different constructors at its head, then this
@@ -71,8 +116,14 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
 
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
-         (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs lhsty
-         log 3 ("LHS: " ++ show lhs ++ " : " ++ show reqty)
+         let linvars = findLinear gam 0 Rig1 lhs
+         log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
+                 show linvars
+         let lhs' = setLinear linvars lhs
+         let lhsty' = setLinear linvars lhsty
+
+         (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs' lhsty'
+         log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
          rhs <- wrapError (InRHS loc defining) $
                 checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
 

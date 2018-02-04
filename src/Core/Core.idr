@@ -24,6 +24,8 @@ data Error annot
     | WhenUnifying annot (Env Term vars) (Term vars) (Term vars) (Error annot)
     | ValidCase annot (Env Term vars) (Either (Term vars) (Error annot))
     | UndefinedName annot Name
+    | LinearUsed annot Nat Name
+    | LinearMisuse annot Name RigCount RigCount
     | AmbiguousName annot (List Name)
     | AmbiguousElab annot (List (Term vars))
     | AllFailed (List (Error annot))
@@ -72,6 +74,22 @@ Show annot => Show (Error annot) where
              Left tm => assert_total (show tm) ++ " is not a valid impossible pattern because it typechecks"
              Right err => "Not a valid impossible pattern:\n\t" ++ assert_total (show err)
   show (UndefinedName fc x) = show fc ++ ":Undefined name " ++ show x
+  show (LinearUsed fc count n)
+      = show fc ++ ":There are " ++ show count ++ " uses of linear name " ++ show n
+  show (LinearMisuse fc n exp ctx)
+      = show fc ++ ":Trying to use " ++ showRig exp ++ " name " ++ show n ++
+                   " in " ++ showRel ctx ++ " context"
+     where
+       showRig : RigCount -> String
+       showRig Rig0 = "erased"
+       showRig Rig1 = "linear"
+       showRig RigW = "non-linear"
+
+       showRel : RigCount -> String
+       showRel Rig0 = "irrelevant"
+       showRel Rig1 = "relevant"
+       showRel RigW = "non-linear"
+
   show (AmbiguousName fc ns) = show fc ++ ":Ambiguous name " ++ show ns
   show (AmbiguousElab fc ts) = show fc ++ ":Ambiguous elaboration " ++ show ts
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
