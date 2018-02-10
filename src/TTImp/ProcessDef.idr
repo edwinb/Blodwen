@@ -129,7 +129,7 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
 
          wrapError (InRHS loc defining) $ checkUserHoles loc False
 
-         log 3 ("Clause: " ++ show lhs ++ " = " ++ show rhs)
+         log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs))
   where
     extend : Env Term vars -> NestedNames vars -> 

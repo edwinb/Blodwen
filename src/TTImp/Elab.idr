@@ -5,15 +5,19 @@ import public TTImp.Elab.State
 import public TTImp.Elab.Term
 import Core.CaseTree
 import Core.Context
+import Core.LinearCheck
 import Core.Normalise
 import Core.TT
-import Core.Typecheck
 import Core.Unify
 
 import Data.List
 import Data.List.Views
 
 %default covering
+
+getRigNeeded : ElabMode -> RigCount
+getRigNeeded InType = Rig0 -- unrestricted usage in types
+getRigNeeded _ = Rig1
 
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
@@ -28,7 +32,8 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
 elabTerm process defining env nest impmode elabmode tm tyin
     = do resetHoles
          e <- newRef EST (initEState defining)
-         (chktm, ty) <- check {e} Rig1 process (initElabInfo impmode elabmode) env nest tm tyin
+         let rigc = getRigNeeded elabmode
+         (chktm, ty) <- check {e} rigc process (initElabInfo impmode elabmode) env nest tm tyin
          log 10 $ "Initial check: " ++ show chktm ++ " : " ++ show ty
          solveConstraints (case elabmode of
                                 InLHS => InLHS
@@ -57,6 +62,7 @@ elabTerm process defining env nest impmode elabmode tm tyin
          normaliseHoleTypes
          clearSolvedHoles
          dumpConstraints 2 False
+         linearCheck (getAnnot tm) rigc env ptm'
          pure (ptm', pty')
 
 export
