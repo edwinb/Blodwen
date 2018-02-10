@@ -138,11 +138,23 @@ mutual
     <|> do start <- location
            symbol "("
            bracketedExpr fname start indents
+  
+  getMult : Constant -> EmptyRule RigCount
+  getMult (BI 0) = pure Rig0
+  getMult (BI 1) = pure Rig1
+  getMult _ = fail "Invalid multiplicity"
+
+  multiplicity : EmptyRule RigCount
+  multiplicity
+      = do c <- constant
+           getMult c
+    <|> pure RigW
 
   explicitPi : FileName -> IndentInfo -> Rule PTerm
   explicitPi fname indents
       = do start <- location
            symbol "("
+           rig <- multiplicity
            n <- name
            symbol ":"
            commit
@@ -151,7 +163,7 @@ mutual
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) RigW Explicit (Just n) ty scope)
+           pure (PPi (MkFC fname start end) rig Explicit (Just n) ty scope)
 
   autoImplicitPi : FileName -> IndentInfo -> Rule PTerm
   autoImplicitPi fname indents
@@ -159,6 +171,7 @@ mutual
            symbol "{"
            keyword "auto"
            commit
+           rig <- multiplicity
            n <- name
            symbol ":"
            ty <- expr fname indents
@@ -166,12 +179,13 @@ mutual
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) RigW AutoImplicit (Just n) ty scope)
+           pure (PPi (MkFC fname start end) rig AutoImplicit (Just n) ty scope)
 
   implicitPi : FileName -> IndentInfo -> Rule PTerm
   implicitPi fname indents
       = do start <- location
            symbol "{"
+           rig <- multiplicity
            n <- name
            symbol ":"
            commit
@@ -180,12 +194,13 @@ mutual
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) RigW Implicit (Just n) ty scope)
+           pure (PPi (MkFC fname start end) rig Implicit (Just n) ty scope)
 
   lam : FileName -> IndentInfo -> Rule PTerm
   lam fname indents
       = do start <- location
            symbol "\\"
+           rig <- multiplicity
            n <- name
            ty <- option 
                     (PImplicit (MkFC fname start start))
@@ -195,12 +210,13 @@ mutual
            continue indents
            scope <- typeExpr fname indents
            end <- location
-           pure (PLam (MkFC fname start end) RigW Explicit n ty scope)
+           pure (PLam (MkFC fname start end) rig Explicit n ty scope)
 
   let_ : FileName -> IndentInfo -> Rule PTerm
   let_ fname indents
       = do start <- location
            keyword "let"
+           rig <- multiplicity
            n <- name
            symbol "="
            commit
@@ -209,7 +225,7 @@ mutual
            keyword "in"
            scope <- typeExpr fname indents
            end <- location
-           pure (PLet (MkFC fname start end) RigW n (PImplicit (MkFC fname start end)) val scope)
+           pure (PLet (MkFC fname start end) rig n (PImplicit (MkFC fname start end)) val scope)
     <|> do start <- location
            keyword "let"
            ds <- block (topDecl fname)
