@@ -566,6 +566,17 @@ updateDef n def
                        setCtxt (addCtxt n gdef g)
  
 export
+updateTy : {auto x : Ref Ctxt Defs} ->
+						Name -> ClosedTerm -> Core annot ()
+updateTy n ty
+    = do g <- getCtxt
+         case lookupCtxtExact n g of
+              Nothing => throw (InternalError ("No such name to update " ++ show n))
+              Just odef => 
+                   let gdef = record { type = ty } odef in
+                       setCtxt (addCtxt n gdef g)
+ 
+export
 setFlag : {auto x : Ref Ctxt Defs} ->
 					annot -> Name -> DefFlag -> Core annot ()
 setFlag loc n fl

@@ -37,6 +37,74 @@ count : Elem x ns -> Usage ns -> Nat
 count p [] = 0
 count p (q :: xs) = if sameVar p q then 1 + count p xs else count p xs
 
+-- If there are holes in the given term, update the hole's type to reflect
+-- whether the given variable was used (in a Rig1 position) elsewhere.
+-- If it *was* used elsewhere, the hole's type should have it at a rig
+-- count of zero, otherwise its rig count should be left alone.
+-- That is: the 'useInHole' argument reflects whether the given variable
+-- should be treated as Rig1 when we encounter the next hole
+
+-- If there's more than one hole, assume the variable gets used in the
+-- first one we encounter (so continue with 'useInHole' as False after
+-- encountering a hole)
+
+-- Returns 'False' if no hole encountered (so no need to change usage data
+-- for the rest of the definition)
+mutual
+  updateHoleUsageArgs : {auto c : Ref Ctxt Defs} ->
+                        (useInHole : Bool) ->
+                        Elem x vars -> List (Term vars) -> Core annot Bool 
+  updateHoleUsageArgs useInHole var [] = pure False
+  updateHoleUsageArgs useInHole var (a :: as)
+      = do h <- updateHoleUsage useInHole var a
+           h' <- updateHoleUsageArgs (useInHole && not h) var as
+           pure (h || h')
+
+  updateHoleType : {auto c : Ref Ctxt Defs} ->
+                   (useInHole : Bool) ->
+                   Elem x vars -> Nat -> Term vs -> List (Term vars) ->
+                   Core annot (Term vs)
+  updateHoleType useInHole var (S k) (Bind nm (Pi c e ty) sc) (Local v :: as)
+      -- if the argument to the hole type is the variable of interest,
+      -- and the variable should be used in the hole, set it to Rig1,
+      -- otherwise set it to Rig0
+      = if sameVar var v
+           then do scty <- updateHoleType False var k sc as
+                   let c' = if useInHole then c else Rig0
+                   pure (Bind nm (Pi c' e ty) scty)
+           else do scty <- updateHoleType useInHole var k sc as
+                   pure (Bind nm (Pi c e ty) scty)
+  updateHoleType useInHole var (S k) (Bind nm (Pi c e ty) sc) (a :: as)
+      = do updateHoleUsage False var a
+           scty <- updateHoleType useInHole var k sc as
+           pure (Bind nm (Pi c e ty) scty)
+  updateHoleType useInHole var _ ty as 
+      = do updateHoleUsageArgs False var as
+           pure ty
+
+  updateHoleUsage : {auto c : Ref Ctxt Defs} ->
+                    (useInHole : Bool) ->
+                    Elem x vars -> Term vars -> Core annot Bool 
+  updateHoleUsage useInHole var (Bind n (Let c val ty) sc)
+        = do h <- updateHoleUsage useInHole var val
+             h' <- updateHoleUsage (useInHole && not h) (There var) sc
+             pure (h || h')
+  updateHoleUsage useInHole var (Bind n b sc)
+        = updateHoleUsage useInHole (There var) sc
+  updateHoleUsage useInHole var tm with (unapply tm)
+    updateHoleUsage useInHole var (apply (Ref nt fn) args) | ArgsList 
+        = do gam <- getCtxt
+             case lookupDefTyExact fn gam of
+                  Just (Hole locs pvar, ty)
+                    => do ty' <- updateHoleType useInHole var locs ty args
+                          updateTy fn ty'
+                          pure True
+                  _ => updateHoleUsageArgs useInHole var args
+    updateHoleUsage useInHole var (apply f []) | ArgsList 
+        = pure False
+    updateHoleUsage useInHole var (apply f args) | ArgsList 
+        = updateHoleUsageArgs useInHole var (f :: args)
+
 -- Linearity checking of an already checked term. This serves two purposes:
 --  + Checking correct usage of linear bindings
 --  + updating hole types to reflect usage counts correctly
@@ -65,22 +133,38 @@ mutual
       = do gam <- getCtxt
            case lookupDefTyExact fn gam of
                 Nothing => throw (InternalError ("Linearity checking failed on " ++ show fn))
+                -- Don't count variable usage in holes, so as far as linearity
+                -- checking is concerned, update the type so that the binders
+                -- are in Rig0
+                Just (Hole locs _, ty) => 
+                     pure (Ref nt fn, embed (unusedHoleArgs locs ty), [])
                 Just (def, ty) => pure (Ref nt fn, embed ty, [])
+    where
+      unusedHoleArgs : Nat -> Term vars -> Term vars
+      unusedHoleArgs (S k) (Bind n (Pi _ e ty) sc)
+          = Bind n (Pi Rig0 e ty) (unusedHoleArgs k sc)
+      unusedHoleArgs _ ty = ty
 
   lcheck loc rig env (Bind nm b sc)
       = do (b', bt, usedb) <- lcheckBinder loc rig env b
            (sc', sct, usedsc) <- lcheck loc rig (b' :: env) sc
-           checkUsageOK (rigMult (multiplicity b) rig) usedsc
+           let used = count Here usedsc
+           holeFound <- if multiplicity b == Rig1
+                           then updateHoleUsage (used == 0) Here sc'
+                           else pure False
+           -- if there's a hole, assume it will contain the missing usage
+           -- if there is none already
+           checkUsageOK (if holeFound && used == 0 then 1 else used)
+                        (rigMult (multiplicity b) rig)
            pure $ discharge nm b' bt sc' sct (usedb ++ doneScope usedsc)
     where
-      checkUsageOK : RigCount -> Usage (nm :: vars) -> Core annot ()
-      checkUsageOK Rig0 _ = pure ()
-      checkUsageOK RigW _ = pure ()
-      checkUsageOK Rig1 ns 
-          = let used = count Here ns in
-                if used == 1 
-                   then pure ()
-                   else throw (LinearUsed loc used nm)
+      checkUsageOK : Nat -> RigCount -> Core annot ()
+      checkUsageOK used Rig0 = pure ()
+      checkUsageOK used RigW = pure ()
+      checkUsageOK used Rig1 
+          = if used == 1 
+               then pure ()
+               else throw (LinearUsed loc used nm)
 
   lcheck loc rig env (App f a)
       = do (f', fty, fused) <- lcheck loc rig env f
