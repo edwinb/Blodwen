@@ -4,6 +4,7 @@ Processing as TTImp
 LOG 0: --- CONSTRAINTS AND HOLES ---
 LOG 0: ?Main.something : (m : Main.Nat) -> (a : Type) -> (ys : (Main.Vect m a)) -> (n : Main.Nat) -> (xs : (Main.Vect n a)) -> ({k:45} : Main.Nat) -> ({a:44} : Type) -> (xs : (Main.Vect {k:45} {a:44})) -> (x : {a:44}) -> ({imp_pat:43} : (Main.Vect (Main.S {k:45}) {a:44})) -> ({imp_pat:39} : Main.Nat) -> ({imp_pat:41} : (Main.Vect {imp_pat:39} {a:44})) -> (n : Main.Nat) -> (ys : (Main.Vect {imp_pat:39} {a:44})) -> (a : Type) -> (m : Main.Nat) -> (Main.Vect (Main.plus {k:45} {imp_pat:39}) {a:44})
 Blodwen> (Main.Cons __ 1 __ (Main.Cons __ 2 __ (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
+Blodwen> (Main.Cons __ 1 __ (Main.something (Main.S (Main.S Main.Z)) Integer (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))) (Main.S (Main.S Main.Z)) (Main.Cons __ 1 __ (Main.Cons __ 2 __ (Main.Nil __))) (Main.S Main.Z) Integer (Main.Cons __ 2 __ (Main.Nil __)) 1 (Main.Cons __ 1 __ (Main.Cons __ 2 __ (Main.Nil __))) (Main.S (Main.S Main.Z)) (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))) (Main.S (Main.S Main.Z)) (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))) Integer (Main.S (Main.S Main.Z)))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
 Loading cases.ttc
@@ -11,4 +12,5 @@ Processing as TTC
 LOG 0: --- CONSTRAINTS AND HOLES ---
 LOG 0: ?Main.something : (m : Main.Nat) -> (a : Type) -> (ys : (Main.Vect m a)) -> (n : Main.Nat) -> (xs : (Main.Vect n a)) -> ({k:45} : Main.Nat) -> ({a:44} : Type) -> (xs : (Main.Vect {k:45} {a:44})) -> (x : {a:44}) -> ({imp_pat:43} : (Main.Vect (Main.S {k:45}) {a:44})) -> ({imp_pat:39} : Main.Nat) -> ({imp_pat:41} : (Main.Vect {imp_pat:39} {a:44})) -> (n : Main.Nat) -> (ys : (Main.Vect {imp_pat:39} {a:44})) -> (a : Type) -> (m : Main.Nat) -> (Main.Vect (Main.plus {k:45} {imp_pat:39}) {a:44})
 Blodwen> (Main.Cons __ 1 __ (Main.Cons __ 2 __ (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
+Blodwen> (Main.Cons __ 1 __ (Main.something (Main.S (Main.S Main.Z)) Integer (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))) (Main.S (Main.S Main.Z)) (Main.Cons __ 1 __ (Main.Cons __ 2 __ (Main.Nil __))) (Main.S Main.Z) Integer (Main.Cons __ 2 __ (Main.Nil __)) 1 (Main.Cons __ 1 __ (Main.Cons __ 2 __ (Main.Nil __))) (Main.S (Main.S Main.Z)) (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))) (Main.S (Main.S Main.Z)) (Main.Cons __ 3 __ (Main.Cons __ 4 __ (Main.Nil __))) Integer (Main.S (Main.S Main.Z)))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
 Blodwen> Bye for now!

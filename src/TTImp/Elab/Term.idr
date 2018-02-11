@@ -352,7 +352,9 @@ mutual
                              Nothing =>
                                 do t <- addHole loc env TType
                                    pure (mkConstantApp t env)
-           let casefnty = abstractEnvType env 
+           let casefnty = abstractEnvType env $
+                           embed $
+                            abstractEnvType env 
                                (Bind scrn (Pi RigW Explicit scrty) 
                                           (weaken caseretty))
 
@@ -361,9 +363,12 @@ mutual
 
            let alts' = map (updateClause casen env) alts
            log 5 $ "Generated alts: " ++ show alts'
-           process c u i env nest (IDef loc casen alts')
 
-           pure (App (mkConstantApp casen env) scrtm, caseretty)
+           let nest' = record { names $= ((casen, (casen, 
+                                    (mkConstantApp casen env))) ::) } nest
+           process c u i env nest' (IDef loc casen alts')
+
+           pure (App (applyTo (mkConstantApp casen env) env) scrtm, caseretty)
     where
       asBind : Name -> annot -> RawImp annot -> RawImp annot
       asBind (UN n) ann tm = IAs ann n tm
