@@ -133,59 +133,10 @@ mutual
       = checkLam (bindRig rigc) process elabinfo loc env nest rigl plicity n ty scope expected
   checkImp rigc process elabinfo env nest (ILet loc rigl n nTy nVal scope) expected 
       = checkLet (bindRig rigc) process elabinfo loc env nest rigl n nTy nVal scope expected
-  checkImp {vars} {c} {u} {i} rigc process elabinfo env nest (ICase loc scr alts) expected 
-      = do (scrtm, scrty) <- check rigc process elabinfo env nest scr Nothing
-           log 0 $ "Expected: " ++ show expected
-           log 0 $ "Scrutinee: " ++ show scrtm ++ " : " ++ show scrty
-           log 0 $ "Env: " ++ show env
-           log 0 $ "Alts: " ++ show alts
-           throw (InternalError "Case not yet implemented")
-  checkImp {vars} {c} {u} {i} rigc process elabinfo env nest (ILocal loc nested scope) expected 
-      = do let defNames = definedInBlock nested
-           est <- get EST
-           let f = defining est
-           let nest' = record { names $= ((map (applyEnv f) defNames) ++) } nest
-           let env' = dropLinear env
-           traverse (process c u i env' nest') (map (updateName nest') nested)
-           checkImp rigc process elabinfo env nest' scope expected
-    where
-      -- For the local definitions, don't allow access to linear things
-      -- unless they're explicitly passed.
-      -- This is because, at the moment, we don't have any mechanism of
-      -- ensuring the nested definition is used exactly once
-      dropLinear : Env Term vs -> Env Term vs
-      dropLinear [] = []
-      dropLinear (b :: bs) 
-          = if multiplicity b == Rig1
-               then setMultiplicity b Rig0 :: dropLinear bs
-               else b :: dropLinear bs
-
-      applyEnv : Name -> Name -> (Name, (Name, Term vars))
-      applyEnv outer inner = (inner, (GN (Nested outer inner), 
-                                      mkConstantApp (GN (Nested outer inner)) env))
-
-      -- Update the names in the declarations to the new 'nested' names.
-      -- When we encounter the names in elaboration, we'll update to an
-      -- application of the nested name.
-      newName : NestedNames vars -> Name -> Name
-      newName nest n 
-          = case lookup n (names nest) of
-                 Just (n', _) => n'
-                 _ => n
-
-      updateTyName : NestedNames vars -> ImpTy annot -> ImpTy annot
-      updateTyName nest (MkImpTy loc' n ty) = MkImpTy loc' (newName nest n) ty
-
-      updateDataName : NestedNames vars -> ImpData annot -> ImpData annot
-      updateDataName nest (MkImpData loc' n tycons dcons)
-          = MkImpData loc' (newName nest n) tycons (map (updateTyName nest) dcons)
-
-      updateName : NestedNames vars -> ImpDecl annot -> ImpDecl annot
-      updateName nest (IClaim loc' ty) = IClaim loc' (updateTyName nest ty)
-      updateName nest (IDef loc' n cs) = IDef loc' (newName nest n) cs
-      updateName nest (IData loc' d) = IData loc' (updateDataName nest d)
-      updateName nest i = i
-
+  checkImp rigc process elabinfo env nest (ICase loc scr alts) expected 
+      = checkCase rigc process elabinfo loc env nest scr alts expected
+  checkImp rigc process elabinfo env nest (ILocal loc nested scope) expected 
+      = checkLocal rigc process elabinfo loc env nest nested scope expected
   checkImp rigc process elabinfo env nest (IApp loc fn arg) expected 
       = do -- Collect the implicits from the top level application first
            let (fn', args) = collectGivenImps fn
@@ -382,6 +333,121 @@ mutual
                             (quote empty env ty) expected
                   else throw (BadPattern loc n)
 
+  checkCase : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+              {auto e : Ref EST (EState vars)} ->
+              {auto i : Ref ImpST (ImpState annot)} ->
+              RigCount -> Elaborator annot ->
+              ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
+              RawImp annot -> List (ImpClause annot) ->
+              Maybe (Term vars) ->
+              Core annot (Term vars, Term vars)
+  checkCase {c} {u} {i} rigc process elabinfo loc env nest scr alts expected
+      = do (scrtm, scrty) <- check rigc process elabinfo env nest scr Nothing
+           log 5 $ "Case scrutinee: " ++ show scrtm ++ " : " ++ show scrty
+           scrn <- genName "scr"
+           est <- get EST
+           casen <- genCaseName (defining est)
+           caseretty <- case expected of
+                             Just ty => pure ty
+                             Nothing =>
+                                do t <- addHole loc env TType
+                                   pure (mkConstantApp t env)
+           let casefnty = abstractEnvType env 
+                               (Bind scrn (Pi RigW Explicit scrty) 
+                                          (weaken caseretty))
+          
+           log 5 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
+           addDef casen (newDef casefnty Private None)
+
+           let alts' = map (updateClause casen env) alts
+           log 5 $ "Generated alts: " ++ show alts'
+           process c u i env nest (IDef loc casen alts')
+
+           pure (App (mkConstantApp casen env) scrtm, caseretty)
+    where
+      asBind : Name -> annot -> RawImp annot -> RawImp annot
+      asBind (UN n) ann tm = IAs ann n tm
+      asBind _ ann tm = tm
+
+      addEnv : Env Term vs -> List Name -> List (RawImp annot)
+      addEnv [] used = []
+      addEnv ((::) {x} b bs) used
+          = if x `elem` used
+               then Implicit loc :: addEnv bs used
+               else asBind x loc (Implicit loc) :: addEnv bs (x :: used)
+
+      -- Names used in the pattern we're matching on, so don't bind them
+      -- in the generated case block
+      usedIn : RawImp annot -> List Name
+      usedIn (IBindVar _ n) = [UN n]
+      usedIn (IApp _ f a) = usedIn f ++ usedIn a
+      usedIn (IAs _ n a) = UN n :: usedIn a
+      usedIn _ = []
+
+      updateClause : Name -> Env Term vars -> ImpClause annot -> ImpClause annot
+      updateClause casen env (PatClause loc' lhs rhs)
+          = let args = addEnv env (usedIn lhs) in
+                PatClause loc' (apply (IVar loc casen) (reverse (lhs :: args))) rhs
+      updateClause casen env (ImpossibleClause loc' lhs)
+          = let args = addEnv env (usedIn lhs) in
+                ImpossibleClause loc' (apply (IVar loc casen) (reverse (lhs :: args)))
+  
+  checkLocal : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+               {auto e : Ref EST (EState vars)} ->
+               {auto i : Ref ImpST (ImpState annot)} ->
+               RigCount -> Elaborator annot ->
+               ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
+               List (ImpDecl annot) -> RawImp annot ->
+               Maybe (Term vars) ->
+               Core annot (Term vars, Term vars)
+  checkLocal {vars} {c} {u} {i} rigc process elabinfo loc env nest nested scope expected
+      = do let defNames = definedInBlock nested
+           est <- get EST
+           let f = defining est
+           let nest' = record { names $= ((map (applyEnv f) defNames) ++) } nest
+           let env' = dropLinear env
+           traverse (process c u i env' nest') (map (updateName nest') nested)
+           checkImp rigc process elabinfo env nest' scope expected
+    where
+      -- For the local definitions, don't allow access to linear things
+      -- unless they're explicitly passed.
+      -- This is because, at the moment, we don't have any mechanism of
+      -- ensuring the nested definition is used exactly once
+      dropLinear : Env Term vs -> Env Term vs
+      dropLinear [] = []
+      dropLinear (b :: bs) 
+          = if multiplicity b == Rig1
+               then setMultiplicity b Rig0 :: dropLinear bs
+               else b :: dropLinear bs
+
+      applyEnv : Name -> Name -> (Name, (Name, Term vars))
+      applyEnv outer inner = (inner, (GN (Nested outer inner), 
+                                      mkConstantApp (GN (Nested outer inner)) env))
+
+      -- Update the names in the declarations to the new 'nested' names.
+      -- When we encounter the names in elaboration, we'll update to an
+      -- application of the nested name.
+      newName : NestedNames vars -> Name -> Name
+      newName nest n 
+          = case lookup n (names nest) of
+                 Just (n', _) => n'
+                 _ => n
+
+      updateTyName : NestedNames vars -> ImpTy annot -> ImpTy annot
+      updateTyName nest (MkImpTy loc' n ty) = MkImpTy loc' (newName nest n) ty
+
+      updateDataName : NestedNames vars -> ImpData annot -> ImpData annot
+      updateDataName nest (MkImpData loc' n tycons dcons)
+          = MkImpData loc' (newName nest n) tycons (map (updateTyName nest) dcons)
+
+      updateName : NestedNames vars -> ImpDecl annot -> ImpDecl annot
+      updateName nest (IClaim loc' ty) = IClaim loc' (updateTyName nest ty)
+      updateName nest (IDef loc' n cs) = IDef loc' (newName nest n) cs
+      updateName nest (IData loc' d) = IData loc' (updateDataName nest d)
+      updateName nest i = i
+
+
+
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
@@ -393,7 +459,6 @@ mutual
   checkAs rigc process elabinfo loc env nest var tm expected
       = do let n = PV var
            (patTm, patTy) <- checkImp rigc process elabinfo env nest tm (Just expected)
-           addBoundName loc n False env expected
            est <- get EST
            case lookup n (boundNames est) of
                 Just (tm, ty) =>

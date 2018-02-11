@@ -157,7 +157,7 @@ mutual
     compare (CaseBlock _ _) (Nested _ _) = GT
     compare (WithBlock _ _) (Nested _ _) = GT
     
-    compare (WithBlock _ _) (CaseBlock _ _) = LT
+    compare (WithBlock _ _) (CaseBlock _ _) = GT
 
     compare (Nested x1 x2) (Nested y1 y2) 
         = case compare x1 y1 of

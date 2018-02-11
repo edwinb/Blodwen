@@ -294,12 +294,13 @@ getToBind {vars} env
 bindImplVars : Int -> 
                ImplicitMode ->
                Gamma ->
+               Env Term vars ->
                List (Name, Term vars) ->
                Term vars -> Term vars -> (Term vars, Term vars)
-bindImplVars i NONE gam args scope scty = (scope, scty)
-bindImplVars i mode gam [] scope scty = (scope, scty)
-bindImplVars i mode gam ((n, ty) :: imps) scope scty
-    = let (scope', ty') = bindImplVars (i + 1) mode gam imps scope scty
+bindImplVars i NONE gam env args scope scty = (scope, scty)
+bindImplVars i mode gam env [] scope scty = (scope, scty)
+bindImplVars i mode gam env ((n, ty) :: imps) scope scty
+    = let (scope', ty') = bindImplVars (i + 1) mode gam env imps scope scty
           tmpN = MN "unb" i
           repNameTm = repName (Ref Bound tmpN) scope' 
           repNameTy = repName (Ref Bound tmpN) ty'
@@ -312,14 +313,17 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                           -- otherwise reduce it
                           case n of
                                PV _ =>
-                                  (Bind n' (PLet RigW (embed (normalise gam [] (Ref Func n))) ty) 
+                                  -- Need to apply 'n' to the surrounding environment in these cases!
+                                  -- otherwise it won't work in nested defs...
+
+                                  (Bind n' (PLet RigW (normalise gam env (applyTo (Ref Func n) env)) ty) 
                                            (refToLocal tmpN n' repNameTm), 
                                    Bind n' 
-                                        (PLet RigW (embed (normalise gam [] (Ref Func n))) ty) 
+                                        (PLet RigW (normalise gam env (applyTo (Ref Func n) env)) ty) 
                                               (refToLocal tmpN n' repNameTy))
-                               _ => (subst (embed (normalise gam [] (Ref Func n)))
+                               _ => (subst (normalise gam env (applyTo (Ref Func n) env))
                                            (refToLocal tmpN n repNameTm),
-                                     subst (embed (normalise gam [] (Ref Func n)))
+                                     subst (normalise gam env (applyTo (Ref Func n) env))
                                            (refToLocal tmpN n repNameTy))
                        _ =>
                           (Bind n' (PVar RigW ty) (refToLocal tmpN n' repNameTm), 
@@ -328,9 +332,9 @@ bindImplVars i mode gam ((n, ty) :: imps) scope scty
                PI _ =>
                   case lookupDefExact n gam of
                      Just (PMDef _ _ t) =>
-                        (subst (embed (normalise gam [] (Ref Func n)))
+                        (subst (normalise gam env (applyTo (Ref Func n) env))
                                (refToLocal tmpN n repNameTm),
-                         subst (embed (normalise gam [] (Ref Func n)))
+                         subst (normalise gam env (applyTo (Ref Func n) env))
                                (refToLocal tmpN n repNameTy))
                      _ => (Bind n' (Pi RigW Implicit ty) (refToLocal tmpN n' repNameTm), ty')
                _ => (Bind n' (Pi RigW Implicit ty) (refToLocal tmpN n' repNameTm), ty')
@@ -368,7 +372,7 @@ bindImplicits : ImplicitMode ->
                 List (Name, Term vars) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
 bindImplicits {vars} mode gam env hs tm ty 
-   = bindImplVars 0 mode gam (map nHoles hs)
+   = bindImplVars 0 mode gam env (map nHoles hs)
                              (normaliseHoles gam env tm)
                              (normaliseHoles gam env ty)
   where

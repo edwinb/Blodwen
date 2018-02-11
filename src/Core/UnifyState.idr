@@ -220,14 +220,18 @@ mkConstantAppArgs (b :: env) xs
     = let rec = mkConstantAppArgs env xs in
           Local Here :: map weaken rec
 
+export
+applyTo : Term vars -> Env Term vars -> Term vars
+applyTo {vars} tm env
+  = let args = reverse (mkConstantAppArgs {done = []} env []) in
+        apply tm (rewrite sym (appendNilRightNeutral vars) in args)
+
 -- Apply a named constant to the current environment.
 export
 mkConstantApp : Name -> Env Term vars -> Term vars
 -- Leftmost argument is the outermost variable, so make a list of local
 -- variables then reverse it
-mkConstantApp {vars} cn env 
-  = let args = reverse (mkConstantAppArgs {done = []} env []) in
-        apply (Ref Func cn) (rewrite sym (appendNilRightNeutral vars) in args)
+mkConstantApp cn env = applyTo (Ref Func cn) env
 
 -- Given a term and a type, add a new guarded constant to the global context
 -- by applying the term to the current environment

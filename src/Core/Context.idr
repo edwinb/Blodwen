@@ -39,7 +39,9 @@ export
 lookupCtxtName : Name -> Context a -> List (Name, a)
 lookupCtxtName n dict
     = case userNameRoot n of
-           Nothing => []
+           Nothing => case lookupCtxtExact n dict of
+                           Nothing => []
+                           Just res => [(n, res)]
            Just r => case lookup r (hierarchy dict) of
                           Nothing => []
                           Just ns => filter (matches n) ns
@@ -476,7 +478,7 @@ inCurrentNS n@(MN _ _)
          pure (NS (currentNS defs) n)
 inCurrentNS n = pure n
 
--- Note that the name should be saved when writing out a .tti
+-- Note that the name should be saved when writing out a .ttc
 export
 addToSave : {auto c : Ref Ctxt Defs} ->
             Name -> Core annot ()
@@ -516,6 +518,22 @@ genName root
     = do ust <- get Ctxt
          put Ctxt (record { nextVar $= (+1) } ust)
          inCurrentNS (MN root (nextVar ust))
+
+export
+genCaseName : {auto x : Ref Ctxt Defs} ->
+			     		Name -> Core annot Name
+genCaseName root
+    = do ust <- get Ctxt
+         put Ctxt (record { nextVar $= (+1) } ust)
+         pure (GN (CaseBlock root (nextVar ust)))
+
+export
+genWithName : {auto x : Ref Ctxt Defs} ->
+			     		Name -> Core annot Name
+genWithName root
+    = do ust <- get Ctxt
+         put Ctxt (record { nextVar $= (+1) } ust)
+         pure (GN (WithBlock root (nextVar ust)))
 
 export
 setCtxt : {auto x : Ref Ctxt Defs} -> Gamma -> Core annot ()
