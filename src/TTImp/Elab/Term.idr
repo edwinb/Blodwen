@@ -355,8 +355,8 @@ mutual
            let casefnty = abstractEnvType env 
                                (Bind scrn (Pi RigW Explicit scrty) 
                                           (weaken caseretty))
-          
-           log 5 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
+
+           log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
            addDef casen (newDef casefnty Private None)
 
            let alts' = map (updateClause casen env) alts
@@ -445,8 +445,6 @@ mutual
       updateName nest (IDef loc' n cs) = IDef loc' (newName nest n) cs
       updateName nest (IData loc' d) = IData loc' (updateDataName nest d)
       updateName nest i = i
-
-
 
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->

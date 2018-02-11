@@ -8,6 +8,7 @@ import Core.Normalise
 import Core.Unify
 
 import Data.List
+import Data.CSet
 
 -- How the elaborator should deal with IBindVar:
 -- * NONE: IBindVar is not valid (rhs of an definition, top level expression)
@@ -245,6 +246,9 @@ setBound ns
 
 -- 'toBind' are the names which are to be implicitly bound (pattern bindings and
 -- unbound implicits).
+-- Return the names in the order they should be bound: i.e. respecting
+-- dependencies between types, and putting @-patterns last because their
+-- value is determined from the patterns
 export
 getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
             {auto u : Ref UST (UState annot)} ->
@@ -258,13 +262,17 @@ getToBind {vars} env
          log 10 $ "With holes " ++ show (map snd (holes ust))
          -- if we encounter a hole name that we've seen before, and is now 
          -- stored in boundImplicits, we don't want to bind it again
-         normImps gam (boundImplicits est) (asLast (asVariables est)
-                                                   (reverse $ toBind est))
+         res <- normImps gam (boundImplicits est) (reverse $ toBind est)
+         let hnames = map fst res
+         log 5 $ "Sorting " ++ show res
+         let ret = asLast (asVariables est) (depSort hnames res)
+         log 5 $ "Sorted " ++ show ret
+         pure ret
   where
     -- put the @-pattern bound names last (so that we have the thing they're
     -- equal to bound first)
-    asLast : List Name -> List (Name, Term vars, Term vars) -> 
-                          List (Name, Term vars, Term vars)
+    asLast : List Name -> List (Name, Term vars) -> 
+                          List (Name, Term vars)
     asLast asvars ns 
         = filter (\p => not (fst p `elem` asvars)) ns ++
           filter (\p => fst p `elem` asvars) ns
@@ -289,6 +297,27 @@ getToBind {vars} env
                       else normImps gam ns ts
              _ => do rest <- normImps gam (n :: ns) ts
                      pure ((n, normaliseHoles gam env ty) :: rest)
+    
+    -- Insert the hole/binding pair into the list before the first thing
+    -- which refers to it
+    insert : (Name, Term vars) -> List Name -> List Name -> 
+             List (Name, Term vars) -> 
+             List (Name, Term vars)
+    insert h ns sofar [] = [h]
+    insert (hn, hty) ns sofar ((hn', hty') :: rest)
+        = let used = filter (\n => elem n ns) (toList (getRefs hty')) in
+              if hn `elem` used
+                 then (hn, hty) :: (hn', hty') :: rest
+                 else (hn', hty') :: 
+                          insert (hn, hty) ns (hn' :: sofar) rest
+    
+    -- Sort the list of implicits so that each binding is inserted *after*
+    -- all the things it depends on (assumes no cycles)
+    depSort : List Name -> List (Name, Term vars) -> 
+              List (Name, Term vars)
+    depSort hnames [] = []
+    depSort hnames (h :: hs) = insert h hnames [] (depSort hnames hs)
+
 
 -- Bind implicit arguments, returning the new term and its updated type
 bindImplVars : Int -> 
