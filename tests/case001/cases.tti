@@ -18,8 +18,8 @@ append {a=a} {n=n} {m=m} xs ys
            Nil => ys
            Cons x xs => Cons x (append xs ys)
 
-append2 : Vect n a -> Vect m a -> Vect (plus n m) a
-append2 {a=a} {n=n} {m=m} xs ys
+append' : Vect n a -> Vect m a -> Vect (plus n m) a
+append' {a=a} {n=n} {m=m} xs ys
     = case xs of
            Nil => ys
            Cons x xs => Cons x ?something

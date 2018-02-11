@@ -58,6 +58,7 @@ ident = pred startIdent <+> many (pred validIdent)
 
     validIdent : Char -> Bool
     validIdent '_' = True
+    validIdent '\'' = True
     validIdent x = isAlphaNum x
 
 doubleLit : Lexer
