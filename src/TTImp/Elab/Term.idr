@@ -358,28 +358,100 @@ mutual
                                (Bind scrn (Pi RigW Explicit scrty) 
                                           (weaken caseretty))
 
+           gam <- getCtxt
+           let (_ ** smallerIn) = findSubEnv env scrty
+           let (_ ** smaller) = dropParams gam env smallerIn scrty
+
+--            let casefnty = abstractEnvType env $
+--                             embed $
+--                               abstractEnvType env
+--                                  (Bind scrn (Pi RigW Explicit scrty) 
+--                                             (weaken caseretty))
+
+           let casefnty = abstractEnvType env $
+                            absSmaller {done = []} env smaller 
+                              (Bind scrn (Pi RigW Explicit scrty) 
+                                         (weaken caseretty))
+
            log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
+--            log 0 $ "New case function type: " ++ show casen ++ " : " ++ show newcasefnty
+
            addDef casen (newDef casefnty Private None)
 
-           let alts' = map (updateClause casen env) alts
+           let alts' = map (updateClause casen env smaller) alts
            log 5 $ "Generated alts: " ++ show alts'
 
            let nest' = record { names $= ((casen, (casen, 
                                     (mkConstantApp casen env))) ::) } nest
            process c u i env nest' (IDef loc casen alts')
 
-           pure (App (applyTo (mkConstantApp casen env) env) scrtm, caseretty)
+           pure (App (applyToSub (mkConstantApp casen env) env smaller) 
+                     scrtm, caseretty)
     where
+      -- Is every occurence of the given variable name in a parameter
+      -- position? 'ppos' says whether we are checking at a parameter
+      -- position.
+      asParam : Gamma -> (ppos : Bool) -> Elem v vs -> Term vs -> Bool
+      asParam gam ppos var (Bind x (Let _ val ty) sc)
+          = asParam gam False var val && asParam gam False var ty && 
+            asParam gam ppos (There var) sc
+      asParam gam ppos var (Bind x b sc)
+          = asParam gam False var (binderType b) && 
+            asParam gam ppos (There var) sc
+      asParam gam ppos var tm with (unapply tm)
+        asParam gam ppos var (apply (Local x) []) | ArgsList
+            = if sameVar var x then ppos else True
+        asParam gam ppos var (apply (Ref nt n) args) | ArgsList
+            = case lookupDefExact n gam of
+                   Just (TCon _ _ ps _)
+                     => asParamArgs gam var 0 ps args
+                   _ => all (asParam gam False var) args
+          where
+            asParamArgs : Gamma -> Elem v vs -> Nat -> List Nat ->
+                          List (Term vs) -> Bool
+            asParamArgs gam var n ns [] = True
+            asParamArgs gam var n ns (t :: ts) 
+               = asParam gam (n `elem` ns) var t &&
+                 asParamArgs gam var (1 + n) ns ts
+        asParam gam ppos var (apply f []) | ArgsList = True
+        asParam gam ppos var (apply f args) | ArgsList 
+            = all (asParam gam False var) args
+
+      -- Drop names from the SubVars list which are *only* used in a
+      -- parameter position in the term
+      dropParams : Gamma -> Env Term vs -> SubVars vs' vs -> Term vs ->
+                   (vs'' ** SubVars vs'' vs)
+      dropParams gam [] sub tm = ([] ** SubRefl)
+      dropParams gam (b :: env) SubRefl tm 
+         = let (_ ** sub') = dropParams gam env SubRefl (subst Erased tm) in
+               if asParam gam False Here tm
+                  then (_ ** DropCons sub')
+                  else (_ ** KeepCons sub')
+      dropParams gam (b :: env) (DropCons p) tm
+         = let (_ ** sub') = dropParams gam env p (subst Erased tm) in
+               (_ ** DropCons sub')
+      dropParams gam (b :: env) (KeepCons p) tm
+         = let (_ ** sub') = dropParams gam env p (subst Erased tm) in
+               if asParam gam False Here tm
+                  then (_ ** DropCons sub')
+                  else (_ ** KeepCons sub')
+
       asBind : Name -> annot -> RawImp annot -> RawImp annot
       asBind (UN n) ann tm = IAs ann n tm
       asBind _ ann tm = tm
 
-      addEnv : Env Term vs -> List Name -> List (RawImp annot)
-      addEnv [] used = []
-      addEnv ((::) {x} b bs) used
+      addEnv : Env Term vs -> SubVars vs' vs -> List Name -> List (RawImp annot)
+      addEnv [] sub used = []
+      addEnv ((::) {x} b bs) SubRefl used
           = if x `elem` used
-               then Implicit loc :: addEnv bs used
-               else asBind x loc (Implicit loc) :: addEnv bs (x :: used)
+               then Implicit loc :: addEnv bs SubRefl used
+               else asBind x loc (Implicit loc) :: addEnv bs SubRefl (x :: used)
+      addEnv ((::) {x} b bs) (DropCons p) used
+          = addEnv bs p used
+      addEnv ((::) {x} b bs) (KeepCons p) used
+          = if x `elem` used
+               then Implicit loc :: addEnv bs p used
+               else asBind x loc (Implicit loc) :: addEnv bs p (x :: used)
 
       -- Names used in the pattern we're matching on, so don't bind them
       -- in the generated case block
@@ -389,12 +461,13 @@ mutual
       usedIn (IAs _ n a) = UN n :: usedIn a
       usedIn _ = []
 
-      updateClause : Name -> Env Term vars -> ImpClause annot -> ImpClause annot
-      updateClause casen env (PatClause loc' lhs rhs)
-          = let args = addEnv env (usedIn lhs) in
+      updateClause : Name -> Env Term vars -> SubVars vs' vars ->
+                     ImpClause annot -> ImpClause annot
+      updateClause casen env sub (PatClause loc' lhs rhs)
+          = let args = addEnv env sub (usedIn lhs) in
                 PatClause loc' (apply (IVar loc casen) (reverse (lhs :: args))) rhs
-      updateClause casen env (ImpossibleClause loc' lhs)
-          = let args = addEnv env (usedIn lhs) in
+      updateClause casen env sub (ImpossibleClause loc' lhs)
+          = let args = addEnv env sub (usedIn lhs) in
                 ImpossibleClause loc' (apply (IVar loc casen) (reverse (lhs :: args)))
   
   checkLocal : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->

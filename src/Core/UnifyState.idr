@@ -211,7 +211,7 @@ mkConstant {vars = x :: _} (b :: env) tm
 -- Make the type of a new constant which applies a term to everything in
 -- the current environment
 mkConstantTy : Env Term vars -> Term vars -> ClosedTerm
-mkConstantTy = abstractEnvType
+mkConstantTy = abstractEnvType 
 
 mkConstantAppArgs : Env Term vars -> 
                     List (Term done) -> List (Term (vars ++ done))
@@ -224,6 +224,22 @@ export
 applyTo : Term vars -> Env Term vars -> Term vars
 applyTo {vars} tm env
   = let args = reverse (mkConstantAppArgs {done = []} env []) in
+        apply tm (rewrite sym (appendNilRightNeutral vars) in args)
+
+mkConstantAppArgsSub : Env Term vars -> SubVars smaller vars ->
+                       List (Term done) -> List (Term (vars ++ done))
+mkConstantAppArgsSub [] p xs = xs
+mkConstantAppArgsSub (b :: env) SubRefl xs
+    = Local Here :: map weaken (mkConstantAppArgsSub env SubRefl xs)
+mkConstantAppArgsSub (b :: env) (DropCons p) xs
+    = map weaken (mkConstantAppArgsSub env p xs)
+mkConstantAppArgsSub (b :: env) (KeepCons p) xs
+    = Local Here :: map weaken (mkConstantAppArgsSub env p xs)
+
+export
+applyToSub : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars
+applyToSub {vars} tm env sub
+  = let args = reverse (mkConstantAppArgsSub {done = []} env sub []) in
         apply tm (rewrite sym (appendNilRightNeutral vars) in args)
 
 -- Apply a named constant to the current environment.

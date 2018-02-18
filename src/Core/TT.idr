@@ -378,14 +378,6 @@ defined {vars = x :: xs} n (b :: env) with (nameEq x n)
       = do (m, el) <- defined n env
            Just (m, There el)
 
--- Make a type which abstracts over an environment
-export
-abstractEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
-abstractEnvType [] tm = tm
-abstractEnvType (b :: env) tm 
-    = abstractEnvType env (Bind _ (Pi (multiplicity b) Explicit (binderType b)) tm)
-
-
 {- Some ugly mangling to allow us to extend the scope of a term - a
    term is always valid in a bigger scope than it needs. -}
 insertElem : Elem x (outer ++ inner) -> Elem x (outer ++ n :: inner)
@@ -471,6 +463,14 @@ getBinder : Weaken tm => Elem x vars -> Env tm vars -> Binder (tm vars)
 getBinder Here (b :: env) = map weaken b
 getBinder (There later) (b :: env) = map weaken (getBinder later env)
 
+-- Make a type which abstracts over an environment
+export
+abstractEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
+abstractEnvType [] tm = tm
+abstractEnvType (b :: env) tm 
+    = abstractEnvType env (Bind _ 
+						(Pi (multiplicity b) Explicit (binderType b)) tm)
+
 -- Some syntax manipulation
 
 export
@@ -548,7 +548,7 @@ namespace SubstEnv
   substEnv env (PrimVal y) = PrimVal y
   substEnv env Erased = Erased
   substEnv env TType = TType
-
+      
 -- Replace the most recently bound name with a term
 export
 subst : Term vars -> Term (x :: vars) -> Term vars
@@ -587,6 +587,54 @@ subElem Here (KeepCons ds) = Just Here
 subElem (There later) (KeepCons ds) 
        = Just (There !(subElem later ds))
 
+changeVar : (old : Elem x vs) -> (new : Elem x vs) -> Term vs -> Term vs
+changeVar old new (Local y) 
+    = if sameVar old y
+         then Local new
+         else Local y
+changeVar old new (Bind x b sc) 
+    = Bind x (assert_total (map (changeVar old new) b)) 
+		         (changeVar (There old) (There new) sc)
+changeVar old new (App fn arg) 
+    = App (changeVar old new fn) (changeVar old new arg)
+changeVar old new tm = tm
+
+findLater : (newer : List Name) -> Elem x (newer ++ x :: older)
+findLater [] = Here
+findLater (x :: xs) = There (findLater xs)
+
+-- For any variable in vs', re-abstract over it in the term
+export
+absSmaller : Env Term vs -> SubVars vs' vs -> 
+						 Term (done ++ vs) -> Term (done ++ vs)
+absSmaller [] SubRefl tm = tm
+absSmaller {done} {vs = x :: vars} (b :: env) SubRefl tm 
+     -- need to rebind 'b' in tm with a new name. So, weaken 'tm' then 
+		 -- replace 'There Here' with 'Here'.
+	 = let bindervs : Binder (Term (done ++ (x :: vars)))
+	                    = rewrite appendAssociative done [x] vars in
+															  map (weakenNs (done ++ [x])) b
+	       btm = Bind x (Pi (multiplicity b) Explicit (binderType bindervs)) 
+				            (changeVar (findLater (x :: done)) Here (weaken tm)) in
+         rewrite appendAssociative done [x] vars in
+				         absSmaller {done = done ++ [x]} env SubRefl 
+                      (rewrite sym (appendAssociative done [x] vars) in btm)
+absSmaller {done} {vs = x :: vars} (b :: env) (DropCons sub) tm 
+  = rewrite appendAssociative done [x] vars in
+            absSmaller {done = done ++ [x]} env sub
+               (rewrite sym (appendAssociative done [x] vars) in tm)
+absSmaller {done} {vs = x :: vars} (b :: env) (KeepCons sub) tm
+  = let bindervs : Binder (Term (done ++ (x :: vars)))
+                      = rewrite appendAssociative done [x] vars in
+                                map (weakenNs (done ++ [x])) b
+        btm = Bind x (Pi (multiplicity b) Explicit (binderType bindervs)) 
+                   (changeVar (findLater (x :: done)) Here (weaken tm)) in
+        rewrite appendAssociative done [x] vars in
+                absSmaller {done = done ++ [x]} env sub
+                    (rewrite sym (appendAssociative done [x] vars) in btm)
+
+
+
 -- Would be handy if binders were Traversable...
 
 mutual
@@ -622,6 +670,97 @@ mutual
   shrinkTerm (PrimVal x) subprf = Just (PrimVal x)
   shrinkTerm Erased subprf = Just Erased
   shrinkTerm TType subprf = Just TType
+      
+export
+shrinkEnv : Env Term vars -> SubVars newvars vars -> Maybe (Env Term newvars)
+shrinkEnv env SubRefl = Just env
+shrinkEnv (b :: env) (DropCons p) = shrinkEnv env p
+shrinkEnv (b :: env) (KeepCons p) 
+    = do env' <- shrinkEnv env p
+         b' <- shrinkBinder b p
+         pure (b' :: env')
+
+isUsed : Elem x vars -> List (y ** Elem y vars) -> Bool
+isUsed el [] = False
+isUsed el ((_ ** el') :: els) = sameVar el el' || isUsed el els
+
+dropHere : List (x ** Elem x (n :: xs)) -> List (x ** Elem x xs)
+dropHere [] = []
+dropHere ((_ ** Here) :: xs) = dropHere xs
+dropHere ((_ ** There p) :: xs) = (_ ** p) :: dropHere xs
+
+-- This is kind of ugly - we're building a proof that some variables are
+-- a subset of the larger set of variables, if those variables are in the
+-- list of membership proofs.
+-- We'll then use this to shrink the environment needed for a term using
+-- 'shrinkEnv' above.
+-- The ugliness is that 'shrinkEnv' returns a Maybe and if we get the first
+-- step right, shrinking should always succeed!
+-- It would be nice to prove this step, but in the absence of such a proof
+-- we'll just build the SubVars structure and return the original environment
+-- if shrinking fails for the moment.
+mkShrinkSub : (vars : _) -> List (x ** Elem x (n :: vars)) -> 
+              (newvars ** SubVars newvars (n :: vars))
+mkShrinkSub [] els 
+    = if isUsed Here els
+         then (_ ** KeepCons SubRefl)
+         else (_ ** DropCons SubRefl)
+mkShrinkSub (x :: xs) els 
+    = let (_ ** subRest) = mkShrinkSub xs (dropHere els) in
+					if isUsed Here els
+				     then (_ ** KeepCons subRest)
+				     else (_ ** DropCons subRest)
+
+mkShrink : List (x ** Elem x vars) -> 
+           (newvars ** SubVars newvars vars)
+mkShrink {vars = []} xs = (_ ** SubRefl)
+mkShrink {vars = v :: vs} xs = mkShrinkSub _ xs
+
+mutual
+  findUsedLocs : Env Term vars -> Term vars -> List (x ** Elem x vars)
+  findUsedLocs env (Local y) 
+	  = (_ ** y) :: assert_total (findUsedInBinder env (getBinder y env))
+  findUsedLocs env (Bind x b tm) 
+    = assert_total (findUsedInBinder env b) ++ 
+          dropHere (findUsedLocs (b :: env) tm)
+  findUsedLocs env (App tm x) = findUsedLocs env tm ++ findUsedLocs env x
+  findUsedLocs env _ = []
+  
+  findUsedInBinder : Env Term vars -> Binder (Term vars) -> 
+                     List (x ** Elem x vars)
+  findUsedInBinder env (Let _ val ty) 
+    = findUsedLocs env val ++ findUsedLocs env ty
+  findUsedInBinder env (PLet _ val ty)
+    = findUsedLocs env val ++ findUsedLocs env ty
+  findUsedInBinder env b = findUsedLocs env (binderType b)
+
+-- Find the smallest subset of the environment which is needed to type check
+-- the given term
+export
+findSubEnv : Env Term vars -> Term vars -> 
+						 (vars' : List Name ** SubVars vars' vars)
+findSubEnv env tm = mkShrink (findUsedLocs env tm)
+
+-- Find the smallest subset of the current environment which is needed
+-- for the scrutinee's type
+-- See note above - if something goes wrong, it's safe to return the original
+-- environment. We make no guarantee that the environment truly is the smallest
+-- possible, but we'll make the best effort.
+export
+mkUsedEnv : Env Term vars -> Term vars -> Term vars ->
+						(vars' : List Name ** 
+							       (SubVars vars' vars, Env Term vars', Term vars', Term vars'))
+mkUsedEnv env tm ty
+   = let (_ ** sub) = mkShrink (findUsedLocs env tm ++ findUsedLocs env ty) in
+         case shrinkEnv env sub of
+              Nothing => (_ ** (SubRefl, env, tm, ty))
+              Just env' =>
+                   case shrinkTerm tm sub of
+                        Nothing => (_ ** (SubRefl, env, tm, ty))
+                        Just tm' =>
+                             case shrinkTerm ty sub of
+                                  Nothing => (_ ** (SubRefl, env, tm, ty))
+                                  Just ty' => (_ ** (sub, env', tm', ty'))
 
 public export
 data CompatibleVars : List Name -> List Name -> Type where
@@ -755,8 +894,12 @@ Show (Term vars) where
         showCount Rig1 = "1 "
         showCount RigW = ""
 
+        vCount : Elem x xs -> Nat
+        vCount Here = 0
+        vCount (There p) = 1 + vCount p
+
         showApp : Term vars -> List (Term vars) -> String
-        showApp (Local {x} y) [] = show x
+        showApp (Local {x} y) [] = show x -- ++ "[" ++ show (vCount y) ++ "]"
         showApp (Ref x fn) [] = show fn
         showApp (Bind n (Lam c x ty) sc) [] 
             = assert_total ("\\" ++ showCount c ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
