@@ -1,0 +1,6 @@
+echo ':q' | ../../ttimp bad1.tti
+echo ':q' | ../../ttimp bad2.tti
+echo ':q' | ../../ttimp bad3.tti
+echo ':q' | ../../ttimp good1.tti
+echo ':q' | ../../ttimp good2.tti
+rm -f *.ttc

@@ -1,0 +1,14 @@
+data Nat : Type where
+     Z : Nat
+     S : (1 k : Nat) -> Nat
+
+plus : (1 x : Nat) -> (1 y : Nat) -> Nat
+plus Z y = y
+plus (S k) y = S (plus k y)
+
+contrived : (x : Nat) -> (y : Nat) -> (1 z : Nat) -> Nat
+contrived x y z
+    = plus (case x of
+                 Z => z
+                 S y => S z) z
+

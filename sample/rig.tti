@@ -52,3 +52,9 @@ holetest1 x y = plus ?this y
 holetest2 : (1 x : Nat) -> (1 y : Nat) -> Nat
 holetest2 x y = plus x ?that
 
+contrived : (x : Nat) -> (y : Nat) -> (1 z : Nat) -> Nat
+contrived x y z
+    = plus (case x of
+                 Z => y
+                 S y => S y) z
+

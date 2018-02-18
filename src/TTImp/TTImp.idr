@@ -5,6 +5,7 @@ import Core.Context
 import Core.UnifyState
 
 import Data.List
+import Data.CSet
 
 %default covering
 
@@ -75,6 +76,61 @@ mutual
                ImpDecl annot
        ILog : Nat -> ImpDecl annot
        -- To add: IRecord
+
+mutual
+  -- assume RHS (so no IBindVar or anything pattern match related)
+  -- Intention is to find unused names in a case block so that we can
+  -- give them the right multiplicity in the generated type, if any names
+  -- are used linearly
+  used : SortedSet -> RawImp annot -> SortedSet
+  used ns (IVar x n) 
+     = if contains n ns then empty else insert n empty
+  used ns (IPi _ _ _ bn argTy retTy) 
+     = let ns' = maybe ns (\n => insert n ns) bn in
+           union (used ns' argTy) (used ns' retTy)
+  used ns (ILam _ _ _ n argTy scope) 
+     = union (used ns argTy) (used ns scope)
+  used ns (ILet _ _ n nTy nVal scope) 
+     = union (union (used ns nTy) (used ns nVal)) (used ns scope)
+  used ns (ICase _ sc xs) 
+     = union (used ns sc) (usedCases ns xs)
+  used ns (ILocal _ ds sc) 
+     = union (usedDecls ns ds) (used ns sc)
+  used ns (IApp _ fn arg) 
+     = union (used ns fn) (used ns arg)
+  used ns (IImplicitApp _ fn _ arg)
+     = union (used ns fn) (used ns arg)
+  used ns _ = empty
+
+  bindVars : RawImp annot -> SortedSet
+  bindVars (IBindVar _ n) = insert (UN n) empty
+  bindVars (IApp _ f a) = union (bindVars f) (bindVars a)
+  bindVars (IImplicitApp _ f _ a) = union (bindVars f) (bindVars a)
+  bindVars (IAs _ n p) = insert (UN n) (bindVars p)
+  bindVars _ = empty
+
+  usedCases : SortedSet -> List (ImpClause annot) -> SortedSet
+  usedCases ns [] = empty
+  usedCases ns (ImpossibleClause _ _ :: rest) = usedCases ns rest
+  usedCases ns (PatClause _ lhs rhs :: rest)
+      = union (used (union (bindVars lhs) ns) rhs)
+              (usedCases ns rest)
+
+  usedDecls : SortedSet -> List (ImpDecl annot) -> SortedSet
+  usedDecls ns [] = empty
+  usedDecls ns (IDef _ n cs :: rest) 
+      = union (usedCases ns cs) (usedDecls ns rest)
+  usedDecls ns (_ :: rest) = usedDecls ns rest
+
+
+-- Return all the names which are used but not bound in the term
+export
+usedNames : RawImp annot -> List Name
+usedNames = toList . used empty
+
+export
+usedInAlts : List (ImpClause annot) -> List Name
+usedInAlts = toList . usedCases empty
 
 -- REPL commands for TTImp interaction
 public export

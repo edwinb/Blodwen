@@ -40,7 +40,8 @@ atom
 mutual
   appExpr : IndentInfo -> Rule (RawImp ())
   appExpr indents
-      = do f <- simpleExpr indents
+      = case_ indents
+    <|> do f <- simpleExpr indents
            args <- many (argExpr indents)
            pure (applyExpImp f args)
     where
@@ -211,7 +212,6 @@ mutual
     <|> explicitPi indents
     <|> lam indents
     <|> let_ indents
-    <|> case_ indents
 
   typeExpr : IndentInfo -> Rule (RawImp ())
   typeExpr indents
@@ -227,7 +227,7 @@ mutual
 
   export
   expr : IndentInfo -> Rule (RawImp ())
-  expr = typeExpr
+  expr = typeExpr 
 
 tyDecl : IndentInfo -> Rule (ImpTy ())
 tyDecl indents

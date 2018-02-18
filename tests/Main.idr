@@ -8,7 +8,7 @@ tests : List String
 tests = ["test001", "test002", "test003", "test004", "test005",
          "test006", "test007", "test008",
          "case001",
-         "linear001", "linear002",
+         "linear001", "linear002", "linear003",
          "perf001"]
 
 chdir : String -> IO Bool

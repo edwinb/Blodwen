@@ -347,21 +347,23 @@ mutual
            scrn <- genName "scr"
            est <- get EST
            casen <- genCaseName (defining est)
+           let usedNs = usedInAlts alts
+
+           log 6 $ "Names used in case block: " ++ show usedNs
+
+           -- Update environment so that linear bindings which aren't in
+           -- 'usedNs' have multiplicity 0 in the case type
+           let env = updateMults usedNs env
+
+           gam <- getCtxt
+           let (_ ** smallerIn) = findSubEnv env scrty
+           let (_ ** smaller) = dropParams gam env smallerIn scrty
+           
            caseretty <- case expected of
                              Just ty => pure ty
                              Nothing =>
                                 do t <- addHole loc env TType
                                    pure (mkConstantApp t env)
-           let casefnty = abstractEnvType env $
-                           embed $
-                            abstractEnvType env 
-                               (Bind scrn (Pi RigW Explicit scrty) 
-                                          (weaken caseretty))
-
-           gam <- getCtxt
-           let (_ ** smallerIn) = findSubEnv env scrty
-           let (_ ** smaller) = dropParams gam env smallerIn scrty
-
            let casefnty = abstractEnvType env $
                             absSmaller {done = []} env smaller 
                               (Bind scrn (Pi RigW Explicit scrty) 
@@ -432,6 +434,15 @@ mutual
       asBind : Name -> annot -> RawImp annot -> RawImp annot
       asBind (UN n) ann tm = IAs ann n tm
       asBind _ ann tm = tm
+
+      updateMults : List Name -> Env Term vs -> Env Term vs
+      updateMults ns [] = []
+      updateMults ns ((::) {x} b bs)
+         -- if it's not used in the case block, it should have 0 multiplicity
+         -- in the case block's type, otherwise leave it alone
+         = if multiplicity b == Rig1 && not (x `elem` ns)
+              then setMultiplicity b Rig0 :: updateMults (filter (/=x) ns) bs
+              else b :: updateMults (filter (/=x) ns) bs
 
       addEnv : Env Term vs -> SubVars vs' vs -> List Name -> List (RawImp annot)
       addEnv [] sub used = []

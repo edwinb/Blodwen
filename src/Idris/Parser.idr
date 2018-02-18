@@ -45,7 +45,8 @@ atom fname
 mutual
   appExpr : FileName -> IndentInfo -> Rule PTerm
   appExpr fname indents
-      = do start <- location
+      = case_ fname indents
+    <|> do start <- location
            f <- simpleExpr fname indents
            args <- many (argExpr fname indents)
            end <- location
@@ -271,7 +272,6 @@ mutual
     <|> explicitPi fname indents
     <|> lam fname indents
     <|> let_ fname indents
-    <|> case_ fname indents
 
   typeExpr : FileName -> IndentInfo -> Rule PTerm
   typeExpr fname indents
