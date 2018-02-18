@@ -1,0 +1,3 @@
+../../ttimp rig.tti < input
+../../ttimp rig.ttc < input
+rm -f *.ttc

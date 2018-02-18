@@ -1,0 +1,15 @@
+data Bool : Type where
+     False : Bool
+     True : Bool
+
+data Thing : Bool -> Type where
+     TF : Thing False
+     TT : Thing True
+
+ok : (0 b : Bool) -> Thing b -> Bool
+ok False TF = True
+ok True TT = False
+
+bad : (0 b : Bool) -> Bool
+bad False = True
+bad True = False

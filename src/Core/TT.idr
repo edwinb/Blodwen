@@ -873,7 +873,7 @@ getPatternEnv : Env Term vars ->
                            Term (pvars ++ vars),
                            Term (pvars ++ vars)))
 getPatternEnv {vars} env (Bind n (PVar c ty) sc) (Bind n' (PVTy c' ty') sc') 
-    = case nameEq n n' of -- TODO: They should always be the same, but the
+    = case nameEq n n' of -- They should always be the same, but the
                           -- types don't tell us this. Better in any case to
                           -- rename n' to n since the de Bruijn indices will
                           -- match up okay.

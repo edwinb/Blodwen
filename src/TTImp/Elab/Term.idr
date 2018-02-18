@@ -362,19 +362,12 @@ mutual
            let (_ ** smallerIn) = findSubEnv env scrty
            let (_ ** smaller) = dropParams gam env smallerIn scrty
 
---            let casefnty = abstractEnvType env $
---                             embed $
---                               abstractEnvType env
---                                  (Bind scrn (Pi RigW Explicit scrty) 
---                                             (weaken caseretty))
-
            let casefnty = abstractEnvType env $
                             absSmaller {done = []} env smaller 
                               (Bind scrn (Pi RigW Explicit scrty) 
                                          (weaken caseretty))
 
            log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
---            log 0 $ "New case function type: " ++ show casen ++ " : " ++ show newcasefnty
 
            addDef casen (newDef casefnty Private None)
 
