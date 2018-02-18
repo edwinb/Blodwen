@@ -729,13 +729,74 @@ addFnDef loc vis (MkFn n ty clauses)
     toClosed (MkClause env lhs rhs) 
           = (close 0 False env lhs, close 0 True env rhs)
 
+updateParams : Maybe (List (Maybe (Term vars))) -> 
+                  -- arguments to the type constructor which could be
+                  -- parameters
+                  -- Nothing, as an argument, means this argument can't
+                  -- be a parameter position
+               List (Term vars) ->
+                  -- arguments to an application 
+               List (Maybe (Term vars))
+updateParams Nothing args = map couldBeParam args
+  where
+    couldBeParam : Term vars -> Maybe (Term vars)
+    couldBeParam (Local v) = Just (Local v)
+    couldBeParam _ = Nothing
+updateParams (Just args) args' = zipWith mergeArg args args'
+  where
+    mergeArg : Maybe (Term vars) -> Term vars -> Maybe (Term vars)
+    mergeArg (Just (Local x)) (Local y)
+        = if sameVar x y then Just (Local x) else Nothing
+    mergeArg _ _ = Nothing
+
+getPs : Maybe (List (Maybe (Term vars))) -> Name -> Term vars ->
+           Maybe (List (Maybe (Term vars)))
+getPs acc tyn (Bind x (Pi _ _ ty) sc)
+      = let scPs = getPs (map (map (map weaken)) acc) tyn sc in
+            map (map shrink) scPs
+  where
+    shrink : Maybe (Term (x :: vars)) -> Maybe (Term vars)
+    shrink Nothing = Nothing
+    shrink (Just tm) = shrinkTerm tm (DropCons SubRefl)
+getPs acc tyn tm with (unapply tm)
+  getPs acc tyn (apply (Ref _ n) args) | ArgsList 
+      = if n == tyn 
+           then Just (updateParams acc args)
+           else acc
+  getPs acc tyn (apply f args) | ArgsList = acc
+
+toPos : Maybe (List (Maybe a)) -> List Nat
+toPos Nothing = []
+toPos (Just ns) = justPos 0 ns
+  where
+    justPos : Nat -> List (Maybe a) -> List Nat
+    justPos i [] = []
+    justPos i (Just x :: xs) = i :: justPos (1 + i) xs
+    justPos i (Nothing :: xs) = justPos (1 + i) xs
+
+getConPs : Maybe (List (Maybe (Term vars))) -> Name -> Term vars -> List Nat
+getConPs acc tyn (Bind x (Pi _ _ ty) sc) 
+    = let bacc = getPs acc tyn ty in
+          getConPs (map (map (map weaken)) bacc) tyn sc
+getConPs acc tyn tm = toPos (getPs acc tyn tm)
+    
+combinePos : Eq a => List (List a) -> List a
+combinePos [] = []
+combinePos (xs :: xss) = filter (\x => all (elem x) xss) xs
+
+paramPos : Name -> (dcons : List ClosedTerm) ->
+           List Nat
+paramPos tyn dcons = combinePos (map (getConPs Nothing tyn) dcons)
+
 export
 addData : {auto x : Ref Ctxt Defs} ->
 					Visibility -> DataDef -> Core annot ()
 addData vis (MkData (MkCon tyn arity tycon) datacons)
     = do gam <- getCtxt 
          tag <- getNextTypeTag 
-         let tydef = newDef tycon vis (TCon tag arity [] (map name datacons))
+         let tydef = newDef tycon vis (TCon tag arity 
+                                            (paramPos tyn (map type datacons))
+                                            (map name datacons))
          let gam' = addCtxt tyn tydef gam
          setCtxt (addDataConstructors 0 datacons gam')
   where
