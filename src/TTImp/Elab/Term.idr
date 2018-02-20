@@ -446,16 +446,12 @@ mutual
 
       addEnv : Env Term vs -> SubVars vs' vs -> List Name -> List (RawImp annot)
       addEnv [] sub used = []
-      addEnv ((::) {x} b bs) SubRefl used
-          = if x `elem` used
-               then Implicit loc :: addEnv bs SubRefl used
-               else asBind x loc (Implicit loc) :: addEnv bs SubRefl (x :: used)
-      addEnv ((::) {x} b bs) (DropCons p) used
+      addEnv (b :: bs) SubRefl used
+          = Implicit loc :: addEnv bs SubRefl used
+      addEnv (b :: bs) (DropCons p) used
           = addEnv bs p used
-      addEnv ((::) {x} b bs) (KeepCons p) used
-          = if x `elem` used
-               then Implicit loc :: addEnv bs p used
-               else asBind x loc (Implicit loc) :: addEnv bs p (x :: used)
+      addEnv (b :: bs) (KeepCons p) used
+          = Implicit loc :: addEnv bs p used
 
       -- Names used in the pattern we're matching on, so don't bind them
       -- in the generated case block

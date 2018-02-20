@@ -12,7 +12,7 @@ data Vect : Nat -> Type -> Type where
      Nil  : Vect Z a
      Cons : a -> Vect k a -> Vect (S k) a
 
-foldl : (b : Nat -> Type) ->
+foldl : (0 b : Nat -> Type) ->
         ({k : Nat} -> b k -> a -> b (S k)) ->
         b Z ->
         Vect m a -> b m

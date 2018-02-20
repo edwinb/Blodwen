@@ -12,12 +12,10 @@ import Data.CSet
 
 -- How the elaborator should deal with IBindVar:
 -- * NONE: IBindVar is not valid (rhs of an definition, top level expression)
--- * PI True: Bind implicits as Pi, in the appropriate scope, and bind
---            any additional holes
--- * PI False: As above, but don't bind additional holes
--- * PATTERN: Bind implicits as PVar, but only at the top level
+-- * PI rig: Bind implicits as Pi, in the appropriate scope, and bind
+--           any additional holes, with given multiplicity
 public export
-data ImplicitMode = NONE | PI Bool | PATTERN
+data ImplicitMode = NONE | PI RigCount | PATTERN
 
 public export
 data ElabMode = InType | InLHS | InExpr
@@ -357,15 +355,15 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
                        _ =>
                           (Bind n' (PVar RigW ty) (refToLocal tmpN n' repNameTm), 
                            Bind n' (PVTy RigW ty) (refToLocal tmpN n' repNameTy))
-               -- unless explicitly given, unbound implicits are RigW
-               PI _ =>
+               -- unless explicitly given, unbound implicits are Rig0
+               PI rig =>
                   case lookupDefExact n gam of
                      Just (PMDef _ _ t) =>
                         (subst (normalise gam env (applyTo (Ref Func n) env))
                                (refToLocal tmpN n repNameTm),
                          subst (normalise gam env (applyTo (Ref Func n) env))
                                (refToLocal tmpN n repNameTy))
-                     _ => (Bind n' (Pi RigW Implicit ty) (refToLocal tmpN n' repNameTm), ty')
+                     _ => (Bind n' (Pi rig Implicit ty) (refToLocal tmpN n' repNameTm), ty')
                _ => (Bind n' (Pi RigW Implicit ty) (refToLocal tmpN n' repNameTm), ty')
   where
     -- Replace the name applied to the given number of arguments 
@@ -418,77 +416,6 @@ bindTopImplicits {vars} mode gam env hs tm ty
     weakenVars : (Name, ClosedTerm) -> (Name, Term vars)
     weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
                                      weakenNs vars tm)
-
--- Find any holes in the resulting expression, and implicitly bind them
--- at the top level (i.e. they can't depend on any explicitly given
--- arguments).
--- Return the updated term and type, and the names of holes which occur
-export
-findHoles : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-            ImplicitMode -> Env Term vars -> Term vars -> Term vars ->
-            Core annot (Term vars, Term vars, List Name) 
-findHoles NONE env tm exp = pure (tm, exp, [])
-findHoles (PI False) env tm exp = pure (tm, exp, [])
-findHoles mode env tm exp
-    = do h <- newRef HVar []
-         tm <- holes h tm
-         hs <- get HVar
-         gam <- getCtxt
-         log 5 $ "Extra implicits to bind: " ++ show (reverse hs)
-         let (tm', ty) = bindTopImplicits mode gam env (reverse hs) tm exp
-         traverse implicitBind (map fst hs)
-         pure (tm', ty, map fst hs)
-  where
-    data HVar : Type where -- empty type to label the local state
-
-    mkType : (vars : List Name) -> Term hs -> Maybe (Term hs)
-    mkType (v :: vs) (Bind tm (Pi _ _ ty) sc) 
-        = do sc' <- mkType vs sc
-             shrinkTerm sc' (DropCons SubRefl)
-    mkType _ tm = pure tm
-
-    processHole : Ref HVar (List (Name, ClosedTerm)) ->
-                  Name -> (vars : List Name) -> ClosedTerm ->
-                  Core annot ()
-    processHole h n vars ty
-       = do hs <- get HVar
---             putStrLn $ "IMPLICIT: " ++ show (n, vars, ty)
-            case mkType vars ty of
-                 Nothing => pure ()
-                 Just impTy =>
-                    case lookup n hs of
-                         Just _ => pure ()
-                         Nothing => put HVar ((n, impTy) :: hs)
-
-    holes : Ref HVar (List (Name, ClosedTerm)) ->
-            Term vars -> 
-            Core annot (Term vars)
-    holes h {vars} (Ref nt fn) 
-        = do gam <- getCtxt
-             case lookupDefTyExact fn gam of
-                  Just (Hole _ _, ty) =>
-                       do processHole h fn vars ty
-                          pure (Ref nt fn)
-                  _ => pure (Ref nt fn)
-    holes h (App fn arg)
-        = do fn' <- holes h fn
-             arg' <- holes h arg
-             pure (App fn' arg')
-    -- Allow implicits under 'Pi', 'PVar', 'PLet' only
-    holes h (Bind y (Pi c imp ty) sc)
-        = do ty' <- holes h ty
-             sc' <- holes h sc
-             pure (Bind y (Pi c imp ty') sc')
-    holes h (Bind y (PVar c ty) sc)
-        = do ty' <- holes h ty
-             sc' <- holes h sc
-             pure (Bind y (PVar c ty') sc')
-    holes h (Bind y (PLet c val ty) sc)
-        = do val' <- holes h val
-             ty' <- holes h ty
-             sc' <- holes h sc
-             pure (Bind y (PLet c val' ty') sc')
-    holes h tm = pure tm
 
 export
 renameImplicits : Gamma -> Term vars -> Term vars

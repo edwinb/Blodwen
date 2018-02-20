@@ -20,7 +20,7 @@ checkCon elab env nest (MkImpTy loc cn_in ty_raw)
     = do cn <- inCurrentNS cn_in
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc cn) $
-                  checkTerm elab cn env nest (PI False) InType ty_imp TType
+                  checkTerm elab cn env nest (PI RigW) InType ty_imp TType
          wrapError (InCon loc cn) $ checkUserHoles loc False
 
          let ty' = abstractEnvType env ty
@@ -41,7 +41,7 @@ processData elab env nest (MkImpData loc n_in ty_raw cons_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc n) $
-                  checkTerm elab n env nest (PI False) InType ty_imp TType
+                  checkTerm elab n env nest (PI RigW) InType ty_imp TType
          wrapError (InCon loc n) $ checkUserHoles loc False
 
          -- TODO: Check ty returns a TType
