@@ -58,22 +58,20 @@ mutual
   -- Term (Core.TT)
   public export
   data PTerm : Type where
+       -- Direct (more or less) translations to RawImp
+
        PRef : FC -> Name -> PTerm
        PPi : FC -> RigCount -> PiInfo -> Maybe Name -> 
              (argTy : PTerm) -> (retTy : PTerm) -> PTerm
        PLam : FC -> RigCount -> PiInfo -> Name ->
               (argTy : PTerm) -> (scope : PTerm) -> PTerm
+       -- TODO: LHS should be pattern, and allow alternatives on RHS
        PLet : FC -> RigCount -> Name ->
               (nTy : PTerm) -> (nVal : PTerm) -> (scope : PTerm) -> PTerm
        PCase : FC -> PTerm -> List PClause -> PTerm
        PLocal : FC -> List PDecl -> (scope : PTerm) -> PTerm
        PApp : FC -> PTerm -> PTerm -> PTerm
        PImplicitApp : FC -> PTerm -> (argn : Name) -> PTerm -> PTerm
-       PBracketed : FC -> PTerm -> PTerm
-       POp : FC -> OpStr -> PTerm -> PTerm -> PTerm
-       PPrefixOp : FC -> OpStr -> PTerm -> PTerm
-       PSectionL : FC -> OpStr -> PTerm -> PTerm
-       PSectionR : FC -> PTerm -> OpStr -> PTerm
        PSearch : FC -> (depth : Nat) -> PTerm
        PPrimVal : FC -> Constant -> PTerm
        PHole : FC -> (holename : String) -> PTerm
@@ -81,6 +79,37 @@ mutual
        PAs : FC -> (vname : String) -> (pattern : PTerm) -> PTerm
        PDotted : FC -> PTerm -> PTerm
        PImplicit : FC -> PTerm
+       
+       -- Operators
+       
+       POp : FC -> OpStr -> PTerm -> PTerm -> PTerm
+       PPrefixOp : FC -> OpStr -> PTerm -> PTerm
+       PSectionL : FC -> OpStr -> PTerm -> PTerm
+       PSectionR : FC -> PTerm -> OpStr -> PTerm
+       PBracketed : FC -> PTerm -> PTerm
+
+       -- Syntactic sugar
+       
+       PDoBlock : FC -> List PDo -> PTerm
+
+       -- TODO: Tuples, unit, dependent pairs, lists, idiom brackets,
+       -- comprehensions, if/then/else, rewrites
+
+  public export
+  data PDo : Type where
+       DoExp : FC -> PTerm -> PDo
+       DoBind : FC -> Name -> PTerm -> PDo
+       DoBindPat : FC -> PTerm -> PTerm -> List PClause -> PDo
+       DoLet : FC -> Name -> RigCount -> PTerm -> PDo
+       DoLetPat : FC -> PTerm -> PTerm -> List PClause -> PDo
+
+  export
+  getLoc : PDo -> FC
+  getLoc (DoExp fc _) = fc
+  getLoc (DoBind fc _ _) = fc
+  getLoc (DoBindPat fc _ _ _) = fc
+  getLoc (DoLet fc _ _ _) = fc
+  getLoc (DoLetPat fc _ _ _) = fc
 
   public export
   data PTypeDecl : Type where

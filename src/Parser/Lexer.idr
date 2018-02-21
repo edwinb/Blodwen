@@ -67,7 +67,7 @@ doubleLit = digits <+> is '.' <+> digits <+> opt
 
 -- Reserved words
 keywords : List String
-keywords = ["data", "module", "where", "let", "in", 
+keywords = ["data", "module", "where", "let", "in", "do", "record",
             "auto", "implicit", "namespace", "impossible", "case", "of",
             "using", "interface", "implementation", "open", "import",
             "public", "export", "private",
@@ -85,7 +85,7 @@ symbols = [".(", -- for things such as Foo.Bar.(+)
            "(|", "|)",
            ".", "%",
            "(", ")", "{", "}", "[", "]", "`", ",", "|", ";", "_",
-           "->", "=>", "="]
+           "<-", "->", "=>", "="]
 
 validSymbol : Lexer
 validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")

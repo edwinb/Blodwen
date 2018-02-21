@@ -46,6 +46,7 @@ mutual
   appExpr : FileName -> IndentInfo -> Rule PTerm
   appExpr fname indents
       = case_ fname indents
+    <|> doBlock fname indents
     <|> do start <- location
            f <- simpleExpr fname indents
            args <- many (argExpr fname indents)
@@ -264,6 +265,73 @@ mutual
            atEnd indents
            end <- location
            pure (MkImpossible (MkFC fname start end) lhs)
+
+  doBlock : FileName -> IndentInfo -> Rule PTerm
+  doBlock fname indents
+      = do start <- location
+           keyword "do"
+           actions <- block (doAct fname)
+           end <- location
+           pure (PDoBlock (MkFC fname start end) actions)
+
+  lowerFirst : String -> Bool
+  lowerFirst "" = False
+  lowerFirst str = assert_total (isLower (strHead str))
+
+  validPatternVar : Name -> EmptyRule ()
+  validPatternVar (UN n)
+      = if lowerFirst n then pure ()
+                        else fail "Not a pattern variable"
+  validPatternVar _ = fail "Not a pattern variable"
+
+  doAct : FileName -> IndentInfo -> Rule PDo
+  doAct fname indents
+      = do start <- location
+           n <- name
+           -- If the name doesn't begin with a lower case letter, we should
+           -- treat this as a pattern, so fail
+           validPatternVar n
+           symbol "<-"
+           val <- expr fname indents
+           atEnd indents
+           end <- location
+           pure (DoBind (MkFC fname start end) n val)
+    <|> do start <- location
+           keyword "let"
+           rig <- multiplicity
+           n <- name
+           validPatternVar n
+           commit
+           symbol "="
+           val <- expr fname indents
+           atEnd indents
+           end <- location
+           pure (DoLet (MkFC fname start end) n rig val)
+    <|> do start <- location
+           keyword "let"
+           e <- expr fname indents
+           symbol "="
+           val <- expr fname indents
+           alts <- block (patAlt fname)
+           atEnd indents
+           end <- location
+           pure (DoLetPat (MkFC fname start end) e val alts)
+    <|> do start <- location
+           e <- expr fname indents
+           (do atEnd indents
+               end <- location
+               pure (DoExp (MkFC fname start end) e))
+             <|> (do symbol "<-"
+                     val <- expr fname indents
+                     alts <- block (patAlt fname)
+                     atEnd indents
+                     end <- location
+                     pure (DoBindPat (MkFC fname start end) e val alts))
+
+  patAlt : FileName -> IndentInfo -> Rule PClause
+  patAlt fname indents
+      = do symbol "|"
+           caseAlt fname indents
 
   binder : FileName -> IndentInfo -> Rule PTerm
   binder fname indents

@@ -153,6 +153,8 @@ mutual
   desugar (PLocal fc xs scope) 
       = pure $ ILocal fc (concat !(traverse desugarDecl xs)) 
                          !(desugar scope)
+  desugar (PDoBlock fc block)
+      = expandDo fc block
   desugar (PApp fc x y) 
       = pure $ IApp fc !(desugar x) !(desugar y)
   desugar (PImplicitApp fc x argn y) 
@@ -186,6 +188,40 @@ mutual
       = pure $ IMustUnify fc !(desugar x)
   desugar (PImplicit fc) = pure $ Implicit fc
   
+  expandDo : {auto s : Ref Syn SyntaxInfo} ->
+             FC -> List PDo -> Core FC (RawImp FC)
+  expandDo fc [] = throw (GenericMsg fc "Do block cannot be empty")
+  expandDo _ [DoExp fc tm] = desugar tm
+  expandDo fc [e] 
+      = throw (GenericMsg (getLoc e) 
+                  "Last statement in do block must be an expression") 
+  expandDo topfc (DoBind fc n tm :: rest)
+      = do tm' <- desugar tm
+           rest' <- expandDo topfc rest
+           pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
+                     (ILam fc RigW Explicit n (Implicit fc) rest')
+  expandDo topfc (DoBindPat fc pat exp alts :: rest)
+      = do pat' <- desugar pat
+           exp' <- desugar exp
+           alts' <- traverse desugarClause alts
+           rest' <- expandDo topfc rest
+           pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) exp')
+                    (ILam fc RigW Explicit (MN "bind" 0) (Implicit fc)
+                          (ICase fc (IVar fc (MN "bind" 0))
+                               (PatClause fc (bindNames False [] pat') rest' 
+                                  :: alts')))
+  expandDo topfc (DoLet fc n rig tm :: rest) 
+      = do tm' <- desugar tm
+           rest' <- expandDo topfc rest
+           pure $ ILet fc rig n (Implicit fc) tm' rest'
+  expandDo topfc (DoLetPat fc pat tm alts :: rest) 
+      = do pat' <- desugar pat
+           tm' <- desugar tm
+           alts' <- traverse desugarClause alts
+           rest' <- expandDo topfc rest
+           pure $ ICase fc tm' (PatClause fc (bindNames False [] pat') rest'
+                                  :: alts')
+
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
                 Tree FC PTerm -> Core FC (RawImp FC)
   desugarTree (Inf loc op l r)
