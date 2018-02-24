@@ -332,6 +332,10 @@ record Defs where
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
 
+export
+noGam : Defs -> Defs
+noGam = record { gamma = empty }
+
 -- Just write out what's in "gamma" - everything else is either reconstructed
 -- from that, or not used when reading from a file
 export
@@ -393,8 +397,20 @@ lookupDefTyExact n gam
          pure (definition def, type def)
 
 export
+lookupDefTyVisExact : Name -> Gamma -> Maybe (Def, ClosedTerm, Visibility)
+lookupDefTyVisExact n gam 
+    = do def <- lookupGlobalExact n gam
+         pure (definition def, type def, visibility def)
+
+export
 lookupDefTyName : Name -> Gamma -> List (Name, Def, ClosedTerm)
 lookupDefTyName n gam
+    = map (\(x, g) => (x, definition g, type g)) (lookupGlobalName n gam)
+
+export
+lookupDefTyNameIn : (nspace : List String) ->
+                    Name -> Gamma -> List (Name, Def, ClosedTerm)
+lookupDefTyNameIn nspace n gam
     = map (\(x, g) => (x, definition g, type g)) (lookupGlobalName n gam)
 
 public export

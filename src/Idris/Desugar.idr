@@ -19,12 +19,16 @@ import TTImp.TTImp
 -- Desugaring from high level Idris syntax to TTImp involves:
 
 -- Done:
-
--- Still TODO:
 -- * Shunting infix operators into function applications according to precedence
 -- * Replacing 'do' notating with applications of (>>=)
--- * Replacing !-notation
 -- * Replacing pattern matching binds with 'case'
+
+-- Still TODO:
+-- * Replacing !-notation
+-- * Changing tuples to 'Pair/MkPair'
+-- * Dependent pair notation
+-- * Idiom brackets
+-- * List notation
 
 %default covering
 
@@ -153,8 +157,6 @@ mutual
   desugar (PLocal fc xs scope) 
       = pure $ ILocal fc (concat !(traverse desugarDecl xs)) 
                          !(desugar scope)
-  desugar (PDoBlock fc block)
-      = expandDo fc block
   desugar (PApp fc x y) 
       = pure $ IApp fc !(desugar x) !(desugar y)
   desugar (PImplicitApp fc x argn y) 
@@ -187,6 +189,10 @@ mutual
   desugar (PDotted fc x) 
       = pure $ IMustUnify fc !(desugar x)
   desugar (PImplicit fc) = pure $ Implicit fc
+  desugar (PDoBlock fc block)
+      = expandDo fc block
+  desugar (PPair fc l r) = ?desugarPair
+  desugar (PUnit fc) = ?desugarUnit
   
   expandDo : {auto s : Ref Syn SyntaxInfo} ->
              FC -> List PDo -> Core FC (RawImp FC)
@@ -257,11 +263,11 @@ mutual
   desugarDecl : {auto s : Ref Syn SyntaxInfo} ->
                 PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl (PClaim fc ty) 
-      = pure [IClaim fc !(desugarType ty)]
+      = pure [IClaim fc Public !(desugarType ty)]
   desugarDecl (PDef fc n clauses) 
       = pure [IDef fc n !(traverse desugarClause clauses)]
   desugarDecl (PData fc ddecl) 
-      = pure [IData fc !(desugarData ddecl)]
+      = pure [IData fc Public !(desugarData ddecl)]
   desugarDecl (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)

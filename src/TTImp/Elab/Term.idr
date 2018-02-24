@@ -32,8 +32,9 @@ insertImpLam env tm (Just ty) = bindLam tm ty
 
 expandAmbigName : Gamma -> Env Term vars -> NestedNames vars ->
                   RawImp annot -> 
-                  List (annot, RawImp annot) -> RawImp annot -> RawImp annot
-expandAmbigName gam env nest orig args (IVar loc x)
+                  List (annot, RawImp annot) -> RawImp annot -> 
+                  Maybe (Term vars) -> RawImp annot
+expandAmbigName gam env nest orig args (IVar loc x) exp
    = case lookup x (names nest) of
           Just _ => orig
           Nothing => 
@@ -48,9 +49,9 @@ expandAmbigName gam env nest orig args (IVar loc x)
     buildAlt : RawImp annot -> List (annot, RawImp annot) -> RawImp annot
     buildAlt f [] = f
     buildAlt f ((loc', a) :: as) = buildAlt (IApp loc' f a) as
-expandAmbigName gam env nest orig args (IApp loc f a)
-   = expandAmbigName gam env nest orig ((loc, a) :: args) f
-expandAmbigName gam env nest orig args _ = orig
+expandAmbigName gam env nest orig args (IApp loc f a) exp
+   = expandAmbigName gam env nest orig ((loc, a) :: args) f exp
+expandAmbigName gam env nest orig args _ _ = orig
 
 -- Erase any forced arguments from a top level application
 eraseForced : Gamma -> Term vars -> Term vars
@@ -88,7 +89,7 @@ mutual
           Core annot (Term vars, Term vars) 
   check rigc process elabinfo env nest tm_in exp 
       = do gam <- getCtxt
-           let tm = expandAmbigName gam env nest tm_in [] tm_in
+           let tm = expandAmbigName gam env nest tm_in [] tm_in exp
            case elabMode elabinfo of
                -- don't expand implicit lambda on LHS
                InLHS => checkImp rigc process elabinfo env nest tm exp
@@ -106,13 +107,13 @@ mutual
   checkImp rigc process elabinfo env nest (IVar loc x) expected 
       = case lookup x (names nest) of
              Just (n', tm) =>
-                  do gam <- getCtxt
-                     case lookupTyExact n' gam of
+                  do gam <- get Ctxt
+                     case lookupTyExact n' (gamma gam) of
                           Nothing => throw (UndefinedName loc n')
                           Just varty => 
                              do let tyenv = useVars (getArgs tm) (embed varty)
                                 (ty_nf, imps) <- getImps rigc process loc env nest elabinfo (nf gam env tyenv) []
-                                let ty = quote empty env ty_nf
+                                let ty = quote (noGam gam) env ty_nf
                                 log 5 $ "Type of " ++ show n' ++ " : " ++ show ty
                                 log 5 $ "Term: " ++ show (apply tm imps)
                                 checkExp rigc process loc elabinfo env nest 
@@ -144,9 +145,9 @@ mutual
            log 10 $ "Implicits: " ++ show (implicitsGiven elabinfo')
            (restm, resty) <- checkApp rigc process elabinfo' loc env nest fn' arg expected
            -- Add any remaining implicits greedily
-           gam <- getCtxt
+           gam <- get Ctxt
            (ty, imps) <- getImps rigc process loc env nest elabinfo' (nf gam env resty) []
-           log 10 $ "Checked app " ++ show (restm, quote empty env ty, imps)
+           log 10 $ "Checked app " ++ show (restm, quote (noGam gam) env ty, imps)
            -- Check all of the implicits we collected have been used
            est <- get EST
            log 10 $ "Used: " ++ show (implicitsUsed est, map fst args)
@@ -154,16 +155,16 @@ mutual
            case imps of
                 [] => pure (restm, resty)
                 _ => checkExp rigc process loc elabinfo env nest (apply restm imps) 
-                              (quote empty env ty) expected
+                              (quote (noGam gam) env ty) expected
   checkImp rigc process elabinfo env nest (IImplicitApp loc fn nm arg) expected 
       = do let (fn', args) = collectGivenImps fn
            let elabinfo' = addGivenImps elabinfo ((nm, arg) :: args)
            log 10 $ "IImplicits: " ++ show (implicitsGiven elabinfo')
            (restm, resty) <- check rigc process elabinfo' env nest fn' expected
            -- Add any remaining implicits greedily
-           gam <- getCtxt
+           gam <- get Ctxt
            (ty, imps) <- getImps rigc process loc env nest elabinfo' (nf gam env resty) []
-           log 10 $ "Checked app " ++ show (restm, quote empty env ty, imps)
+           log 10 $ "Checked app " ++ show (restm, quote (noGam gam) env ty, imps)
            -- Check all of the implicits we collected have been used
            est <- get EST
            log 10 $ "IUsed: " ++ show (implicitsUsed est, nm :: map fst args)
@@ -171,7 +172,7 @@ mutual
            case imps of
                 [] => pure (restm, resty)
                 _ => checkExp rigc process loc elabinfo env nest (apply restm imps) 
-                              (quote empty env ty) expected
+                              (quote (noGam gam) env ty) expected
   checkImp rigc process elabinfo env nest (ISearch loc depth) Nothing
       = throw (InternalError "Trying to search for a term with an unknown type")
   checkImp rigc process elabinfo env nest (ISearch loc depth) (Just expected)
@@ -290,16 +291,17 @@ mutual
               NestedNames vars -> Name -> Maybe (Term vars) ->
               Core annot (Term vars, Term vars)
   checkName {vars} rigc process elabinfo loc env nest x expected 
-      = do gam <- getCtxt
+      = do gam <- get Ctxt
            case defined x env of
              Just (rigb, lv) => 
                  do rigSafe rigb rigc
                     let varty = binderType (getBinder lv env) 
                     (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                     checkExp rigc process loc elabinfo env nest (apply (Local lv) imps)
-                            (quote empty env ty) expected
+                            (quote (noGam gam) env ty) expected
              Nothing =>
-                    case lookupDefTyName x gam of
+                 do nspace <- getNS
+                    case lookupDefTyNameIn nspace x (gamma gam) of
                          [] => throw $ UndefinedName loc x
                          [(fullname, def, ty)] => 
                               resolveRef fullname def gam (embed ty)
@@ -317,7 +319,7 @@ mutual
       defOK False InLHS _ = False
       defOK _ _ _ = True
 
-      resolveRef : Name -> Def -> Gamma -> Term vars -> 
+      resolveRef : Name -> Def -> Defs -> Term vars -> 
                    Core annot (Term vars, Term vars)
       resolveRef n def gam varty
           = do let nt : NameType 
@@ -330,7 +332,7 @@ mutual
                if topLevel elabinfo ||
                     defOK (dotted elabinfo) (elabMode elabinfo) nt
                   then checkExp rigc process loc elabinfo env nest (apply (Ref nt n) imps) 
-                            (quote empty env ty) expected
+                            (quote (noGam gam) env ty) expected
                   else throw (BadPattern loc n)
 
   checkCase : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -519,9 +521,9 @@ mutual
           = MkImpData loc' (newName nest n) tycons (map (updateTyName nest) dcons)
 
       updateName : NestedNames vars -> ImpDecl annot -> ImpDecl annot
-      updateName nest (IClaim loc' ty) = IClaim loc' (updateTyName nest ty)
+      updateName nest (IClaim loc' vis ty) = IClaim loc' vis (updateTyName nest ty)
       updateName nest (IDef loc' n cs) = IDef loc' (newName nest n) cs
-      updateName nest (IData loc' d) = IData loc' (updateDataName nest d)
+      updateName nest (IData loc' vis d) = IData loc' vis (updateDataName nest d)
       updateName nest i = i
 
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -546,7 +548,7 @@ mutual
                            (record { boundNames $= ((n, (tm, expected)) ::),
                                      toBind $= ((n, (tm, expected)) ::),
                                      asVariables $= (n ::) } est)
-                       gam <- getCtxt
+                       gam <- get Ctxt
                        convert loc InLHS env (nf gam env patTm) (nf gam env tm)
                        pure (patTm, expected)
 
@@ -560,7 +562,7 @@ mutual
              Core annot (Term vars, Term vars) 
   checkApp rigc process elabinfo loc env nest fn arg expected
       = do (fntm, fnty) <- check rigc process elabinfo env nest fn Nothing
-           gam <- getCtxt
+           gam <- get Ctxt
            case nf gam env fnty of
                 NBind _ (Pi rigf _ ty) scdone =>
                   do impsUsed <- saveImps
@@ -573,10 +575,10 @@ mutual
                                      _ => arg
                      (argtm, argty) <- check (rigMult rigf rigc)
                                              process (record { implicitsGiven = [] } elabinfo)
-                                             env nest arg' (Just (quote empty env ty))
+                                             env nest arg' (Just (quote (noGam gam) env ty))
                      restoreImps impsUsed
                      let sc' = scdone (toClosure False env argtm)
-                     gam <- getCtxt
+                     gam <- get Ctxt
                      checkExp rigc process loc elabinfo env nest (App fntm argtm)
                                   (quote gam env sc') expected
                 _ => 
@@ -590,7 +592,7 @@ mutual
                                              env nest arg (Just expty)
                      restoreImps impsUsed
                      -- Check the type of 'fn' is an actual function type
-                     gam <- getCtxt
+                     gam <- get Ctxt
                      (fnchk, _) <-
                          checkExp rigc process loc elabinfo env nest fntm 
                                   (Bind bn (Pi RigW Explicit expty) scty) 
@@ -635,7 +637,7 @@ mutual
            case (top, impmode) of
                 (True, PI _) =>
                    do log 5 $ "Binding arg implicits " ++ show argImps
-                      gam <- getCtxt
+                      gam <- get Ctxt
                       let (scopev', scopet')
                           = bindImplicits impmode gam env'
                                           scopeImps scopev scopet
@@ -721,22 +723,25 @@ mutual
   makeImplicit rigc process loc env nest elabinfo bn ty
       = case lookup bn (implicitsGiven elabinfo) of
              Just rawtm => 
-               do usedImp bn
-                  (imptm, impty) <- checkImp rigc process elabinfo env nest rawtm (Just (quote empty env ty))
+               do gam <- get Ctxt
+                  usedImp bn
+                  (imptm, impty) <- checkImp rigc process elabinfo env nest rawtm (Just (quote (noGam gam) env ty))
                   pure imptm
              Nothing =>
               -- In an expression, add a hole
               -- In a pattern or type, treat as a variable to bind
                case elabMode elabinfo of
                   InExpr => 
-                     do hn <- genName (nameRoot bn)
-                        addNamedHole loc hn False env (quote empty env ty)
+                     do gam <- get Ctxt
+                        hn <- genName (nameRoot bn)
+                        addNamedHole loc hn False env (quote (noGam gam) env ty)
                         pure (mkConstantApp hn env)
                   _ =>
-                     do hn <- genName (nameRoot bn)
+                     do gam <- get Ctxt
+                        hn <- genName (nameRoot bn)
                         -- Add as a pattern variable, but let it unify with other
                         -- things, hence 'False' as an argument to addBoundName
-                        let expected = quote empty env ty
+                        let expected = quote (noGam gam) env ty
                         tm <- addBoundName loc hn False env expected
                         log 5 $ "Added Bound implicit " ++ show (hn, (tm, expected))
                         est <- get EST
@@ -752,21 +757,24 @@ mutual
   makeAutoImplicit rigc process loc env nest elabinfo bn ty
       = case lookup bn (implicitsGiven elabinfo) of
              Just rawtm =>
-               do usedImp bn
-                  (imptm, impty) <- checkImp rigc process elabinfo env nest rawtm (Just (quote empty env ty))
+               do gam <- get Ctxt
+                  usedImp bn
+                  (imptm, impty) <- checkImp rigc process elabinfo env nest rawtm (Just (quote (noGam gam) env ty))
                   pure imptm
              Nothing => 
                -- on the LHS, just treat it as an implicit pattern variable.
                -- on the RHS, add a searchable hole
                case elabMode elabinfo of
                     InLHS => 
-                       do hn <- genName (nameRoot bn)
-                          addNamedHole loc hn False env (quote empty env ty)
+                       do gam <- get Ctxt
+                          hn <- genName (nameRoot bn)
+                          addNamedHole loc hn False env (quote (noGam gam) env ty)
                           pure (mkConstantApp hn env)
                     _ => 
-                       do n <- addSearchable loc env (quote empty env ty) 500
+                       do gam <- get Ctxt
+                          n <- addSearchable loc env (quote (noGam gam) env ty) 500
                           log 0 $ "Auto implicit search: " ++ show n ++
-                                  " for " ++ show (quote empty env ty)
+                                  " for " ++ show (quote (noGam gam) env ty)
                           solveConstraints InTerm
                           pure (mkConstantApp n env)
 
@@ -822,12 +830,12 @@ mutual
       = do gam <- getCtxt
            pure (eraseForced gam tm, got)
   checkExp rigc process loc elabinfo env nest tm got (Just exp) 
-      = do gam <- getCtxt
+      = do gam <- get Ctxt
            let expnf = nf gam env exp
            (got', imps) <- convertImps rigc process loc env nest elabinfo (nf gam env got) expnf []
            constr <- convert loc (elabMode elabinfo) env got' expnf
            case constr of
-                [] => pure (eraseForced gam (apply tm imps), quote empty env got')
+                [] => pure (eraseForced (gamma gam) (apply tm imps), quote (noGam gam) env got')
                 cs => do gam <- getCtxt
                          c <- addConstant loc env (apply tm imps) exp cs
                          pure (mkConstantApp c env, got)

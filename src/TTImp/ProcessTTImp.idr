@@ -34,15 +34,15 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               NestedNames vars ->
               ImpDecl annot -> 
               Core annot ()
-processDecl env nest (IClaim loc ty) 
+processDecl env nest (IClaim loc vis ty) 
     = processType (\c, u, i => processDecl {c} {u} {i})
-                  env nest ty
+                  env nest vis ty
 processDecl env nest (IDef loc n cs) 
     = processDef (\c, u, i => processDecl {c} {u} {i})
                  env nest loc n cs
-processDecl env nest (IData loc d) 
+processDecl env nest (IData loc vis d) 
     = processData (\c, u, i => processDecl {c} {u} {i})
-                  env nest d
+                  env nest vis d
 processDecl env nest (INamespace loc ns ds)
     = do oldns <- getNS
          extendNS (reverse ns)

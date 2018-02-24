@@ -1,6 +1,7 @@
 module Parser.RawImp
 
 import Core.TT
+import Core.Context
 import Core.RawContext
 import TTImp.TTImp
 
@@ -229,6 +230,17 @@ mutual
   expr : IndentInfo -> Rule (RawImp ())
   expr = typeExpr 
 
+visibility : EmptyRule Visibility
+visibility
+    = do keyword "public"
+         keyword "export"
+         pure Public
+  <|> do keyword "export"
+         pure Export
+  <|> do keyword "private"
+         pure Private
+  <|> pure Private
+
 tyDecl : IndentInfo -> Rule (ImpTy ())
 tyDecl indents
     = do n <- name
@@ -314,8 +326,9 @@ directive indents
 -- Declared at the top
 -- topDecl : Rule (ImpDecl ())
 topDecl indents
-    = do dat <- dataDecl indents
-         pure (IData () dat)
+    = do vis <- visibility
+         dat <- dataDecl indents
+         pure (IData () vis dat)
   <|> do ns <- namespaceDecl
          ds <- assert_total (nonEmptyBlock topDecl)
          pure (INamespace () ns ds)
@@ -323,8 +336,9 @@ topDecl indents
          pure (ImplicitNames () ns)
   <|> do symbol "%"; commit
          directive indents
-  <|> do claim <- tyDecl indents
-         pure (IClaim () claim)
+  <|> do vis <- visibility
+         claim <- tyDecl indents
+         pure (IClaim () vis claim)
   <|> do nd <- clause indents
          pure (IDef () (fst nd) [snd nd])
 

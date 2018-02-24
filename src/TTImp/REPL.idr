@@ -27,7 +27,7 @@ process (Eval ttimp)
     = do i <- newRef ImpST (initImpState {annot = ()})
          (tm, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
-         gam <- getCtxt
+         gam <- get Ctxt
          coreLift (putStrLn (show (normalise gam [] tm) ++ " : " ++
                              show (normalise gam [] ty)))
          pure True
@@ -35,19 +35,19 @@ process (Check ttimp)
     = do i <- newRef ImpST (initImpState {annot = ()})
          (tm, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
-         gam <- getCtxt
+         gam <- get Ctxt
          coreLift (putStrLn (show tm ++ " : " ++
                              show (normaliseHoles gam [] ty)))
          pure True
 process (ProofSearch n)
     = do tm <- search () 1000 n
-         gam <- getCtxt
+         gam <- get Ctxt
          coreLift (putStrLn (show (normalise gam [] tm)))
          dumpConstraints 0 True
          pure True
 process (DebugInfo n)
-    = do gam <- getCtxt
-         traverse showInfo (lookupDefName n gam)
+    = do gam <- get Ctxt
+         traverse showInfo (lookupDefName n (gamma gam))
          pure True
 process Quit 
     = do coreLift $ putStrLn "Bye for now!"

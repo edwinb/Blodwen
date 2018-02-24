@@ -34,7 +34,7 @@ using (FileIO m)
              Right raw => do
                (ptm, pty) <- infer () [] raw
                coreLift (putStr "Evaluating main: ")
-               gam <- getCtxt
+               gam <- get Ctxt
                coreLift (printLn (normalise gam [] ptm))
 
   export

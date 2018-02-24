@@ -98,12 +98,26 @@ definition is done).
 See Term.makeImplicit and Term.makeAutoImplicit to see where we add holes for
 the implicit arguments in applications
 
+Core.Unify.solveConstraints revisits all of the currently unsolved holes and
+constrained definitions, and tries again to unify any constraints which they
+require. It also tries to resolve anything defined by proof search.
+
 Dot Patterns
 ------------
 IMustUnify is a constructor of RawImp. When we elaborate this, we generate a
 hole, then elaborate the term, and add a constraint that the generated hole
 must unify with the term which was explicitly given (in UnifyState.addDot),
 finally checked in 'UnifyState.checkDots'
+
+Proof Search
+------------
+A definition with the body 'BySearch' is a hole which will be resolved
+by searching for something which fits the type. This happens in
+Core.AutoSearch.
+
+At the minute, it just takes the first thing which fits the type - we'll need
+to add various constraints on it later (e.g. for dealing with interfaces
+effectively)
 
 @-Patterns
 ----------

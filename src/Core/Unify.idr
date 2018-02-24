@@ -73,7 +73,7 @@ unifyArgs mode loc env (cx :: cxs) (cy :: cys)
     = do constr <- unify mode loc env cx cy
          case constr of
               [] => unifyArgs mode loc env cxs cys
-              _ => do gam <- getCtxt 
+              _ => do gam <- get Ctxt 
                       cs <- unifyArgs mode loc env cxs cys
                       -- TODO: Fix this bit! See p59 Ulf's thesis
 --                       c <- addConstraint 
@@ -154,8 +154,8 @@ patternEnv : {auto c : Ref Ctxt Defs} ->
              Env Term vars -> List (Closure vars) -> 
              Core annot (Maybe (newvars ** SubVars newvars vars))
 patternEnv env args
-    = do gam <- getCtxt
-         let args' = map (evalClosure empty) args
+    = do defs <- get Ctxt
+         let args' = map (evalClosure (noGam defs)) args
          case getVars args' of
               Nothing => pure Nothing
               Just vs => pure (Just (toSubVars _ vs))
@@ -170,12 +170,12 @@ instantiate : {auto c : Ref Ctxt Defs} ->
               (metavar : Name) -> SubVars newvars vars -> Term newvars ->
               Core annot ()
 instantiate loc metavar smvs tm {newvars}
-     = do gam <- getCtxt
+     = do gam <- get Ctxt
           -- If the name is user defined, it means we've solved a ?hole by
           -- unification, which is not what we want!
           when (isUserName metavar) $
                throw (SolvedNamedHole loc metavar)
-          case lookupDefTyExact metavar gam of
+          case lookupDefTyExact metavar (gamma gam) of
                Nothing => ufail loc $ "No such metavariable " ++ show metavar
                Just (_, ty) => 
                     case mkRHS [] newvars CompatPre ty 
@@ -206,14 +206,14 @@ implicitBind : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
                Name -> Core annot ()
 implicitBind n 
-    = do gam <- getCtxt
-         case lookupDefExact n gam of
+    = do gam <- get Ctxt
+         case lookupDefExact n (gamma gam) of
               Just (Hole len _) => updateDef n ImpBind
               _ => pure ()
 
 -- Check that the references in the term don't refer to the hole name as
 -- part of their definition
-occursCheck : Gamma -> Name -> Term vars -> Bool
+occursCheck : Defs -> Name -> Term vars -> Bool
 occursCheck gam n tm 
     = case oc empty tm of
            Nothing => False
@@ -228,7 +228,7 @@ occursCheck gam n tm
              then Just chk
              else if var == n 
                then Nothing
-               else let ns = getDescendents var gam in
+               else let ns = getDescendents var (gamma gam) in
                         if n `elem` ns
                            then Nothing
                            else Just (insert var chk)
@@ -267,12 +267,12 @@ mutual
            pure (Bind x (setType b bty') sc')
   shrinkHoles loc env args tm with (unapply tm)
     shrinkHoles loc env args (apply (Ref Func h) as) | ArgsList 
-         = do gam <- getCtxt
+         = do gam <- get Ctxt
               -- If the hole we're trying to solve (in the call to 'shrinkHoles')
               -- doesn't have enough arguments to be able to pass them to
               -- 'h' here, make a new hole 'sh' which only uses the available
               -- arguments, and solve h with it.
-              case lookupDefTyExact h gam of
+              case lookupDefTyExact h (gamma gam) of
                    Just (Hole _ _, ty) => 
                         do sn <- genName "sh"
                            mkSmallerHole loc [] ty h as sn args
@@ -373,25 +373,25 @@ mutual
   unifyHole loc env nt var args tm
       = case !(patternEnv env args) of
            Just (newvars ** submv) =>
-                do gam <- getCtxt
+                do gam <- get Ctxt
 --                    tm' <- shrinkHoles loc env (map (quote gam env) args) 
 --                                               (quote gam env tm)
---                    gam <- getCtxt
+--                    gam <- get Ctxt
                    -- newvars and args should be the same length now, because
                    -- there's one new variable for each distinct argument.
                    -- The types don't express this, but 'submv' at least
                    -- tells us that 'newvars' are the subset of 'vars'
                    -- being applied to the metavariable, and so 'tm' must
                    -- only use those variables for success
-                   case shrinkTerm (normaliseHoles gam env (quote empty env tm)) submv of
+                   case shrinkTerm (normaliseHoles gam env (quote (noGam gam) env tm)) submv of
                         Nothing => do
                            log 10 $ "Postponing constraint " ++
-                                      show (quote empty env (NApp (NRef nt var) args))
+                                      show (quote (noGam gam) env (NApp (NRef nt var) args))
                                        ++ " =?= " ++
-                                      show (quote empty env tm)
+                                      show (quote (noGam gam) env tm)
                            postpone loc env 
-                             (quote empty env (NApp (NRef nt var) args))
-                             (quote empty env tm)
+                             (quote (noGam gam) env (NApp (NRef nt var) args))
+                             (quote (noGam gam) env tm)
 --                              ufail loc $ "Scope error " ++
 --                                    show (vars, newvars) ++
 --                                    "\nUnifying " ++
@@ -402,7 +402,7 @@ mutual
                         Just tm' => 
                             -- if the terms are the same, this isn't a solution
                             -- but they are already unifying, so just return
-                            if convert empty env (NApp (NRef nt var) args) tm
+                            if convert (noGam gam) env (NApp (NRef nt var) args) tm
                                then pure []
                                else
                                 -- otherwise, instantiate the hole as long as
@@ -411,18 +411,19 @@ mutual
                                    if not (occursCheck gam var tm')
                                       then throw (Cycle loc env
                                                  (normaliseHoles gam env
-                                                     (quote empty env (NApp (NRef nt var) args)))
+                                                     (quote (noGam gam) env (NApp (NRef nt var) args)))
                                                  (normaliseHoles gam env
-                                                     (quote empty env tm)))
+                                                     (quote (noGam gam) env tm)))
                                       else do instantiate loc var submv tm'
                                               pure []
-           Nothing => do log 10 $ "Postponing constraint " ++
-                                      show (quote empty env (NApp (NRef nt var) args))
+           Nothing => do gam <- get Ctxt
+                         log 10 $ "Postponing constraint " ++
+                                      show (quote (noGam gam) env (NApp (NRef nt var) args))
                                        ++ " =?= " ++
-                                      show (quote empty env tm)
+                                      show (quote (noGam gam) env tm)
                          postpone loc env 
-                               (quote empty env (NApp (NRef nt var) args))
-                               (quote empty env tm)
+                               (quote (noGam gam) env (NApp (NRef nt var) args))
+                               (quote (noGam gam) env tm)
 
   unifyApp : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -430,60 +431,64 @@ mutual
              NHead vars -> List (Closure vars) -> NF vars ->
              Core annot (List Name)
   unifyApp loc env (NRef nt var) args tm 
-      = do gam <- getCtxt
-           if convert empty env (NApp (NRef nt var) args) tm
+      = do gam <- get Ctxt
+           if convert (noGam gam) env (NApp (NRef nt var) args) tm
               then pure []
               else
-               if isHoleNF gam var
+               if isHoleNF (gamma gam) var
                   then unifyHole loc env nt var args tm
                   else unifyIfEq True loc env (NApp (NRef nt var) args) tm
   unifyApp loc env hd args (NApp (NRef nt var) args')
-      = do gam <- getCtxt
-           if convert empty env (NApp hd args) (NApp (NRef nt var) args')
+      = do gam <- get Ctxt
+           if convert (noGam gam) env (NApp hd args) (NApp (NRef nt var) args')
               then pure []
               else
-                if isHoleNF gam var
+                if isHoleNF (gamma gam) var
                    then unifyHole loc env nt var args' (NApp hd args)
                    else unifyIfEq True loc env (NApp hd args)
                                                (NApp (NRef nt var) args')
   unifyApp loc env (NLocal x) [] (NApp (NLocal y) [])
-      = if sameVar x y then pure []
-           else do log 10 $ "Postponing var constraint " ++
-                            show (quote empty env (NApp (NLocal x) [])) ++ 
-                            " =?= " ++ 
-                            show (quote empty env (NApp (NLocal y) []))
-                   postpone loc env
-                     (quote empty env (NApp (NLocal x) [])) 
-                     (quote empty env (NApp (NLocal y) []))
+      = do gam <- get Ctxt
+           if sameVar x y then pure []
+             else do log 10 $ "Postponing var constraint " ++
+                              show (quote (noGam gam) env (NApp (NLocal x) [])) ++ 
+                              " =?= " ++ 
+                              show (quote (noGam gam) env (NApp (NLocal y) []))
+                     postpone loc env
+                       (quote (noGam gam) env (NApp (NLocal x) [])) 
+                       (quote (noGam gam) env (NApp (NLocal y) []))
   unifyApp loc env hd args (NApp hd' args')
-      = if convert empty env (NApp hd args) (NApp hd' args')
-           then pure []
-           else do log 10 $ "Postponing constraint " ++
-                            show (quote empty env (NApp hd args)) ++ " =?= " ++
-                            show (quote empty env (NApp hd' args))
-                   postpone loc env
-                            (quote empty env (NApp hd args)) 
-                            (quote empty env (NApp hd' args'))
+      = do gam <- get Ctxt
+           if convert (noGam gam) env (NApp hd args) (NApp hd' args')
+             then pure []
+             else do log 10 $ "Postponing constraint " ++
+                              show (quote (noGam gam) env (NApp hd args)) ++ " =?= " ++
+                              show (quote (noGam gam) env (NApp hd' args))
+                     postpone loc env
+                              (quote (noGam gam) env (NApp hd args)) 
+                              (quote (noGam gam) env (NApp hd' args'))
   -- A local variable against a constructor is impossible, because the local
   -- should quantify over everything
   unifyApp loc env (NLocal x) [] (NDCon n t a args)
-      = ufail loc $ "Can't unify " ++ show (quote empty env (NApp (NLocal x) []))
-                        ++ " and " ++ show (quote empty env (NDCon n t a args))
+      = do gam <- get Ctxt
+           ufail loc $ "Can't unify " ++ show (quote (noGam gam) env (NApp (NLocal x) []))
+                        ++ " and " ++ show (quote (noGam gam) env (NDCon n t a args))
   unifyApp loc env (NLocal x) [] (NTCon n t a args)
-      = ufail loc $ "Can't unify " ++ show (quote empty env (NApp (NLocal x) []))
-                        ++ " and " ++ show (quote empty env (NTCon n t a args))
+      = do gam <- get Ctxt
+           ufail loc $ "Can't unify " ++ show (quote (noGam gam) env (NApp (NLocal x) []))
+                        ++ " and " ++ show (quote (noGam gam) env (NTCon n t a args))
   -- If they're already convertible without metavariables, we're done,
   -- otherwise postpone
   unifyApp loc env hd args tm 
-      = do gam <- getCtxt
-           if convert gam env (quote empty env (NApp hd args))
-                              (quote empty env tm)
+      = do gam <- get Ctxt
+           if convert gam env (quote (noGam gam) env (NApp hd args))
+                              (quote (noGam gam) env tm)
               then pure []
               else do log 10 $ "Catch all case: Postponing constraint " ++
-                            show (quote empty env (NApp hd args)) ++ " =?= " ++
-                            show (quote empty env tm)
+                            show (quote (noGam gam) env (NApp hd args)) ++ " =?= " ++
+                            show (quote (noGam gam) env tm)
                       postpone loc env
-                           (quote empty env (NApp hd args)) (quote empty env tm)
+                           (quote (noGam gam) env (NApp hd args)) (quote (noGam gam) env tm)
   
   unifyBothApps
            : {auto c : Ref Ctxt Defs} ->
@@ -493,35 +498,38 @@ mutual
              NHead vars -> List (Closure vars) ->
              Core annot (List Name)
   unifyBothApps _ loc env (NLocal xv) [] (NLocal yv) []
-     = if sameVar xv yv
-          then pure []
-          else ufail loc $ "Can't unify " ++ 
-                           show (quote empty env (NApp (NLocal xv) []))
-                           ++ " and " ++
-                           show (quote empty env (NApp (NLocal yv) []))
+     = do gam <- get Ctxt
+          if sameVar xv yv
+            then pure []
+            else ufail loc $ "Can't unify " ++ 
+                             show (quote (noGam gam) env (NApp (NLocal xv) []))
+                             ++ " and " ++
+                             show (quote (noGam gam) env (NApp (NLocal yv) []))
   -- Locally bound things, in a term (not LHS). Since we have to unify
   -- for *all* possible values, we can safely unify the arguments.
   unifyBothApps InTerm loc env (NLocal xv) argsx (NLocal yv) argsy
-     = if sameVar xv yv
-          then unifyArgs InTerm loc env argsx argsy
-          else do log 10 $ "Postponing constraint (locals) " ++
-                           show (quote empty env (NApp (NLocal xv) argsx))
-                           ++ " =?= " ++
-                           show (quote empty env (NApp (NLocal yv) argsy))
-                  postpone loc env (quote empty env (NApp (NLocal xv) argsx))
-                                   (quote empty env (NApp (NLocal yv) argsy))
+     = do gam <- get Ctxt
+          if sameVar xv yv
+            then unifyArgs InTerm loc env argsx argsy
+            else do log 10 $ "Postponing constraint (locals) " ++
+                             show (quote (noGam gam) env (NApp (NLocal xv) argsx))
+                             ++ " =?= " ++
+                             show (quote (noGam gam) env (NApp (NLocal yv) argsy))
+                    postpone loc env (quote (noGam gam) env (NApp (NLocal xv) argsx))
+                                     (quote (noGam gam) env (NApp (NLocal yv) argsy))
   unifyBothApps _ loc env (NLocal xv) argsx (NLocal yv) argsy
-      = do log 10 $ "Postponing constraint (locals, LHS) " ++
-                     show (quote empty env (NApp (NLocal xv) argsx))
+      = do gam <- get Ctxt
+           log 10 $ "Postponing constraint (locals, LHS) " ++
+                     show (quote (noGam gam) env (NApp (NLocal xv) argsx))
                      ++ " =?= " ++
-                     show (quote empty env (NApp (NLocal yv) argsy))
-           postpone loc env (quote empty env (NApp (NLocal xv) argsx))
-                            (quote empty env (NApp (NLocal yv) argsy))
+                     show (quote (noGam gam) env (NApp (NLocal yv) argsy))
+           postpone loc env (quote (noGam gam) env (NApp (NLocal xv) argsx))
+                            (quote (noGam gam) env (NApp (NLocal yv) argsy))
   -- If they're both holes, solve the one with the bigger context with
   -- the other
   unifyBothApps mode loc env (NRef xt hdx) argsx (NRef yt hdy) argsy
-      = do gam <- getCtxt
-           if isHoleNF gam hdx && isHoleNF gam hdy
+      = do gam <- get Ctxt
+           if isHoleNF (gamma gam) hdx && isHoleNF (gamma gam) hdy
               then
                  (if length argsx > length argsy
                      then unifyApp loc env (NRef xt hdx) argsx 
@@ -529,7 +537,7 @@ mutual
                      else unifyApp loc env (NRef yt hdy) argsy 
                                            (NApp (NRef xt hdx) argsx))
               else 
-                 (if isHoleNF gam hdx
+                 (if isHoleNF (gamma gam) hdx
                      then unifyApp loc env (NRef xt hdx) argsx
                                            (NApp (NRef yt hdy) argsy)
                      else unifyApp loc env (NRef yt hdy) argsy 
@@ -545,68 +553,71 @@ mutual
              Name -> Binder (NF vars) -> (Closure vars -> NF vars) ->
              Core annot (List Name)
   unifyBothBinders mode loc env x (Pi cx ix tx) scx y (Pi cy iy ty) scy
-      = if ix /= iy && cx /= cy
-           then ufail loc $ "Can't unify " ++ show (quote empty env
-                                                   (NBind x (Pi cx ix tx) scx))
-                                       ++ " and " ++
-                                          show (quote empty env
-                                                   (NBind y (Pi cy iy ty) scy))
-           else
-             do ct <- unify mode loc env tx ty
-                xn <- genName "x"
-                let env' : Env Term (x :: _)
-                         = Pi cx ix (quote empty env tx) :: env
-                case ct of
-                     [] => -- no constraints, check the scope
-                           do let tscx = scx (toClosure False env (Ref Bound xn))
-                              let tscy = scy (toClosure False env (Ref Bound xn))
-                              let termx = refToLocal xn x (quote empty env tscx)
-                              let termy = refToLocal xn x (quote empty env tscy)
-                              unify mode loc env' termx termy
-                     cs => -- constraints, make new guarded constant
-                           do let txtm = quote empty env tx
-                              let tytm = quote empty env ty
-                              c <- addConstant loc env
-                                     (Bind x (Lam cx Explicit txtm) (Local Here))
-                                     (Bind x (Pi cx Explicit txtm)
-                                         (weaken tytm)) cs
-                              let tscx = scx (toClosure False env (Ref Bound xn))
-                              let tscy = scy (toClosure False env 
-                                             (App (mkConstantApp c env) (Ref Bound xn)))
-                              let termx = refToLocal xn x (quote empty env tscx)
-                              let termy = refToLocal xn x (quote empty env tscy)
-                              cs' <- unify mode loc env' termx termy
-                              pure (union cs cs')
+      = do gam <- get Ctxt
+           if ix /= iy && cx /= cy
+             then ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
+                                                     (NBind x (Pi cx ix tx) scx))
+                                         ++ " and " ++
+                                            show (quote (noGam gam) env
+                                                     (NBind y (Pi cy iy ty) scy))
+             else
+               do ct <- unify mode loc env tx ty
+                  xn <- genName "x"
+                  let env' : Env Term (x :: _)
+                           = Pi cx ix (quote (noGam gam) env tx) :: env
+                  case ct of
+                       [] => -- no constraints, check the scope
+                             do let tscx = scx (toClosure False env (Ref Bound xn))
+                                let tscy = scy (toClosure False env (Ref Bound xn))
+                                let termx = refToLocal xn x (quote (noGam gam) env tscx)
+                                let termy = refToLocal xn x (quote (noGam gam) env tscy)
+                                unify mode loc env' termx termy
+                       cs => -- constraints, make new guarded constant
+                             do let txtm = quote (noGam gam) env tx
+                                let tytm = quote (noGam gam) env ty
+                                c <- addConstant loc env
+                                       (Bind x (Lam cx Explicit txtm) (Local Here))
+                                       (Bind x (Pi cx Explicit txtm)
+                                           (weaken tytm)) cs
+                                let tscx = scx (toClosure False env (Ref Bound xn))
+                                let tscy = scy (toClosure False env 
+                                               (App (mkConstantApp c env) (Ref Bound xn)))
+                                let termx = refToLocal xn x (quote (noGam gam) env tscx)
+                                let termy = refToLocal xn x (quote (noGam gam) env tscy)
+                                cs' <- unify mode loc env' termx termy
+                                pure (union cs cs')
   unifyBothBinders mode loc env x (Lam cx ix tx) scx y (Lam cy iy ty) scy 
-      = if ix /= iy && cx /= cy
-           then ufail loc $ "Can't unify " ++ show (quote empty env
-                                                   (NBind x (Lam cx ix tx) scx))
-                                       ++ " and " ++
-                                          show (quote empty env
-                                                   (NBind y (Lam cy iy ty) scy))
-           else
-             do csty <- unify mode loc env tx ty
-                xn <- genName "x"
-                let env' : Env Term (x :: _)
-                         = Lam cx ix (quote empty env tx) :: env
-                let tscx = scx (toClosure False env (Ref Bound xn))
-                let tscy = scy (toClosure False env (Ref Bound xn))
-                let termx = refToLocal xn x (quote empty env tscx)
-                let termy = refToLocal xn x (quote empty env tscy)
-                cssc <- unify mode loc env' termx termy
-                pure (union csty cssc)
+      = do gam <- get Ctxt
+           if ix /= iy && cx /= cy
+             then ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
+                                                     (NBind x (Lam cx ix tx) scx))
+                                         ++ " and " ++
+                                            show (quote (noGam gam) env
+                                                     (NBind y (Lam cy iy ty) scy))
+             else
+               do csty <- unify mode loc env tx ty
+                  xn <- genName "x"
+                  let env' : Env Term (x :: _)
+                           = Lam cx ix (quote (noGam gam) env tx) :: env
+                  let tscx = scx (toClosure False env (Ref Bound xn))
+                  let tscy = scy (toClosure False env (Ref Bound xn))
+                  let termx = refToLocal xn x (quote (noGam gam) env tscx)
+                  let termy = refToLocal xn x (quote (noGam gam) env tscy)
+                  cssc <- unify mode loc env' termx termy
+                  pure (union csty cssc)
   unifyBothBinders mode loc env x bx scx y by scy
-      = ufail loc $ "Can't unify " ++ show (quote empty env (NBind x bx scx))
-                    ++ " and " ++ show (quote empty env (NBind x by scy))
+      = do gam <- get Ctxt
+           ufail loc $ "Can't unify " ++ show (quote (noGam gam) env (NBind x bx scx))
+                    ++ " and " ++ show (quote (noGam gam) env (NBind x by scy))
   
   export
   Unify Closure where
     unifyD _ _ mode loc env x y 
-        = do gam <- getCtxt
+        = do gam <- get Ctxt
              -- 'quote' using an empty global context, because then function
              -- names won't reduce until they have to
-             let x' = quote empty env x
-             let y' = quote empty env y
+             let x' = quote (noGam gam) env x
+             let y' = quote (noGam gam) env y
              unify mode loc env x' y'
 
   unifyIfEq : {auto c : Ref Ctxt Defs} ->
@@ -615,17 +626,17 @@ mutual
               annot -> Env Term vars -> NF vars -> NF vars -> 
                   Core annot (List Name)
   unifyIfEq post loc env x y 
-        = do gam <- getCtxt
+        = do gam <- get Ctxt
              if convert gam env x y
                 then pure []
                 else if post 
                         then do log 10 $ "Postponing constraint (unifyIfEq) " ++
-                                         show (quote empty env x) ++ " =?= " ++
-                                         show (quote empty env y)
-                                postpone loc env (quote empty env x) (quote empty env y)
-                        else ufail loc $ "Can't unify " ++ show (quote empty env x)
+                                         show (quote (noGam gam) env x) ++ " =?= " ++
+                                         show (quote (noGam gam) env y)
+                                postpone loc env (quote (noGam gam) env x) (quote (noGam gam) env y)
+                        else ufail loc $ "Can't unify " ++ show (quote (noGam gam) env x)
                                             ++ " and "
-                                            ++ show (quote empty env y)
+                                            ++ show (quote (noGam gam) env y)
 
   export
   Unify NF where
@@ -634,43 +645,45 @@ mutual
     -- If one thing is a lambda and the other is a name applied to some
     -- arguments, eta expand and try again
     unifyD _ _ mode loc env tmx@(NBind x (Lam cx ix tx) scx) tmy
-        = do gam <- getCtxt
+        = do gam <- get Ctxt
              let etay = nf gam env 
-                           (Bind x (Lam cx ix (quote empty env tx))
-                                   (App (weaken (quote empty env tmy)) (Local Here)))
+                           (Bind x (Lam cx ix (quote (noGam gam) env tx))
+                                   (App (weaken (quote (noGam gam) env tmy)) (Local Here)))
              unify mode loc env tmx etay
     unifyD _ _ mode loc env tmx tmy@(NBind y (Lam cy iy ty) scy)
-        = do gam <- getCtxt
+        = do gam <- get Ctxt
              let etax = nf gam env 
-                           (Bind y (Lam cy iy (quote empty env ty))
-                                   (App (weaken (quote empty env tmx)) (Local Here)))
+                           (Bind y (Lam cy iy (quote (noGam gam) env ty))
+                                   (App (weaken (quote (noGam gam) env tmx)) (Local Here)))
              unify mode loc env etax tmy
     unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
-        = if tagx == tagy
-             then do log 5 ("Constructor " ++ show (quote empty env (NDCon x tagx ax xs))
-                                ++ " and " ++ show (quote empty env (NDCon y tagy ay ys)))
-                     unifyArgs mode loc env xs ys
-             else ufail loc $ "Can't unify " ++ show (quote empty env
-                                                        (NDCon x tagx ax xs))
-                                         ++ " and "
-                                         ++ show (quote empty env
-                                                        (NDCon y tagy ay ys))
+        = do gam <- get Ctxt
+             if tagx == tagy
+               then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NDCon x tagx ax xs))
+                                  ++ " and " ++ show (quote (noGam gam) env (NDCon y tagy ay ys)))
+                       unifyArgs mode loc env xs ys
+               else ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
+                                                          (NDCon x tagx ax xs))
+                                           ++ " and "
+                                           ++ show (quote (noGam gam) env
+                                                          (NDCon y tagy ay ys))
     unifyD _ _ mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
-        = if tagx == tagy
-             then do log 5 ("Constructor " ++ show (quote empty env (NTCon x tagx ax xs))
-                                ++ " and " ++ show (quote empty env (NTCon y tagy ay ys)))
-                     unifyArgs mode loc env xs ys
-             -- TODO: Type constructors are not necessarily injective.
-             -- If we don't know it's injective, need to postpone the
-             -- constraint. But before then, we need some way to decide
-             -- what's injective...
---              then postpone loc env (quote empty env (NTCon x tagx ax xs))
---                                    (quote empty env (NTCon y tagy ay ys))
-             else ufail loc $ "Can't unify " ++ show (quote empty env
-                                                        (NTCon x tagx ax xs))
-                                         ++ " and "
-                                         ++ show (quote empty env
-                                                        (NTCon y tagy ay ys))
+        = do gam <- get Ctxt
+             if tagx == tagy
+               then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NTCon x tagx ax xs))
+                                  ++ " and " ++ show (quote (noGam gam) env (NTCon y tagy ay ys)))
+                       unifyArgs mode loc env xs ys
+               -- TODO: Type constructors are not necessarily injective.
+               -- If we don't know it's injective, need to postpone the
+               -- constraint. But before then, we need some way to decide
+               -- what's injective...
+--                then postpone loc env (quote empty env (NTCon x tagx ax xs))
+--                                      (quote empty env (NTCon y tagy ay ys))
+               else ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
+                                                          (NTCon x tagx ax xs))
+                                           ++ " and "
+                                           ++ show (quote (noGam gam) env
+                                                          (NTCon y tagy ay ys))
     unifyD _ _ mode loc env (NPrimVal x) (NPrimVal y) 
         = if x == y 
              then pure [] 
@@ -685,8 +698,9 @@ mutual
     unifyD _ _ mode loc env NErased y = pure []
     unifyD _ _ mode loc env NType NType = pure []
     unifyD _ _ mode loc env x y 
-        = do log 10 $ "Conversion check: " ++ show (quote empty env x) 
-                                ++ " and " ++ show (quote empty env y)
+        = do gam <- get Ctxt
+             log 10 $ "Conversion check: " ++ show (quote (noGam gam) env x) 
+                                ++ " and " ++ show (quote (noGam gam) env y)
              unifyIfEq False loc env x y
 
   export
@@ -694,7 +708,7 @@ mutual
     -- TODO: Don't just go to values, try to unify the terms directly
     -- and avoid normalisation as far as possible
     unifyD _ _ mode loc env x y 
-          = do gam <- getCtxt
+          = do gam <- get Ctxt
                unify mode loc env (nf gam env x) (nf gam env y)
 
 -- Try again to solve the given named constraint, and return the list
@@ -706,7 +720,7 @@ retry : {auto c : Ref Ctxt Defs} ->
         Core annot (List Name)
 retry mode cname
     = do ust <- get UST
-         gam <- getCtxt
+         gam <- get Ctxt
          case lookupCtxtExact cname (constraints ust) of
               Nothing => pure []
               -- If the constraint is now resolved (i.e. unifying now leads
@@ -734,8 +748,8 @@ retryHole : {auto c : Ref Ctxt Defs} ->
             UnifyMode -> (hole : (annot, Name)) ->
             Core annot ()
 retryHole mode (loc, hole)
-    = do gam <- getCtxt
-         case lookupDefExact hole gam of
+    = do gam <- get Ctxt
+         case lookupDefExact hole (gamma gam) of
               Nothing => pure ()
               Just (Guess tm constraints) => 
                    do cs' <- traverse (\x => retry mode x) constraints

@@ -351,8 +351,8 @@ dumpHole lvl hole
          if logLevel ust < lvl
             then pure ()
             else do
-               gam <- getCtxt
-               case lookupDefTyExact hole gam of
+               gam <- get Ctxt
+               case lookupDefTyExact hole (gamma gam) of
                     Nothing => pure ()
                     Just (Guess tm constraints, ty) => 
                          do log lvl $ "!" ++ show hole ++ " : " ++ 
@@ -379,7 +379,7 @@ dumpHole lvl hole
     dumpConstraint : Name -> Core annot ()
     dumpConstraint n
         = do ust <- get UST
-             gam <- getCtxt
+             gam <- get Ctxt
              case lookupCtxtExact n (constraints ust) of
                   Nothing => pure ()
                   Just Resolved => log lvl "\tResolved"
@@ -435,24 +435,24 @@ normaliseHoleTypes : {auto u : Ref UST (UState annot)} ->
                      Core annot ()
 normaliseHoleTypes
     = do hs <- getHoleNames
-         gam <- getCtxt
-         traverse (normaliseH gam) hs
+         ds <- get Ctxt
+         traverse (normaliseH ds) hs
          pure ()
   where
-    updateType : Gamma -> Name -> GlobalDef -> Core annot ()
-    updateType gam n def
-        = do let ty' = normaliseHoles gam [] (type def)
+    updateType : Defs -> Name -> GlobalDef -> Core annot ()
+    updateType ds n def
+        = do let ty' = normaliseHoles ds [] (type def)
              addDef n (record { type = ty' } def)
 
-    normaliseH : Gamma -> Name -> Core annot ()
-    normaliseH gam n
-        = case lookupGlobalExact n gam of
+    normaliseH : Defs -> Name -> Core annot ()
+    normaliseH ds n
+        = case lookupGlobalExact n (gamma ds) of
                Just gdef =>
                   case definition gdef of
-                       PMDef h _ _ => if h then updateType gam n gdef
+                       PMDef h _ _ => if h then updateType ds n gdef
                                            else pure ()
-                       Hole _ _ => updateType gam n gdef
-                       Guess _ _ => updateType gam n gdef
+                       Hole _ _ => updateType ds n gdef
+                       Guess _ _ => updateType ds n gdef
                        _ => pure ()
                Nothing => pure ()
 
@@ -465,11 +465,11 @@ dumpDots : {auto u : Ref UST (UState annot)} ->
 dumpDots
     = do ust <- get UST
          log 2 "--- DOT PATTERN CONSTRAINTS ---"
-         gam <- getCtxt
+         gam <- get Ctxt
          traverse (dumpConstraint gam) (dotConstraints ust)
          pure ()
   where
-    dumpConstraint : Gamma -> Constraint annot -> Core annot ()
+    dumpConstraint : Defs -> Constraint annot -> Core annot ()
     dumpConstraint gam (MkConstraint _ env x y)
         = do log 2 $ "\t  " ++ show (normalise gam env x) 
                             ++ " =?= " ++ show (normalise gam env y)
@@ -483,15 +483,15 @@ checkDots : {auto u : Ref UST (UState annot)} ->
             Core annot ()
 checkDots
     = do ust <- get UST
-         gam <- getCtxt
+         gam <- get Ctxt
          traverse (checkConstraint gam) (dotConstraints ust)
          put UST (record { dotConstraints = [] } ust)
          pure ()
   where
-    checkConstraint : Gamma -> Constraint annot -> Core annot ()
+    checkConstraint : Defs -> Constraint annot -> Core annot ()
     checkConstraint gam (MkConstraint loc env x y)
         = if convert gam env x y
              then pure ()
              else throw (BadDotPattern loc x y)
-    checkConstraint game _ = pure ()
+    checkConstraint gam _ = pure ()
 

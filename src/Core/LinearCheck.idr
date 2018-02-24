@@ -130,8 +130,8 @@ mutual
       used _ = []
 
   lcheck loc rig env (Ref nt fn)
-      = do gam <- getCtxt
-           case lookupDefTyExact fn gam of
+      = do gam <- get Ctxt
+           case lookupDefTyExact fn (gamma gam) of
                 Nothing => throw (InternalError ("Linearity checking failed on " ++ show fn))
                 -- Don't count variable usage in holes, so as far as linearity
                 -- checking is concerned, update the type so that the binders
@@ -168,7 +168,7 @@ mutual
 
   lcheck loc rig env (App f a)
       = do (f', fty, fused) <- lcheck loc rig env f
-           gam <- getCtxt
+           gam <- get Ctxt
            case nf gam env fty of
                 NBind _ (Pi rigf _ ty) scdone =>
                    do (a', aty, aused) <- lcheck loc (rigMult rigf rig) env a

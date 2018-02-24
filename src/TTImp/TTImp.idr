@@ -66,9 +66,9 @@ mutual
 
   public export
   data ImpDecl : Type -> Type where
-       IClaim : annot -> ImpTy annot -> ImpDecl annot
+       IClaim : annot -> Visibility -> ImpTy annot -> ImpDecl annot
        IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
-       IData : annot -> ImpData annot -> ImpDecl annot
+       IData : annot -> Visibility -> ImpData annot -> ImpDecl annot
        INamespace : annot -> List String -> List (ImpDecl annot) ->
                     ImpDecl annot
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
@@ -100,6 +100,8 @@ mutual
      = union (used ns fn) (used ns arg)
   used ns (IImplicitApp _ fn _ arg)
      = union (used ns fn) (used ns arg)
+  used ns (IAlternative _ _ alts)
+     = foldr (\alt => union (used ns alt)) empty alts
   used ns _ = empty
 
   bindVars : RawImp annot -> SortedSet
@@ -175,8 +177,8 @@ definedInBlock = concatMap defName
     getName (MkImpTy _ n _) = n
 
     defName : ImpDecl annot -> List Name
-    defName (IClaim _ ty) = [getName ty]
-    defName (IData _ (MkImpData _ n _ cons)) = n :: map getName cons
+    defName (IClaim _ _ ty) = [getName ty]
+    defName (IData _ _ (MkImpData _ n _ cons)) = n :: map getName cons
     defName _ = []
 
 export
@@ -257,10 +259,10 @@ mutual
 
   export
   Show (ImpDecl annot) where
-    show (IClaim _ ty) = show ty
+    show (IClaim _ _ ty) = show ty
     show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                          showSep "\n\t" (map show cs)
-    show (IData _ d) = show d
+    show (IData _ _ d) = show d
     show (INamespace _ ns decls) 
         = "namespace " ++ show ns ++ 
           showSep "\n" (assert_total $ map show decls)

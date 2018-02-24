@@ -26,7 +26,7 @@ checkCon elab env nest (MkImpTy loc cn_in ty_raw)
          let ty' = abstractEnvType env ty
          log 3 $ show cn ++ " : " ++ show ty'
          -- TODO: Check 'ty' returns something in the right family
-         gam <- getCtxt
+         gam <- get Ctxt
          addToSave cn
          pure (MkCon cn (getArity gam [] ty') ty')
 
@@ -35,9 +35,10 @@ processData : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
               Elaborator annot ->
-              Env Term vars -> NestedNames vars -> ImpData annot -> 
+              Env Term vars -> NestedNames vars -> 
+              Visibility -> ImpData annot -> 
               Core annot ()
-processData elab env nest (MkImpData loc n_in ty_raw cons_raw)
+processData elab env nest vis (MkImpData loc n_in ty_raw cons_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc n) $
@@ -47,7 +48,7 @@ processData elab env nest (MkImpData loc n_in ty_raw cons_raw)
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty
          log 3 $ show n ++ " : " ++ show ty'
-         gam <- getCtxt
+         gam <- get Ctxt
          let arity = getArity gam [] ty'
          -- Add a temporary type constructor, to use while checking
          -- data constructors (tag is meaningless here, so just set to 0)
@@ -57,6 +58,6 @@ processData elab env nest (MkImpData loc n_in ty_raw cons_raw)
          -- Any non user defined holes should be resolved by now
          wrapError (InCon loc n) $ checkUserHoles loc True
          let def = MkData (MkCon n arity ty') cons
-         addData Public def
+         addData vis def
          addToSave n
 

@@ -13,7 +13,7 @@ import Data.List
 import Control.Catchable
 
 mutual
-  mismatchNF : Gamma -> NF vars -> NF vars -> Bool
+  mismatchNF : Defs -> NF vars -> NF vars -> Bool
   mismatchNF gam (NTCon _ xt _ xargs) (NTCon _ yt _ yargs) 
       = if xt /= yt 
            then True
@@ -25,7 +25,7 @@ mutual
   mismatchNF gam (NPrimVal xc) (NPrimVal yc) = xc /= yc
   mismatchNF _ _ _ = False
 
-  mismatch : Gamma -> (Closure vars, Closure vars) -> Bool
+  mismatch : Defs -> (Closure vars, Closure vars) -> Bool
   mismatch gam (x, y) = mismatchNF gam (evalClosure gam x) (evalClosure gam y)
 
 -- Find names which are applied to a function in a Rig1/Rig0 position,
@@ -34,12 +34,12 @@ mutual
 -- 'bound' counts the number of variables locally bound; these are the
 -- only ones we're checking linearity of (we may be shadowing names if thos
 -- is a local definition, so we need to leave the earlier ones alone)
-findLinear : Gamma -> Nat -> RigCount -> Term vars -> List (Name, RigCount)
+findLinear : Defs -> Nat -> RigCount -> Term vars -> List (Name, RigCount)
 findLinear gam bound rig (Bind n b sc) = findLinear gam (S bound) rig sc
 findLinear gam bound rig tm with (unapply tm)
   findLinear gam bound rig (apply (Ref _ n) []) | ArgsList = []
   findLinear gam bound rig (apply (Ref _ n) args) | ArgsList 
-      = case lookupTyExact n gam of
+      = case lookupTyExact n (gamma gam) of
              Nothing => []
              Just nty => findLinArg (nf gam [] nty) args
     where
@@ -75,7 +75,7 @@ setLinear vs tm = tm
 -- If the terms have the same type constructor at the head, and one of
 -- the argument positions has different constructors at its head, then this
 -- is an impossible case, so return True
-impossibleOK : Gamma -> NF vars -> NF vars -> Bool
+impossibleOK : Defs -> NF vars -> NF vars -> Bool
 impossibleOK gam (NTCon xn xt xa xargs) (NTCon tn yt ya yargs)
     = any (mismatch gam) (zip xargs yargs)
 impossibleOK _ _ _ = False
@@ -91,14 +91,14 @@ checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
     = handle
          (do lhs_raw <- lhsInCurrentNS nest lhs_raw
              (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
-             gam <- getCtxt
+             gam <- get Ctxt
              let lhs = normaliseHoles gam env lhs_in
              let lhsty = normaliseHoles gam env lhsty_in
              throw (ValidCase loc env (Left lhs)))
          (\err => case err of
                        ValidCase _ _ _ => throw err
                        WhenUnifying _ env l r err
-                           => do gam <- getCtxt
+                           => do gam <- get Ctxt
                                  if impossibleOK gam (nf gam env l) (nf gam env r)
                                     then pure Nothing
                                     else throw (ValidCase loc env (Right err))
@@ -108,7 +108,7 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          log 5 ("Checking LHS: " ++ show lhs_raw)
          (lhs_in, lhsty_in) <- wrapError (InLHS loc defining) $
               inferTerm elab defining env nest PATTERN InLHS lhs_raw
-         gam <- getCtxt
+         gam <- get Ctxt
          -- Check there's no holes or constraints in the left hand side
          -- we've just checked - they must be resolved now (that's what
          -- True means)
@@ -159,13 +159,13 @@ processDef : {auto c : Ref Ctxt Defs} ->
 processDef elab env nest loc n_in cs_raw
     = do gam <- getCtxt
          n <- inCurrentNS n_in
-         case lookupDefTyExact n gam of
+         case lookupDefTyVisExact n gam of
               Nothing => throw (NoDeclaration loc n)
-              Just (None, ty) =>
+              Just (None, ty, vis) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
                    -- Any non user defined holes should be resolved by now
                    checkUserHoles loc True
-                   addFnDef loc Public (MkFn n ty (mapMaybe id cs))
+                   addFnDef loc vis (MkFn n ty (mapMaybe id cs))
                    addToSave n
                    gam <- getCtxt
                    log 3 $
@@ -174,4 +174,4 @@ processDef elab env nest loc n_in cs_raw
                               "Case tree for " ++ show n ++ "\n\t" ++
                               show args ++ " " ++ show t
                            _ => "No case tree for " ++ show n
-              Just (_, ty) => throw (AlreadyDefined loc n)
+              Just (_, ty, _) => throw (AlreadyDefined loc n)

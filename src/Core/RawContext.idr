@@ -69,14 +69,14 @@ addData : {auto c : Ref Ctxt Defs} ->
 addData loc (MkRawData tycon datacons)
     = do (tn, tty) <- addTyDecl loc tycon
          cons <- traverse (\x => checkCon x) datacons
-         gam <- getCtxt 
+         gam <- get Ctxt 
          let def = MkData (MkCon tn (getArity gam [] tty) tty) cons
          addData Public def
   where
     checkCon : RawTy -> Core annot Constructor
     checkCon (MkRawTy n ty) 
         = do tyc <- check loc [] ty TType
-             gam <- getCtxt 
+             gam <- get Ctxt 
              pure (MkCon n (getArity gam [] tyc) tyc)
 
 export

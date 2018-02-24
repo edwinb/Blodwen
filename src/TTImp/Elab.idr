@@ -45,16 +45,15 @@ elabTerm process defining env nest impmode elabmode tm tyin
          fullImps <- getToBind env
          setBound (map fst fullImps) -- maybe not necessary since we're done now
          clearToBind -- remove the bound holes
-         gam <- getCtxt
+         gam <- get Ctxt
          log 5 $ "Binding implicits " ++ show fullImps ++
                  " in " ++ show chktm
          let (restm, resty) = bindImplicits impmode gam env fullImps chktm ty
          traverse implicitBind (map fst fullImps)
-         gam <- getCtxt
          -- Give implicit bindings their proper names, as UNs not PVs
-         gam <- getCtxt
-         let ptm' = renameImplicits gam (normaliseHoles gam env restm)
-         let pty' = renameImplicits gam resty
+         gam <- get Ctxt
+         let ptm' = renameImplicits (gamma gam) (normaliseHoles gam env restm)
+         let pty' = renameImplicits (gamma gam) resty
          normaliseHoleTypes
          clearSolvedHoles
          dumpConstraints 2 False

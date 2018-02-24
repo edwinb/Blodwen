@@ -255,7 +255,7 @@ getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
 getToBind {vars} env
     = do est <- get EST
          ust <- get UST
-         gam <- getCtxt
+         gam <- get Ctxt
          log 5 $ "Before normImps " ++ show (map (norm gam) (reverse $ toBind est))
          log 10 $ "With holes " ++ show (map snd (holes ust))
          -- if we encounter a hole name that we've seen before, and is now 
@@ -275,10 +275,10 @@ getToBind {vars} env
         = filter (\p => not (fst p `elem` asvars)) ns ++
           filter (\p => fst p `elem` asvars) ns
 
-    norm : Gamma -> (Name, Term vars, Term vars) -> (Name, Term vars)
+    norm : Defs -> (Name, Term vars, Term vars) -> (Name, Term vars)
     norm gam (n, tm, ty) = (n, normaliseHoles gam env tm)
 
-    normImps : Gamma -> List Name -> List (Name, Term vars, Term vars) -> 
+    normImps : Defs -> List Name -> List (Name, Term vars, Term vars) -> 
                Core annot (List (Name, Term vars))
     normImps gam ns [] = pure []
     normImps gam ns ((PV n, tm, ty) :: ts) 
@@ -320,7 +320,7 @@ getToBind {vars} env
 -- Bind implicit arguments, returning the new term and its updated type
 bindImplVars : Int -> 
                ImplicitMode ->
-               Gamma ->
+               Defs ->
                Env Term vars ->
                List (Name, Term vars) ->
                Term vars -> Term vars -> (Term vars, Term vars)
@@ -334,7 +334,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
           n' = dropNS n in
           case mode of
                PATTERN =>
-                  case lookupDefExact n gam of
+                  case lookupDefExact n (gamma gam) of
                        Just (PMDef _ _ t) =>
                           -- if n is an accessible pattern variable, bind it,
                           -- otherwise reduce it
@@ -357,7 +357,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
                            Bind n' (PVTy RigW ty) (refToLocal tmpN n' repNameTy))
                -- unless explicitly given, unbound implicits are Rig0
                PI rig =>
-                  case lookupDefExact n gam of
+                  case lookupDefExact n (gamma gam) of
                      Just (PMDef _ _ t) =>
                         (subst (normalise gam env (applyTo (Ref Func n) env))
                                (refToLocal tmpN n repNameTm),
@@ -383,7 +383,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
                    case nameEq n fn' of
                         Nothing => App (repName new fn) (repName new arg)
                         Just Refl => 
-                           let locs = case lookupDefExact fn' gam of
+                           let locs = case lookupDefExact fn' (gamma gam) of
                                            Just (Hole i _) => i
                                            _ => 0
                                         in
@@ -395,7 +395,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
 
 export
 bindImplicits : ImplicitMode ->
-                Gamma -> Env Term vars ->
+                Defs -> Env Term vars ->
                 List (Name, Term vars) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
 bindImplicits {vars} mode gam env hs tm ty 
@@ -407,7 +407,7 @@ bindImplicits {vars} mode gam env hs tm ty
     nHoles (n, ty) = (n, normaliseHoles gam env ty)
 
 export
-bindTopImplicits : ImplicitMode -> Gamma -> Env Term vars ->
+bindTopImplicits : ImplicitMode -> Defs -> Env Term vars ->
                    List (Name, ClosedTerm) -> Term vars -> Term vars ->
                    (Term vars, Term vars)
 bindTopImplicits {vars} mode gam env hs tm ty
@@ -438,16 +438,17 @@ convert loc elabmode env x y
     = let umode = case elabmode of
                        InLHS => InLHS
                        _ => InTerm in
-          catch (do solveConstraints umode
-                    log 10 $ "Unifying " ++ show (quote empty env x) ++ " and " 
-                                         ++ show (quote empty env y)
+          catch (do gam <- get Ctxt
+                    solveConstraints umode
+                    log 10 $ "Unifying " ++ show (quote (noGam gam) env x) ++ " and " 
+                                         ++ show (quote (noGam gam) env y)
                     vs <- unify umode loc env x y
                     solveConstraints umode
                     pure vs)
-            (\err => do gam <- getCtxt 
+            (\err => do gam <- get Ctxt 
                         throw (WhenUnifying loc env
-                                            (normaliseHoles gam env (quote empty env x))
-                                            (normaliseHoles gam env (quote empty env y))
+                                            (normaliseHoles gam env (quote (noGam gam) env x))
+                                            (normaliseHoles gam env (quote (noGam gam) env y))
                                   err))
   
 export

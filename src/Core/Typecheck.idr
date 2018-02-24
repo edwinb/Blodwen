@@ -11,20 +11,20 @@ import Data.List
 
 export
 doConvert : (Quote tm, Convert tm) => 
-            annot -> Gamma -> Env Term outer -> 
+            annot -> Defs -> Env Term outer -> 
             tm outer -> tm outer -> Either (Error annot) ()
 doConvert loc gam env x y 
     = if convert gam env x y 
          then pure ()
          else error (CantConvert loc env (quote gam env x) (quote gam env y))
 
-parameters (loc : annot, gam : Gamma)
+parameters (loc : annot, gam : Defs)
   mutual
     chk : Env Term vars -> Raw -> Either (Error annot) (Term vars, Term vars)
     chk env (RVar x) 
         = case defined x env of
                Nothing => 
-                  case lookupDefTyExact x gam of
+                  case lookupDefTyExact x (gamma gam) of
                        Just (PMDef _ _ _, ty) => 
                             pure $ (Ref Func x, embed ty)
                        Just (DCon tag arity _, ty) => 
@@ -111,7 +111,7 @@ parameters (loc : annot, gam : Gamma)
     chkConstant DoubleType = (PrimVal DoubleType, TType)
 
 export
-checkHas : annot -> (gam : Gamma) -> Env Term vars ->
+checkHas : annot -> (gam : Defs) -> Env Term vars ->
            (term : Raw) -> (expected : Term vars) -> 
            Either (Error annot) (Term vars)
 checkHas loc gam env tm exp
@@ -125,7 +125,7 @@ check : {auto c : Ref Ctxt Defs} ->
         (term : Raw) -> (expected : Term vars) -> 
         Core annot (Term vars)
 check loc env term expected 
-    = case checkHas loc !getCtxt env term expected of
+    = case checkHas loc !(get Ctxt) env term expected of
            Left err => throw err
            Right ok => pure ok
 
@@ -134,7 +134,7 @@ infer : {auto c : Ref Ctxt Defs} ->
         annot -> Env Term vars ->
         (term : Raw) -> Core annot (Term vars, Term vars)
 infer loc env term
-    = case chk loc !getCtxt env term of
+    = case chk loc !(get Ctxt) env term of
            Left err => throw err
            Right ok => pure ok
 
@@ -144,7 +144,7 @@ checkConvert : {auto c : Ref Ctxt Defs} ->
                (x : Term vars) -> (y : Term vars) ->
                Core annot ()
 checkConvert loc env x y 
-    = case doConvert loc !getCtxt env x y of
+    = case doConvert loc !(get Ctxt) env x y of
            Left err => throw err
            Right ok => pure ()
 
