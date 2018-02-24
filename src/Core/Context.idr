@@ -197,9 +197,6 @@ TTC annot Def where
              _ => corrupt "Def"
 
 public export
-data Visibility = Public | Export | Private
-
-public export
 data DefFlag = TypeHint Name | GlobalHint | Inline
 
 export
@@ -208,25 +205,6 @@ Eq DefFlag where
     (==) GlobalHint GlobalHint = True
     (==) Inline Inline = True
     (==) _ _ = False
-
-public export
-data PartialReason = NotCovering | NotStrictlyPositive 
-                   | Calling (List Name)
-
-public export
-data Totality = Partial PartialReason | Unchecked | Covering | Total 
-
-TTC annot Visibility where
-  toBuf b Public = tag 0
-  toBuf b Export = tag 1
-  toBuf b Private = tag 2
-
-  fromBuf s b 
-      = case !getTag of
-             0 => pure Public
-             1 => pure Export
-             2 => pure Private
-             _ => corrupt "Visibility"
 
 TTC annot DefFlag where
   toBuf b (TypeHint x) = do tag 0; toBuf b x
@@ -239,33 +217,6 @@ TTC annot DefFlag where
              1 => pure GlobalHint
              2 => pure Inline
              _ => corrupt "DefFlag"
-
-TTC annot PartialReason where
-  toBuf b NotCovering = tag 0
-  toBuf b NotStrictlyPositive = tag 1
-  toBuf b (Calling xs) = do tag 2; toBuf b xs
-
-  fromBuf s b 
-      = case !getTag of
-             0 => pure NotCovering
-             1 => pure NotStrictlyPositive
-             2 => do xs <- fromBuf s b
-                     pure (Calling xs)
-             _ => corrupt "PartialReason"
-
-TTC annot Totality where
-  toBuf b (Partial x) = do tag 0; toBuf b x
-  toBuf b Unchecked = tag 1
-  toBuf b Covering = tag 2
-  toBuf b Total = tag 3
-
-  fromBuf s b 
-      = case !getTag of
-             0 => do x <- fromBuf s b; pure (Partial x)
-             1 => pure Unchecked
-             2 => pure Covering
-             3 => pure Total
-             _ => corrupt "Totality"
 
 -- *everything* about a definition goes here, so that we can save out the
 -- type checked code "simply" by writing out a list of GlobalDefs
@@ -367,6 +318,23 @@ lookupGlobalExact n gam = lookupCtxtExact n gam
 export
 lookupGlobalName : Name -> Gamma -> List (Name, GlobalDef)
 lookupGlobalName n gam = lookupCtxtName n gam
+    
+-- private names are only visible in this namespace if their namespace
+-- is the current namespace (or an outer one)
+-- that is: given that most recent namespace is first in the list,
+-- the namespace of 'n' is a suffix of nspace
+export
+visibleIn : (nspace : List String) -> Name -> Visibility -> Bool
+visibleIn nspace (NS ns n) Private = isSuffixOf ns nspace
+-- Public and Export names are always visible
+visibleIn nspace n _ = True
+
+-- TODO: This also needs to take into account totality, later
+export
+reducibleIn : (nspace : List String) -> Name -> Visibility -> Bool
+reducibleIn nspace (NS ns n) Export = isSuffixOf ns nspace
+reducibleIn nspace (NS ns n) Private = isSuffixOf ns nspace
+reducibleIn nspace n _ = True
 
 export
 lookupDefExact : Name -> Gamma -> Maybe Def
@@ -411,7 +379,13 @@ export
 lookupDefTyNameIn : (nspace : List String) ->
                     Name -> Gamma -> List (Name, Def, ClosedTerm)
 lookupDefTyNameIn nspace n gam
-    = map (\(x, g) => (x, definition g, type g)) (lookupGlobalName n gam)
+    = map (\ (x, d, t, v) => (x, d, t)) $
+        filter isVisible $
+          map (\ (x, g) => (x, definition g, type g, visibility g)) 
+            (lookupGlobalName n gam)
+  where
+    isVisible : (Name, Def, ClosedTerm, Visibility) -> Bool
+    isVisible (n, d, t, v) = visibleIn nspace n v
 
 public export
 record Constructor where
@@ -687,6 +661,32 @@ isTotal loc n
          case t of
               Total => pure True
               _ => pure False
+
+-- Check that the names used in the term don't conflict with the visibility
+-- of the name. No name in the term, defined in the same namespace,
+-- can have lower visibility than the given name and visibility.
+export
+checkNameVisibility : {auto x : Ref Ctxt Defs} ->
+                      annot -> 
+                      Name -> Visibility -> Term vars -> Core annot ()
+checkNameVisibility loc n vis tm
+    = do traverse visible (toList (getRefs tm))
+         pure ()
+  where
+    eqNS : Name -> Name -> Bool
+    eqNS (NS xs _) (NS ys _) = xs == ys
+    eqNS _ _ = False
+
+    visible : Name -> Core annot ()
+    visible ref
+        = do defs <- get Ctxt
+             case lookupGlobalExact ref (gamma defs) of
+                  Just def =>
+                       if visibility def < vis && eqNS n ref
+                          then throw (VisibilityError loc vis n 
+                                            (visibility def) ref)
+                          else pure ()
+                  Nothing => pure ()
 
 argToPat : ClosedTerm -> Pat
 argToPat tm with (unapply tm)

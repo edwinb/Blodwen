@@ -70,23 +70,32 @@ parameters (defs : Defs, holesonly : Bool)
                            Just res => res
                _ => NApp (NRef nt n) stk
                    
+    evalDef : Env Term free -> LocalEnv free vars -> Stack free ->
+              NameType -> Name -> Def -> NF free
+    evalDef env loc stk nt fn (PMDef h args tree)
+        = if h || not holesonly then
+             case extendFromStack args loc stk of
+                  Nothing => NApp (NRef nt fn) stk
+                  Just (loc', stk') => 
+                       case evalTree env loc' stk' tree of
+                            Nothing => NApp (NRef nt fn) stk
+                            Just val => val
+             else NApp (NRef nt fn) stk
+    evalDef env loc stk nt fn (Builtin op) = evalOp (getOp op) nt fn stk
+    evalDef env loc stk nt fn (DCon tag arity _) = NDCon fn tag arity stk
+    evalDef env loc stk nt fn (TCon tag arity _ _) = NTCon fn tag arity stk
+    evalDef env loc stk nt fn _ = NApp (NRef nt fn) stk
 
+    -- Only evaluate the name if its definition is visible in the current 
+    -- namespace
     evalRef : Env Term free -> LocalEnv free vars -> Stack free ->
               NameType -> Name -> NF free
     evalRef env loc stk nt fn
-        = case lookupDefExact fn (gamma defs) of
-               Just (PMDef h args tree) =>
-                 if h || not holesonly then
-                    case extendFromStack args loc stk of
-                         Nothing => NApp (NRef nt fn) stk
-                         Just (loc', stk') => 
-                              case evalTree env loc' stk' tree of
-                                   Nothing => NApp (NRef nt fn) stk
-                                   Just val => val
-                    else NApp (NRef nt fn) stk
-               Just (Builtin op) => evalOp (getOp op) nt fn stk
-               Just (DCon tag arity _) => NDCon fn tag arity stk
-               Just (TCon tag arity _ _) => NTCon fn tag arity stk
+        = case lookupGlobalExact fn (gamma defs) of
+               Just def => 
+                    if reducibleIn (currentNS defs) fn (visibility def)
+                       then evalDef env loc stk nt fn (definition def)
+                       else NApp (NRef nt fn) stk
                _ => NApp (NRef nt fn) stk
     
     -- Take arguments from the stack, as long as there's enough.

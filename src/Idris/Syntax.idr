@@ -1,5 +1,6 @@
 module Idris.Syntax
 
+import public Core.Context
 import public Core.Core
 import public Core.TT
 import public Core.Binary
@@ -133,9 +134,9 @@ mutual
 
   public export
   data PDecl : Type where
-       PClaim : FC -> PTypeDecl -> PDecl
+       PClaim : FC -> Visibility -> PTypeDecl -> PDecl
        PDef : FC -> Name -> List PClause -> PDecl
-       PData : FC -> PDataDecl -> PDecl
+       PData : FC -> Visibility -> PDataDecl -> PDecl
        PFixity : FC -> Fixity -> Nat -> OpStr -> PDecl
        PNamespace : FC -> List String -> List PDecl -> PDecl
        PDirective : FC -> Directive -> PDecl

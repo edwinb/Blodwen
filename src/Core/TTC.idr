@@ -259,3 +259,45 @@ mutual
                        pure (Unmatched x)
                3 => pure Impossible
                _ => corrupt "CaseTree"
+
+export
+TTC annot Visibility where
+  toBuf b Private = tag 0
+  toBuf b Export = tag 1
+  toBuf b Public = tag 2
+
+  fromBuf s b 
+      = case !getTag of
+             0 => pure Private
+             1 => pure Export
+             2 => pure Public
+             _ => corrupt "Visibility"
+
+export
+TTC annot PartialReason where
+  toBuf b NotCovering = tag 0
+  toBuf b NotStrictlyPositive = tag 1
+  toBuf b (Calling xs) = do tag 2; toBuf b xs
+
+  fromBuf s b 
+      = case !getTag of
+             0 => pure NotCovering
+             1 => pure NotStrictlyPositive
+             2 => do xs <- fromBuf s b
+                     pure (Calling xs)
+             _ => corrupt "PartialReason"
+
+export
+TTC annot Totality where
+  toBuf b (Partial x) = do tag 0; toBuf b x
+  toBuf b Unchecked = tag 1
+  toBuf b Covering = tag 2
+  toBuf b Total = tag 3
+
+  fromBuf s b 
+      = case !getTag of
+             0 => do x <- fromBuf s b; pure (Partial x)
+             1 => pure Unchecked
+             2 => pure Covering
+             3 => pure Total
+             _ => corrupt "Totality"

@@ -113,7 +113,6 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          -- we've just checked - they must be resolved now (that's what
          -- True means)
          wrapError (InLHS loc defining) $ checkUserHoles loc True
-
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          let linvars = findLinear gam 0 Rig1 lhs
@@ -121,11 +120,21 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
                  show linvars
          let lhs' = setLinear linvars lhs
          let lhsty' = setLinear linvars lhsty
-
+         
          (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs' lhsty'
          log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
          rhs <- wrapError (InRHS loc defining) $
                 checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
+
+         -- only need to check body for visibility if name is
+         -- public
+         let vis = case lookupGlobalExact defining (gamma gam) of
+                        Just d => visibility d
+                        Nothing => Public
+
+         when (vis == Public) $ do
+           checkNameVisibility loc defining vis lhs
+           checkNameVisibility loc defining vis rhs
 
          wrapError (InRHS loc defining) $ checkUserHoles loc False
 

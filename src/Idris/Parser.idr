@@ -361,6 +361,17 @@ mutual
   expr : FileName -> IndentInfo -> Rule PTerm
   expr = typeExpr
 
+visibility : EmptyRule Visibility
+visibility
+    = do keyword "public"
+         keyword "export"
+         pure Public
+  <|> do keyword "export"
+         pure Export
+  <|> do keyword "private"
+         pure Private
+  <|> pure Private
+
 tyDecl : FileName -> IndentInfo -> Rule PTypeDecl
 tyDecl fname indents
     = do start <- location
@@ -436,9 +447,10 @@ namespaceDecl
 -- topDecl : FileName -> IndentInfo -> Rule (List PDecl)
 topDecl fname indents
     = do start <- location
+         vis <- visibility
          dat <- dataDecl fname indents
          end <- location
-         pure [PData (MkFC fname start end) dat]
+         pure [PData (MkFC fname start end) vis dat]
   <|> do start <- location
          ns <- namespaceDecl
          end <- location
@@ -457,9 +469,10 @@ topDecl fname indents
          end <- location
          pure (map (PFixity (MkFC fname start end) fixity (cast prec)) ops)
   <|> do start <- location
+         vis <- visibility
          claim <- tyDecl fname indents
          end <- location
-         pure [PClaim (MkFC fname start end) claim]
+         pure [PClaim (MkFC fname start end) vis claim]
   <|> do start <- location
          nd <- clause fname indents
          end <- location

@@ -14,14 +14,16 @@ checkCon : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
            Elaborator annot -> 
-           Env Term vars -> NestedNames vars -> ImpTy annot ->
+           Env Term vars -> NestedNames vars -> Visibility -> ImpTy annot ->
            Core annot Constructor
-checkCon elab env nest (MkImpTy loc cn_in ty_raw)
+checkCon elab env nest vis (MkImpTy loc cn_in ty_raw)
     = do cn <- inCurrentNS cn_in
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc cn) $
                   checkTerm elab cn env nest (PI RigW) InType ty_imp TType
          wrapError (InCon loc cn) $ checkUserHoles loc False
+         
+         checkNameVisibility loc cn vis ty
 
          let ty' = abstractEnvType env ty
          log 3 $ show cn ++ " : " ++ show ty'
@@ -44,6 +46,8 @@ processData elab env nest vis (MkImpData loc n_in ty_raw cons_raw)
          ty <- wrapError (InCon loc n) $
                   checkTerm elab n env nest (PI RigW) InType ty_imp TType
          wrapError (InCon loc n) $ checkUserHoles loc False
+           
+         checkNameVisibility loc n vis ty
 
          -- TODO: Check ty returns a TType
          let ty' = abstractEnvType env ty
@@ -53,7 +57,11 @@ processData elab env nest vis (MkImpData loc n_in ty_raw cons_raw)
          -- Add a temporary type constructor, to use while checking
          -- data constructors (tag is meaningless here, so just set to 0)
          addDef n (newDef ty' Public (TCon 0 arity [] []))
-         cons <- traverse (\x => checkCon elab env nest x) cons_raw
+         
+         -- Constructors are private if the data type as a whole is
+         -- export
+         let cvis = if vis == Export then Private else vis
+         cons <- traverse (checkCon elab env nest cvis) cons_raw
 
          -- Any non user defined holes should be resolved by now
          wrapError (InCon loc n) $ checkUserHoles loc True

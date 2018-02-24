@@ -260,6 +260,42 @@ data Term : List Name -> Type where
      Erased : Term vars
      TType : Term vars
 
+public export
+data Visibility = Private | Export | Public
+
+export
+Show Visibility where
+  show Private = "private"
+  show Export = "export"
+  show Public = "public export"
+
+export
+Eq Visibility where
+  Private == Private = True
+  Export == Export = True
+  Public == Public = True
+  _ == _ = False
+
+export
+Ord Visibility where
+  compare Private Export = LT
+  compare Private Public = LT
+  compare Export Public = LT
+
+  compare Private Private = EQ
+  compare Export Export = EQ
+  compare Public Public = EQ
+
+  compare Export Private = GT
+  compare Public Private = GT
+  compare Public Export = GT
+
+public export
+data PartialReason = NotCovering | NotStrictlyPositive 
+                   | Calling (List Name)
+
+public export
+data Totality = Partial PartialReason | Unchecked | Covering | Total 
 
 data SameElem : Elem x xs -> Elem x' xs -> Type where
      SameHere : SameElem Here Here

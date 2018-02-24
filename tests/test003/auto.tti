@@ -24,49 +24,61 @@ implicit n, m, k, a, x, y;
 
 namespace List
 
+    public export
     data List : Type -> Type where {
          Nil  : List a;
          Cons : a -> List a -> List a;
     }
 
+    public export
     length : List a -> Nat;
     length Nil = Z;
     length (Cons x xs) = S (length xs);
 
+    public export
     append : List a -> List a -> List a;
     append Nil         ys = ys;
     append (Cons x xs) ys = Cons x (append xs ys);
 
     implicit xs : List a;
 
+    public export
     data Elem : a -> List a -> Type where {
          Here : Elem x (Cons x xs);
          There : Elem x xs -> Elem x (Cons y xs);
     }
 
+    public export
     pos : (xs : List a) -> Elem x xs -> a;
     pos (Cons x xs) Here = x;
     pos (Cons x xs) (There p) = pos xs p;
 
+    public export
     posi : (x : a) -> (xs : List a) -> Elem x xs -> a;
     posi _ (Cons x xs) Here = x;
     posi _ (Cons x xs) (There p) = posi _ xs p;
 
+    public export
     posa : (x : a) -> (xs : List a) -> {auto prf : Elem x xs} -> a;
     posa x xs {prf = prf} = posi x xs %search;
 
+    public export
     posa2 : (x : a) -> (xs : List a) -> {auto prf : Elem x xs} -> a;
     posa2 x (Cons .(x) xs) {prf = Here} = x;
     posa2 y (Cons x xs) {prf = There p} = posa2 y xs;
 
+    public export
     test : Nat -> Nat;
     test n = posi (S n) (Cons n (Cons (S n) (Cons n Nil))) %search;
 
+    public export
     test2 : Int -> (inp : Nat) -> Int -> Nat;
     test2 = %search; -- ?help2;
 
+    public export
     mkTy : Type -> Type;
     mkTy a = Int -> (inp : a) -> Int -> a;
 
+    public export
     test3 : (a : Type) -> mkTy a;
     test3 = %search; -- ?help3;

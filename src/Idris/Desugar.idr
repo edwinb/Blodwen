@@ -262,12 +262,12 @@ mutual
   export
   desugarDecl : {auto s : Ref Syn SyntaxInfo} ->
                 PDecl -> Core FC (List (ImpDecl FC))
-  desugarDecl (PClaim fc ty) 
-      = pure [IClaim fc Public !(desugarType ty)]
+  desugarDecl (PClaim fc vis ty) 
+      = pure [IClaim fc vis !(desugarType ty)]
   desugarDecl (PDef fc n clauses) 
       = pure [IDef fc n !(traverse desugarClause clauses)]
-  desugarDecl (PData fc ddecl) 
-      = pure [IData fc Public !(desugarData ddecl)]
+  desugarDecl (PData fc vis ddecl) 
+      = pure [IData fc vis !(desugarData ddecl)]
   desugarDecl (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)

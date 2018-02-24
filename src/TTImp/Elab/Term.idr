@@ -30,17 +30,18 @@ insertImpLam env tm (Just ty) = bindLam tm ty
               ILam loc RigW Implicit n (Implicit loc) (bindLam tm sc)
     bindLam tm sc = tm
 
-expandAmbigName : Gamma -> Env Term vars -> NestedNames vars ->
+expandAmbigName : Defs -> Env Term vars -> NestedNames vars ->
                   RawImp annot -> 
                   List (annot, RawImp annot) -> RawImp annot -> 
                   Maybe (Term vars) -> RawImp annot
-expandAmbigName gam env nest orig args (IVar loc x) exp
+expandAmbigName defs env nest orig args (IVar loc x) exp
    = case lookup x (names nest) of
           Just _ => orig
           Nothing => 
             case defined x env of
                  Just _ => orig
-                 Nothing => case lookupCtxtName x gam of
+                 Nothing => case lookupDefTyNameIn (currentNS defs) x 
+                                                   (gamma defs) of
                                  [] => orig
                                  ns => IAlternative loc True
                                          (map (\n => buildAlt (IVar loc n) args) 
@@ -49,9 +50,9 @@ expandAmbigName gam env nest orig args (IVar loc x) exp
     buildAlt : RawImp annot -> List (annot, RawImp annot) -> RawImp annot
     buildAlt f [] = f
     buildAlt f ((loc', a) :: as) = buildAlt (IApp loc' f a) as
-expandAmbigName gam env nest orig args (IApp loc f a) exp
-   = expandAmbigName gam env nest orig ((loc, a) :: args) f exp
-expandAmbigName gam env nest orig args _ _ = orig
+expandAmbigName defs env nest orig args (IApp loc f a) exp
+   = expandAmbigName defs env nest orig ((loc, a) :: args) f exp
+expandAmbigName defs env nest orig args _ _ = orig
 
 -- Erase any forced arguments from a top level application
 eraseForced : Gamma -> Term vars -> Term vars
@@ -88,7 +89,7 @@ mutual
           (expected : Maybe (Term vars)) -> -- Expected type, if available
           Core annot (Term vars, Term vars) 
   check rigc process elabinfo env nest tm_in exp 
-      = do gam <- getCtxt
+      = do gam <- get Ctxt
            let tm = expandAmbigName gam env nest tm_in [] tm_in exp
            case elabMode elabinfo of
                -- don't expand implicit lambda on LHS

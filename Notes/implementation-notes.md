@@ -167,3 +167,17 @@ Forced arguments to constructors are those which are constructor guarded in
 the indices of the constructor. They get erased during elaboration (in
 TTImp.Elab.Term) in 'checkExp' so the result of type checking has already
 erased arguments.
+
+Namespaces and name visibility
+------------------------------
+Same rules mostly apply as in Idris 1. The difference is that visibility is
+*per namespace* not *per file* (that is, files have no relevance other except
+in that they introduce their own namespace, and in that they allow separate
+typechecking).
+
+One effect of this is that when a file defines nested namespaces, the inner
+namespace can see what's in the outer namespace, but not vice versa unless
+names defined in the inner namespace are explicitly exported. The visibility
+modifiers "export", "public export", and "private" control whether the name
+can be seen in any other namespace, and it's nothing to do with the file
+they're defined in at all.

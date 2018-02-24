@@ -23,6 +23,8 @@ processType elab env nest vis (MkImpTy loc n_in ty_raw)
          wrapError (InType loc n) $ checkUserHoles loc False
 
          log 1 $ show n ++ " : " ++ show (abstractEnvType env ty)
+
+         checkNameVisibility loc n vis ty
          addDef n (newDef (abstractEnvType env ty) vis None)
          addToSave n
 

@@ -1,0 +1,6 @@
+../../ttimp visible1.tti < input
+../../ttimp visible2.tti < input
+../../ttimp visible3.tti < input
+echo ':q' | ../../ttimp visible4.tti
+echo ':q' | ../../ttimp visible5.tti
+rm -f *.ttc

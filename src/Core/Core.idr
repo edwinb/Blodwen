@@ -33,6 +33,7 @@ data Error annot
     | CantSolveGoal annot (Env Term vars) (Term vars)
     | UnsolvedHoles annot (List Name)
     | SolvedNamedHole annot Name
+    | VisibilityError annot Visibility Name Visibility Name
     | NonLinearPattern annot Name
     | BadPattern annot Name
     | NoDeclaration annot Name
@@ -99,6 +100,9 @@ Show annot => Show (Error annot) where
       = show fc ++ ":Can't solve goal " ++ assert_total (show g)
   show (UnsolvedHoles fc hs) = show fc ++ ":Unsolved holes " ++ show hs
   show (SolvedNamedHole fc h) = show fc ++ ":Named hole " ++ show h ++ " is solved by unification"
+  show (VisibilityError fc vx x vy y)
+      = show fc ++ ":" ++ show vx ++ " " ++ show x ++ " cannot refer to "
+                       ++ show vy ++ " " ++ show y
   show (NonLinearPattern fc n) = show fc ++ ":Non linear pattern variable " ++ show n
   show (BadPattern fc n) = show fc ++ ":Pattern not allowed here: " ++ show n
   show (NoDeclaration fc x) = show fc ++ ":No type declaration for " ++ show x

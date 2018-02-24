@@ -1,0 +1,26 @@
+Welcome to TTImp. Good luck.
+Loading visible1.tti
+Processing as TTImp
+Blodwen> (Main.Test.plus (Main.Test.S (Main.Test.S Main.Test.Z)) (Main.Test.S (Main.Test.S Main.Test.Z))) : Main.Test.Nat
+Blodwen> Bye for now!
+Welcome to TTImp. Good luck.
+Loading visible2.tti
+Processing as TTImp
+Blodwen> ():Undefined name add
+Blodwen> Bye for now!
+Welcome to TTImp. Good luck.
+Loading visible3.tti
+Processing as TTImp
+Blodwen> (Main.add Main.Test.two Main.Test.two) : Main.Test.Nat
+Blodwen> Bye for now!
+Welcome to TTImp. Good luck.
+Loading visible4.tti
+Processing as TTImp
+():When elaborating left hand side of Main.add:
+():Undefined name Z
+Blodwen> Bye for now!
+Welcome to TTImp. Good luck.
+Loading visible5.tti
+Processing as TTImp
+():public export Main.Test.add cannot refer to export Main.Test.Nat
+Blodwen> Bye for now!

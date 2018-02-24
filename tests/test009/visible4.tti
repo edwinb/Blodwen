@@ -1,0 +1,13 @@
+namespace Test
+  export
+  data Nat : Type where
+       Z : Nat
+       S : Nat -> Nat
+
+  plus : Nat -> Nat -> Nat
+  plus Z y = y
+  plus (S k) y = S (plus k y)
+
+add : Nat -> Nat -> Nat
+add Z y = y
+add (S k) y = S (add k y)
