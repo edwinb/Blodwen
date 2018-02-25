@@ -1,0 +1,3 @@
+localdata Z
+localdata (S (S Z))
+:q

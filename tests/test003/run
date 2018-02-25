@@ -1,4 +1,0 @@
-../../ttimp auto.tti < input
-../../ttimp auto.ttc < input
-
-rm -f *.ttc

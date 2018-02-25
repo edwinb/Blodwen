@@ -1,0 +1,4 @@
+$1 auto.tti < input
+$1 auto.ttc < input
+
+rm -f *.ttc

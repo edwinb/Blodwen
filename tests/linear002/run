@@ -1,2 +1,0 @@
-echo ':q' | ../../ttimp bad.tti
-rm -f *.ttc

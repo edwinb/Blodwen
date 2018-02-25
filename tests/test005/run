@@ -1,3 +1,0 @@
-echo ':q' | ../../ttimp ambig.tti
-
-rm -f *.ttc

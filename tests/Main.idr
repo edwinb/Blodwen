@@ -4,12 +4,17 @@ import System
 
 %default covering
 
-tests : List String
-tests = ["test001", "test002", "test003", "test004", "test005",
-         "test006", "test007", "test008", "test009",
-         "case001",
-         "linear001", "linear002", "linear003",
-         "perf001"]
+ttimpTests : List String
+ttimpTests 
+    = ["test001", "test002", "test003", "test004", "test005",
+       "test006", "test007", "test008", "test009",
+       "case001",
+       "linear001", "linear002", "linear003",
+       "perf001"]
+
+blodwenTests : List String
+blodwenTests
+    = []
 
 chdir : String -> IO Bool
 chdir dir 
@@ -21,11 +26,11 @@ fail err
     = do putStrLn err
          exitWith (ExitFailure 1)
 
-runTest : String -> IO ()
-runTest test
-    = do chdir test
+runTest : String -> String -> String -> IO ()
+runTest dir prog test
+    = do chdir (dir ++ "/" ++ test)
          putStr $ test ++ ": "
-         system "sh ./run > output"
+         system $ "sh ./run " ++ prog ++ " > output"
          Right out <- readFile "output"
                | Left err => fail (show err)
          Right exp <- readFile "expected"
@@ -33,11 +38,14 @@ runTest test
          if (out == exp)
             then putStrLn "success"
             else putStrLn "FAILURE"
-         chdir ".."
+         chdir "../.."
          pure ()
 
 main : IO ()
 main
-    = do chdir "tests"
-         traverse runTest tests
+    = do [_, ttimp, blodwen] <- getArgs
+              | _ => do putStrLn "Usage: runtests [ttimp path] [blodwen path]"
+         traverse (runTest "ttimp" ttimp) ttimpTests
+         traverse (runTest "blodwen" blodwen) blodwenTests
          pure ()
+

@@ -1,0 +1,2 @@
+$1 testlet.tti < input
+rm -f *.ttc

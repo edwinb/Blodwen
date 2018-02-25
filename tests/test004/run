@@ -1,3 +1,0 @@
-echo ':q' | ../../ttimp eta.tti
-
-rm -f *.ttc

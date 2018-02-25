@@ -1,0 +1,4 @@
+$1 interp.tti < input
+$1 interp.ttc < input
+
+rm -f *.ttc

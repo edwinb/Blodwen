@@ -1,2 +1,0 @@
-../../ttimp testlet.tti < input
-rm -f *.ttc

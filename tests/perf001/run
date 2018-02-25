@@ -1,3 +1,0 @@
-echo ':q' | ../../ttimp bigsuc.tti
-
-rm -f *.ttc

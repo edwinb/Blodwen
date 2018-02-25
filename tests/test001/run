@@ -1,4 +1,0 @@
-../../ttimp vect.tti < input
-../../ttimp vect.ttc < input
-
-rm -f *.ttc

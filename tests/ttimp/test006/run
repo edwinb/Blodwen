@@ -1,0 +1,3 @@
+echo ':q' | $1 dotpatterns.tti
+
+rm -f *.ttc

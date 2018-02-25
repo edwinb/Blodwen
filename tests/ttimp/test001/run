@@ -1,0 +1,4 @@
+$1 vect.tti < input
+$1 vect.ttc < input
+
+rm -f *.ttc

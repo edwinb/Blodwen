@@ -1,3 +1,0 @@
-../../ttimp cases.tti < input
-../../ttimp cases.ttc < input
-rm -f *.ttc

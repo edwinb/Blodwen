@@ -1,0 +1,6 @@
+$1 visible1.tti < input
+$1 visible2.tti < input
+$1 visible3.tti < input
+echo ':q' | $1 visible4.tti
+echo ':q' | $1 visible5.tti
+rm -f *.ttc

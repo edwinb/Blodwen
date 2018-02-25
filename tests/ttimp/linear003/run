@@ -1,0 +1,6 @@
+echo ':q' | $1 bad1.tti
+echo ':q' | $1 bad2.tti
+echo ':q' | $1 bad3.tti
+echo ':q' | $1 good1.tti
+echo ':q' | $1 good2.tti
+rm -f *.ttc
