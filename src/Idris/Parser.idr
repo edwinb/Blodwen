@@ -156,21 +156,51 @@ mutual
       = do c <- constant
            getMult c
     <|> pure RigW
+       
+  pibindAll : FC -> PiInfo -> List (RigCount, Maybe Name, PTerm) -> 
+              PTerm -> PTerm
+  pibindAll fc p [] scope = scope
+  pibindAll fc p ((rig, n, ty) :: rest) scope
+           = PPi fc rig p n ty (pibindAll fc p rest scope)
+
+  bindList : FileName -> FilePos -> IndentInfo -> 
+             Rule (List (RigCount, Name, PTerm))
+  bindList fname start indents
+      = sepBy1 (symbol ",")
+               (do rig <- multiplicity
+                   n <- name
+                   ty <- option 
+                            (PImplicit (MkFC fname start start))
+                            (do symbol ":"
+                                expr fname indents)
+                   pure (rig, n, ty))
+
+  pibindList : FileName -> FilePos -> IndentInfo -> 
+               Rule (List (RigCount, Maybe Name, PTerm))
+  pibindList fname start indents
+       = do rig <- multiplicity
+            ns <- sepBy (symbol ",") name
+            symbol ":"
+            ty <- expr fname indents
+            atEnd indents
+            pure (map (\n => (rig, Just n, ty)) ns)
+     <|> sepBy1 (symbol ",")
+                (do rig <- multiplicity
+                    n <- name
+                    symbol ":"
+                    ty <- expr fname indents
+                    pure (rig, Just n, ty))
 
   explicitPi : FileName -> IndentInfo -> Rule PTerm
   explicitPi fname indents
       = do start <- location
            symbol "("
-           rig <- multiplicity
-           n <- name
-           symbol ":"
-           commit
-           ty <- expr fname indents
+           binders <- pibindList fname start indents
            symbol ")"
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) rig Explicit (Just n) ty scope)
+           pure (pibindAll (MkFC fname start end) Explicit binders scope)
 
   autoImplicitPi : FileName -> IndentInfo -> Rule PTerm
   autoImplicitPi fname indents
@@ -178,46 +208,39 @@ mutual
            symbol "{"
            keyword "auto"
            commit
-           rig <- multiplicity
-           n <- name
-           symbol ":"
-           ty <- expr fname indents
+           binders <- pibindList fname start indents
            symbol "}"
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) rig AutoImplicit (Just n) ty scope)
+           pure (pibindAll (MkFC fname start end) AutoImplicit binders scope)
 
   implicitPi : FileName -> IndentInfo -> Rule PTerm
   implicitPi fname indents
       = do start <- location
            symbol "{"
-           rig <- multiplicity
-           n <- name
-           symbol ":"
-           commit
-           ty <- expr fname indents
+           binders <- pibindList fname start indents
            symbol "}"
            symbol "->"
            scope <- typeExpr fname indents
            end <- location
-           pure (PPi (MkFC fname start end) rig Implicit (Just n) ty scope)
+           pure (pibindAll (MkFC fname start end) Implicit binders scope)
 
   lam : FileName -> IndentInfo -> Rule PTerm
   lam fname indents
       = do start <- location
            symbol "\\"
-           rig <- multiplicity
-           n <- name
-           ty <- option 
-                    (PImplicit (MkFC fname start start))
-                    (do symbol ":"
-                        expr fname indents)
+           binders <- bindList fname start indents
            symbol "=>"
            continue indents
            scope <- typeExpr fname indents
            end <- location
-           pure (PLam (MkFC fname start end) rig Explicit n ty scope)
+           pure (bindAll (MkFC fname start end) binders scope)
+     where
+       bindAll : FC -> List (RigCount, Name, PTerm) -> PTerm -> PTerm
+       bindAll fc [] scope = scope
+       bindAll fc ((rig, n, ty) :: rest) scope
+           = PLam fc rig Explicit n ty (bindAll fc rest scope)
 
   let_ : FileName -> IndentInfo -> Rule PTerm
   let_ fname indents
