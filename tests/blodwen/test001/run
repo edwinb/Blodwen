@@ -1,0 +1,3 @@
+$1 vect.blod < input
+
+rm -f *.ttc

@@ -14,7 +14,7 @@ ttimpTests
 
 blodwenTests : List String
 blodwenTests
-    = []
+    = ["test001", "test002", "test003"]
 
 chdir : String -> IO Bool
 chdir dir 
@@ -29,7 +29,7 @@ fail err
 runTest : String -> String -> String -> IO ()
 runTest dir prog test
     = do chdir (dir ++ "/" ++ test)
-         putStr $ test ++ ": "
+         putStr $ dir ++ "/" ++ test ++ ": "
          system $ "sh ./run " ++ prog ++ " > output"
          Right out <- readFile "output"
                | Left err => fail (show err)
