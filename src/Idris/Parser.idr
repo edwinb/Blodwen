@@ -79,13 +79,18 @@ mutual
 
   implicitArg : FileName -> IndentInfo -> Rule (Name, PTerm)
   implicitArg fname indents
-      = do symbol "{"
+      = do start <- location
+           symbol "{"
            x <- unqualifiedName
-           symbol "="
-           commit
-           tm <- expr fname indents
-           symbol "}"
-           pure (UN x, tm)
+           (do symbol "="
+               commit
+               tm <- expr fname indents
+               symbol "}"
+               pure (UN x, tm))
+             <|> (do symbol "}"
+                     end <- location
+                     pure (UN x, PRef (MkFC fname start end) (UN x)))
+           
 
   opExpr : FileName -> IndentInfo -> Rule PTerm
   opExpr fname indents
@@ -410,17 +415,65 @@ clause fname indents
          lhs <- expr fname indents
          parseRHS fname start indents lhs
 
-dataDecl : FileName -> IndentInfo -> Rule PDataDecl
-dataDecl fname indents
+mkTyConType : FC -> List Name -> PTerm
+mkTyConType fc [] = PType fc
+mkTyConType fc (x :: xs) 
+   = PPi fc Rig1 Explicit Nothing (PType fc) (mkTyConType fc xs)
+
+mkDataConType : FC -> PTerm -> List (Either PTerm (Name, PTerm)) -> PTerm
+mkDataConType fc ret [] = ret
+mkDataConType fc ret (Left x :: xs)
+    = PPi fc Rig1 Explicit Nothing x (mkDataConType fc ret xs)
+mkDataConType fc ret (Right (n, PRef fc' x) :: xs)
+    = if n == x
+         then PPi fc Rig1 Implicit (Just n) (PType fc') 
+                          (mkDataConType fc ret xs)
+         else PPi fc Rig1 Implicit (Just n) (PRef fc' x) 
+                          (mkDataConType fc ret xs)
+mkDataConType fc ret (Right (n, x) :: xs)
+    = PPi fc Rig1 Implicit (Just n) x (mkDataConType fc ret xs)
+
+simpleCon : FileName -> PTerm -> IndentInfo -> Rule PTypeDecl
+simpleCon fname ret indents
     = do start <- location
-         keyword "data"
-         n <- name
-         symbol ":"
+         cname <- name
+         params <- many (argExpr fname indents)
+         atEnd indents
+         end <- location
+         let cfc = MkFC fname start end
+         pure (MkPTy cfc cname (mkDataConType cfc ret params)) 
+
+simpleData : FileName -> FilePos -> Name -> IndentInfo -> Rule PDataDecl
+simpleData fname start n indents
+    = do params <- many name
+         tyend <- location
+         let tyfc = MkFC fname start tyend
+         symbol "="
+         let conRetTy = papply tyfc (PRef tyfc n)
+                           (map (PRef tyfc) params)
+         cons <- sepBy1 (symbol "|") 
+                        (simpleCon fname conRetTy indents)
+         end <- location
+         pure (MkPData (MkFC fname start end) n
+                       (mkTyConType tyfc params) cons)
+
+gadtData : FileName -> FilePos -> Name -> IndentInfo -> Rule PDataDecl
+gadtData fname start n indents
+    = do symbol ":"
+         commit
          ty <- expr fname indents
          keyword "where"
          cs <- block (tyDecl fname)
          end <- location
          pure (MkPData (MkFC fname start end) n ty cs)
+
+dataDecl : FileName -> IndentInfo -> Rule PDataDecl
+dataDecl fname indents
+    = do start <- location
+         keyword "data"
+         n <- name
+         simpleData fname start n indents 
+           <|> gadtData fname start n indents
 
 directive : IndentInfo -> Rule Directive
 directive indents

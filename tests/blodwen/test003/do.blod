@@ -1,6 +1,5 @@
-data Maybe : Type -> Type where
-     Nothing : Maybe a
-     Just : a -> Maybe a
+data Maybe a = Nothing 
+             | Just a
 
 infixl 1 >>=
 

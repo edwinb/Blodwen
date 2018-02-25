@@ -1,6 +1,4 @@
-data Nat : Type where
-     Z : Nat
-     S : Nat -> Nat
+data Nat = Z | S Nat
 
 plus : Nat -> Nat -> Nat
 plus Z     y = y

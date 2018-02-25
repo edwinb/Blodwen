@@ -280,6 +280,7 @@ isTerminator : Token -> Bool
 isTerminator (Symbol ";") = True
 isTerminator (Symbol "}") = True
 isTerminator (Symbol ")") = True
+isTerminator (Symbol "|") = True
 isTerminator (Keyword "in") = True
 isTerminator EndInput = True
 isTerminator _ = False

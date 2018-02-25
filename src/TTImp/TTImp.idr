@@ -74,6 +74,7 @@ mutual
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
                ImpDecl annot
+       IPragma : Core annot () -> ImpDecl annot
        ILog : Nat -> ImpDecl annot
        -- To add: IRecord
 
@@ -268,6 +269,7 @@ mutual
           showSep "\n" (assert_total $ map show decls)
     show (ImplicitNames _ ns) = "implicit " ++ show ns
     show (IHint _ n t) = "%hint " ++ show n ++ " " ++ show t
+    show (IPragma _) = "[externally defined pragma]"
     show (ILog lvl) = "%logging " ++ show lvl
 
 -- State which is useful to preserve throughout elaborating a file

@@ -114,6 +114,11 @@ mutual
   getLoc (DoLet fc _ _ _) = fc
   getLoc (DoLetPat fc _ _ _) = fc
 
+  export
+  papply : FC -> PTerm -> List PTerm -> PTerm
+  papply fc f [] = f
+  papply fc f (a :: as) = papply fc (PApp fc f a) as
+
   public export
   data PTypeDecl : Type where
        MkPTy : FC -> (n : Name) -> (type : PTerm) -> PTypeDecl
