@@ -745,9 +745,9 @@ retry mode cname
 
 retryHole : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
-            UnifyMode -> (hole : (annot, Name)) ->
+            UnifyMode -> (lastChance : Bool) -> (hole : (annot, Name)) ->
             Core annot ()
-retryHole mode (loc, hole)
+retryHole mode lastChance (loc, hole)
     = do gam <- get Ctxt
          case lookupDefExact hole (gamma gam) of
               Nothing => pure ()
@@ -761,8 +761,10 @@ retryHole mode (loc, hole)
                                     removeHoleName hole
                            newcs => updateDef hole (Guess tm newcs)
               Just (BySearch depth) => 
-                   try (do search loc depth hole
-                           pure ())
+                   if lastChance
+                      then do search loc depth hole; pure ()
+                      else try (do search loc depth hole
+                                   pure ())
                        (pure ()) -- postpone again
               Just _ => pure () -- Nothing we can do
 
@@ -772,10 +774,10 @@ retryHole mode (loc, hole)
 export
 solveConstraints : {auto c : Ref Ctxt Defs} ->
                    {auto u : Ref UST (UState annot)} ->
-                   UnifyMode -> Core annot ()
-solveConstraints mode
+                   UnifyMode -> (lastChance : Bool) -> Core annot ()
+solveConstraints mode lastChance
     = do hs <- getHoleInfo
-         traverse (retryHole mode) hs
+         traverse (retryHole mode lastChance) hs
          -- Question: Another iteration if any holes have been resolved?
          pure ()
 

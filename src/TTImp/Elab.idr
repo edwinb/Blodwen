@@ -37,7 +37,7 @@ elabTerm process defining env nest impmode elabmode tm tyin
          log 10 $ "Initial check: " ++ show chktm ++ " : " ++ show ty
          solveConstraints (case elabmode of
                                 InLHS => InLHS
-                                _ => InTerm)
+                                _ => InTerm) True
          dumpDots
          checkDots
          -- Bind the implicits and any unsolved holes they refer to

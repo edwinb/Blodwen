@@ -182,7 +182,7 @@ mutual
                             InLHS => InLHS
                             _ => InTerm
            -- try again to solve the holes, including the search we've just added.
-           solveConstraints umode
+           solveConstraints umode False
            pure (mkConstantApp n env, expected)
   -- TODO: On failure to disambiguate, postpone? Would need another unification
   -- tactic, like 'search' is...
@@ -776,7 +776,7 @@ mutual
                           n <- addSearchable loc env (quote (noGam gam) env ty) 500
                           log 0 $ "Auto implicit search: " ++ show n ++
                                   " for " ++ show (quote (noGam gam) env ty)
-                          solveConstraints InTerm
+                          solveConstraints InTerm False
                           pure (mkConstantApp n env)
 
   -- Get the implicit arguments that need to be inserted at this point

@@ -80,9 +80,9 @@ mutual
        PAs : FC -> (vname : String) -> (pattern : PTerm) -> PTerm
        PDotted : FC -> PTerm -> PTerm
        PImplicit : FC -> PTerm
-       
+
        -- Operators
-       
+
        POp : FC -> OpStr -> PTerm -> PTerm -> PTerm
        PPrefixOp : FC -> OpStr -> PTerm -> PTerm
        PSectionL : FC -> OpStr -> PTerm -> PTerm
