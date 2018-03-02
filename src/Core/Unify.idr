@@ -40,6 +40,9 @@ unify {c} {u} = unifyD c u
 ufail : annot -> String -> Core annot a
 ufail loc msg = throw (GenericMsg loc msg)
 
+convertError : annot -> Env Term vars -> Term vars -> Term vars -> Core annot a
+convertError loc env x y = throw (CantConvert loc env x y)
+
 -- Given a name, which must currently be a hole, attempt to fill in the hole with
 -- an expression which would fit. Also returns the expression.
 -- (Defined in AutoSearch; we need this when searching arguments recursively
@@ -471,12 +474,13 @@ mutual
   -- should quantify over everything
   unifyApp loc env (NLocal x) [] (NDCon n t a args)
       = do gam <- get Ctxt
-           ufail loc $ "Can't unify " ++ show (quote (noGam gam) env (NApp (NLocal x) []))
-                        ++ " and " ++ show (quote (noGam gam) env (NDCon n t a args))
+           convertError loc env  
+               (quote (noGam gam) env (NApp (NLocal x) []))
+               (quote (noGam gam) env (NDCon n t a args))
   unifyApp loc env (NLocal x) [] (NTCon n t a args)
       = do gam <- get Ctxt
-           ufail loc $ "Can't unify " ++ show (quote (noGam gam) env (NApp (NLocal x) []))
-                        ++ " and " ++ show (quote (noGam gam) env (NTCon n t a args))
+           convertError loc env (quote (noGam gam) env (NApp (NLocal x) []))
+                        (quote (noGam gam) env (NTCon n t a args))
   -- If they're already convertible without metavariables, we're done,
   -- otherwise postpone
   unifyApp loc env hd args tm 
@@ -501,10 +505,9 @@ mutual
      = do gam <- get Ctxt
           if sameVar xv yv
             then pure []
-            else ufail loc $ "Can't unify " ++ 
-                             show (quote (noGam gam) env (NApp (NLocal xv) []))
-                             ++ " and " ++
-                             show (quote (noGam gam) env (NApp (NLocal yv) []))
+            else convertError loc env 
+                             (quote (noGam gam) env (NApp (NLocal xv) []))
+                             (quote (noGam gam) env (NApp (NLocal yv) []))
   -- Locally bound things, in a term (not LHS). Since we have to unify
   -- for *all* possible values, we can safely unify the arguments.
   unifyBothApps InTerm loc env (NLocal xv) argsx (NLocal yv) argsy
@@ -555,11 +558,9 @@ mutual
   unifyBothBinders mode loc env x (Pi cx ix tx) scx y (Pi cy iy ty) scy
       = do gam <- get Ctxt
            if ix /= iy && cx /= cy
-             then ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
-                                                     (NBind x (Pi cx ix tx) scx))
-                                         ++ " and " ++
-                                            show (quote (noGam gam) env
-                                                     (NBind y (Pi cy iy ty) scy))
+             then convertError loc env 
+                    (quote (noGam gam) env (NBind x (Pi cx ix tx) scx))
+                    (quote (noGam gam) env (NBind y (Pi cy iy ty) scy))
              else
                do ct <- unify mode loc env tx ty
                   xn <- genName "x"
@@ -589,11 +590,9 @@ mutual
   unifyBothBinders mode loc env x (Lam cx ix tx) scx y (Lam cy iy ty) scy 
       = do gam <- get Ctxt
            if ix /= iy && cx /= cy
-             then ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
-                                                     (NBind x (Lam cx ix tx) scx))
-                                         ++ " and " ++
-                                            show (quote (noGam gam) env
-                                                     (NBind y (Lam cy iy ty) scy))
+             then convertError loc env 
+                     (quote (noGam gam) env (NBind x (Lam cx ix tx) scx))
+                     (quote (noGam gam) env (NBind y (Lam cy iy ty) scy))
              else
                do csty <- unify mode loc env tx ty
                   xn <- genName "x"
@@ -607,8 +606,9 @@ mutual
                   pure (union csty cssc)
   unifyBothBinders mode loc env x bx scx y by scy
       = do gam <- get Ctxt
-           ufail loc $ "Can't unify " ++ show (quote (noGam gam) env (NBind x bx scx))
-                    ++ " and " ++ show (quote (noGam gam) env (NBind x by scy))
+           convertError loc env 
+                  (quote (noGam gam) env (NBind x bx scx))
+                  (quote (noGam gam) env (NBind x by scy))
   
   export
   Unify Closure where
@@ -634,9 +634,9 @@ mutual
                                          show (quote (noGam gam) env x) ++ " =?= " ++
                                          show (quote (noGam gam) env y)
                                 postpone loc env (quote (noGam gam) env x) (quote (noGam gam) env y)
-                        else ufail loc $ "Can't unify " ++ show (quote (noGam gam) env x)
-                                            ++ " and "
-                                            ++ show (quote (noGam gam) env y)
+                        else convertError loc env 
+                                     (quote (noGam gam) env x)
+                                     (quote (noGam gam) env y)
 
   export
   Unify NF where
@@ -662,11 +662,9 @@ mutual
                then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NDCon x tagx ax xs))
                                   ++ " and " ++ show (quote (noGam gam) env (NDCon y tagy ay ys)))
                        unifyArgs mode loc env xs ys
-               else ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
-                                                          (NDCon x tagx ax xs))
-                                           ++ " and "
-                                           ++ show (quote (noGam gam) env
-                                                          (NDCon y tagy ay ys))
+               else convertError loc env 
+                         (quote (noGam gam) env (NDCon x tagx ax xs))
+                         (quote (noGam gam) env (NDCon y tagy ay ys))
     unifyD _ _ mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
         = do gam <- get Ctxt
              if tagx == tagy
@@ -679,15 +677,13 @@ mutual
                -- what's injective...
 --                then postpone loc env (quote empty env (NTCon x tagx ax xs))
 --                                      (quote empty env (NTCon y tagy ay ys))
-               else ufail loc $ "Can't unify " ++ show (quote (noGam gam) env
-                                                          (NTCon x tagx ax xs))
-                                           ++ " and "
-                                           ++ show (quote (noGam gam) env
-                                                          (NTCon y tagy ay ys))
+               else convertError loc env 
+                         (quote (noGam gam) env (NTCon x tagx ax xs))
+                         (quote (noGam gam) env (NTCon y tagy ay ys))
     unifyD _ _ mode loc env (NPrimVal x) (NPrimVal y) 
         = if x == y 
              then pure [] 
-             else ufail loc $ "Can't unify " ++ show x ++ " and " ++ show y
+             else convertError loc env (PrimVal x) (PrimVal y)
     unifyD _ _ mode loc env (NApp fx ax) (NApp fy ay)
         = unifyBothApps mode loc env fx ax fy ay
     unifyD _ _ mode loc env (NApp hd args) y 

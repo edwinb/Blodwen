@@ -91,11 +91,63 @@ mutual
   check rigc process elabinfo env nest tm_in exp 
       = do gam <- get Ctxt
            let tm = expandAmbigName gam env nest tm_in [] tm_in exp
+           let lazyTm = insertLazy gam tm (map (nf gam env) exp)
            case elabMode elabinfo of
                -- don't expand implicit lambda on LHS
-               InLHS => checkImp rigc process elabinfo env nest tm exp
-               _ => let tm' = insertImpLam env tm exp in
-                        checkImp rigc process elabinfo env nest tm' exp
+               InLHS => checkImp rigc process elabinfo env nest lazyTm exp
+               _ => let tm' = insertImpLam env lazyTm exp 
+                        loc = getAnnot tm'
+                        forcetm = IApp loc (IVar loc (NS ["Main"] (UN "Force"))) tm' in
+                        insertForce 
+                          (checkImp rigc process elabinfo env nest tm' exp)
+                          (checkImp rigc process elabinfo env nest forcetm exp)
+
+  delayError : Defs -> Error annot -> Bool
+  delayError defs (CantConvert _ env x y) 
+      = headDelay (nf defs env x) || headDelay (nf defs env y)
+    where
+      headDelay : NF vars -> Bool
+      headDelay (NTCon n _ _ _) = n == NS ["Main"] (UN "Delayed")
+      headDelay _ = False
+  delayError defs (WhenUnifying _ _ x y err) = delayError defs err
+  delayError defs (InType _ _ err) = delayError defs err
+  delayError defs (InCon _ _ err) = delayError defs err
+  delayError defs (InLHS _ _ err) = delayError defs err
+  delayError defs (InRHS _ _ err) = delayError defs err
+  delayError _ _ = False
+
+  insertForce : {auto c : Ref Ctxt Defs} -> 
+                {auto u : Ref UST (UState annot)} ->
+                {auto i : Ref ImpST (ImpState annot)} ->
+                Core annot (Term vars, Term vars) ->
+                Core annot (Term vars, Term vars) ->
+                Core annot (Term vars, Term vars)
+  insertForce elab forced
+      = handle elab
+               (\err => do defs <- get Ctxt
+                           if delayError defs err then forced else throw err)
+
+  concrete : Defs -> NF vars -> Bool
+  concrete defs (NApp (NRef nt n) args)
+      = case lookupDefExact n (gamma defs) of
+             Just (Hole _ pvar) => pvar
+             _ => False
+  concrete defs _ = True
+
+  insertLazy : Defs -> RawImp annot -> Maybe (NF vars) -> RawImp annot
+  insertLazy defs tm@(IBindVar _ _) _ = tm
+  -- If the expected type is "Delayed" and its arguments aren't holes,
+  -- then we'll try inserting a "Delay"
+  insertLazy defs tm (Just (NTCon n _ _ args))
+      = if n == NS ["Main"] (UN "Delayed") &&
+           not (explicitLazy defs (getFn tm)) &&
+           all (\x => concrete defs (evalClosure defs x)) args
+           then let loc = getAnnot tm in
+                    IAlternative loc False 
+                     [IApp loc (IVar loc (NS ["Main"] (UN "Delay"))) tm,
+                      tm]
+           else tm
+  insertLazy defs tm _ = tm
 
   checkImp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
@@ -240,7 +292,8 @@ mutual
            gam <- getCtxt
            let tm = mkConstantApp n env
            addDot loc env wantedTm tm
-           checkExp rigc process loc elabinfo env nest tm wantedTy (Just expected)
+           checkExp rigc process loc (record { elabMode= InExpr } elabinfo) 
+                    env nest tm wantedTy (Just expected)
     checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) | elabmode
         = throw (GenericMsg loc "Dot pattern not valid here")
   checkImp rigc process elabinfo env nest (IMustUnify loc tm) expected

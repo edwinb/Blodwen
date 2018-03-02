@@ -260,8 +260,11 @@ mutual
              args' <- quoteArgs num defs env args
              pure $ apply f' args'
     quoteGen num defs env (NDCon nm tag arity xs) 
-        = do xs' <- quoteArgs num defs env xs
-             pure $ apply (Ref (DataCon tag arity) nm) xs'
+        = if nm == NS ["Main"] (UN "Delay")
+             then do xs' <- quoteArgs num (noGam defs) env xs
+                     pure $ apply (Ref (DataCon tag arity) nm) xs'
+             else do xs' <- quoteArgs num defs env xs
+                     pure $ apply (Ref (DataCon tag arity) nm) xs'
     quoteGen num defs env (NTCon nm tag arity xs) 
         = do xs' <- quoteArgs num defs env xs
              pure $ apply (Ref (TyCon tag arity) nm) xs'

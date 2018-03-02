@@ -207,6 +207,19 @@ apply : RawImp a -> List (RawImp a) -> RawImp a
 apply f [] = f
 apply f (x :: xs) = apply (IApp (getAnnot f) f x) xs
 
+export
+getFn : RawImp a -> RawImp a
+getFn (IApp _ f arg) = getFn f
+getFn (IImplicitApp _ f _ _) = getFn f
+getFn f = f
+
+export
+explicitLazy : Defs -> RawImp annot -> Bool
+explicitLazy defs (IVar _ n)
+   = n == NS ["Main"] (UN "Force")
+     || n == NS ["Main"] (UN "Delay")
+explicitLazy defs _ = False
+  
 mutual
   export
   Show (RawImp annot) where

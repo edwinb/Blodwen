@@ -3,5 +3,5 @@ Loading vect.blod
 Processing as Idris
 Blodwen> (Main.Cons __ (Main.S Main.Z) __ (Main.Cons __ (Main.S (Main.S Main.Z)) __ (Main.Nil __))) : (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat)
 Blodwen> (interactive):1:28--1:51:When unifying: (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat) and (Main.Vect (Main.S Main.Z) Main.Nat)
-	(interactive):1:28--1:51:Can't unify (Main.S Main.Z) and Main.Z
+	(interactive):1:28--1:51:Type mismatch: (Main.S Main.Z) and Main.Z
 Blodwen> Bye for now!
