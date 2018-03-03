@@ -504,6 +504,12 @@ directive indents
          lvl <- intLit
          atEnd indents
          pure (Logging (cast lvl))
+  <|> do exactIdent "lazy"
+         ty <- name
+         f <- name
+         d <- name
+         atEnd indents
+         pure (LazyNames ty f d)
 
 fixDecl : Rule Fixity
 fixDecl

@@ -450,7 +450,7 @@ convert loc elabmode env x y
                                             (normaliseHoles gam env (quote (noGam gam) env x))
                                             (normaliseHoles gam env (quote (noGam gam) env y))
                                   err))
-  
+
 export
 inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} ->

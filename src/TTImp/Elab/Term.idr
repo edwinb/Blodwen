@@ -96,18 +96,21 @@ mutual
                -- don't expand implicit lambda on LHS
                InLHS => checkImp rigc process elabinfo env nest lazyTm exp
                _ => let tm' = insertImpLam env lazyTm exp 
-                        loc = getAnnot tm'
-                        forcetm = IApp loc (IVar loc (NS ["Main"] (UN "Force"))) tm' in
-                        insertForce 
-                          (checkImp rigc process elabinfo env nest tm' exp)
-                          (checkImp rigc process elabinfo env nest forcetm exp)
+                        loc = getAnnot tm' in
+                        case forceName gam of
+                             Nothing => (checkImp rigc process elabinfo env nest tm' exp)
+                             Just fn =>
+                                let forcetm = IApp loc (IVar loc fn) tm' in
+                                    insertForce 
+                                      (checkImp rigc process elabinfo env nest tm' exp)
+                                      (checkImp rigc process elabinfo env nest forcetm exp)
 
   delayError : Defs -> Error annot -> Bool
   delayError defs (CantConvert _ env x y) 
       = headDelay (nf defs env x) || headDelay (nf defs env y)
     where
       headDelay : NF vars -> Bool
-      headDelay (NTCon n _ _ _) = n == NS ["Main"] (UN "Delayed")
+      headDelay (NTCon n _ _ _) = isDelayType n defs
       headDelay _ = False
   delayError defs (WhenUnifying _ _ x y err) = delayError defs err
   delayError defs (InType _ _ err) = delayError defs err
@@ -139,14 +142,17 @@ mutual
   -- If the expected type is "Delayed" and its arguments aren't holes,
   -- then we'll try inserting a "Delay"
   insertLazy defs tm (Just (NTCon n _ _ args))
-      = if n == NS ["Main"] (UN "Delayed") &&
-           not (explicitLazy defs (getFn tm)) &&
-           all (\x => concrete defs (evalClosure defs x)) args
-           then let loc = getAnnot tm in
-                    IAlternative loc False 
-                     [IApp loc (IVar loc (NS ["Main"] (UN "Delay"))) tm,
-                      tm]
-           else tm
+      = case delayName defs of
+             Nothing => tm
+             Just delay =>
+                if isDelayType n defs &&
+                   not (explicitLazy defs (getFn tm)) &&
+                   all (\x => concrete defs (evalClosure defs x)) args
+                   then let loc = getAnnot tm in
+                            IAlternative loc False 
+                             [IApp loc (IVar loc delay) tm,
+                              tm]
+                   else tm
   insertLazy defs tm _ = tm
 
   checkImp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -892,5 +898,6 @@ mutual
                 [] => pure (eraseForced (gamma gam) (apply tm imps), quote (noGam gam) env got')
                 cs => do gam <- getCtxt
                          c <- addConstant loc env (apply tm imps) exp cs
+                         dumpConstraints 4 False
                          pure (mkConstantApp c env, got)
 

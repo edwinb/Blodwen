@@ -281,4 +281,5 @@ mutual
   desugarDecl (PDirective fc d) 
       = case d of
              Logging i => pure [ILog i]
+             LazyNames ty d f => pure [IPragma (\defs => setLazy fc ty d f)]
 

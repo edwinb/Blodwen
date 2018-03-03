@@ -1,0 +1,4 @@
+$1 lazy.blod < input
+$1 lazy.ttc < input
+
+rm -f *.ttc

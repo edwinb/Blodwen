@@ -287,15 +287,19 @@ export
 noGam : Defs -> Defs
 noGam = record { gamma = empty }
 
--- Just write out what's in "gamma" - everything else is either reconstructed
--- from that, or not used when reading from a file
+-- Just write out what's in "gamma", and the relevant options
+-- Everything else is either reconstructed from that, or not used when reading
+-- from a file
 export
 TTC annot Defs where
   toBuf b val 
-      = toBuf b (CMap.toList (exactNames (gamma val)))
+      = do toBuf b (CMap.toList (exactNames (gamma val)))
+           toBuf b (laziness (options val))
   fromBuf s b 
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
-           pure (MkAllDefs (insertFrom ns empty) [] [] defaults
+           lazy <- fromBuf s b
+           pure (MkAllDefs (insertFrom ns empty) [] [] 
+                            (record { laziness = lazy } defaults)
                             empty [] empty 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
@@ -387,6 +391,7 @@ lookupDefTyNameIn nspace n gam
     isVisible : (Name, Def, ClosedTerm, Visibility) -> Bool
     isVisible (n, d, t, v) = visibleIn nspace n v
 
+
 public export
 record Constructor where
   constructor MkCon
@@ -409,7 +414,6 @@ data FnDef : Type where
      MkFn : (n : Name) -> (ty : ClosedTerm) -> (clauses : List Clause) ->
             FnDef
 
-
 -- A label for the context in the global state
 export
 data Ctxt : Type where
@@ -419,13 +423,69 @@ getCtxt : {auto c : Ref Ctxt Defs} ->
 					Core annot Gamma
 getCtxt = pure (gamma !(get Ctxt))
 
--- Extend the context with the definitions given in the second
+export
+isDelayType : Name -> Defs -> Bool
+isDelayType n defs
+    = case laziness (options defs) of
+           Nothing => False
+           Just l => n == delayType l
+
+export
+isDelay : Name -> Defs -> Bool
+isDelay n defs
+    = case laziness (options defs) of
+           Nothing => False
+           Just l => n == delay l
+
+export
+isForce : Name -> Defs -> Bool
+isForce n defs
+    = case laziness (options defs) of
+           Nothing => False
+           Just l => n == force l
+
+export
+delayName : Defs -> Maybe Name
+delayName defs
+    = do l <- laziness (options defs)
+         pure (delay l)
+
+export
+forceName : Defs -> Maybe Name
+forceName defs
+    = do l <- laziness (options defs)
+         pure (force l)
+
+export
+checkUnambig : {auto c : Ref Ctxt Defs} ->
+               annot -> Name -> Core annot Name
+checkUnambig loc n
+    = do defs <- get Ctxt
+         case lookupDefName n (gamma defs) of
+              [] => throw (UndefinedName loc n)
+              [(fulln, _)] => pure fulln
+              ns => throw (AmbiguousName loc (map fst ns))
+
+export
+setLazy : {auto c : Ref Ctxt Defs} ->
+          annot -> (delayType : Name) -> (delay : Name) -> (force : Name) ->
+          Core annot ()
+setLazy loc ty d f
+    = do defs <- get Ctxt
+         ty' <- checkUnambig loc ty
+         d' <- checkUnambig loc d
+         f' <- checkUnambig loc f
+         put Ctxt (record { options $= setLazy ty' d' f' } defs)
+
+-- Extend the context with the definitions/options given in the second
+-- New options override current ones
 export
 extend : {auto c : Ref Ctxt Defs} ->
          Defs -> Core annot ()
 extend new
     = do ctxt <- get Ctxt
-         put Ctxt (record { gamma $= mergeContext (gamma new) } ctxt)
+         put Ctxt (record { gamma $= mergeContext (gamma new),
+                            options $= mergeOptions (options new) } ctxt)
 
 -- Set the default namespace for new definitions
 export

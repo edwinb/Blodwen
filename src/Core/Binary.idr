@@ -2,6 +2,7 @@ module Core.Binary
 
 import Core.Context
 import Core.Core
+import Core.Options
 import Core.TT
 import Core.TTC
 import Core.UnifyState
@@ -96,7 +97,9 @@ writeToTTC extradata fname
     = do buf <- initBinary
          defs <- get Ctxt
          ust <- get UST
-         let defs' = mkSaveDefs (getSave defs) initCtxt defs
+         let defs' = mkSaveDefs (getSave defs) 
+                         (record { options = options defs } initCtxt)
+                         defs
          toBuf buf (MkTTCFile ttcVersion (holes ust) (constraints ust) defs'
                               extradata)
          Right ok <- coreLift $ writeToFile fname !(get Bin)

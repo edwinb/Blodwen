@@ -74,7 +74,7 @@ mutual
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
                ImpDecl annot
-       IPragma : Core annot () -> ImpDecl annot
+       IPragma : (Ref Ctxt Defs -> Core annot ()) -> ImpDecl annot
        ILog : Nat -> ImpDecl annot
        -- To add: IRecord
 
@@ -216,10 +216,9 @@ getFn f = f
 export
 explicitLazy : Defs -> RawImp annot -> Bool
 explicitLazy defs (IVar _ n)
-   = n == NS ["Main"] (UN "Force")
-     || n == NS ["Main"] (UN "Delay")
+   = isDelay n defs || isForce n defs
 explicitLazy defs _ = False
-  
+ 
 mutual
   export
   Show (RawImp annot) where

@@ -398,12 +398,15 @@ dumpConstraints : {auto u : Ref UST (UState annot)} ->
                   (all : Bool) ->
                   Core annot ()
 dumpConstraints loglevel all
-    = do hs <- if all then getHoleNames else getCurrentHoleNames
-         case hs of
-              [] => pure ()
-              _ => do log loglevel "--- CONSTRAINTS AND HOLES ---"
-                      traverse (dumpHole loglevel) hs
-                      pure ()
+    = do ust <- get UST
+         if logLevel ust >= loglevel then
+            do hs <- if all then getHoleNames else getCurrentHoleNames
+               case hs of
+                    [] => pure ()
+                    _ => do log loglevel "--- CONSTRAINTS AND HOLES ---"
+                            traverse (dumpHole loglevel) hs
+                            pure ()
+            else pure ()
 
 -- Remove any solved hole names from the list; the assumption is that all
 -- references to them have been removed with 'normaliseHoles' or by binding
