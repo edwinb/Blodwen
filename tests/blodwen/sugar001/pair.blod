@@ -1,0 +1,10 @@
+data Pair : Type -> Type -> Type where
+     MkPair : a -> b -> Pair a b
+
+data Unit = MkUnit
+
+fst : (a, b) -> a
+fst (x, y) = x
+
+snd : (a, b, c) -> b
+snd (x, y, z) = y

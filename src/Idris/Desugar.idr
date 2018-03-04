@@ -102,6 +102,8 @@ bindNames arg env (IImplicitApp fc fn n av)
     = IImplicitApp fc (bindNames False env fn) n (bindNames True env av)
 bindNames arg env (IAs fc n pat)
     = IAs fc n (bindNames arg env pat)
+bindNames arg env (IAlternative fc u alts)
+    = IAlternative fc u (map (bindNames arg env) alts)
 -- We've skipped lambda, case, let and local - rather than guess where the
 -- name should be bound, leave it to the programmer
 bindNames arg env tm = tm
@@ -191,8 +193,16 @@ mutual
   desugar (PImplicit fc) = pure $ Implicit fc
   desugar (PDoBlock fc block)
       = expandDo fc block
-  desugar (PPair fc l r) = ?desugarPair
-  desugar (PUnit fc) = ?desugarUnit
+  desugar (PPair fc l r) 
+      = do l' <- desugar l
+           r' <- desugar r
+           pure $ IAlternative fc True
+                  [apply (IVar fc (UN "Pair")) [l', r'],
+                   apply (IVar fc (UN "MkPair")) [l', r']]
+  desugar (PUnit fc) 
+      = pure $ IAlternative fc True 
+               [IVar fc (UN "Unit"), 
+                IVar fc (UN "MkUnit")]
   
   expandDo : {auto s : Ref Syn SyntaxInfo} ->
              FC -> List PDo -> Core FC (RawImp FC)

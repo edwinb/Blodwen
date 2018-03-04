@@ -1,0 +1,4 @@
+fst (1, 2)
+fst (Int, Int)
+snd (2, 3, 4)
+:q

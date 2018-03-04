@@ -113,16 +113,40 @@ mutual
            symbol ")"
            end <- location
            pure (PSectionL (MkFC fname start end) op e)
-      -- bracketed expression or right section
+      -- unit type/value
+    <|> do symbol ")"
+           end <- location
+           pure (PUnit (MkFC fname start end))
+      -- right section (1-tuple is just an expression)
     <|> do e <- expr fname indents
            (do op <- operator
                symbol ")"
                end <- location
                pure (PSectionR (MkFC fname start end) e op)
              <|>
-            do symbol ")"
-               end <- location
-               pure (PBracketed (MkFC fname start end) e))
+            -- all the other bracketed expressions
+            tuple fname start indents e)
+
+  -- A pair, dependent pair, or just a single expression
+  tuple : FileName -> FilePos -> IndentInfo -> PTerm -> Rule PTerm
+  tuple fname start indents e
+      = do rest <- some (do symbol ","
+                            estart <- location
+                            el <- expr fname indents
+                            pure (estart, el))
+           symbol ")"
+           end <- location
+           pure (PPair (MkFC fname start end) e
+                       (mergePairs end rest))
+     <|> do symbol ")"
+            end <- location
+            pure (PBracketed (MkFC fname start end) e)
+    where
+      mergePairs : FilePos -> List (FilePos, PTerm) -> PTerm
+      mergePairs end [] = PUnit (MkFC fname start end)
+      mergePairs end [(estart, exp)] = exp
+      mergePairs end ((estart, exp) :: rest)
+          = PPair (MkFC fname estart end) exp (mergePairs end rest)
 
   simpleExpr : FileName -> IndentInfo -> Rule PTerm
   simpleExpr fname indents
