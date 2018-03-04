@@ -775,11 +775,24 @@ retryHole mode lastChance (loc, hole)
                       else try (do search loc depth hole
                                    pure ())
                        (pure ()) -- postpone again
+              Just _ => pure () -- Nothing we can do
+
+retryDelayed : {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState annot)} ->
+               (lastChance : Bool) -> (hole : (annot, Name)) ->
+               Core annot Bool
+retryDelayed lastChance (loc, hole)
+    = do gam <- get Ctxt
+         case lookupDefExact hole (gamma gam) of
+              Nothing => pure False
               Just (Delayed c) =>
                    if lastChance
-                      then rerunDelayed hole c
-                      else pure ()
-              Just _ => pure () -- Nothing we can do
+                      then do rerunDelayed hole c
+                              pure True
+                      else try (do rerunDelayed hole c
+                                   pure True)
+                               (pure False)
+              Just _ => pure False -- Nothing we can do
 
 -- Attempt to solve any remaining constraints in the unification context.
 -- Do this by working through the list of holes
@@ -793,4 +806,25 @@ solveConstraints mode lastChance
          traverse (retryHole mode lastChance) hs
          -- Question: Another iteration if any holes have been resolved?
          pure ()
+
+export
+retryAllDelayed : {auto c : Ref Ctxt Defs} ->
+                  {auto u : Ref UST (UState annot)} ->
+                  Core annot ()
+retryAllDelayed
+    = do hs <- getHoleInfo
+         case hs of
+              [] => pure ()
+              _ => do results <- traverse (retryDelayed False) hs
+                   -- if we made any progress, go around again
+                   -- Assumption is that this terminates because the set
+                   -- of holes 'hs' will be smaller next time around, as
+                   -- a successful result removes a hole
+                      if or (map Delay results)
+                         then retryAllDelayed
+                         -- Otherwise one more go just to get the error
+                         -- message
+                         else do traverse (retryDelayed True) hs
+                                 pure ()
+
 

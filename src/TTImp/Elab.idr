@@ -35,9 +35,21 @@ elabTerm process defining env nest impmode elabmode tm tyin
          let rigc = getRigNeeded elabmode
          (chktm, ty) <- check {e} rigc process (initElabInfo impmode elabmode) env nest tm tyin
          log 10 $ "Initial check: " ++ show chktm ++ " : " ++ show ty
+
+         -- Final retry of constraints and delayed elaborations
+         -- - Solve any constraints, then retry any delayed elaborations
+         -- - Finally, one last attempt at solving constraints, but this
+         --   is most likely just to be able to display helpful errors
+         solveConstraints (case elabmode of
+                                InLHS => InLHS
+                                _ => InTerm) False
+         retryAllDelayed
+         -- True flag means "last chance" i.e report error rather than
+         -- postponing again (this pass is primarily about error reporting)
          solveConstraints (case elabmode of
                                 InLHS => InLHS
                                 _ => InTerm) True
+
          dumpDots
          checkDots
          -- Bind the implicits and any unsolved holes they refer to
