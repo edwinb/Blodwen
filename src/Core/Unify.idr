@@ -739,6 +739,19 @@ retry mode cname
                                     pure []
                            _ => pure cs
 
+rerunDelayed : {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState annot)} ->
+               (hole : Name) -> (cname : Name) ->
+               Core annot ()
+rerunDelayed hole cname
+    = do ust <- get UST
+         case lookupCtxtExact cname (delayedElab ust) of
+              Nothing => throw (InternalError ("No such delayed elaborator" ++ show cname))
+              Just elab => 
+                   do tm <- elab
+                      updateDef hole (PMDef True [] (STerm tm))
+                      removeHoleName hole
+
 retryHole : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
             UnifyMode -> (lastChance : Bool) -> (hole : (annot, Name)) ->
@@ -762,6 +775,10 @@ retryHole mode lastChance (loc, hole)
                       else try (do search loc depth hole
                                    pure ())
                        (pure ()) -- postpone again
+              Just (Delayed c) =>
+                   if lastChance
+                      then rerunDelayed hole c
+                      else pure ()
               Just _ => pure () -- Nothing we can do
 
 -- Attempt to solve any remaining constraints in the unification context.

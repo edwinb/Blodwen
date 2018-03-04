@@ -14,7 +14,7 @@ ttimpTests
 
 blodwenTests : List String
 blodwenTests
-    = ["test001", "test002", "test003",
+    = ["test001", "test002", "test003", "test004",
        "lazy001"]
 
 chdir : String -> IO Bool

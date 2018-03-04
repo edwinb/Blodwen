@@ -77,6 +77,10 @@ record UnifyState annot where
                           -- after elaboration, we check that the equations
                           -- are already solved, which shows that the term
                           -- in the pattern is valid by unification
+     delayedElab : Context (Core annot ClosedTerm)
+                   -- Elaborators which we need to try again later, because
+                   -- we didn't have enough type information to elaborate
+                   -- successfully yet
 
 {- Note on when holes must be resolved:
    - in a LHS, there must be no constraints generated or holes left over,
@@ -88,7 +92,7 @@ record UnifyState annot where
 
 export
 initUState : UnifyState annot
-initUState = MkUnifyState 0 [] [] [] empty []
+initUState = MkUnifyState 0 [] [] [] empty [] empty
 
 public export
 UState : Type -> Type
@@ -306,6 +310,24 @@ addSearchable loc env ty depth
          addDef cn hole
          pure cn
 
+-- Add a hole which stands for a delayed elaborator, and return the
+-- name of the hole while stands for it and a reference for the delayed
+-- elaborator in the unification state
+export
+addDelayedElab : {auto u : Ref UST (UState annot)} ->
+                 {auto c : Ref Ctxt Defs} ->       
+                 annot -> Env Term vars ->
+                 (ty : Term vars) -> Core annot (Name, Name)
+addDelayedElab loc env ty
+    = do cn <- genName "delayed"
+         c_id <- getNextHole
+         let cref = MN "elab" c_id
+         let defty = mkConstantTy env ty
+         let hole = newDef defty Public (Delayed cref)
+         addHoleName loc cn
+         addDef cn hole
+         pure (cn, cref)
+
 export
 addBoundName : {auto u : Ref UST (UState annot)} ->
                {auto c : Ref Ctxt Defs} ->
@@ -373,6 +395,9 @@ dumpHole lvl hole
                                        " = " ++ show (normalise gam [] (Ref Func hole))
                     Just (ImpBind, ty) =>
                          log 4 $ "Bound: " ++ show hole ++ " : " ++ 
+                                       show (normalise gam [] ty)
+                    Just (Delayed n, ty) =>
+                         log 4 $ "Delayed elaborator : " ++ 
                                        show (normalise gam [] ty)
                     _ => pure ()
   where

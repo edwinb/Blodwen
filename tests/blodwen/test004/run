@@ -1,0 +1,4 @@
+echo ':q' | $1 ambig1.blod
+echo ':q' | $1 ambig2.blod
+
+rm -f *.ttc

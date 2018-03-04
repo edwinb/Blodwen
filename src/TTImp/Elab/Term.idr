@@ -43,6 +43,7 @@ expandAmbigName defs env nest orig args (IVar loc x) exp
                  Nothing => case lookupDefTyNameIn (currentNS defs) x 
                                                    (gamma defs) of
                                  [] => orig
+                                 [(n, _)] => buildAlt (IVar loc n) args
                                  ns => IAlternative loc True
                                          (map (\n => buildAlt (IVar loc n) args) 
                                               (map fst ns))
@@ -242,12 +243,23 @@ mutual
            -- try again to solve the holes, including the search we've just added.
            solveConstraints umode False
            pure (mkConstantApp n env, expected)
-  -- TODO: On failure to disambiguate, postpone? Would need another unification
-  -- tactic, like 'search' is...
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) expected
-      = let tryall = if uniq then exactlyOne else anyOne in
-            tryall loc (map (\t => 
-                    checkImp rigc process elabinfo env nest t expected) alts)
+      = delayOnFailure loc env expected ambiguous $
+          (do gam <- get Ctxt
+              log 5 $ "Ambiguous elaboration " ++ show alts ++ 
+                      "\nTarget type " ++ show (map (normaliseHoles gam env) expected)
+              let tryall = if uniq then exactlyOne else anyOne 
+              tryall loc (map (\t => 
+                     checkImp rigc process elabinfo env nest t expected) alts))
+    where
+      ambiguous : Error annot -> Bool
+      ambiguous (AmbiguousElab _ _) = True
+      ambiguous (AmbiguousName _ _) = True
+      ambiguous (InType _ _ err) = ambiguous err
+      ambiguous (InCon _ _ err) = ambiguous err
+      ambiguous (InLHS _ _ err) = ambiguous err
+      ambiguous (InRHS _ _ err) = ambiguous err
+      ambiguous _ = False
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected

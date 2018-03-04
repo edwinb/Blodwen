@@ -132,8 +132,11 @@ data Def : Type where
      ImpBind : Def -- Hole turned into an implicitly bound variable
                    -- (which will be deleted after elaboration)
      -- The constraint names refer into a context of constraints,
-     -- defined in Core.Unify
+     -- defined in Core.UnifyState
      Guess : (guess : ClosedTerm) -> (constraints : List Name) -> Def
+     -- A delayed elaboration. Name refers into a context of delayed
+     -- elaborators in Core.UnifyState
+     Delayed : Name -> Def
 
 export
 Show Def where
@@ -159,6 +162,7 @@ Show Def where
       = "Search with depth " ++ show n
   show ImpBind = "Implicitly bound name"
   show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
+  show (Delayed n) = "Delayed " ++ show n
 
 TTC annot Def where
   toBuf b None = tag 0
@@ -177,6 +181,8 @@ TTC annot Def where
   toBuf b ImpBind = tag 6
   toBuf b (Guess guess constraints) 
       = do tag 7; toBuf b guess; toBuf b constraints
+  toBuf b (Delayed n)
+      = throw (InternalError "Trying to serialise a Delayed elaborator")
 
   fromBuf s b 
       = case !getTag of
@@ -258,6 +264,7 @@ getRefs (Hole numlocs _) = []
 getRefs (BySearch _) = []
 getRefs ImpBind = []
 getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
+getRefs (Delayed n) = []
 
 export
 newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef

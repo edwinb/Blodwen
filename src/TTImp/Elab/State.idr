@@ -570,3 +570,41 @@ anyOne loc [] = throw (GenericMsg loc "All elaborators failed")
 anyOne loc [elab] = elab
 anyOne loc (e :: es) = tryElab e (anyOne loc es)
 
+total
+mkClosedElab : Env Term vars -> 
+               (Core annot (Term vars, Term vars)) ->
+               Core annot ClosedTerm
+mkClosedElab [] elab 
+    = do (tm, _) <- elab
+         pure tm
+mkClosedElab {vars = x :: vars} (b :: env) elab
+    = mkClosedElab env 
+          (do (sc', _) <- elab
+              pure (Bind x 
+                      (Lam (multiplicity b) Explicit (binderType b))
+                      sc', Erased))
+
+-- Try the given elaborator; if it fails, and the error matches the
+-- predicate, make a hole and try it again later when more holes might
+-- have been resolved
+export
+delayOnFailure : 
+      {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+      {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+      annot -> Env Term vars ->
+      (expected : Maybe (Term vars)) ->
+      (Error annot -> Bool) ->
+      (Core annot (Term vars, Term vars)) ->
+      Core annot (Term vars, Term vars)
+delayOnFailure loc env Nothing pred elab = elab
+delayOnFailure loc env (Just expected) pred elab 
+    = handle elab
+        (\err => if pred err 
+                    then 
+                      do (cn, cref) <- addDelayedElab loc env expected
+                         log 5 $ "Postponing elaborator for " ++ show expected
+                         ust <- get UST
+                         put UST (record { delayedElab $= addCtxt cref
+                                             (mkClosedElab env elab) } ust)
+                         pure (mkConstantApp cn env, expected)
+                    else throw err)
