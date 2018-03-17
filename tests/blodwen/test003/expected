@@ -1,8 +1,8 @@
 Welcome to Blodwen. Good luck.
 Loading do.blod
 Processing as Idris
-Blodwen> (Main.Just __ (Main.S (Main.S (Main.S Main.Z)))) : (Main.Maybe Main.Nat)
-Blodwen> (Main.Just __ Main.Z) : (Main.Maybe Main.Nat)
-Blodwen> (Main.Just __ (Main.S (Main.S (Main.S Main.Z)))) : (Main.Maybe Main.Nat)
-Blodwen> (Main.Just __ Main.Z) : (Main.Maybe Main.Nat)
-Blodwen> Bye for now!
+Main> (Main.Just __ (Main.S (Main.S (Main.S Main.Z)))) : (Main.Maybe Main.Nat)
+Main> (Main.Just __ Main.Z) : (Main.Maybe Main.Nat)
+Main> (Main.Just __ (Main.S (Main.S (Main.S Main.Z)))) : (Main.Maybe Main.Nat)
+Main> (Main.Just __ Main.Z) : (Main.Maybe Main.Nat)
+Main> Bye for now!

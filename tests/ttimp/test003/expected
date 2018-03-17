@@ -8,7 +8,7 @@ Blodwen> LOG 0: Auto implicit search: Main.{h:140} for (Main.List.Elem Integer 1
 ():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
-Loading auto.ttc
+Loading build/auto.ttc
 Processing as TTC
 Blodwen> LOG 0: Auto implicit search: Main.{h:5} for (Main.List.Elem Integer 3 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
 3 : Integer

@@ -1,4 +1,4 @@
 $1 lazy.blod < input
-$1 lazy.ttc < input
+$1 build/lazy.ttc < input
 
-rm -f *.ttc
+rm -rf build

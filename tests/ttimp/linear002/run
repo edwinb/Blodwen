@@ -1,2 +1,2 @@
 echo ':q' | $1 bad.tti
-rm -f *.ttc
+rm -rf build

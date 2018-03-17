@@ -24,6 +24,7 @@ data Error annot
     | WhenUnifying annot (Env Term vars) (Term vars) (Term vars) (Error annot)
     | ValidCase annot (Env Term vars) (Either (Term vars) (Error annot))
     | UndefinedName annot Name
+    | InvisibleName annot Name
     | LinearUsed annot Nat Name
     | LinearMisuse annot Name RigCount RigCount
     | AmbiguousName annot (List Name)
@@ -45,6 +46,7 @@ data Error annot
     | GenericMsg annot String
     | TTCError TTCErrorMsg
     | FileErr String FileError
+    | ModuleNotFound annot (List String)
     | InternalError String
 
     | InType annot Name (Error annot)
@@ -75,6 +77,10 @@ Show annot => Show (Error annot) where
              Left tm => assert_total (show tm) ++ " is not a valid impossible pattern because it typechecks"
              Right err => "Not a valid impossible pattern:\n\t" ++ assert_total (show err)
   show (UndefinedName fc x) = show fc ++ ":Undefined name " ++ show x
+  show (InvisibleName fc (NS ns x)) 
+       = show fc ++ ":Name " ++ show x ++ " is inaccessible since " ++
+         showSep "." (reverse ns) ++ " is not explicitly imported"
+  show (InvisibleName fc x) = show fc ++ ":Name " ++ show x ++ " is inaccessible since "
   show (LinearUsed fc count n)
       = show fc ++ ":There are " ++ show count ++ " uses of linear name " ++ show n
   show (LinearMisuse fc n exp ctx)
@@ -116,6 +122,8 @@ Show annot => Show (Error annot) where
   show (GenericMsg fc str) = show fc ++ ":" ++ str
   show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
+  show (ModuleNotFound fc ns) 
+      = show fc ++ ":" ++ showSep "." (reverse ns) ++ " not found"
   show (InternalError str) = "INTERNAL ERROR: " ++ str
 
   show (InType fc n err)

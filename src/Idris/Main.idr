@@ -13,8 +13,9 @@ import Idris.Parser
 import Idris.ProcessIdr
 import Idris.REPL
 
-
 import Data.Vect
+
+%default covering
 
 usageMsg : Core FC ()
 usageMsg = coreLift $ putStrLn "Usage: blodwen [source file]"
@@ -30,14 +31,13 @@ stMain
          s <- newRef Syn initSyntax
 
          case span (/= '.') fname of
+              -- This is temporary, until we get module chasing and
+              -- need for rebuild checking...
               (_, ".ttc") => do coreLift $ putStrLn "Processing as TTC"
-                                syn <- readFromTTC {extra = SyntaxInfo} fname
+                                readForREPL fname
                                 dumpConstraints 0 True
-                                put Syn syn
               _ => do coreLift $ putStrLn "Processing as Idris"
                       ProcessIdr.process fname
-                      syn <- get Syn
-                      writeToTTC syn (getTTCFileName fname)
          repl {c} {u}
 
 

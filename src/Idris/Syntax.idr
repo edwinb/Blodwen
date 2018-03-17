@@ -25,6 +25,10 @@ record FC where
   startPos : FilePos
   endPos : FilePos
 
+export
+emptyFC : FC
+emptyFC = MkFC "(no file)" (0, 0) (0, 0)
+
 %name FC fc
 
 export
@@ -156,9 +160,18 @@ data REPLCmd : Type where
      Quit : REPLCmd
 
 public export
+record Import where
+  constructor MkImport
+  loc : FC
+  reexport : Bool
+  path : List String
+  nameAs : List String
+
+public export
 record Module where
   constructor MkModule
+  headerloc : FC
   moduleNS : List String
-  imports : List (List String)
+  imports : List Import
   decls : List PDecl
 

@@ -74,6 +74,14 @@ initSyntax = MkSyntax empty empty
 export
 data Syn : Type where
 
+export
+extend : {auto s : Ref Syn SyntaxInfo} ->
+         SyntaxInfo -> Core annot ()
+extend newsyn
+    = do syn <- get Syn
+         put Syn (record { infixes $= mergeLeft (infixes newsyn),
+                           prefixes $= mergeLeft (prefixes newsyn) } syn)
+
 -- Whether names are turned into IBindVar or not
 -- on the lhs and in types, by default, lower case variable names which
 -- are not bound explicitly are turned ito IBindVar

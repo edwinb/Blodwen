@@ -8,7 +8,7 @@ Blodwen> Main.this : (0 y : Main.Nat) -> (1 x : Main.Nat) -> Main.Nat
 Blodwen> Main.that : (1 y : Main.Nat) -> (0 x : Main.Nat) -> Main.Nat
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
-Loading rig.ttc
+Loading build/rig.ttc
 Processing as TTC
 LOG 0: --- CONSTRAINTS AND HOLES ---
 LOG 0: ?Main.that : (1 y : Main.Nat) -> (0 x : Main.Nat) -> Main.Nat

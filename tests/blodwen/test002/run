@@ -1,3 +1,3 @@
 $1 op.blod < input
 
-rm -f *.ttc
+rm -rf build

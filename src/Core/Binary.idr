@@ -98,7 +98,8 @@ writeToTTC extradata fname
          defs <- get Ctxt
          ust <- get UST
          let defs' = mkSaveDefs (getSave defs) 
-                         (record { options = options defs } initCtxt)
+                         (record { options = options defs,
+                                   imported = imported defs } initCtxt)
                          defs
          toBuf buf (MkTTCFile ttcVersion (holes ust) (constraints ust) defs'
                               extradata)
@@ -107,20 +108,41 @@ writeToTTC extradata fname
          pure ()
 
 -- Add definitions from a binary file to the current context
+-- Returns the "extra" section of the file (user defined data) and the list
+-- of additional TTCs that need importing
+-- (we need to return these, rather than do it here, because after loading
+-- the data that's when we process to extra data...)
 export
 readFromTTC : (TTC annot annot, TTC annot extra) =>
               {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
-              (fname : String) ->
-              Core annot extra
-readFromTTC fname
-    = do Right buf <- coreLift $ readFromFile fname
+              (fname : String) -> -- file containing the module
+              (modNS : List String) -> -- module namespace
+              (importAs : List String) -> -- namespace to import as
+              Core annot (Maybe (extra, List (List String, Bool, List String)))
+readFromTTC fname modNS importAs
+    = do defs <- get Ctxt
+         -- If it's already in the context, don't load it again
+         let False = (fname, importAs) `elem` allImported defs
+              | True => pure Nothing
+         put Ctxt (record { allImported $= ((fname, importAs) :: ) } defs)
+
+         Right buf <- coreLift $ readFromFile fname
                | Left err => throw (InternalError (fname ++ ": " ++ show err))
          bin <- newRef Bin buf -- for reading the file into
          sh <- initShare -- for recording string sharing
-         tti <- fromBuf sh bin
-         extend (context tti)
+         ttc <- fromBuf sh bin
+         -- Rename everything in the ttc's context according to the namespace
+         -- it was imported as
+         -- [TODO]
+         let renamed = context ttc
+
+         -- Extend the current context with the updated definitions from the ttc
+         extendAs modNS importAs renamed
+
+         -- Finally, update the unification state with the holes from the
+         -- ttc
          ust <- get UST
-         put UST (record { holes = holes tti,
-                           constraints = constraints tti } ust)
-         pure (extraData tti)
+         put UST (record { holes = holes ttc,
+                           constraints = constraints ttc } ust)
+         pure (Just (extraData ttc, imported (context ttc)))

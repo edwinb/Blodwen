@@ -1,3 +1,3 @@
 echo ':q' | $1 eta.tti
 
-rm -f *.ttc
+rm -rf build

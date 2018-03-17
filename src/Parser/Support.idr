@@ -203,7 +203,9 @@ identPart
 
 export
 namespace_ : Rule (List String)
-namespace_ = sepBy1 (symbol ".") identPart
+namespace_ 
+    = do ns <- sepBy1 (symbol ".") identPart
+         pure (reverse ns) -- innermost first, so reverse
 
 export
 unqualifiedName : Rule String

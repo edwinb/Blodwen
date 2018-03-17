@@ -1,2 +1,2 @@
 $1 cases.tti < input
-rm -f *.ttc
+rm -rf build

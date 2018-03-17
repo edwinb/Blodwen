@@ -391,10 +391,19 @@ mutual
       defOK False InLHS _ = False
       defOK _ _ _ = True
 
+      checkVisibleNS : Name -> Core annot ()
+      checkVisibleNS (NS ns x)
+          = if !(isVisible ns)
+               then pure ()
+               else do defs <- get Ctxt
+                       throw $ InvisibleName loc (NS ns x)
+      checkVisibleNS _ = pure ()
+
       resolveRef : Name -> Def -> Defs -> Term vars -> 
                    Core annot (Term vars, Term vars)
       resolveRef n def gam varty
-          = do let nt : NameType 
+          = do checkVisibleNS n
+               let nt : NameType 
                         = case def of
                              PMDef _ _ _ => Func
                              DCon tag arity _ => DataCon tag arity

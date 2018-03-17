@@ -1,4 +1,4 @@
 $1 auto.tti < input
-$1 auto.ttc < input
+$1 build/auto.ttc < input
 
-rm -f *.ttc
+rm -rf build

@@ -18,7 +18,7 @@ import Data.Vect
 
 %default total
 
-export
+public export
 record Context a where
      constructor MkContext 
      -- for looking up by exact (completely qualified) names
@@ -26,10 +26,15 @@ record Context a where
      -- for looking up by name root or partially qualified (so possibly
      -- ambiguous) names. This doesn't store machine generated names.
      hierarchy : StringMap (List (Name, a))
+     -- Namespaces which are visible (i.e. have been imported)
+     -- This only matters during evaluation and type checking, to control
+     -- access in a program - in all other cases, we'll assume everything is
+     -- visible
+     visibleNS : List (List String)
 
 export
 empty : Context a
-empty = MkContext empty empty
+empty = MkContext empty empty []
 
 export
 lookupCtxtExact : Name -> Context a -> Maybe a
@@ -78,16 +83,26 @@ addToHier n val hier
 
 export
 addCtxt : Name -> a -> Context a -> Context a
-addCtxt n val (MkContext dict hier) 
+addCtxt n val (MkContext dict hier vis) 
      = let dict' = insert n val dict
            hier' = addToHier n val hier in
-           MkContext dict' hier'
+           MkContext dict' hier' vis
 
 -- Merge two contexts, with entries in the second overriding entries in
 -- the first
 mergeContext : Context a -> Context a -> Context a
-mergeContext ctxt (MkContext exact hier)
-    = insertFrom (toList exact) ctxt
+mergeContext ctxt (MkContext exact hier vis)
+    = record { visibleNS $= (vis ++) } (insertFrom (toList exact) ctxt)
+  where
+    insertFrom : List (Name, a) -> Context a -> Context a
+    insertFrom [] ctxt = ctxt
+    insertFrom ((n, val) :: cs) ctxt
+        = insertFrom cs (addCtxt n val ctxt)
+
+mergeContextAs : List String -> List String ->
+                 Context a -> Context a -> Context a
+mergeContextAs oldns newns ctxt (MkContext exact hier vis)
+    = record { visibleNS $= (vis ++) } (insertFrom (toList exact) ctxt)
   where
     insertFrom : List (Name, a) -> Context a -> Context a
     insertFrom [] ctxt = ctxt
@@ -284,6 +299,12 @@ record Defs where
       currentNS : List String -- namespace for current definitions
       options : Options
       toSave : SortedSet -- Definitions to write out as .tti
+      imported : List (List String, Bool, List String) 
+          -- imported modules, to rexport, as namespace
+      allImported : List (String, List String)
+          -- all imported filenames/namespaces, just to avoid loading something
+          -- twice unnecessarily (this is a record of all the things we've
+          -- called 'readFromTTC' with, in practice)
       autoHints : List Name -- global auto hints
       typeHints : Context (List Name) -- type name hints
       nextTag : Int -- next tag for type constructors
@@ -294,20 +315,23 @@ export
 noGam : Defs -> Defs
 noGam = record { gamma = empty }
 
--- Just write out what's in "gamma", and the relevant options
+-- Just write out what's in "gamma", the relevant options, and the imported
+-- modules
 -- Everything else is either reconstructed from that, or not used when reading
 -- from a file
 export
 TTC annot Defs where
   toBuf b val 
       = do toBuf b (CMap.toList (exactNames (gamma val)))
+           toBuf b (imported val)
            toBuf b (laziness (options val))
   fromBuf s b 
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
+           imported <- fromBuf s b
            lazy <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) [] [] 
                             (record { laziness = lazy } defaults)
-                            empty [] empty 100 0 0)
+                            empty imported [] [] empty 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -316,7 +340,7 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] ["Main"] defaults empty [] empty 100 0 0
+initCtxt = MkAllDefs empty ["Main"] ["Main"] defaults empty [] [] [] empty 100 0 0
 
 export
 getSave : Defs -> List Name
@@ -464,6 +488,31 @@ forceName defs
          pure (force l)
 
 export
+setVisible : {auto c : Ref Ctxt Defs} -> 
+             (nspace : List String) -> Core annot ()
+setVisible nspace
+    = do defs <- get Ctxt
+         put Ctxt (record { gamma->visibleNS $= (nspace ::) } defs)
+
+-- Return True if the given namespace is visible in the context (meaning
+-- the namespace itself, and any namespace it's nested inside)
+export
+isVisible : {auto c : Ref Ctxt Defs} -> 
+            (nspace : List String) -> Core annot Bool
+isVisible nspace
+    = do defs <- get Ctxt
+         pure (any visible (allParents (currentNS defs) ++ visibleNS (gamma defs)))
+  where
+    allParents : List String -> List (List String)
+    allParents [] = []
+    allParents (n :: ns) = (n :: ns) :: allParents ns
+
+    -- Visible if any visible namespace is a suffix of the namespace we're
+    -- asking about
+    visible : List String -> Bool
+    visible visns = isSuffixOf visns nspace
+
+export
 checkUnambig : {auto c : Ref Ctxt Defs} ->
                annot -> Name -> Core annot Name
 checkUnambig loc n
@@ -484,6 +533,12 @@ setLazy loc ty d f
          f' <- checkUnambig loc f
          put Ctxt (record { options $= setLazy ty' d' f' } defs)
 
+export
+getDirs : {auto c : Ref Ctxt Defs} -> Core annot Dirs
+getDirs
+    = do defs <- get Ctxt
+         pure (dirs (options defs))
+
 -- Extend the context with the definitions/options given in the second
 -- New options override current ones
 export
@@ -493,6 +548,17 @@ extend new
     = do ctxt <- get Ctxt
          put Ctxt (record { gamma $= mergeContext (gamma new),
                             options $= mergeOptions (options new) } ctxt)
+
+export
+extendAs : {auto c : Ref Ctxt Defs} ->
+           List String -> List String -> 
+           Defs -> Core annot ()
+extendAs modNS importAs new
+    = if modNS == importAs 
+         then extend new
+         else do ctxt <- get Ctxt
+                 put Ctxt (record { gamma $= mergeContextAs modNS importAs (gamma new),
+                                    options $= mergeOptions (options new) } ctxt)
 
 -- Set the default namespace for new definitions
 export
@@ -509,6 +575,24 @@ getNS : {auto c : Ref Ctxt Defs} ->
 getNS 
     = do defs <- get Ctxt
          pure (currentNS defs)
+
+-- Add the module name, and namespace, of an imported module
+-- (i.e. for "import X as Y", it's (X, Y)
+-- "import public X" is, when rexported, the same as 
+-- "import X as [current namespace]")
+export
+addImported : {auto c : Ref Ctxt Defs} ->
+              (List String, Bool, List String) -> Core annot ()
+addImported mod
+    = do defs <- get Ctxt
+         put Ctxt (record { imported $= (mod ::) } defs)
+
+export
+getImported : {auto c : Ref Ctxt Defs} -> 
+              Core annot (List (List String, Bool, List String))
+getImported
+    = do defs <- get Ctxt
+         pure (imported defs)
 
 -- Add a new nested namespace to the current namespace for new definitions
 -- e.g. extendNS ["Data"] when namespace is "Prelude.List" leads to

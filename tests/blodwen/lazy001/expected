@@ -1,12 +1,13 @@
 Welcome to Blodwen. Good luck.
 Loading lazy.blod
 Processing as Idris
-Blodwen> (Main.Stream.:: __ 1 (Main.Delay __ __ Main.ones)) : (Main.Stream.Stream Integer)
-Blodwen> (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.Nil __))))) : (Main.List.List Integer)
-Blodwen> Bye for now!
+Main> (Main.Stream.:: __ 1 (Main.Delay __ __ Main.ones)) : (Main.Stream.Stream Integer)
+Main> (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.Nil __))))) : (Main.List.List Integer)
+Main> Bye for now!
 Welcome to Blodwen. Good luck.
-Loading lazy.ttc
+Loading build/lazy.ttc
 Processing as TTC
-Blodwen> (Main.Stream.:: __ 1 (Main.Delay __ __ Main.ones)) : (Main.Stream.Stream Integer)
-Blodwen> (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.Nil __))))) : (Main.List.List Integer)
-Blodwen> Bye for now!
+Importing build/lazy.ttc
+Main> (Main.Stream.:: __ 1 (Main.Delay __ __ Main.ones)) : (Main.Stream.Stream Integer)
+Main> (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.:: __ 1 (Main.List.Nil __))))) : (Main.List.List Integer)
+Main> Bye for now!

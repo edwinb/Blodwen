@@ -610,14 +610,31 @@ collectDefs (d :: ds)
     = d :: collectDefs ds
 
 export
+import_ : FileName -> IndentInfo -> Rule Import
+import_ fname indents
+    = do start <- location
+         keyword "import"
+         reexp <- option False (do keyword "public"
+                                   pure True)
+         ns <- namespace_
+         nsAs <- option ns (do exactIdent "as"
+                               namespace_)
+         end <- location
+         atEnd indents
+         pure (MkImport (MkFC fname start end) reexp ns nsAs)
+
+export
 prog : FileName -> Rule Module
 prog fname
-    = do nspace <- option ["Main"]
+    = do start <- location
+         nspace <- option ["Main"]
                       (do keyword "module"
                           namespace_)
-         l <- location
+         end <- location
+         imports <- block (import_ fname)
          ds <- nonEmptyBlock (topDecl fname)
-         pure (MkModule nspace [] (collectDefs (concat ds)))
+         pure (MkModule (MkFC fname start end)
+                        nspace imports (collectDefs (concat ds)))
 
 export
 command : Rule REPLCmd

@@ -6,7 +6,7 @@ Blodwen> \var : Main.Nat => (Main.plus var (Main.S Main.Z)) : ({pi:27} : Main.Na
 Blodwen> (Main.S (Main.S (Main.S (Main.S Main.Z)))) : Main.Nat
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
-Loading interp.ttc
+Loading build/interp.ttc
 Processing as TTC
 Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus var var) : ({pi:27} : Main.Nat) -> ({pi:27} : Main.Nat) -> Main.Nat
 Blodwen> \var : Main.Nat => (Main.plus var (Main.S Main.Z)) : ({pi:27} : Main.Nat) -> Main.Nat

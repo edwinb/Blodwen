@@ -72,7 +72,8 @@ repl : {auto c : Ref Ctxt Defs} ->
        {auto s : Ref Syn SyntaxInfo} ->
        Core FC ()
 repl
-    = do coreLift (putStr "Blodwen> ")
+    = do ns <- getNS
+         coreLift (putStr (showSep "." (reverse ns) ++ "> "))
          inp <- coreLift getLine
          case runParser inp command of
               Left err => do coreLift (printLn err)

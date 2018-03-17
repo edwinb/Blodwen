@@ -1,4 +1,4 @@
 $1 interp.tti < input
-$1 interp.ttc < input
+$1 build/interp.ttc < input
 
-rm -f *.ttc
+rm -rf build

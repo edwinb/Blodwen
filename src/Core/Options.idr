@@ -1,7 +1,6 @@
 module Core.Options
 
 import Core.Core
-import Core.Directory
 import Core.Name
 import Core.TTC
 import Utils.Binary
@@ -26,10 +25,20 @@ TTC annot LazyNames where
            pure (MkLazy ty d f)
 
 public export
+record Dirs where
+  constructor MkDirs
+  working_dir : String -- top level directory
+  build_dir : String -- build directory, relative to working directory
+  extra_dirs : List String -- places to look for source files
+
+public export
 record Options where
   constructor MkOptions
   dirs : Dirs
   laziness : Maybe LazyNames
+
+defaultDirs : Dirs
+defaultDirs = MkDirs "." "build" []
 
 export
 defaults : Options
