@@ -99,7 +99,7 @@ mutual
        PPair : FC -> PTerm -> PTerm -> PTerm
        PUnit : FC -> PTerm
 
-       -- TODO: Tuples, unit, dependent pairs, lists, idiom brackets,
+       -- TODO: Dependent pairs, lists, idiom brackets, equality,
        -- comprehensions, if/then/else, rewrites
 
   public export

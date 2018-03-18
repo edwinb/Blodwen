@@ -534,6 +534,20 @@ setLazy loc ty d f
          put Ctxt (record { options $= setLazy ty' d' f' } defs)
 
 export
+setPPrint : {auto c : Ref Ctxt Defs} ->
+            PPrinter -> Core annot ()
+setPPrint ppopts
+    = do defs <- get Ctxt
+         put Ctxt (record { options->printing = ppopts } defs)
+
+export
+getPPrint : {auto c : Ref Ctxt Defs} ->
+            Core annot PPrinter
+getPPrint
+    = do defs <- get Ctxt
+         pure (printing (options defs))
+
+export
 getDirs : {auto c : Ref Ctxt Defs} -> Core annot Dirs
 getDirs
     = do defs <- get Ctxt

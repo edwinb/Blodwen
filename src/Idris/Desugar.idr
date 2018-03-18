@@ -32,7 +32,7 @@ import TTImp.TTImp
 
 %default covering
 
-export
+public export
 record SyntaxInfo where
   constructor MkSyntax
   -- Keep infix/prefix, then we can define operators which are both

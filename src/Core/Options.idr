@@ -32,17 +32,26 @@ record Dirs where
   extra_dirs : List String -- places to look for source files
 
 public export
+record PPrinter where
+  constructor MkPPOpts
+  show_implicits : Bool
+
+public export
 record Options where
   constructor MkOptions
   dirs : Dirs
+  printing : PPrinter
   laziness : Maybe LazyNames
 
 defaultDirs : Dirs
 defaultDirs = MkDirs "." "build" []
 
+defaultPPrint : PPrinter
+defaultPPrint = MkPPOpts False
+
 export
 defaults : Options
-defaults = MkOptions defaultDirs Nothing
+defaults = MkOptions defaultDirs defaultPPrint Nothing
 
 -- Some relevant options get stored in TTC; merge in the options from
 -- a TTC file

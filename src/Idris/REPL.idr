@@ -8,6 +8,7 @@ import Core.Unify
 
 import Idris.Desugar
 import Idris.Parser
+import Idris.Resugar
 import Idris.Syntax
 
 import TTImp.Elab
@@ -32,8 +33,9 @@ process (Eval itm)
          (tm, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
-         coreLift (putStrLn (show (normalise gam [] tm) ++ " : " ++
-                             show (normalise gam [] ty)))
+         itm <- resugar [] (normalise gam [] tm)
+         ity <- resugar [] (normalise gam [] ty)
+         coreLift (putStrLn (show itm ++ " : " ++ show ity))
          pure True
 process (Check itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
@@ -41,13 +43,15 @@ process (Check itm)
          (tm, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
-         coreLift (putStrLn (show tm ++ " : " ++
-                             show (normaliseHoles gam [] ty)))
+         itm <- resugar [] (normaliseHoles gam [] tm)
+         ity <- resugar [] (normaliseHoles gam [] ty)
+         coreLift (putStrLn (show itm ++ " : " ++ show ity))
          pure True
 process (ProofSearch n)
     = do tm <- search (MkFC "(interactive)" (0, 0) (0, 0)) 1000 n
          gam <- get Ctxt
-         coreLift (putStrLn (show (normalise gam [] tm)))
+         itm <- resugar [] (normaliseHoles gam [] tm)
+         coreLift (putStrLn (show itm))
          dumpConstraints 0 True
          pure True
 process (DebugInfo n)

@@ -7,7 +7,8 @@ modules = Idris.Desugar,
           Idris.Syntax,
           Idris.Parser,
           Idris.ProcessIdr,
-          Idris.REPL
+          Idris.REPL,
+          Idris.Resugar
 
 sourcedir = src
 executable = blodwen

@@ -2,6 +2,6 @@ Welcome to Blodwen. Good luck.
 Loading op.blod
 Processing as Idris
 Main> 42 : Integer
-Main> (Main.:: __ 3 (Main.:: __ 4 (Main.:: __ 5 (Main.Nil __ __)))) : (Main.List Type Integer)
-Main> (Main.:: __ 2 (Main.:: __ 4 (Main.:: __ 6 (Main.Nil __ __)))) : (Main.List Type Integer)
+Main> 3 :: (4 :: (5 :: Nil)) : List Integer
+Main> 2 :: (4 :: (6 :: Nil)) : List Integer
 Main> Bye for now!
