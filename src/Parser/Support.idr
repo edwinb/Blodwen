@@ -42,12 +42,12 @@ eoi
     isEOI _ = False
 
 export
-runParser : String -> Rule ty -> Either ParseError ty
+runParser : String -> Grammar (TokenData Token) e ty -> Either ParseError ty
 runParser str p 
     = case lex str of
            Left err => Left $ LexFail err
            Right toks => 
-              case parse (do res <- p; eoi; pure res) toks of
+              case parse p toks of
                    Left (Error err []) => 
                           Left $ ParseFail err Nothing []
                    Left (Error err (t :: ts)) => 
@@ -226,10 +226,9 @@ name
          pure (UN op)
  where
    mkFullName : List String -> Name
-   mkFullName xs with (snocList xs)
-     mkFullName [] | Empty = UN "NONE" -- Can't happen :)
-     mkFullName ([] ++ [n]) | (Snoc rec) = UN n
-     mkFullName (ns ++ [n]) | (Snoc rec) = NS ns (UN n)
+   mkFullName [] = UN "NONE" -- Can't happen :)
+   mkFullName [n] = UN n
+   mkFullName (n :: ns) = NS ns (UN n)
 
 export
 IndentInfo : Type

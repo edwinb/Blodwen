@@ -29,6 +29,10 @@ export
 emptyFC : FC
 emptyFC = MkFC "(no file)" (0, 0) (0, 0)
 
+export
+toplevelFC : FC
+toplevelFC = MkFC "(toplevel)" (0, 0) (0, 0)
+
 %name FC fc
 
 export

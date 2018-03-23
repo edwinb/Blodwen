@@ -637,6 +637,18 @@ prog fname
                         nspace imports (collectDefs (concat ds)))
 
 export
+progHdr : FileName -> EmptyRule Module
+progHdr fname
+    = do start <- location
+         nspace <- option ["Main"]
+                      (do keyword "module"
+                          namespace_)
+         end <- location
+         imports <- block (import_ fname)
+         pure (MkModule (MkFC fname start end)
+                        nspace imports [])
+
+export
 command : Rule REPLCmd
 command
     = do symbol ":"; exactIdent "t"

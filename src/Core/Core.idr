@@ -2,6 +2,7 @@ module Core.Core
 
 import Core.TT
 import Core.CaseTree
+import Parser.Support
 
 import public Data.IORef
 import public Control.Catchable
@@ -46,7 +47,9 @@ data Error annot
     | GenericMsg annot String
     | TTCError TTCErrorMsg
     | FileErr String FileError
+    | ParseFail ParseError
     | ModuleNotFound annot (List String)
+    | CyclicImports (List (List String))
     | InternalError String
 
     | InType annot Name (Error annot)
@@ -122,8 +125,14 @@ Show annot => Show (Error annot) where
   show (GenericMsg fc str) = show fc ++ ":" ++ str
   show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
+  show (ParseFail err) = "Parse error (" ++ show err ++ ")"
   show (ModuleNotFound fc ns) 
       = show fc ++ ":" ++ showSep "." (reverse ns) ++ " not found"
+  show (CyclicImports ns)
+      = "Module imports form a cycle: " ++ showSep " -> " (map showMod ns)
+    where
+      showMod : List String -> String
+      showMod ns = showSep "." (reverse ns)
   show (InternalError str) = "INTERNAL ERROR: " ++ str
 
   show (InType fc n err)

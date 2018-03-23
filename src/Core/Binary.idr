@@ -99,7 +99,8 @@ writeToTTC extradata fname
          ust <- get UST
          let defs' = mkSaveDefs (getSave defs) 
                          (record { options = options defs,
-                                   imported = imported defs } initCtxt)
+                                   imported = imported defs,
+                                   currentNS = currentNS defs } initCtxt)
                          defs
          toBuf buf (MkTTCFile ttcVersion (holes ust) (constraints ust) defs'
                               extradata)
@@ -111,7 +112,7 @@ writeToTTC extradata fname
 -- Returns the "extra" section of the file (user defined data) and the list
 -- of additional TTCs that need importing
 -- (we need to return these, rather than do it here, because after loading
--- the data that's when we process to extra data...)
+-- the data that's when we process the extra data...)
 export
 readFromTTC : (TTC annot annot, TTC annot extra) =>
               {auto c : Ref Ctxt Defs} ->
@@ -139,6 +140,7 @@ readFromTTC fname modNS importAs
 
          -- Extend the current context with the updated definitions from the ttc
          extendAs modNS importAs renamed
+         setNS (currentNS (context ttc))
 
          -- Finally, update the unification state with the holes from the
          -- ttc

@@ -1,13 +1,11 @@
-Welcome to Blodwen. Good luck.
-Loading lazy.blod
 Processing as Idris
+1/1: Building lazy (lazy.blod)
+Welcome to Blodwen. Good luck.
 Main> 1 :: (Delay ones) : Stream Integer
 Main> 1 :: (1 :: (1 :: (1 :: Nil))) : List Integer
 Main> Bye for now!
-Welcome to Blodwen. Good luck.
-Loading build/lazy.ttc
 Processing as TTC
-Importing build/lazy.ttc
+Welcome to Blodwen. Good luck.
 Main> 1 :: (Delay ones) : Stream Integer
 Main> 1 :: (1 :: (1 :: (1 :: Nil))) : List Integer
 Main> Bye for now!

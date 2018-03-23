@@ -1,5 +1,6 @@
-echo ':q' | $1 Nat.blod
-echo ':q' | $1 Mult.blod
+$1 Test.blod < input
+sleep 1
+touch Mult.blod
 $1 Test.blod < input
 
 rm -rf build

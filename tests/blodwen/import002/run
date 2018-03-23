@@ -1,5 +1,3 @@
-echo ':q' | $1 Nat.blod
-echo ':q' | $1 Mult.blod
 echo ':q' | $1 Test.blod
 
 rm -rf build

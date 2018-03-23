@@ -26,6 +26,13 @@ dropExtension fname
            (ext, root) => 
                -- assert that root can't be empty
                reverse (assert_total (strTail root))
+    
+firstAvailable : annot -> List String -> List String -> Core annot String
+firstAvailable loc ns [] = throw (ModuleNotFound loc ns)
+firstAvailable loc ns (f :: fs)
+    = do Right ok <- coreLift $ openFile f Read
+               | Left err => firstAvailable loc ns fs
+         pure f
 
 -- Given a namespace, return the full path to the checked module, 
 -- looking first in the build directory then in the extra_dirs
@@ -36,16 +43,20 @@ nsToPath loc ns
     = do d <- getDirs
          let fnameBase = showSep (cast sep) (reverse ns)
          let fs = map (\p => p ++ cast sep ++ fnameBase ++ ".ttc")
-                      ((working_dir d ++ cast sep ++ build_dir d)
-                          :: extra_dirs d)
-         firstAvailable fs
-  where
-    firstAvailable : List String -> Core annot String
-    firstAvailable [] = throw (ModuleNotFound loc ns)
-    firstAvailable (f :: fs)
-        = do Right ok <- coreLift $ openFile f Read
-                   | Left err => firstAvailable fs
-             pure f
+                      (build_dir d :: extra_dirs d)
+         firstAvailable loc ns fs
+
+-- Given a namespace, return the full path to the source module (if it
+-- exists in the working directory)
+export
+nsToSource : {auto c : Ref Ctxt Defs} ->
+             annot -> List String -> Core annot String
+nsToSource loc ns
+    = do d <- getDirs
+         let fnameBase = showSep (cast sep) (reverse ns)
+         let fs = map (\ext => fnameBase ++ ext)
+                      [".blod", ".idr", ".lidr"]
+         firstAvailable loc ns fs
 
 -- Given a filename in the working directory, return the correct
 -- namespace for it
@@ -79,22 +90,22 @@ makeBuildDirectory : {auto c : Ref Ctxt Defs} ->
                      List String -> Core annot ()
 makeBuildDirectory ns
     = do d <- getDirs
-         let bdir = working_dir d ++ cast sep ++ build_dir d
+         let bdir = build_dir d
          let ndirs = case ns of
                           [] => []
                           (n :: ns) => ns -- first item is file name
          let fname = showSep (cast sep) (reverse ndirs)
-         Right _ <- coreLift $ mkdirs ((working_dir d ++ "/" ++ build_dir d)
-                                         :: reverse ndirs)
+         Right _ <- coreLift $ mkdirs (build_dir d :: reverse ndirs)
             | Left err => throw (FileErr (bdir ++ cast sep ++ fname) err)
          pure ()
 
+-- Given a source file, return the name of the ttc file to generate
 export
 getTTCFileName : {auto c : Ref Ctxt Defs} -> String -> Core annot String
 getTTCFileName inp 
     = do ns <- getNS
          d <- getDirs
-         let bdir = working_dir d ++ cast sep ++ build_dir d
+         let bdir = build_dir d
          pure $ bdir ++ cast sep ++ dropExtension inp ++ ".ttc"
 
 -- findFile : String -> Dirs -> Core annot 

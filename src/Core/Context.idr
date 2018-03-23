@@ -295,7 +295,6 @@ public export
 record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
-      moduleNS : List String -- namespace for the current input file
       currentNS : List String -- namespace for current definitions
       options : Options
       toSave : SortedSet -- Definitions to write out as .tti
@@ -323,13 +322,15 @@ export
 TTC annot Defs where
   toBuf b val 
       = do toBuf b (CMap.toList (exactNames (gamma val)))
+           toBuf b (currentNS val)
            toBuf b (imported val)
            toBuf b (laziness (options val))
   fromBuf s b 
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
+           modNS <- fromBuf s b
            imported <- fromBuf s b
            lazy <- fromBuf s b
-           pure (MkAllDefs (insertFrom ns empty) [] [] 
+           pure (MkAllDefs (insertFrom ns empty) modNS 
                             (record { laziness = lazy } defaults)
                             empty imported [] [] empty 100 0 0)
     where
@@ -340,7 +341,7 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] ["Main"] defaults empty [] [] [] empty 100 0 0
+initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty 100 0 0
 
 export
 getSave : Defs -> List Name
@@ -453,6 +454,14 @@ export
 getCtxt : {auto c : Ref Ctxt Defs} ->
 					Core annot Gamma
 getCtxt = pure (gamma !(get Ctxt))
+
+-- Reset the context, except for the options
+export
+clearCtxt : {auto c : Ref Ctxt Defs} ->
+            Core annot ()
+clearCtxt
+    = do defs <- get Ctxt
+         put Ctxt (record { options = options defs } initCtxt)
 
 export
 isDelayType : Name -> Defs -> Bool

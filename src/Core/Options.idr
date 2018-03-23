@@ -27,9 +27,8 @@ TTC annot LazyNames where
 public export
 record Dirs where
   constructor MkDirs
-  working_dir : String -- top level directory
   build_dir : String -- build directory, relative to working directory
-  extra_dirs : List String -- places to look for source files
+  extra_dirs : List String -- places to look for import files
 
 public export
 record PPrinter where
@@ -44,7 +43,7 @@ record Options where
   laziness : Maybe LazyNames
 
 defaultDirs : Dirs
-defaultDirs = MkDirs "." "build" []
+defaultDirs = MkDirs "build" ["."]
 
 defaultPPrint : PPrinter
 defaultPPrint = MkPPOpts False

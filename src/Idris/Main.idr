@@ -8,6 +8,7 @@ import Core.Primitives
 import Core.Unify
 
 import Idris.Desugar
+import Idris.ModTree
 import Idris.Syntax
 import Idris.Parser
 import Idris.ProcessIdr
@@ -26,7 +27,6 @@ stMain
          addPrimitives
 
          [_, fname] <- coreLift getArgs | _ => usageMsg
-         coreLift $ putStrLn $ "Loading " ++ fname
          u <- newRef UST initUState
          s <- newRef Syn initSyntax
 
@@ -34,16 +34,16 @@ stMain
               -- This is temporary, until we get module chasing and
               -- need for rebuild checking...
               (_, ".ttc") => do coreLift $ putStrLn "Processing as TTC"
-                                readForREPL fname
+                                readAsMain fname
                                 dumpConstraints 0 True
               _ => do coreLift $ putStrLn "Processing as Idris"
-                      ProcessIdr.process fname
+                      buildAll fname
+         coreLift $ putStrLn "Welcome to Blodwen. Good luck."
          repl {c} {u}
 
 
 main : IO ()
-main = do putStrLn "Welcome to Blodwen. Good luck."
-          coreRun stMain
+main = coreRun stMain
                (\err : Error _ => putStrLn ("Uncaught error: " ++ show err))
                (\res => pure ())
 

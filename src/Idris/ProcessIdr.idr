@@ -53,13 +53,14 @@ readModule loc vis reexp imp as
               | Nothing => pure () -- already loaded
          addImported (imp, reexp, as)
          Desugar.extend syn
+         modNS <- getNS
          when vis $ setVisible imp
          traverse (\ mimp => 
                        do let m = fst mimp
                           let reexp = fst (snd mimp)
                           let as = snd (snd mimp)
                           readModule loc (vis && reexp) reexp m as) more
-         pure ()
+         setNS modNS
 
 
 readImport : {auto c : Ref Ctxt Defs} ->
@@ -69,23 +70,23 @@ readImport : {auto c : Ref Ctxt Defs} ->
 readImport imp
     = readModule (loc imp) True (reexport imp) (path imp) (nameAs imp)
 
--- TMP HACK! Remove once module chasing and top level import done right
+-- Import a TTC for use as the main file (e.g. at the REPL)
 export
-readForREPL : {auto c : Ref Ctxt Defs} ->
+readAsMain : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
               (fname : String) -> Core FC ()
-readForREPL fname
-    = do coreLift $ putStrLn ("Importing " ++ fname)
-         Just (syn, more) <- readFromTTC {extra = SyntaxInfo} fname [] []
+readAsMain fname
+    = do Just (syn, more) <- readFromTTC {extra = SyntaxInfo} fname [] []
               | Nothing => pure ()
          Desugar.extend syn
+         replNS <- getNS
          traverse (\ mimp => 
                        do let m = fst mimp
                           let as = snd (snd mimp)
                           fname <- nsToPath emptyFC m
                           readModule emptyFC True False m as) more
-         pure ()
+         setNS replNS
 
 -- Process everything in the module; return the syntax information which
 -- needs to be written to the TTC (e.g. exported infix operators)
@@ -115,16 +116,18 @@ export
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
-          FileName -> Core FC ()
+          FileName -> Core FC Bool
 process file
     = do Right res <- coreLift (readFile file)
-               | Left err => coreLift (putStrLn ("File error: " ++ show err))
-         case runParser res (prog file) of
-              Left err => coreLift (putStrLn ("Parser error: " ++ show err))
+               | Left err => throw (FileErr file err)
+         case runParser res (do p <- prog file; eoi; pure p) of
+              Left err => throw (ParseFail err)
               Right mod =>
                     catch (do processMod mod
                               makeBuildDirectory (pathToNS file)
                               fn <- getTTCFileName file
-                              writeToTTC !(get Syn) fn)
-                          (\err => coreLift (printLn err))
+                              writeToTTC !(get Syn) fn
+                              pure True)
+                          (\err => do coreLift (printLn err)
+                                      pure False)
 

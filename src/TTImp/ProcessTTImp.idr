@@ -77,7 +77,7 @@ process : {auto c : Ref Ctxt Defs} ->
 process file
     = do Right res <- coreLift (readFile file)
                | Left err => coreLift (putStrLn ("File error: " ++ show err))
-         case runParser res prog of
+         case runParser res (do p <- prog; eoi; pure p) of
               Left err => coreLift (putStrLn ("TTImp Parse error: " ++ show err))
               Right decls => 
                    catch (processDecls [] (MkNested []) decls)

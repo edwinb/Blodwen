@@ -1,6 +1,6 @@
-Welcome to Blodwen. Good luck.
-Loading pair.blod
 Processing as Idris
+1/1: Building pair (pair.blod)
+Welcome to Blodwen. Good luck.
 Main> 1 : Integer
 Main> Int : Type
 Main> 3 : Integer
