@@ -89,6 +89,10 @@ mutual
           (term : RawImp annot) -> -- Term to elaborate
           (expected : Maybe (Term vars)) -> -- Expected type, if available
           Core annot (Term vars, Term vars) 
+  -- If we've just inserted an implicit coercion (in practice, that's either
+  -- a force or delay) then check the term with any further insertions
+  check rigc process elabinfo env nest (ICoerced loc tm) exp
+      = checkImp rigc process elabinfo env nest tm exp
   check rigc process elabinfo env nest tm_in exp 
       = do gam <- get Ctxt
            let tm = expandAmbigName gam env nest tm_in [] tm_in exp
@@ -99,12 +103,13 @@ mutual
                _ => let tm' = insertImpLam env lazyTm exp 
                         loc = getAnnot tm' in
                         case forceName gam of
-                             Nothing => (checkImp rigc process elabinfo env nest tm' exp)
+                             Nothing => checkImp rigc process elabinfo env nest tm' exp
                              Just fn =>
-                                let forcetm = IApp loc (IVar loc fn) tm' in
-                                    insertForce 
-                                      (checkImp rigc process elabinfo env nest tm' exp)
-                                      (checkImp rigc process elabinfo env nest forcetm exp)
+                                let forcetm = IApp loc (IVar loc fn) 
+                                                       (ICoerced loc tm') in
+                                    insertForce tm'
+                                        (checkImp rigc process elabinfo env nest tm' exp)
+                                        (checkImp rigc process elabinfo env nest forcetm exp)
 
   delayError : Defs -> Error annot -> Bool
   delayError defs (CantConvert _ env x y) 
@@ -123,36 +128,30 @@ mutual
   insertForce : {auto c : Ref Ctxt Defs} -> 
                 {auto u : Ref UST (UState annot)} ->
                 {auto i : Ref ImpST (ImpState annot)} ->
+                RawImp annot ->
                 Core annot (Term vars, Term vars) ->
                 Core annot (Term vars, Term vars) ->
                 Core annot (Term vars, Term vars)
-  insertForce elab forced
-      = handle elab
+  insertForce orig elab forced
+      = do defs <- get Ctxt
+           handle elab
                (\err => do defs <- get Ctxt
-                           if delayError defs err then forced else throw err)
-
-  concrete : Defs -> NF vars -> Bool
-  concrete defs (NApp (NRef nt n) args)
-      = case lookupDefExact n (gamma defs) of
-             Just (Hole _ pvar) => pvar
-             _ => False
-  concrete defs _ = True
+                           if not (explicitLazy defs (getFn orig))
+                              && delayError defs err 
+                                then forced else throw err)
 
   insertLazy : Defs -> RawImp annot -> Maybe (NF vars) -> RawImp annot
   insertLazy defs tm@(IBindVar _ _) _ = tm
-  -- If the expected type is "Delayed" and its arguments aren't holes,
+  -- If the expected type is "Delayed" and the given term doesn't elaborate
   -- then we'll try inserting a "Delay"
   insertLazy defs tm (Just (NTCon n _ _ args))
       = case delayName defs of
              Nothing => tm
              Just delay =>
-                if isDelayType n defs &&
-                   not (explicitLazy defs (getFn tm)) &&
-                   all (\x => concrete defs (evalClosure defs x)) args
+                if isDelayType n defs && not (explicitLazy defs (getFn tm))
                    then let loc = getAnnot tm in
                             IAlternative loc False 
-                             [IApp loc (IVar loc delay) tm,
-                              tm]
+                             [IApp loc (IVar loc delay) (ICoerced loc tm), tm]
                    else tm
   insertLazy defs tm _ = tm
 
@@ -164,6 +163,8 @@ mutual
              Env Term vars -> NestedNames vars ->
              (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
              Core annot (Term vars, Term vars) 
+  checkImp rigc process elabinfo env nest (ICoerced _ tm) expected
+      = checkImp rigc process elabinfo env nest tm expected
   checkImp rigc process elabinfo env nest (IVar loc x) expected 
       = case lookup x (names nest) of
              Just (n', tm) =>

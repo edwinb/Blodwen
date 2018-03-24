@@ -17,7 +17,7 @@ blodwenTests
     = ["test001", "test002", "test003", "test004",
        "import001", "import002",
        "sugar001",
-       "lazy001"]
+       "lazy001","lazy002"]
 
 chdir : String -> IO Bool
 chdir dir 

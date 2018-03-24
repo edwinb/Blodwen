@@ -55,7 +55,7 @@ record ElabInfo annot where
   implicitMode : ImplicitMode
   elabMode : ElabMode
   implicitsGiven : List (Name, RawImp annot)
-  dotted : Bool -- are with under a dot pattern? (IMustUnify)
+  dotted : Bool -- are we under a dot pattern? (IMustUnify)
 
 export
 initElabInfo : ImplicitMode -> ElabMode -> ElabInfo annot

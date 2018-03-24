@@ -1,0 +1,2 @@
+plus (fromInteger 10) (fromInteger 10)
+:q

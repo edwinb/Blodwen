@@ -39,6 +39,7 @@ mutual
        ISearch : annot -> (depth : Nat) -> RawImp annot
        IAlternative : annot -> (unique : Bool) -> 
                       List (RawImp annot) -> RawImp annot
+       ICoerced : annot -> RawImp annot -> RawImp annot
        IPrimVal : annot -> Constant -> RawImp annot
        IHole : annot -> String -> RawImp annot
        IType : annot -> RawImp annot
@@ -194,6 +195,7 @@ getAnnot (IApp x _ _) = x
 getAnnot (IImplicitApp x _ _ _) = x
 getAnnot (ISearch x _) = x
 getAnnot (IAlternative x _ _) = x
+getAnnot (ICoerced x _) = x
 getAnnot (IPrimVal x _) = x
 getAnnot (IHole x _) = x
 getAnnot (IType x) = x
@@ -247,6 +249,7 @@ mutual
         = "%search"
     show (IAlternative _ u alts) 
         = "(|" ++ showSep "," (map show alts) ++ "|)"
+    show (ICoerced _ tm) = show tm
     show (IPrimVal _ y) = show y
     show (IHole _ x) = "?" ++ x
     show (IType _) = "Type"

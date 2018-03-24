@@ -1,0 +1,5 @@
+$1 Stuff.blod < input
+sleep 1
+$1 Stuff.blod < input
+
+rm -rf build

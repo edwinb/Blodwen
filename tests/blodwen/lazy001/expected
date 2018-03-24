@@ -4,8 +4,3 @@ Welcome to Blodwen. Good luck.
 Main> 1 :: (Delay ones) : Stream Integer
 Main> 1 :: (1 :: (1 :: (1 :: Nil))) : List Integer
 Main> Bye for now!
-Processing as TTC
-Welcome to Blodwen. Good luck.
-Main> 1 :: (Delay ones) : Stream Integer
-Main> 1 :: (1 :: (1 :: (1 :: Nil))) : List Integer
-Main> Bye for now!

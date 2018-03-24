@@ -102,6 +102,7 @@ mutual
 
   toPTerm p (ISearch _ d) = pure (PSearch emptyFC d)
   toPTerm p (IAlternative _ _ _) = pure (PImplicit emptyFC)
+  toPTerm p (ICoerced _ tm) = toPTerm p tm
   toPTerm p (IPrimVal _ c) = pure (PPrimVal emptyFC c)
   toPTerm p (IHole _ str) = pure (PHole emptyFC str)
   toPTerm p (IType _) = pure (PType emptyFC)
