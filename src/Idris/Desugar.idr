@@ -191,6 +191,9 @@ mutual
       = desugar (PLam fc RigW Explicit (MN "arg" 0) (PImplicit fc)
                  (POp fc op arg (PRef fc (MN "arg" 0))))
   desugar (PSearch fc depth) = pure $ ISearch fc depth
+  desugar (PPrimVal fc (BI x))
+      = pure $ IAlternative fc False [IPrimVal fc (BI x), 
+                                      IPrimVal fc (I (fromInteger x))]
   desugar (PPrimVal fc x) = pure $ IPrimVal fc x
   desugar (PHole fc holename) = pure $ IHole fc holename
   desugar (PType fc) = pure $ IType fc

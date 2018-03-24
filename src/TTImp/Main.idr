@@ -10,6 +10,7 @@ import Core.ProcessTT
 import Core.RawContext
 import Core.Directory
 import Core.Options
+import Core.Primitives
 
 import TTImp.Elab
 import TTImp.ProcessTTImp
@@ -24,6 +25,8 @@ usageMsg = coreLift $ putStrLn "Usage: ttimp [source file]"
 stMain : Core () ()
 stMain 
     = do c <- newRef Ctxt initCtxt
+         addPrimitives
+
          [_, fname] <- coreLift getArgs | _ => usageMsg
          coreLift $ putStrLn $ "Loading " ++ fname
          u <- newRef UST initUState

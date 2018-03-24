@@ -18,10 +18,16 @@ import Debug.Trace
 topDecl : IndentInfo -> Rule (ImpDecl ())
 collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
 
+expandInt : RawImp () -> RawImp ()
+expandInt (IPrimVal () (BI x)) 
+    = IAlternative () False [IPrimVal () (BI x),
+                             IPrimVal () (I (fromInteger x))]
+expandInt x = x
+
 atom : Rule (RawImp ())
 atom
     = do x <- constant
-         pure (IPrimVal () x)
+         pure (expandInt (IPrimVal () x))
   <|> do keyword "Type"
          pure (IType ())
   <|> do symbol "_"
