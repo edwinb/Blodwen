@@ -190,7 +190,7 @@ operator : Rule String
 operator
     = terminal (\x => case tok x of
                            Symbol s => 
-                                if s `elem` symbols 
+                                if s `elem` reservedSymbols 
                                    then Nothing
                                    else Just s
                            _ => Nothing)

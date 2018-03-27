@@ -807,7 +807,8 @@ mutual
              Just rawtm => 
                do gam <- get Ctxt
                   usedImp bn
-                  (imptm, impty) <- checkImp rigc process elabinfo env nest rawtm (Just (quote (noGam gam) env ty))
+                  (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
+                                             env nest rawtm (Just (quote (noGam gam) env ty))
                   pure imptm
              Nothing =>
               -- In an expression, add a hole
@@ -842,7 +843,8 @@ mutual
              Just rawtm =>
                do gam <- get Ctxt
                   usedImp bn
-                  (imptm, impty) <- checkImp rigc process elabinfo env nest rawtm (Just (quote (noGam gam) env ty))
+                  (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
+                                             env nest rawtm (Just (quote (noGam gam) env ty))
                   pure imptm
              Nothing => 
                -- on the LHS, just treat it as an implicit pattern variable.

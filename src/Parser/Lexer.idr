@@ -78,24 +78,32 @@ keywords = ["data", "module", "where", "let", "in", "do", "record",
 special : List String
 special = ["%lam", "%pi", "%imppi", "%let"]
 
--- Reserved symbols (thing which can't be used a a prefix of other symbols)
+-- Special symbols - things which can't be a prefix of another symbol, and
+-- don't match 'validSymbol'
 export
 symbols : List String
-symbols = [".(", -- for things such as Foo.Bar.(+)
-           "(|", "|)",
-           ".", "%",
-           "(", ")", "{", "}", "[", "]", "`", ",", "|", ";", "_",
-           "<-", "->", "=>", "="]
+symbols 
+    = [".(", -- for things such as Foo.Bar.(+)
+       "(|", "|)",
+       "(", ")", "{", "}", "[", "]", "`", ",", ";", "_"]
 
 validSymbol : Lexer
 validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
+
+-- Valid symbols which have a special meaning so can't be operators
+export
+reservedSymbols : List String
+reservedSymbols
+    = symbols ++ ["=", "|", "<-", "->", "=>"]
+
+symbolChar : Char -> Bool
+symbolChar c = c `elem` unpack ":!#$%&*+./<=>?@\\^|-~"
 
 rawTokens : TokenMap Token
 rawTokens = 
     [(comment, Comment),
      (blockComment, Comment)] ++
-   map (\x => (exact x, Keyword)) special ++
-   map (\x => (exact x, Symbol)) symbols ++
+    map (\x => (exact x, Symbol)) symbols ++
     [(doubleLit, \x => DoubleLit (cast x)),
      (digits, \x => Literal (cast x)),
      (stringLit, \x => StrLit (stripQuotes x)),
