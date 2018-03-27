@@ -49,7 +49,7 @@ readModule loc vis reexp imp as
     = do fname <- nsToPath loc imp
 --          coreLift $ putStrLn ("Importing " ++ fname ++ " as " ++ show as ++ 
 --                               if reexp then " public" else "")
-         Just (syn, more) <- readFromTTC {extra = SyntaxInfo} fname imp as
+         Just (syn, more) <- readFromTTC {extra = SyntaxInfo} loc fname imp as
               | Nothing => pure () -- already loaded
          addImported (imp, reexp, as)
          Desugar.extend syn
@@ -77,7 +77,8 @@ readAsMain : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->
               (fname : String) -> Core FC ()
 readAsMain fname
-    = do Just (syn, more) <- readFromTTC {extra = SyntaxInfo} fname [] []
+    = do Just (syn, more) <- readFromTTC {extra = SyntaxInfo} 
+                                         toplevelFC fname [] []
               | Nothing => pure ()
          Desugar.extend syn
          replNS <- getNS

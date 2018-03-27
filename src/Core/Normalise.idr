@@ -83,7 +83,7 @@ parameters (defs : Defs, holesonly : Bool)
              else NApp (NRef nt fn) stk
     evalDef env loc stk nt fn (Builtin op) = evalOp (getOp op) nt fn stk
     evalDef env loc stk nt fn (DCon tag arity _) = NDCon fn tag arity stk
-    evalDef env loc stk nt fn (TCon tag arity _ _) = NTCon fn tag arity stk
+    evalDef env loc stk nt fn (TCon tag arity _ _ _) = NTCon fn tag arity stk
     evalDef env loc stk nt fn _ = NApp (NRef nt fn) stk
 
     -- Only evaluate the name if its definition is visible in the current 

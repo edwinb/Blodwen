@@ -62,7 +62,7 @@ addFn loc (MkRawFn n ty cs)
     = do tyc <- check loc [] ty TType
          addDef n (newDef tyc Public None)
          csc <- traverse (\x => checkClause loc x) cs
-         addFnDef loc Public (MkFn n tyc csc)
+         addFnDef loc (MkFn n tyc csc)
 
 addData : {auto c : Ref Ctxt Defs} ->
           annot -> (def : RawData) -> Core annot ()

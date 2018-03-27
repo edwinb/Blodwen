@@ -132,8 +132,20 @@ mutual
        MkPTy : FC -> (n : Name) -> (type : PTerm) -> PTypeDecl
 
   public export
+  data DataOpt : Type where
+       SearchBy : List Name -> DataOpt -- determining arguments
+       NoHints : DataOpt -- Don't generate search hints for constructors
+
+  export
+  Eq DataOpt where
+    (==) (SearchBy xs) (SearchBy ys) = xs == ys
+    (==) NoHints NoHints = True
+    (==) _ _ = False
+
+  public export
   data PDataDecl : Type where
        MkPData : FC -> (tyname : Name) -> (tycon : PTerm) ->
+                 (opts : List DataOpt) ->
                  (datacons : List PTypeDecl) -> PDataDecl
 
   public export
@@ -147,8 +159,14 @@ mutual
        LazyNames : Name -> Name -> Name -> Directive
 
   public export
+  data FnOpt : Type where
+       Inline : FnOpt
+       Hint : FnOpt
+       GlobalHint : FnOpt
+
+  public export
   data PDecl : Type where
-       PClaim : FC -> Visibility -> PTypeDecl -> PDecl
+       PClaim : FC -> Visibility -> List FnOpt -> PTypeDecl -> PDecl
        PDef : FC -> Name -> List PClause -> PDecl
        PData : FC -> Visibility -> PDataDecl -> PDecl
        PFixity : FC -> Fixity -> Nat -> OpStr -> PDecl

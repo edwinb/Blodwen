@@ -20,7 +20,8 @@ data TTCErrorMsg
 -- a high level language might need, e.g. file/line number
 public export
 data Error annot
-    = CantConvert annot (Env Term vars) (Term vars) (Term vars)
+    = Fatal (Error annot) -- flag as unrecoverable (so don't postpone awaiting further info)
+    | CantConvert annot (Env Term vars) (Term vars) (Term vars)
     | Cycle annot (Env Term vars) (Term vars) (Term vars)
     | WhenUnifying annot (Env Term vars) (Term vars) (Term vars) (Error annot)
     | ValidCase annot (Env Term vars) (Either (Term vars) (Error annot))
@@ -68,6 +69,7 @@ Show TTCErrorMsg where
 -- and display annotations appropriately
 export
 Show annot => Show (Error annot) where
+  show (Fatal err) = show err
   show (CantConvert fc env x y) 
       = show fc ++ ":Type mismatch: " ++ show x ++ " and " ++ show y
   show (Cycle fc env x y) 

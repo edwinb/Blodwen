@@ -22,7 +22,7 @@ import Data.Buffer
 -- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 ttcVersion : Int
-ttcVersion = 1
+ttcVersion = 2
 
 checkTTCVersion : Int -> Int -> Core annot ()
 checkTTCVersion ver exp
@@ -100,7 +100,8 @@ writeToTTC extradata fname
          let defs' = mkSaveDefs (getSave defs) 
                          (record { options = options defs,
                                    imported = imported defs,
-                                   currentNS = currentNS defs } initCtxt)
+                                   currentNS = currentNS defs
+                                 } initCtxt)
                          defs
          toBuf buf (MkTTCFile ttcVersion (holes ust) (constraints ust) defs'
                               extradata)
@@ -117,11 +118,12 @@ export
 readFromTTC : (TTC annot annot, TTC annot extra) =>
               {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
+              annot ->
               (fname : String) -> -- file containing the module
               (modNS : List String) -> -- module namespace
               (importAs : List String) -> -- namespace to import as
               Core annot (Maybe (extra, List (List String, Bool, List String)))
-readFromTTC fname modNS importAs
+readFromTTC loc fname modNS importAs
     = do defs <- get Ctxt
          -- If it's already in the context, don't load it again
          let False = (fname, importAs) `elem` allImported defs
@@ -139,7 +141,7 @@ readFromTTC fname modNS importAs
          let renamed = context ttc
 
          -- Extend the current context with the updated definitions from the ttc
-         extendAs modNS importAs renamed
+         extendAs loc modNS importAs renamed
          setNS (currentNS (context ttc))
 
          -- Finally, update the unification state with the holes from the

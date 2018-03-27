@@ -136,6 +136,7 @@ data Def : Type where
 			       Def
      TCon  : (tag : Int) -> (arity : Nat) -> 
 						 (parampos : List Nat) -> -- argument positions which are parametric
+             (detpos : List Nat) -> -- argument postitions for determining auto search
 						 (datacons : List Name) -> 
 			       Def
      Hole : (numlocs : Nat) -> (pvar : Bool) -> Def 
@@ -163,9 +164,10 @@ Show Def where
       showHole h = if h then "Solved hole" else "Def"
   show (Builtin {arity} f)
       = "<<builtin with " ++ show arity ++ " arguments>>"
-  show (TCon tag arity params cons)
+  show (TCon tag arity params dets cons)
 	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ "; params " ++
-        show params ++ "; constructors " ++ show cons
+        show params ++ "; determining " ++ show dets ++ 
+        "; constructors " ++ show cons
   show (DCon tag arity forced)
       = "DataCon " ++ show tag ++ "; arity " ++ show arity ++ 
         "; forced positions " ++ show forced
@@ -187,8 +189,9 @@ TTC annot Def where
       = throw (InternalError "Trying to serialise a Builtin")
   toBuf b (DCon t arity forcedpos) 
       = do tag 2; toBuf b t; toBuf b arity; toBuf b forcedpos
-  toBuf b (TCon t arity parampos datacons) 
-      = do tag 3; toBuf b t; toBuf b arity; toBuf b parampos; toBuf b datacons
+  toBuf b (TCon t arity parampos detpos datacons) 
+      = do tag 3; toBuf b t; toBuf b arity; toBuf b parampos; 
+           toBuf b detpos; toBuf b datacons
   toBuf b (Hole numlocs pvar) 
       = do tag 4; toBuf b numlocs; toBuf b pvar
   toBuf b (BySearch k) 
@@ -206,8 +209,8 @@ TTC annot Def where
                      pure (PMDef x y z)
              2 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (DCon x y z)
-             3 => do w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
-                     pure (TCon w x y z)
+             3 => do v <- fromBuf s b; w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+                     pure (TCon v w x y z)
              4 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (Hole x y)
              5 => do x <- fromBuf s b
@@ -274,7 +277,7 @@ getRefs None = []
 getRefs (PMDef ishole args sc) = getRefs sc
 getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
-getRefs (TCon tag arity params datacons) = []
+getRefs (TCon tag arity params dets datacons) = []
 getRefs (Hole numlocs _) = []
 getRefs (BySearch _) = []
 getRefs ImpBind = []
@@ -399,12 +402,6 @@ lookupDefTyExact : Name -> Gamma -> Maybe (Def, ClosedTerm)
 lookupDefTyExact n gam 
     = do def <- lookupGlobalExact n gam
          pure (definition def, type def)
-
-export
-lookupDefTyVisExact : Name -> Gamma -> Maybe (Def, ClosedTerm, Visibility)
-lookupDefTyVisExact n gam 
-    = do def <- lookupGlobalExact n gam
-         pure (definition def, type def, visibility def)
 
 export
 lookupDefTyName : Name -> Gamma -> List (Name, Def, ClosedTerm)
@@ -561,27 +558,6 @@ getDirs : {auto c : Ref Ctxt Defs} -> Core annot Dirs
 getDirs
     = do defs <- get Ctxt
          pure (dirs (options defs))
-
--- Extend the context with the definitions/options given in the second
--- New options override current ones
-export
-extend : {auto c : Ref Ctxt Defs} ->
-         Defs -> Core annot ()
-extend new
-    = do ctxt <- get Ctxt
-         put Ctxt (record { gamma $= mergeContext (gamma new),
-                            options $= mergeOptions (options new) } ctxt)
-
-export
-extendAs : {auto c : Ref Ctxt Defs} ->
-           List String -> List String -> 
-           Defs -> Core annot ()
-extendAs modNS importAs new
-    = if modNS == importAs 
-         then extend new
-         else do ctxt <- get Ctxt
-                 put Ctxt (record { gamma $= mergeContextAs modNS importAs (gamma new),
-                                    options $= mergeOptions (options new) } ctxt)
 
 -- Set the default namespace for new definitions
 export
@@ -758,84 +734,6 @@ updateTy n ty
                    let gdef = record { type = ty } odef in
                        setCtxt (addCtxt n gdef g)
  
-export
-setFlag : {auto x : Ref Ctxt Defs} ->
-					annot -> Name -> DefFlag -> Core annot ()
-setFlag loc n fl
-    = do ctxt <- getCtxt
-         case lookupGlobalExact n ctxt of
-              Nothing => throw (UndefinedName loc n)
-              Just def =>
-                   do let flags' = fl :: filter (/= fl) (flags def)
-                      addDef n (record { flags = flags' } def)
-
-export
-unsetFlag : {auto x : Ref Ctxt Defs} ->
-            annot -> Name -> DefFlag -> Core annot ()
-unsetFlag loc n fl
-    = do ctxt <- getCtxt
-         case lookupGlobalExact n ctxt of
-              Nothing => throw (UndefinedName loc n)
-              Just def =>
-                   do let flags' = filter (/= fl) (flags def)
-                      addDef n (record { flags = flags' } def)
-
-export
-hasFlag : {auto x : Ref Ctxt Defs} ->
-          annot -> Name -> DefFlag -> Core annot Bool
-hasFlag loc n fl
-    = do ctxt <- getCtxt
-         case lookupGlobalExact n ctxt of
-              Nothing => throw (UndefinedName loc n)
-              Just def => pure (fl `elem` flags def)
-
-export
-setTotality : {auto x : Ref Ctxt Defs} ->
-              annot -> Name -> Totality -> Core annot ()
-setTotality loc n tot
-    = do ctxt <- getCtxt
-         case lookupGlobalExact n ctxt of
-              Nothing => throw (UndefinedName loc n)
-              Just def => 
-                   addDef n (record { totality = tot } def)
-
-export
-getTotality : {auto x : Ref Ctxt Defs} ->
-              annot -> Name -> Core annot Totality
-getTotality loc n
-    = do ctxt <- getCtxt
-         case lookupGlobalExact n ctxt of
-              Nothing => throw (UndefinedName loc n)
-              Just def => pure $ totality def
-
-export
-setVisibility : {auto x : Ref Ctxt Defs} ->
-                annot -> Name -> Visibility -> Core annot ()
-setVisibility loc n vis
-    = do ctxt <- getCtxt
-         case lookupGlobalExact n ctxt of
-              Nothing => throw (UndefinedName loc n)
-              Just def => 
-                   addDef n (record { visibility = vis } def)
-
-export
-getVisibility : {auto x : Ref Ctxt Defs} ->
-                annot -> Name -> Core annot Visibility
-getVisibility loc n
-    = do ctxt <- getCtxt
-         case lookupGlobalExact n ctxt of
-              Nothing => throw (UndefinedName loc n)
-              Just def => pure $ visibility def
-
-export
-isTotal : {auto x : Ref Ctxt Defs} ->
-          annot -> Name -> Core annot Bool
-isTotal loc n
-    = do t <- getTotality loc n
-         case t of
-              Total => pure True
-              _ => pure False
-
 -- Check that the names used in the term don't conflict with the visibility
 -- of the name. No name in the term, defined in the same namespace,
 -- can have lower visibility than the given name and visibility.
@@ -896,17 +794,19 @@ simpleCase loc fn def clauses
               Left err => throw (CaseCompile loc fn err)
               Right ok => pure ok
 
+-- Add a function definition, as long as the type exists already
 export
 addFnDef : {auto x : Ref Ctxt Defs} ->
-					 annot -> Visibility ->
-           FnDef -> Core annot ()
-addFnDef loc vis (MkFn n ty clauses) 
-    = do let cs = map toClosed clauses
-         (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
---          coreLift $ putStrLn $ "Case tree for " ++ show n ++ ": " 
--- 				             ++ show args ++ "\n" ++ show cs ++ "\n" ++ show tree
-         let def = newDef ty vis (PMDef False args tree)
-         addDef n def
+					 annot -> FnDef -> Core annot ()
+addFnDef loc (MkFn n ty clauses) 
+    = do ctxt <- get Ctxt
+         case lookupGlobalExact n (gamma ctxt) of
+              Just def => 
+                 do let cs = map toClosed clauses
+                    (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
+                    let def' = record { definition = PMDef False args tree } def
+                    addDef n def'
+              Nothing => throw (NoDeclaration loc n)
   where
     close : Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm
     close i plets [] tm = tm
@@ -986,10 +886,15 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
          tag <- getNextTypeTag 
          let tydef = newDef tycon vis (TCon tag arity 
                                             (paramPos tyn (map type datacons))
+                                            (allDet arity)
                                             (map name datacons))
          let gam' = addCtxt tyn tydef gam
          setCtxt (addDataConstructors 0 datacons gam')
   where
+    allDet : Nat -> List Nat
+    allDet Z = []
+    allDet (S k) = [0..k]
+
     conVisibility : Visibility -> Visibility
     conVisibility Export = Private
     conVisibility x = x
@@ -1022,6 +927,149 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
              let gam' = addCtxt n condef gam
              addDataConstructors (tag + 1) cs gam'
 
+-- Get the auto search data for a name. That's: determining arguments
+-- (the first element of the pair), and all the names that might solve a goal
+-- of the given type (constructors, local hints, global hints, in that order)
+export
+getSearchData : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot (List Nat, List Name)
+getSearchData loc target
+    = do defs <- get Ctxt
+         case lookupDefExact target (gamma defs) of
+              Just (TCon _ _ _ dets cons) => 
+                   do let hs = case lookupCtxtExact target (typeHints defs) of
+                                    Nothing => []
+                                    Just ns => ns
+                      pure (dets, hs ++ autoHints defs)
+              _ => throw (UndefinedName loc target)
+
+export
+setDetermining : {auto x : Ref Ctxt Defs} ->
+                 annot -> Name -> List Name -> Core annot ()
+setDetermining loc tn args
+    = do defs <- get Ctxt
+         case lookupGlobalExact tn (gamma defs) of
+              Just g =>
+                   case definition g of
+                        TCon t a ps _ cons =>
+                          do apos <- getPos 0 args (type g)
+                             let g' = record { definition = 
+                                                TCon t a ps apos cons } g
+                             put Ctxt (record { gamma $= addCtxt tn g' } defs)
+                        _ => throw (UndefinedName loc tn)
+              _ => throw (UndefinedName loc tn)
+  where
+    -- Type isn't normalised, but the argument names refer to those given 
+    -- explicitly in the type, so there's no need.
+    getPos : Nat -> List Name -> Term vs -> Core annot (List Nat)
+    getPos i ns (Bind x (Pi _ _ _) sc)
+        = if x `elem` ns 
+             then do rest <- getPos (1 + i) (filter (/=x) ns) sc
+                     pure $ i :: rest
+             else getPos (1 + i) ns sc
+
+    getPos _ [] _ = pure []
+    getPos _ ns ty = throw (GenericMsg loc ("Unknown determining arguments: "
+                           ++ showSep ", " (map show ns)))
+
+export
+runWithCtxt : Show annot => Core annot () -> IO ()
+runWithCtxt prog = coreRun prog 
+                           (\err => printLn err)
+                           (\ok => pure ())
+
+-- Return whether an argument to the given term would be a forced argument
+export
+isForcedArg : Gamma -> Term vars -> Bool
+isForcedArg gam tm with (unapply tm)
+  isForcedArg gam (apply (Ref (DataCon _ _) n) args) | ArgsList 
+      = case lookupDefExact n gam of
+             Just (DCon _ _ forcedpos)
+						    -- if the number of args so far is in forcedpos, then
+								-- the next argument position is indeed forced
+                   => length args `elem` forcedpos
+             _ => False
+  isForcedArg gam (apply f args) | ArgsList = False
+
+export
+setFlag : {auto x : Ref Ctxt Defs} ->
+					annot -> Name -> DefFlag -> Core annot ()
+setFlag loc n fl
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def =>
+                   do let flags' = fl :: filter (/= fl) (flags def)
+                      addDef n (record { flags = flags' } def)
+
+export
+unsetFlag : {auto x : Ref Ctxt Defs} ->
+            annot -> Name -> DefFlag -> Core annot ()
+unsetFlag loc n fl
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def =>
+                   do let flags' = filter (/= fl) (flags def)
+                      addDef n (record { flags = flags' } def)
+
+export
+hasFlag : {auto x : Ref Ctxt Defs} ->
+          annot -> Name -> DefFlag -> Core annot Bool
+hasFlag loc n fl
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure (fl `elem` flags def)
+
+export
+setTotality : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Totality -> Core annot ()
+setTotality loc n tot
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { totality = tot } def)
+
+export
+getTotality : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Core annot Totality
+getTotality loc n
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure $ totality def
+
+export
+setVisibility : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> Visibility -> Core annot ()
+setVisibility loc n vis
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { visibility = vis } def)
+
+export
+getVisibility : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot Visibility
+getVisibility loc n
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure $ visibility def
+
+export
+isTotal : {auto x : Ref Ctxt Defs} ->
+          annot -> Name -> Core annot Bool
+isTotal loc n
+    = do t <- getTotality loc n
+         case t of
+              Total => pure True
+              _ => pure False
+
+
 export
 addToTypeHints : Name -> Name -> Defs -> Defs
 addToTypeHints ty hint defs
@@ -1051,36 +1099,49 @@ addGlobalHint loc hint
          put Ctxt (record { autoHints $= (hint ::) } d)
          setFlag loc hint GlobalHint
 
--- Get all the names that might solve a goal of the given type
--- (constructors, local hints, global hints, in that order)
-export
-getHintsFor : {auto x : Ref Ctxt Defs} ->
-							annot -> Name -> Core annot (List Name)
-getHintsFor loc target
-    = do defs <- get Ctxt
-         case lookupDefExact target (gamma defs) of
-              Just (TCon _ _ _ cons) => 
-                   do let hs = case lookupCtxtExact target (typeHints defs) of
-                                    Nothing => []
-                                    Just ns => ns
-                      pure (hs ++ cons ++ autoHints defs)
-              _ => throw (UndefinedName loc target)
 
-export
-runWithCtxt : Show annot => Core annot () -> IO ()
-runWithCtxt prog = coreRun prog 
-                           (\err => printLn err)
-                           (\ok => pure ())
+processFlags : {auto c : Ref Ctxt Defs} ->
+               annot -> (Name, GlobalDef) -> Core annot ()
+processFlags loc (n, def)
+    = do traverse processFlag (flags def)
+         pure ()
+  where
+    processFlag : DefFlag -> Core annot ()
+    processFlag (TypeHint ty)
+        = addHintFor loc ty n
+    processFlag GlobalHint
+        = addGlobalHint loc n
+    processFlag _ = pure () 
 
--- Return whether an argument to the given term would be a forced argument
+-- Extend the context with the definitions/options given in the second
+-- New options override current ones
 export
-isForcedArg : Gamma -> Term vars -> Bool
-isForcedArg gam tm with (unapply tm)
-  isForcedArg gam (apply (Ref (DataCon _ _) n) args) | ArgsList 
-      = case lookupDefExact n gam of
-             Just (DCon _ _ forcedpos)
-						    -- if the number of args so far is in forcedpos, then
-								-- the next argument position is indeed forced
-                   => length args `elem` forcedpos
-             _ => False
-  isForcedArg gam (apply f args) | ArgsList = False
+extend : {auto c : Ref Ctxt Defs} ->
+         annot -> Defs -> Core annot ()
+extend loc new
+    = do ctxt <- get Ctxt
+         put Ctxt (record { gamma $= mergeContext (gamma new),
+                            options $= mergeOptions (options new)
+                          } ctxt)
+         -- Process any flags that need processing in the newly added
+         -- thing (e.g. whether they are search hints)
+         traverse (processFlags loc) (toList (gamma new))
+         pure ()
+
+-- TODO: Need to do the actual renaming in mergeContextAs and before processFlags!
+export
+extendAs : {auto c : Ref Ctxt Defs} ->
+           annot -> List String -> List String -> 
+           Defs -> Core annot ()
+extendAs loc modNS importAs new
+    = if modNS == importAs 
+         then extend loc new
+         else do ctxt <- get Ctxt
+                 put Ctxt (record { gamma $= mergeContextAs modNS importAs (gamma new),
+                                    options $= mergeOptions (options new)
+                                  } ctxt)
+                 -- Process any flags that need processing in the newly added
+                 -- thing (e.g. whether they are search hints)
+                 traverse (processFlags loc) (toList (gamma new))
+                 pure ()
+

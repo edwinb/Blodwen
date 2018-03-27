@@ -168,13 +168,13 @@ processDef : {auto c : Ref Ctxt Defs} ->
 processDef elab env nest loc n_in cs_raw
     = do gam <- getCtxt
          n <- inCurrentNS n_in
-         case lookupDefTyVisExact n gam of
+         case lookupDefTyExact n gam of
               Nothing => throw (NoDeclaration loc n)
-              Just (None, ty, vis) =>
+              Just (None, ty) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
                    -- Any non user defined holes should be resolved by now
                    checkUserHoles loc True
-                   addFnDef loc vis (MkFn n ty (mapMaybe id cs))
+                   addFnDef loc (MkFn n ty (mapMaybe id cs))
                    addToSave n
                    gam <- getCtxt
                    log 3 $
@@ -183,4 +183,4 @@ processDef elab env nest loc n_in cs_raw
                               "Case tree for " ++ show n ++ "\n\t" ++
                               show args ++ " " ++ show t
                            _ => "No case tree for " ++ show n
-              Just (_, ty, _) => throw (AlreadyDefined loc n)
+              Just (_, ty) => throw (AlreadyDefined loc n)

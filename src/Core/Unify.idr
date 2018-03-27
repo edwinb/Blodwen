@@ -61,9 +61,25 @@ try elab1 elab2
     = do ctxt <- get Ctxt
          ust <- get UST
          catch elab1
-               (\err => do put Ctxt ctxt
-                           put UST ust
-                           elab2)
+               (\err => case err of
+                             Fatal e => throw e
+                             _ => do put Ctxt ctxt
+                                     put UST ust
+                                     elab2)
+
+-- try one elaborator; if it fails, try another
+export
+handleError : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+      Core annot a -> (Error annot -> Core annot a) -> Core annot a
+handleError elab1 elab2
+    = do ctxt <- get Ctxt
+         ust <- get UST
+         catch elab1
+               (\err => case err of
+                             Fatal e => throw e
+                             _ => do put Ctxt ctxt
+                                     put UST ust
+                                     elab2 err)
 
 unifyArgs : (Unify tm, Quote tm) =>
             {auto c : Ref Ctxt Defs} ->

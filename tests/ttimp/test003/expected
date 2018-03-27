@@ -1,17 +1,12 @@
 Welcome to TTImp. Good luck.
 Loading auto.tti
 Processing as TTImp
-LOG 0: Auto implicit search: Main.List.{h:84} for (Main.List.Elem {a:79} y xs)
-Blodwen> LOG 0: Auto implicit search: Main.{h:126} for (Main.List.Elem Integer 3 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
-3 : Integer
-Blodwen> LOG 0: Auto implicit search: Main.{h:140} for (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
-():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
+Blodwen> 3 : Integer
+Blodwen> ():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
 Loading build/auto.ttc
 Processing as TTC
-Blodwen> LOG 0: Auto implicit search: Main.{h:5} for (Main.List.Elem Integer 3 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
-3 : Integer
-Blodwen> LOG 0: Auto implicit search: Main.{h:19} for (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
-():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
+Blodwen> 3 : Integer
+Blodwen> ():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
 Blodwen> Bye for now!

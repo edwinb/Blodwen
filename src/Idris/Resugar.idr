@@ -130,14 +130,14 @@ mutual
             {auto s : Ref Syn SyntaxInfo} ->
             ImpData annot -> Core FC PDataDecl
   toPData (MkImpData _ n ty cs)
-      = pure (MkPData emptyFC n !(toPTerm startPrec ty)
+      = pure (MkPData emptyFC n !(toPTerm startPrec ty) []
                    !(traverse toPTypeDecl cs))
 
   toPDecl : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             ImpDecl annot -> Core FC (Maybe PDecl)
   toPDecl (IClaim _ vis ty) 
-      = pure (Just (PClaim emptyFC vis !(toPTypeDecl ty)))
+      = pure (Just (PClaim emptyFC vis [] !(toPTypeDecl ty)))
   toPDecl (IDef _ n cs)
       = pure (Just (PDef emptyFC n !(traverse toPClause cs)))
   toPDecl (IData _ vis d)

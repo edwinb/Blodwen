@@ -413,8 +413,8 @@ mutual
   expr : FileName -> IndentInfo -> Rule PTerm
   expr = typeExpr
 
-visibility : EmptyRule Visibility
-visibility
+visOption : Rule Visibility
+visOption
     = do keyword "public"
          keyword "export"
          pure Public
@@ -422,6 +422,10 @@ visibility
          pure Export
   <|> do keyword "private"
          pure Private
+
+visibility : EmptyRule Visibility
+visibility
+    = visOption
   <|> pure Private
 
 tyDecl : FileName -> IndentInfo -> Rule PTypeDecl
@@ -502,7 +506,15 @@ simpleData fname start n indents
                         (simpleCon fname conRetTy indents)
          end <- location
          pure (MkPData (MkFC fname start end) n
-                       (mkTyConType tyfc params) cons)
+                       (mkTyConType tyfc params) [] cons)
+
+dataOpt : Rule DataOpt
+dataOpt
+    = do exactIdent "noHints"
+         pure NoHints
+  <|> do exactIdent "search"
+         ns <- some name
+         pure (SearchBy ns)
 
 gadtData : FileName -> FilePos -> Name -> IndentInfo -> Rule PDataDecl
 gadtData fname start n indents
@@ -510,9 +522,13 @@ gadtData fname start n indents
          commit
          ty <- expr fname indents
          keyword "where"
+         opts <- option [] (do symbol "["
+                               dopts <- sepBy1 (symbol ",") dataOpt
+                               symbol "]"
+                               pure dopts)
          cs <- block (tyDecl fname)
          end <- location
-         pure (MkPData (MkFC fname start end) n ty cs)
+         pure (MkPData (MkFC fname start end) n ty opts cs)
 
 dataDecl : FileName -> IndentInfo -> Rule PDataDecl
 dataDecl fname indents
@@ -549,6 +565,36 @@ namespaceDecl
          ns <- namespace_
          pure ns
 
+fnOpt : Rule FnOpt
+fnOpt
+    = do exactIdent "hint"
+         pure Hint
+  <|> do exactIdent "globalhint"
+         pure GlobalHint
+  <|> do exactIdent "inline"
+         pure Inline
+
+visOpt : Rule (Either Visibility FnOpt)
+visOpt
+    = do vis <- visOption
+         pure (Left vis)
+  <|> do symbol "%"
+         opt <- fnOpt
+         pure (Right opt)
+
+getVisibility : Maybe Visibility -> List (Either Visibility FnOpt) -> 
+                EmptyRule Visibility
+getVisibility Nothing [] = pure Private
+getVisibility (Just vis) [] = pure vis
+getVisibility Nothing (Left x :: xs) = getVisibility (Just x) xs
+getVisibility (Just vis) (Left x :: xs)
+   = fail $ "Multiple visibility modifiers"
+getVisibility v (_ :: xs) = getVisibility v xs
+
+getRight : Either a b -> Maybe b
+getRight (Left _) = Nothing
+getRight (Right v) = Just v
+
 -- Declared at the top
 -- topDecl : FileName -> IndentInfo -> Rule (List PDecl)
 topDecl fname indents
@@ -563,7 +609,7 @@ topDecl fname indents
          ds <- assert_total (nonEmptyBlock (topDecl fname))
          pure [PNamespace (MkFC fname start end) ns (concat ds)]
   <|> do start <- location
-         symbol "%"; commit
+         symbol "%" 
          d <- directive indents
          end <- location
          pure [PDirective (MkFC fname start end) d]
@@ -575,10 +621,12 @@ topDecl fname indents
          end <- location
          pure (map (PFixity (MkFC fname start end) fixity (cast prec)) ops)
   <|> do start <- location
-         vis <- visibility
+         visOpts <- many visOpt
+         vis <- getVisibility Nothing visOpts
+         let opts = mapMaybe getRight visOpts
          claim <- tyDecl fname indents
          end <- location
-         pure [PClaim (MkFC fname start end) vis claim]
+         pure [PClaim (MkFC fname start end) vis opts claim]
   <|> do start <- location
          nd <- clause fname indents
          end <- location

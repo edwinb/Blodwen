@@ -56,7 +56,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw cons_raw)
          let arity = getArity gam [] ty'
          -- Add a temporary type constructor, to use while checking
          -- data constructors (tag is meaningless here, so just set to 0)
-         addDef n (newDef ty' Public (TCon 0 arity [] []))
+         addDef n (newDef ty' Public (TCon 0 arity [] [] []))
          
          -- Constructors are private if the data type as a whole is
          -- export

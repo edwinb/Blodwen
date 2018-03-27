@@ -408,7 +408,7 @@ mutual
                         = case def of
                              PMDef _ _ _ => Func
                              DCon tag arity _ => DataCon tag arity
-                             TCon tag arity _ _ => TyCon tag arity
+                             TCon tag arity _ _ _ => TyCon tag arity
                              _ => Func
                (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                if topLevel elabinfo ||
@@ -482,7 +482,7 @@ mutual
             = if sameVar var x then ppos else True
         asParam gam ppos var (apply (Ref nt n) args) | ArgsList
             = case lookupDefExact n gam of
-                   Just (TCon _ _ ps _)
+                   Just (TCon _ _ ps _ _)
                      => asParamArgs gam var 0 ps args
                    _ => all (asParam gam False var) args
           where
@@ -830,6 +830,7 @@ mutual
                         put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
                                           toBind $= ((hn, (tm, expected)) :: ) } est)
                         pure tm
+
   makeAutoImplicit 
           : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
@@ -855,7 +856,7 @@ mutual
                     _ => 
                        do gam <- get Ctxt
                           n <- addSearchable loc env (quote (noGam gam) env ty) 500
-                          log 0 $ "Auto implicit search: " ++ show n ++
+                          log 5 $ "Initiate search: " ++ show n ++
                                   " for " ++ show (quote (noGam gam) env ty)
                           solveConstraints InTerm False
                           pure (mkConstantApp n env)

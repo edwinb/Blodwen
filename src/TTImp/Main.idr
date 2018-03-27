@@ -36,7 +36,7 @@ stMain
                                makeBuildDirectory (pathToNS fname)
                                writeToTTC () !(getTTCFileName fname)
               (_, ".ttc") => do coreLift $ putStrLn "Processing as TTC"
-                                readFromTTC {extra = ()} fname [] []
+                                readFromTTC {extra = ()} () fname [] []
                                 dumpConstraints 0 True
               _ => do coreLift $ putStrLn "Processing as TTImp"
                       ProcessTTImp.process fname
