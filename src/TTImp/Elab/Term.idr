@@ -853,8 +853,15 @@ mutual
                     InLHS => 
                        do gam <- get Ctxt
                           hn <- genName (nameRoot bn)
-                          addNamedHole loc hn False env (quote (noGam gam) env ty)
-                          pure (mkConstantApp hn env)
+                          -- Add as a pattern variable, but let it unify with other
+                          -- things, hence 'False' as an argument to addBoundName
+                          let expected = quote (noGam gam) env ty
+                          tm <- addBoundName loc hn False env expected
+                          log 5 $ "Added Bound implicit " ++ show (hn, (tm, expected))
+                          est <- get EST
+                          put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
+                                            toBind $= ((hn, (tm, expected)) :: ) } est)
+                          pure tm
                     _ => 
                        do gam <- get Ctxt
                           n <- addSearchable loc env (quote (noGam gam) env ty) 500
