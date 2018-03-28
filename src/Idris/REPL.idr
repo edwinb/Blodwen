@@ -79,7 +79,7 @@ repl
     = do ns <- getNS
          coreLift (putStr (showSep "." (reverse ns) ++ "> "))
          inp <- coreLift getLine
-         case runParser inp command of
+         case runParser inp (do c <- command; eoi; pure c) of
               Left err => do coreLift (printLn err)
                              repl
               Right cmd =>

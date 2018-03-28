@@ -1,0 +1,5 @@
+cmp (S Z) (S (S Z))
+cmp (S (S Z)) (S Z)
+Just (S (S Z)) == Just (S Z)
+Just (S (S Z)) /= Just (S Z)
+:q

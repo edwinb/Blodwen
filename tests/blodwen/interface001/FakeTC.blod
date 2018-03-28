@@ -1,0 +1,105 @@
+-- Faking interfaces with auto implicits. This is how the underlying 
+-- interface mechanism should work.
+
+module FakeTC
+
+import Stuff
+
+public export
+data Show : (a : Type) -> Type where 
+     [noHints, search a]
+     MkShow : (show : a -> String) -> Show a
+
+export
+show : {auto c : Show a} -> a -> String
+show {c = MkShow show'} x = show' x
+
+showNat : Nat -> String
+showNat Z = "Z"
+showNat (S k) = "s" -- (showNat k)
+
+%hint
+ShowNat : Show Nat
+ShowNat = MkShow showNat
+
+%hint
+ShowBool : Show Bool
+ShowBool = MkShow (\b => case b of
+                              True => "True"
+                              False => "False")
+
+-- Interface
+public export
+data Eq : (a : Type) -> Type where
+     [noHints, search a]
+     MkEq : (eq : a -> a -> Bool) -> (neq : a -> a -> Bool) -> Eq a
+
+infixl 5 ==, /=
+
+-- Signatures
+(==) : {auto c : Eq a} -> a -> a -> Bool
+(/=) : {auto c : Eq a} -> a -> a -> Bool
+
+-- Top level method bodies
+(==) {c = MkEq eq' neq'} x y = eq' x y
+(/=) {c = MkEq eq' neq'} x y = neq' x y
+
+-- Default definitions
+defaultEq : {auto c : Eq a} -> a -> a -> Bool
+defaultEq x y = not (x /= y)
+
+defaultNotEq : {auto c : Eq a} -> a -> a -> Bool
+defaultNotEq x y = not (x == y)
+
+-- Done!
+
+-- e.g. Nat
+
+-- Instance type
+%hint
+EqNat : Eq Nat
+
+-- Method bodies
+
+eqNat : Nat -> Nat -> Bool
+eqNat Z Z = True
+eqNat (S j) (S k) = j == k
+eqNat _ _ = False
+
+-- Rest of instance, populated with defaults where necessary
+-- (we'll actually need to specialise the default definition in practice...)
+EqNat = MkEq eqNat defaultNotEq
+
+%hint
+EqMaybe : {auto c : Eq a} -> Eq (Maybe a)
+
+eqMaybe : {auto c : Eq a} -> Maybe a -> Maybe a -> Bool
+eqMaybe Nothing Nothing = True
+eqMaybe (Just x) (Just y) = x == y
+eqMaybe _ _ = False
+
+EqMaybe = MkEq eqMaybe defaultNotEq
+
+public export
+data Compare = LT | EQ | GT
+
+public export
+data Ord : (a : Type) -> Type where
+     MkOrd : {auto eqc : Eq a} ->
+             (cmp : a -> a -> Compare) -> Ord a
+
+-- %logging 5
+cmp : {auto c : Ord a} -> a -> a -> Compare
+cmp {c = MkOrd cmp'} x y = cmp' x y
+-- %logging 0
+
+cmpNat : Nat -> Nat -> Compare
+cmpNat Z Z = EQ
+cmpNat Z (S k) = LT
+cmpNat (S k) Z = GT
+cmpNat (S x) (S y) = cmpNat x y
+
+%hint
+ordNat : Ord Nat
+ordNat = MkOrd cmpNat
+
