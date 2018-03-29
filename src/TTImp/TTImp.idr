@@ -58,16 +58,34 @@ mutual
        PatClause : annot -> (lhs : RawImp annot) -> (rhs : RawImp annot) ->
                    ImpClause annot
        ImpossibleClause : annot -> (lhs : RawImp annot) -> ImpClause annot
-       -- To add: WithClause
+       -- TODO: WithClause
+  
+  public export
+  data DataOpt : Type where
+       SearchBy : List Name -> DataOpt -- determining arguments
+       NoHints : DataOpt -- Don't generate search hints for constructors
+
+  export
+  Eq DataOpt where
+    (==) (SearchBy xs) (SearchBy ys) = xs == ys
+    (==) NoHints NoHints = True
+    (==) _ _ = False
 
   public export
   data ImpData : Type -> Type where
        MkImpData : annot -> (n : Name) -> (tycon : RawImp annot) ->
+                   (opts : List DataOpt) ->
                    (datacons : List (ImpTy annot)) -> ImpData annot
+  
+  public export
+  data FnOpt : Type where
+       Inline : FnOpt
+       Hint : FnOpt
+       GlobalHint : FnOpt
 
   public export
   data ImpDecl : Type -> Type where
-       IClaim : annot -> Visibility -> ImpTy annot -> ImpDecl annot
+       IClaim : annot -> Visibility -> List FnOpt -> ImpTy annot -> ImpDecl annot
        IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
        IData : annot -> Visibility -> ImpData annot -> ImpDecl annot
        INamespace : annot -> List String -> List (ImpDecl annot) ->
@@ -179,8 +197,8 @@ definedInBlock = concatMap defName
     getName (MkImpTy _ n _) = n
 
     defName : ImpDecl annot -> List Name
-    defName (IClaim _ _ ty) = [getName ty]
-    defName (IData _ _ (MkImpData _ n _ cons)) = n :: map getName cons
+    defName (IClaim _ _ _ ty) = [getName ty]
+    defName (IData _ _ (MkImpData _ n _ _ cons)) = n :: map getName cons
     defName _ = []
 
 export
@@ -269,13 +287,13 @@ mutual
 
   export
   Show (ImpData annot) where
-    show (MkImpData _ n tycon dcons)
+    show (MkImpData _ n tycon dopts dcons)
         = "data " ++ show n ++ " : " ++ show tycon ++ " where {\n\t" ++
           showSep "\n\t" (map show dcons) ++ "\n}"
 
   export
   Show (ImpDecl annot) where
-    show (IClaim _ _ ty) = show ty
+    show (IClaim _ _ _ ty) = show ty
     show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                          showSep "\n\t" (map show cs)
     show (IData _ _ d) = show d

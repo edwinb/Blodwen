@@ -123,6 +123,7 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          
          (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs' lhsty'
          log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
+         log 5 ("Checking RHS: " ++ show rhs_raw)
          rhs <- wrapError (InRHS loc defining) $
                 checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
 

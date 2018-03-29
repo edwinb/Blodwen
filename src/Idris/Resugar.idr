@@ -116,7 +116,8 @@ mutual
               ImpClause annot -> Core FC PClause
   toPClause (PatClause _ lhs rhs)
       = pure (MkPatClause emptyFC !(toPTerm startPrec lhs)
-                                  !(toPTerm startPrec rhs))
+                                  !(toPTerm startPrec rhs)
+                                  [])
   toPClause (ImpossibleClause _ lhs)
       = pure (MkImpossible emptyFC !(toPTerm startPrec lhs))
 
@@ -129,15 +130,15 @@ mutual
   toPData : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             ImpData annot -> Core FC PDataDecl
-  toPData (MkImpData _ n ty cs)
-      = pure (MkPData emptyFC n !(toPTerm startPrec ty) []
+  toPData (MkImpData _ n ty opts cs)
+      = pure (MkPData emptyFC n !(toPTerm startPrec ty) opts
                    !(traverse toPTypeDecl cs))
 
   toPDecl : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             ImpDecl annot -> Core FC (Maybe PDecl)
-  toPDecl (IClaim _ vis ty) 
-      = pure (Just (PClaim emptyFC vis [] !(toPTypeDecl ty)))
+  toPDecl (IClaim _ vis opts ty) 
+      = pure (Just (PClaim emptyFC vis opts !(toPTypeDecl ty)))
   toPDecl (IDef _ n cs)
       = pure (Just (PDef emptyFC n !(traverse toPClause cs)))
   toPDecl (IData _ vis d)
@@ -187,7 +188,7 @@ Show PTerm where
           showSep " ; " (map showCase cs) ++ " }"
     where
       showCase : PClause -> String
-      showCase (MkPatClause _ lhs rhs) = show lhs ++ " => " ++ show rhs
+      showCase (MkPatClause _ lhs rhs _) = show lhs ++ " => " ++ show rhs
       showCase (MkImpossible _ lhs) = show lhs ++ " impossible"
   show (PLocal _ ds sc) -- We'll never see this when displaying a normal form...
       = "let { << definitions >>  } in " ++ show sc
@@ -214,7 +215,7 @@ Show PTerm where
       = "do " ++ showSep " ; " (map showDo ds)
     where
       showAlt : PClause -> String
-      showAlt (MkPatClause _ lhs rhs) = " | " ++ show lhs ++ " => " ++ show rhs ++ ";"
+      showAlt (MkPatClause _ lhs rhs _) = " | " ++ show lhs ++ " => " ++ show rhs ++ ";"
       showAlt (MkImpossible _ lhs) = " | " ++ show lhs ++ " impossible;"
 
       showDo : PDo -> String

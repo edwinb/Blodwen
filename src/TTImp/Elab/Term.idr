@@ -93,6 +93,11 @@ mutual
   -- a force or delay) then check the term with any further insertions
   check rigc process elabinfo env nest (ICoerced loc tm) exp
       = checkImp rigc process elabinfo env nest tm exp
+  -- If there's local definitions, add implicits inside the block
+  check rigc process elabinfo env nest tm@(ILocal loc fs sc) expected
+      = checkImp rigc process elabinfo env nest tm expected
+  check rigc process elabinfo env nest tm@(ILet loc rig n ty val sc) expected
+      = checkImp rigc process elabinfo env nest tm expected
   check rigc process elabinfo env nest tm_in exp 
       = do gam <- get Ctxt
            let tm = expandAmbigName gam env nest tm_in [] tm_in exp
@@ -569,7 +574,7 @@ mutual
            let nest' = record { names $= ((map (applyEnv f) defNames) ++) } nest
            let env' = dropLinear env
            traverse (process c u i env' nest') (map (updateName nest') nested)
-           checkImp rigc process elabinfo env nest' scope expected
+           check rigc process elabinfo env nest' scope expected
     where
       -- For the local definitions, don't allow access to linear things
       -- unless they're explicitly passed.
@@ -596,16 +601,21 @@ mutual
                  _ => n
 
       updateTyName : NestedNames vars -> ImpTy annot -> ImpTy annot
-      updateTyName nest (MkImpTy loc' n ty) = MkImpTy loc' (newName nest n) ty
+      updateTyName nest (MkImpTy loc' n ty) 
+          = MkImpTy loc' (newName nest n) ty
 
       updateDataName : NestedNames vars -> ImpData annot -> ImpData annot
-      updateDataName nest (MkImpData loc' n tycons dcons)
-          = MkImpData loc' (newName nest n) tycons (map (updateTyName nest) dcons)
+      updateDataName nest (MkImpData loc' n tycons dopts dcons)
+          = MkImpData loc' (newName nest n) tycons dopts
+                           (map (updateTyName nest) dcons)
 
       updateName : NestedNames vars -> ImpDecl annot -> ImpDecl annot
-      updateName nest (IClaim loc' vis ty) = IClaim loc' vis (updateTyName nest ty)
-      updateName nest (IDef loc' n cs) = IDef loc' (newName nest n) cs
-      updateName nest (IData loc' vis d) = IData loc' vis (updateDataName nest d)
+      updateName nest (IClaim loc' vis fnopts ty) 
+           = IClaim loc' vis fnopts (updateTyName nest ty)
+      updateName nest (IDef loc' n cs) 
+           = IDef loc' (newName nest n) cs
+      updateName nest (IData loc' vis d) 
+           = IData loc' vis (updateDataName nest d)
       updateName nest i = i
 
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->

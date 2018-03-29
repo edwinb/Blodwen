@@ -5,6 +5,8 @@ import public Core.Core
 import public Core.TT
 import public Core.Binary
 
+import TTImp.TTImp
+
 %hide Elab.Fixity
 
 public export
@@ -132,17 +134,6 @@ mutual
        MkPTy : FC -> (n : Name) -> (type : PTerm) -> PTypeDecl
 
   public export
-  data DataOpt : Type where
-       SearchBy : List Name -> DataOpt -- determining arguments
-       NoHints : DataOpt -- Don't generate search hints for constructors
-
-  export
-  Eq DataOpt where
-    (==) (SearchBy xs) (SearchBy ys) = xs == ys
-    (==) NoHints NoHints = True
-    (==) _ _ = False
-
-  public export
   data PDataDecl : Type where
        MkPData : FC -> (tyname : Name) -> (tycon : PTerm) ->
                  (opts : List DataOpt) ->
@@ -150,7 +141,9 @@ mutual
 
   public export
   data PClause : Type where
-       MkPatClause : FC -> (lhs : PTerm) -> (rhs : PTerm) -> PClause
+       MkPatClause : FC -> (lhs : PTerm) -> (rhs : PTerm) -> 
+                     (whereblock : List PDecl) -> PClause
+       -- TODO: MkWithClause
        MkImpossible : FC -> (lhs : PTerm) -> PClause
 
   public export
@@ -159,16 +152,15 @@ mutual
        LazyNames : Name -> Name -> Name -> Directive
 
   public export
-  data FnOpt : Type where
-       Inline : FnOpt
-       Hint : FnOpt
-       GlobalHint : FnOpt
-
-  public export
   data PDecl : Type where
        PClaim : FC -> Visibility -> List FnOpt -> PTypeDecl -> PDecl
        PDef : FC -> Name -> List PClause -> PDecl
        PData : FC -> Visibility -> PDataDecl -> PDecl
+       -- TODO: PRecord
+       -- TODO: PInterface
+       -- TODO: PImplementation
+       -- TODO: PPostulate
+       -- TODO: POpen (for opening named interfaces)
        PFixity : FC -> Fixity -> Nat -> OpStr -> PDecl
        PNamespace : FC -> List String -> List PDecl -> PDecl
        PDirective : FC -> Directive -> PDecl

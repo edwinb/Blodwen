@@ -1,0 +1,8 @@
+Processing as Idris
+1/2: Building Stuff (Stuff.blod)
+2/2: Building Wheres (Wheres.blod)
+Welcome to Blodwen. Good luck.
+Wheres> 3 :: (2 :: (1 :: Nil)) : List Integer
+Wheres> 8 : Int
+Wheres> 84 : Int
+Wheres> Bye for now!

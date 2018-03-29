@@ -34,9 +34,9 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               NestedNames vars ->
               ImpDecl annot -> 
               Core annot ()
-processDecl env nest (IClaim loc vis ty) 
+processDecl env nest (IClaim loc vis fnopts ty) 
     = processType (\c, u, i => processDecl {c} {u} {i})
-                  env nest vis ty
+                  env nest vis fnopts ty
 processDecl env nest (IDef loc n cs) 
     = processDef (\c, u, i => processDecl {c} {u} {i})
                  env nest loc n cs

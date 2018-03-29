@@ -3,7 +3,6 @@ module Idris.Desugar
 import Core.Binary
 import Core.Context
 import Core.Core
-import Core.Normalise
 import Core.TT
 
 import Data.StringMap
@@ -268,56 +267,22 @@ mutual
 
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
                   PClause -> Core FC (ImpClause FC)
-  desugarClause (MkPatClause fc lhs rhs) 
-      = pure $ PatClause fc (bindNames False [] !(desugar lhs)) !(desugar rhs)
+  desugarClause (MkPatClause fc lhs rhs wheres)
+      = do ws <- traverse desugarDecl wheres
+           rhs' <- desugar rhs
+           pure $ PatClause fc (bindNames False [] !(desugar lhs)) 
+                     (case ws of
+                           [] => rhs'
+                           _ => ILocal fc (concat ws) rhs')
   desugarClause (MkImpossible fc lhs) 
       = pure $ ImpossibleClause fc (bindNames False [] !(desugar lhs))
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
-                PDataDecl -> Core FC (Name, ImpData FC)
+                PDataDecl -> Core FC (ImpData FC)
   desugarData (MkPData fc n tycon opts datacons) 
-      = pure $ (n, 
-                MkImpData fc n (bindNames True [] !(desugar tycon))
+      = pure $ (MkImpData fc n (bindNames True [] !(desugar tycon))
+                               opts
                               !(traverse desugarType datacons))
-
-  processDataOpt : FC -> Name -> DataOpt -> Core FC (Maybe (ImpDecl FC))
-  processDataOpt fc n NoHints = pure Nothing
-  processDataOpt fc n (SearchBy dets) 
-      = pure (Just (IPragma (\defs => 
-            do ndef <- inCurrentNS n
-               setDetermining fc ndef dets)))
-
-  getRetTy : FC -> Defs -> NF [] -> Core FC Name
-  getRetTy fc ctxt (NBind x (Pi _ _ _) sc)
-      = getRetTy fc ctxt (sc (MkClosure False [] [] Erased))
-  getRetTy fc ctxt (NTCon n _ _ _) = pure n
-  getRetTy fc ctxt tm 
-      = throw (GenericMsg fc ("Can't use hints for return type "
-                 ++ show (quote (noGam ctxt) [] tm)))
-
-  processFnOpt : FC -> PTypeDecl -> FnOpt -> Core FC (Maybe (ImpDecl FC))
-  processFnOpt fc _ Inline = pure Nothing
-  processFnOpt fc (MkPTy _ n _) Hint 
-      = pure (Just (IPragma (\defs =>
-            do ndef <- inCurrentNS n
-               ctxt <- get Ctxt
-               case lookupTyExact ndef (gamma ctxt) of
-                    Nothing => throw (UndefinedName fc ndef)
-                    Just ty => do target <- getRetTy fc ctxt (nf ctxt [] ty)
-                                  addHintFor fc target ndef)))
-  processFnOpt fc (MkPTy _ n _) GlobalHint
-      = pure (Just (IPragma (\defs =>
-            do ndef <- inCurrentNS n
-               addGlobalHint fc ndef)))
-
-  getOpts : PDataDecl -> List DataOpt
-  getOpts (MkPData _ _ _ opts _) = opts
-
-  getCons : PDataDecl -> List Name
-  getCons (MkPData _ _ _ _ cons) = map getName cons
-    where
-      getName : PTypeDecl -> Name
-      getName (MkPTy _ n _) = n
 
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
@@ -325,22 +290,11 @@ mutual
   desugarDecl : {auto s : Ref Syn SyntaxInfo} ->
                 PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl (PClaim fc vis opts ty) 
-      = do dopts <- traverse (processFnOpt fc ty) opts
-           pure (IClaim fc vis !(desugarType ty) :: mapMaybe id dopts)
+      = pure [IClaim fc vis opts !(desugarType ty)]
   desugarDecl (PDef fc n clauses) 
       = pure [IDef fc n !(traverse desugarClause clauses)]
   desugarDecl (PData fc vis ddecl) 
-      = do (tn, idecl) <- desugarData ddecl
-           let opts = getOpts ddecl
-           let dcons = getCons ddecl
-           iopts <- traverse (processDataOpt fc tn) opts
-           let hints = if NoHints `elem` opts 
-                          then []
-                          else map (\dc => IPragma (\defs =>
-                                      do dcns <- inCurrentNS dc
-                                         tnns <- inCurrentNS tn
-                                         addHintFor fc tnns dcns)) dcons
-           pure (IData fc vis idecl :: mapMaybe id iopts ++ hints)
+      = pure [IData fc vis !(desugarData ddecl)]
   desugarDecl (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)

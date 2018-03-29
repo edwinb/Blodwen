@@ -3,9 +3,31 @@ module TTImp.ProcessType
 import Core.TT
 import Core.Unify
 import Core.Context
+import Core.Normalise
 
 import TTImp.Elab
 import TTImp.TTImp
+  
+getRetTy : annot -> Defs -> NF [] -> Core annot Name
+getRetTy loc ctxt (NBind x (Pi _ _ _) sc)
+    = getRetTy loc ctxt (sc (MkClosure False [] [] Erased))
+getRetTy loc ctxt (NTCon n _ _ _) = pure n
+getRetTy loc ctxt tm 
+    = throw (GenericMsg loc ("Can't use hints for return type "
+               ++ show (quote (noGam ctxt) [] tm)))
+
+processFnOpt : {auto c : Ref Ctxt Defs} ->
+               annot -> Name -> FnOpt -> Core annot ()
+processFnOpt loc ndef Inline 
+    = setFlag loc ndef Inline
+processFnOpt loc ndef Hint 
+    = do ctxt <- get Ctxt
+         case lookupTyExact ndef (gamma ctxt) of
+              Nothing => throw (UndefinedName loc ndef)
+              Just ty => do target <- getRetTy loc ctxt (nf ctxt [] ty)
+                            addHintFor loc target ndef
+processFnOpt loc ndef GlobalHint
+    = addGlobalHint loc ndef
 
 export
 processType : {auto c : Ref Ctxt Defs} ->
@@ -13,9 +35,9 @@ processType : {auto c : Ref Ctxt Defs} ->
               {auto i : Ref ImpST (ImpState annot)} ->
               Elaborator annot ->
               Env Term vars -> NestedNames vars ->
-              Visibility -> ImpTy annot -> 
+              Visibility -> List FnOpt -> ImpTy annot -> 
               Core annot ()
-processType elab env nest vis (MkImpTy loc n_in ty_raw)
+processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InType loc n) $
@@ -26,5 +48,6 @@ processType elab env nest vis (MkImpTy loc n_in ty_raw)
 
          checkNameVisibility loc n vis ty
          addDef n (newDef (abstractEnvType env ty) vis None)
+         traverse (processFnOpt loc n) fnopts
          addToSave n
 

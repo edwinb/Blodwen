@@ -1,8 +1,9 @@
 module Idris.Parser
 
+import Idris.Syntax
 import public Parser.Support
 import Parser.Lexer
-import Idris.Syntax
+import TTImp.TTImp
 
 import public Text.Parser
 import Data.List.Views
@@ -41,6 +42,13 @@ atom fname
          x <- name
          end <- location
          pure (PRef (MkFC fname start end) x)
+  
+whereBlock : FileName -> Rule (List PDecl)
+whereBlock fname
+    = do keyword "where"
+         ds <- block (topDecl fname)
+         pure (collectDefs (concat ds))
+
 
 mutual
   appExpr : FileName -> IndentInfo -> Rule PTerm
@@ -312,7 +320,7 @@ mutual
            rhs <- expr fname indents
            atEnd indents 
            end <- location
-           pure (MkPatClause (MkFC fname start end) lhs rhs)
+           pure (MkPatClause (MkFC fname start end) lhs rhs [])
     <|> do keyword "impossible"
            atEnd indents
            end <- location
@@ -443,10 +451,11 @@ parseRHS fname start indents lhs
      = do symbol "="
           commit
           rhs <- expr fname indents
+          ws <- option [] (whereBlock fname)
           atEnd indents
           fn <- getFn lhs
           end <- location
-          pure (fn, MkPatClause (MkFC fname start end) lhs rhs)
+          pure (fn, MkPatClause (MkFC fname start end) lhs rhs ws)
    <|> do keyword "impossible"
           atEnd indents
           fn <- getFn lhs

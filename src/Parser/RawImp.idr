@@ -290,7 +290,7 @@ dataDecl indents
          ty <- expr indents
          keyword "where"
          cs <- block tyDecl 
-         pure (MkImpData () n ty cs)
+         pure (MkImpData () n ty [] cs)
 
 implicitsDecl : IndentInfo -> Rule (List (String, RawImp ()))
 implicitsDecl indents
@@ -344,7 +344,7 @@ topDecl indents
          directive indents
   <|> do vis <- visibility
          claim <- tyDecl indents
-         pure (IClaim () vis claim)
+         pure (IClaim () vis [] claim)
   <|> do nd <- clause indents
          pure (IDef () (fst nd) [snd nd])
 

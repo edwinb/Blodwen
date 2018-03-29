@@ -30,7 +30,10 @@ namespace Stream
     data Stream a = (::) a (Inf (Stream a))
 
 ones : Stream Integer
-ones = 1 :: ones
+ones = num :: ones
+  where
+    num : Integer -- gratuitous where for a regression test!
+    num = 1
 
 data Nat = Z | S Nat
 

@@ -9,7 +9,15 @@ import TTImp.Elab
 import TTImp.TTImp
 
 import Control.Catchable
-
+  
+  
+processDataOpt : {auto c : Ref Ctxt Defs} ->
+                 annot -> Name -> DataOpt -> Core annot ()
+processDataOpt loc n NoHints 
+    = pure ()
+processDataOpt loc ndef (SearchBy dets) 
+    = setDetermining loc ndef dets
+  
 checkCon : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
@@ -32,6 +40,9 @@ checkCon elab env nest vis (MkImpTy loc cn_in ty_raw)
          addToSave cn
          pure (MkCon cn (getArity gam [] ty') ty')
 
+conName : Constructor -> Name
+conName (MkCon cn _ _) = cn
+
 export
 processData : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -40,7 +51,7 @@ processData : {auto c : Ref Ctxt Defs} ->
               Env Term vars -> NestedNames vars -> 
               Visibility -> ImpData annot -> 
               Core annot ()
-processData elab env nest vis (MkImpData loc n_in ty_raw cons_raw)
+processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc n) $
@@ -67,5 +78,10 @@ processData elab env nest vis (MkImpData loc n_in ty_raw cons_raw)
          wrapError (InCon loc n) $ checkUserHoles loc True
          let def = MkData (MkCon n arity ty') cons
          addData vis def
+        
+         traverse (processDataOpt loc n) dopts
+         when (not (NoHints `elem` dopts)) $
+              do traverse (addHintFor loc n) (map conName cons)
+                 pure ()
          addToSave n
 

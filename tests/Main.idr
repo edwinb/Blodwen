@@ -14,7 +14,7 @@ ttimpTests
 
 blodwenTests : List String
 blodwenTests
-    = ["test001", "test002", "test003", "test004",
+    = ["test001", "test002", "test003", "test004", "test005",
        "import001", "import002",
        "interface001", 
        "sugar001",
