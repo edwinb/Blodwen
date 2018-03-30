@@ -43,6 +43,7 @@ modules = Core.AutoSearch,
           TTImp.ProcessDef,
           TTImp.ProcessType,
           TTImp.ProcessTTImp,
+          TTImp.Reflect,
           TTImp.REPL,
           TTImp.TTImp,
 

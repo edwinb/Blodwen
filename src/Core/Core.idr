@@ -45,6 +45,7 @@ data Error annot
     | CaseCompile annot Name CaseError 
     | BadDotPattern annot (Term vars) (Term vars)
     | BadImplicit annot String
+    | BadRunElab annot (Term vars)
     | GenericMsg annot String
     | TTCError TTCErrorMsg
     | FileErr String FileError
@@ -124,6 +125,7 @@ Show annot => Show (Error annot) where
   show (BadDotPattern fc x y)
       = show fc ++ ":Can't match on " ++ show x
   show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"
+  show (BadRunElab fc script) = show fc ++ ":Bad elaborator script " ++ show script
   show (GenericMsg fc str) = show fc ++ ":" ++ str
   show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err

@@ -222,6 +222,11 @@ mutual
   expandDo fc [e] 
       = throw (GenericMsg (getLoc e) 
                   "Last statement in do block must be an expression") 
+  expandDo topfc (DoExp fc tm :: rest)
+      = do tm' <- desugar tm
+           rest' <- expandDo topfc rest
+           pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
+                     (ILam fc RigW Explicit (UN "__bind") (Implicit fc) rest')
   expandDo topfc (DoBind fc n tm :: rest)
       = do tm' <- desugar tm
            rest' <- expandDo topfc rest
@@ -295,6 +300,8 @@ mutual
       = pure [IDef fc n !(traverse desugarClause clauses)]
   desugarDecl (PData fc vis ddecl) 
       = pure [IData fc vis !(desugarData ddecl)]
+  desugarDecl (PReflect fc tm)
+      = pure [IReflect fc !(desugar tm)]
   desugarDecl (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)

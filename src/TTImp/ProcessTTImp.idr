@@ -13,6 +13,7 @@ import TTImp.Elab
 import TTImp.ProcessData
 import TTImp.ProcessDef
 import TTImp.ProcessType
+import TTImp.Reflect
 import TTImp.TTImp
 
 import Parser.RawImp
@@ -48,6 +49,9 @@ processDecl env nest (INamespace loc ns ds)
          extendNS (reverse ns)
          traverse (processDecl env nest) ds
          setNS oldns
+processDecl env nest (IReflect loc tm)
+    = processReflect loc (\c, u, i => processDecl {c} {u} {i})
+                     env nest tm
 processDecl env nest (ImplicitNames loc ns) 
     = do traverse (\ x => addImp (fst x) (snd x)) ns
          pure ()

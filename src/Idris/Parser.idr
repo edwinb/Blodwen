@@ -619,9 +619,15 @@ topDecl fname indents
          pure [PNamespace (MkFC fname start end) ns (concat ds)]
   <|> do start <- location
          symbol "%" 
-         d <- directive indents
-         end <- location
-         pure [PDirective (MkFC fname start end) d]
+         (do d <- directive indents
+             end <- location
+             pure [PDirective (MkFC fname start end) d])
+           <|>
+          (do exactIdent "runElab"
+              tm <- expr fname indents
+              end <- location
+              atEnd indents
+              pure [PReflect (MkFC fname start end) tm])
   <|> do start <- location
          fixity <- fixDecl
          commit

@@ -1,0 +1,62 @@
+module Reflect
+
+import Stuff
+
+data Name = UN String
+          | MN String Int
+          | NS (List String) Name
+
+data Count = M0 | M1 | MW
+
+data PiInfo = Implicit | Explicit | AutoImplicit
+
+data TTImp : Type where
+     Var : Name -> TTImp
+     Pi : Count -> PiInfo -> Maybe Name -> 
+          (argTy : TTImp) -> (retTy : TTImp) -> TTImp
+     Lam : Count -> PiInfo -> Name -> 
+           (argTy : TTImp) -> (scope : TTImp) -> TTImp
+     App : TTImp -> TTImp -> TTImp
+     ImplicitApp : TTImp -> Name -> TTImp -> TTImp
+     Implicit : TTImp
+     TType : TTImp
+
+data Clause : Type where
+     PatClause : (lhs : TTImp) -> (rhs : TTImp) -> Clause
+     Impossible : (lhs : TTImp) -> Clause
+
+data Elab : Type -> Type where
+     Pure : a -> Elab a
+     (>>=) : {a, b : Type} -> 
+             Elab a -> (a -> Elab b) -> Elab b
+     Log : Int -> String -> Elab ()
+
+     DeclareType : Name -> TTImp -> Elab ()
+     DefineFunc : Name -> List Clause -> Elab ()
+
+silly : Elab Nat
+silly
+    = do x <- Pure (S Z)
+         y <- Pure (S (S Z))
+         Log 0 "Doing things"
+         Pure (plus x y)
+
+mkNatTerm : Nat -> TTImp
+mkNatTerm Z = Var (UN "Z")
+mkNatTerm (S k) = App (Var (UN "S")) (mkNatTerm k)
+
+mkNat : String -> Nat -> Elab ()
+mkNat n num = 
+    do DeclareType (UN n) (Var (UN "Nat"))
+       DefineFunc (UN n) 
+           (PatClause (Var (UN n)) (mkNatTerm num) :: Nil)
+
+%runElab silly
+%runElab mkNat "two" (S (S Z))
+
+four : Nat
+four = plus two two
+
+test : Eq Reflect.four (S (S (S (S Z))))
+test = Refl _
+

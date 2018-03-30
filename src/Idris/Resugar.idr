@@ -143,6 +143,8 @@ mutual
       = pure (Just (PDef emptyFC n !(traverse toPClause cs)))
   toPDecl (IData _ vis d)
       = pure (Just (PData emptyFC vis !(toPData d)))
+  toPDecl (IReflect _ tm)
+      = pure (Just (PReflect emptyFC !(toPTerm startPrec tm)))
   toPDecl (INamespace _ ns ds)
       = do ds' <- traverse toPDecl ds
            pure (Just (PNamespace emptyFC ns (mapMaybe id ds')))

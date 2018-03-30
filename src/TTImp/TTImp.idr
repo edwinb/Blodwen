@@ -90,6 +90,7 @@ mutual
        IData : annot -> Visibility -> ImpData annot -> ImpDecl annot
        INamespace : annot -> List String -> List (ImpDecl annot) ->
                     ImpDecl annot
+       IReflect : annot -> RawImp annot -> ImpDecl annot
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
                ImpDecl annot
@@ -300,6 +301,8 @@ mutual
     show (INamespace _ ns decls) 
         = "namespace " ++ show ns ++ 
           showSep "\n" (assert_total $ map show decls)
+    show (IReflect _ tm)
+        = "%runElab " ++ show tm
     show (ImplicitNames _ ns) = "implicit " ++ show ns
     show (IHint _ n t) = "%hint " ++ show n ++ " " ++ show t
     show (IPragma _) = "[externally defined pragma]"

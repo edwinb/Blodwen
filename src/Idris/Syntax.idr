@@ -156,6 +156,7 @@ mutual
        PClaim : FC -> Visibility -> List FnOpt -> PTypeDecl -> PDecl
        PDef : FC -> Name -> List PClause -> PDecl
        PData : FC -> Visibility -> PDataDecl -> PDecl
+       PReflect : FC -> PTerm -> PDecl
        -- TODO: PRecord
        -- TODO: PInterface
        -- TODO: PImplementation
