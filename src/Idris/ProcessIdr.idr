@@ -5,8 +5,9 @@ import Core.Context
 import Core.Directory
 import Core.UnifyState
 
-import TTImp.TTImp
 import TTImp.ProcessTTImp
+import TTImp.Reflect
+import TTImp.TTImp
 
 import Idris.Parser
 import Idris.Syntax

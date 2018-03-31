@@ -2,8 +2,9 @@ module TTImp.Reflect
 
 import Core.Context
 import Core.Normalise
-import Core.TT
+import public Core.Reflect
 import Core.Unify
+import Core.TT
 
 import TTImp.Elab
 import TTImp.ProcessDef
@@ -12,51 +13,34 @@ import TTImp.TTImp
 
 %default covering
 
-interface Reflect annot a where
-  reflect : annot -> Defs -> NF vars -> Maybe a
+Reflect annot => Reflect (RawImp annot) where
+  reflect defs (NDCon (NS ["Reflect"] (UN "Var")) _ _ [fc, n])
+      = do fc' <- reflect defs (evalClosure defs fc)
+           n' <- reflect defs (evalClosure defs n)
+           pure (IVar fc' n')
+  reflect defs (NDCon (NS ["Reflect"] (UN "App")) _ _ [fc, f, a])
+      = do fc' <- reflect defs (evalClosure defs fc)
+           f' <- reflect defs (evalClosure defs f)
+           a' <- reflect defs (evalClosure defs a)
+           pure (IApp fc' f' a')
+  reflect defs _ = Nothing
 
-Reflect annot String where
-  reflect loc defs (NPrimVal (Str str)) = pure str
-  reflect loc defs _ = Nothing
-
-Reflect annot Name where
-  reflect loc defs (NDCon (NS ["Reflect"] (UN "UN")) _ _ [str])
-      = do str' <- reflect loc defs (evalClosure defs str)
-           pure (UN str')
-  reflect loc defs _ = Nothing
-
-Reflect annot (RawImp annot) where
-  reflect loc defs (NDCon (NS ["Reflect"] (UN "Var")) _ _ [n])
-      = do n' <- reflect loc defs (evalClosure defs n)
-           pure (IVar loc n')
-  reflect loc defs (NDCon (NS ["Reflect"] (UN "App")) _ _ [f, a])
-      = do f' <- reflect loc defs (evalClosure defs f)
-           a' <- reflect loc defs (evalClosure defs a)
-           pure (IApp loc f' a')
-  reflect loc defs _ = Nothing
-
-Reflect annot (ImpClause annot) where
-  reflect loc defs (NDCon (NS ["Reflect"] (UN "PatClause")) _ _ [lhs, rhs])
-      = do lhs' <- reflect loc defs (evalClosure defs lhs)
-           rhs' <- reflect loc defs (evalClosure defs rhs)
-           pure (PatClause loc lhs' rhs')
-  reflect loc defs (NDCon (NS ["Reflect"] (UN "Impossible")) _ _ [lhs])
-      = do lhs' <- reflect loc defs (evalClosure defs lhs)
-           pure (ImpossibleClause loc lhs')
-  reflect loc defs _ = Nothing
-
-Reflect annot a => Reflect annot (List a) where
-  reflect loc defs (NDCon (NS _ (UN "Nil")) _ _ _)
-      = pure []
-  reflect loc defs (NDCon (NS _ (UN "::")) _ _ [_, x, xs])
-      = do x' <- reflect loc defs (evalClosure defs x)
-           xs' <- reflect loc defs (evalClosure defs xs)
-           pure (x' :: xs')
-  reflect loc defs _ = Nothing
+Reflect annot => Reflect (ImpClause annot) where
+  reflect defs (NDCon (NS ["Reflect"] (UN "PatClause")) _ _ [fc, lhs, rhs])
+      = do fc' <- reflect defs (evalClosure defs fc)
+           lhs' <- reflect defs (evalClosure defs lhs)
+           rhs' <- reflect defs (evalClosure defs rhs)
+           pure (PatClause fc' lhs' rhs')
+  reflect defs (NDCon (NS ["Reflect"] (UN "Impossible")) _ _ [fc, lhs])
+      = do fc' <- reflect defs (evalClosure defs fc)
+           lhs' <- reflect defs (evalClosure defs lhs)
+           pure (ImpossibleClause fc' lhs')
+  reflect defs _ = Nothing
 
 elabScript : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             Reflect annot =>
              annot -> Elaborator annot ->
              Env Term vars -> NestedNames vars -> NF vars -> 
              Core annot (NF vars) 
@@ -67,12 +51,18 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
     failWith : Defs -> Core annot a
     failWith defs = throw (BadRunElab loc (quote (noGam defs) env tm))
 
-    doReflect : Reflect annot a => NF vars -> Core annot a
-    doReflect tm = 
-        do defs <- get Ctxt
-           case reflect {a} loc defs tm of
-                Nothing => failWith defs
-                Just x => pure x
+    doReflect : Reflect a => NF vars -> Core annot a
+    doReflect tm 
+        = do defs <- get Ctxt
+             case reflect {a} defs tm of
+                  Nothing => failWith defs
+                  Just x => pure x
+
+    retReify : Reify a => Defs -> a -> Core annot (NF vars)
+    retReify defs tm 
+        = case reify defs tm of
+               Nothing => throw (GenericMsg loc "Unsupported reification")
+               Just res => pure (nf defs env (embed res))
 
     retUnit : Core annot (NF vars)
     retUnit = pure (NDCon (NS ["Stuff"] (UN "MkUnit")) 0 0 [])
@@ -88,12 +78,14 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
                             (sc (toClosure False env (quote defs env p)))
                   tm => failWith defs
     elabCon defs "Log" [i, msg]
-        = do let NPrimVal (I i') = evalClosure defs i
-                  | _ => failWith defs
-             let NPrimVal (Str msg') = evalClosure defs msg
-                  | _ => failWith defs
-             log (cast i') msg'
+        = do i' <- doReflect (evalClosure defs i)
+             msg' <- doReflect (evalClosure defs msg)
+             log (cast {from = Int} i') msg'
              retUnit
+    elabCon defs "GenSym" [root]
+        = do root' <- doReflect (evalClosure defs root)
+             n <- genName root'
+             retReify defs n
     elabCon defs "DeclareType" [fn, fty]
         = do fn <- doReflect (evalClosure defs fn)
              ty <- doReflect (evalClosure defs fty)
@@ -113,6 +105,7 @@ export
 processReflect : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
                  {auto i : Ref ImpST (ImpState annot)} ->
+                 Reflect annot =>
                  annot ->
                  Elaborator annot ->
                  Env Term vars -> NestedNames vars -> RawImp annot -> 

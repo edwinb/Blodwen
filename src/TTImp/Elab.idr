@@ -43,6 +43,7 @@ elabTerm process defining env nest impmode elabmode tm tyin
          solveConstraints (case elabmode of
                                 InLHS => InLHS
                                 _ => InTerm) False
+--          resolveDefaults -- any ambiguous literals default to Integer
          retryAllDelayed
          -- True flag means "last chance" i.e report error rather than
          -- postponing again (this pass is primarily about error reporting)

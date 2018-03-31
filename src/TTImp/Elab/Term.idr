@@ -249,14 +249,17 @@ mutual
            -- try again to solve the holes, including the search we've just added.
            solveConstraints umode False
            pure (mkConstantApp n env, expected)
-  checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) expected
-      = delayOnFailure loc env expected ambiguous $
-          (do gam <- get Ctxt
-              log 5 $ "Ambiguous elaboration " ++ show alts ++ 
-                      "\nTarget type " ++ show (map (normaliseHoles gam env) expected)
-              let tryall = if uniq then exactlyOne else anyOne 
-              tryall loc (map (\t => 
-                     checkImp rigc process elabinfo env nest t expected) alts))
+  checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
+      = do expected <- maybe (do t <- addHole loc env TType
+                                 pure (mkConstantApp t env))
+                             pure mexpected
+           delayOnFailure loc env expected ambiguous $
+            (do gam <- get Ctxt
+                log 5 $ "Ambiguous elaboration " ++ show alts ++ 
+                        "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
+                let tryall = if uniq then exactlyOne else anyOne 
+                tryall loc (map (\t => 
+                       checkImp rigc process elabinfo env nest t (Just expected)) alts))
     where
       ambiguous : Error annot -> Bool
       ambiguous (AmbiguousElab _ _) = True
@@ -265,6 +268,7 @@ mutual
       ambiguous (InCon _ _ err) = ambiguous err
       ambiguous (InLHS _ _ err) = ambiguous err
       ambiguous (InRHS _ _ err) = ambiguous err
+      ambiguous (WhenUnifying _ _ _ _ err) = ambiguous err
       ambiguous _ = False
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)

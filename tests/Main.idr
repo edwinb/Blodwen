@@ -16,6 +16,7 @@ blodwenTests : List String
 blodwenTests
     = ["test001", "test002", "test003", "test004", "test005",
        "import001", "import002",
+       "reflect001",
        "interface001", 
        "sugar001",
        "lazy001","lazy002"]

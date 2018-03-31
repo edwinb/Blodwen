@@ -8,8 +8,14 @@ FilePos = (Int, Int)
 data FC : Type where
      MkFC : String -> FilePos -> FilePos -> FC
 
+the : (a : Type) -> a -> a
+the _ x = x
+
+-- 'the' is a TMP HACK until defaults work properly, then we can
+-- safely do the "must be exactly one solution" for integers rather
+-- than "take the first solution"
 emptyFC : FC
-emptyFC = MkFC "(empty)" (0, 0) (0, 0)
+emptyFC = MkFC "(empty)" (the Int 0, the Int 0) (the Int 0, the Int 0)
 
 data Name = UN String
           | MN String Int

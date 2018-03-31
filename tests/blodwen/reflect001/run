@@ -1,0 +1,3 @@
+echo ':q' | $1 Reflect.blod
+
+rm -rf build

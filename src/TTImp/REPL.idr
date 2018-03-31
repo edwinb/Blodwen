@@ -3,6 +3,7 @@ module TTImp.REPL
 import Core.AutoSearch
 import Core.Context
 import Core.Normalise
+import Core.Reflect
 import Core.TT
 import Core.Unify
 

@@ -31,6 +31,7 @@ export
 processDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              Reflect annot =>
               Env Term vars ->
               NestedNames vars ->
               ImpDecl annot -> 
@@ -63,6 +64,7 @@ processDecl env nest (ILog lvl) = setLogLevel lvl
 export
 processDecls : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
+               Reflect annot =>
                Env Term vars -> NestedNames vars ->
                List (ImpDecl annot) -> 
                Core annot ()
@@ -88,5 +90,5 @@ process file
                          (\err => coreLift (printLn err))
 
 export
-elabTop : Elaborator annot
+elabTop : Reflect annot => Elaborator annot
 elabTop = \c, u, i => processDecl {c} {u} {i}

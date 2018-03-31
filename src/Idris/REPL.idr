@@ -16,6 +16,7 @@ import TTImp.TTImp
 import TTImp.ProcessTTImp
 
 import Control.Catchable
+import TTImp.Reflect
 
 %default covering
 

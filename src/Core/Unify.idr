@@ -843,4 +843,41 @@ retryAllDelayed
                          else do traverse (retryDelayed True) hs
                                  pure ()
 
+resolveDefaultInt : {auto c : Ref Ctxt Defs} ->
+                    {auto u : Ref UST (UState annot)} ->
+                    (hole : Name) -> Error annot -> Core annot ()
+resolveDefaultInt hole err@(AmbiguousElab loc ns)
+    = findInteger ns
+  where
+    findInteger : List (Term vars) -> Core annot ()
+    findInteger [] = throw err
+    findInteger (PrimVal (BI i) :: ts) 
+        = do updateDef hole (PMDef True [] (STerm (PrimVal (BI i))))
+             removeHoleName hole
+    findInteger (_ :: ts) = findInteger ts
+resolveDefaultInt hole err = throw err
+
+resolveDefault : {auto c : Ref Ctxt Defs} ->
+                 {auto u : Ref UST (UState annot)} ->
+                 (hole : (annot, Name)) ->
+                 Core annot ()
+resolveDefault (loc, hole)
+    = do gam <- get Ctxt
+         case lookupDefExact hole (gamma gam) of
+              Nothing => pure ()
+              Just (Delayed c) =>
+                      handleError (do log 5 $ "Resolving default " ++ show hole
+                                      rerunDelayed hole c)
+                                  (\err => resolveDefaultInt hole err)
+              Just _ => pure ()
+
+export
+resolveDefaults : {auto c : Ref Ctxt Defs} ->
+                  {auto u : Ref UST (UState annot)} ->
+                  Core annot ()
+resolveDefaults
+    = do hs <- getHoleInfo
+         traverse resolveDefault hs
+         pure ()
+
 

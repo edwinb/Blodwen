@@ -592,19 +592,18 @@ delayOnFailure :
       {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
       {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
       annot -> Env Term vars ->
-      (expected : Maybe (Term vars)) ->
+      (expected : Term vars) ->
       (Error annot -> Bool) ->
       (Core annot (Term vars, Term vars)) ->
       Core annot (Term vars, Term vars)
-delayOnFailure loc env Nothing pred elab = elab
-delayOnFailure loc env (Just expected) pred elab 
+delayOnFailure loc env expected pred elab 
     = handle elab
-        (\err => if pred err 
-                    then 
-                      do (cn, cref) <- addDelayedElab loc env expected
-                         log 5 $ "Postponing elaborator for " ++ show expected
-                         ust <- get UST
-                         put UST (record { delayedElab $= addCtxt cref
-                                             (mkClosedElab env elab) } ust)
-                         pure (mkConstantApp cn env, expected)
-                    else throw err)
+        (\err => do if pred err 
+                        then 
+                          do (cn, cref) <- addDelayedElab loc env expected
+                             log 5 $ "Postponing elaborator for " ++ show expected
+                             ust <- get UST
+                             put UST (record { delayedElab $= addCtxt cref
+                                                 (mkClosedElab env elab) } ust)
+                             pure (mkConstantApp cn env, expected)
+                        else throw err)

@@ -1,10 +1,12 @@
 module Idris.Syntax
 
+import public Core.Binary
 import public Core.Context
 import public Core.Core
+import public Core.Normalise
 import public Core.TT
-import public Core.Binary
 
+import TTImp.Reflect
 import TTImp.TTImp
 
 %hide Elab.Fixity
@@ -26,6 +28,15 @@ record FC where
   file : FileName
   startPos : FilePos
   endPos : FilePos
+
+export
+Reflect FC where
+  reflect defs (NDCon (NS _ (UN "MkFC")) _ _ [file, start, end])
+      = do file' <- reflect defs (evalClosure defs file)
+           start' <- reflect defs (evalClosure defs start)
+           end' <- reflect defs (evalClosure defs end)
+           pure (MkFC file' start' end')
+  reflect defs _ = Nothing
 
 export
 emptyFC : FC

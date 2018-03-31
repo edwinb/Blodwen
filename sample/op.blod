@@ -20,6 +20,7 @@ prefix 10 -: -- TMP HACK :)
 (-:) : Integer -> Integer
 (-:) x = prim__sub_Integer 0 x
 
+
 -- Doesn't quite work yet - ambiguity resolution can't handle this, and maybe
 -- it shouldn't. Maybe it's best to turn -x into negate x
 -- namespace Minus
@@ -33,5 +34,8 @@ data List : a -> Type where
 map : (a -> b) -> List a -> List b
 map f Nil = Nil
 map f (x :: xs) = f x :: map f xs
+
+the : (a : Type) -> a -> a
+the _ x = x
 
 
