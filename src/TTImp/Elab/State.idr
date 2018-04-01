@@ -594,16 +594,16 @@ delayOnFailure :
       annot -> Env Term vars ->
       (expected : Term vars) ->
       (Error annot -> Bool) ->
-      (Core annot (Term vars, Term vars)) ->
+      (Bool -> Core annot (Term vars, Term vars)) ->
       Core annot (Term vars, Term vars)
 delayOnFailure loc env expected pred elab 
-    = handle elab
+    = handle (elab False)
         (\err => do if pred err 
                         then 
                           do (cn, cref) <- addDelayedElab loc env expected
                              log 5 $ "Postponing elaborator for " ++ show expected
                              ust <- get UST
                              put UST (record { delayedElab $= addCtxt cref
-                                                 (mkClosedElab env elab) } ust)
+                                                 (mkClosedElab env (elab True)) } ust)
                              pure (mkConstantApp cn env, expected)
                         else throw err)

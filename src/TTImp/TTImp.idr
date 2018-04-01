@@ -37,7 +37,7 @@ mutual
        IImplicitApp : annot -> 
               (fn : RawImp annot) -> Name -> (arg : RawImp annot) -> RawImp annot
        ISearch : annot -> (depth : Nat) -> RawImp annot
-       IAlternative : annot -> (unique : Bool) -> 
+       IAlternative : annot -> AltType annot -> 
                       List (RawImp annot) -> RawImp annot
        ICoerced : annot -> RawImp annot -> RawImp annot
        IPrimVal : annot -> Constant -> RawImp annot
@@ -47,6 +47,12 @@ mutual
        IAs : annot -> String -> (pattern : RawImp annot) -> RawImp annot
        IMustUnify : annot -> (pattern : RawImp annot) -> RawImp annot
        Implicit : annot -> RawImp annot
+
+  public export
+  data AltType : Type -> Type where
+       FirstSuccess : AltType annot
+       Unique : AltType annot
+       UniqueDefault : RawImp annot -> AltType annot
 
   -- Top level declarations: types, clauses and data
   public export

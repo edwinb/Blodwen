@@ -44,7 +44,7 @@ expandAmbigName defs env nest orig args (IVar loc x) exp
                                                    (gamma defs) of
                                  [] => orig
                                  [(n, _)] => buildAlt (IVar loc n) args
-                                 ns => IAlternative loc True
+                                 ns => IAlternative loc Unique
                                          (map (\n => buildAlt (IVar loc n) args) 
                                               (map fst ns))
   where
@@ -74,6 +74,16 @@ eraseForced gam tm with (unapply tm)
 bindRig : RigCount -> RigCount
 bindRig Rig0 = Rig0
 bindRig _ = Rig1
+      
+ambiguous : Error annot -> Bool
+ambiguous (AmbiguousElab _ _) = True
+ambiguous (AmbiguousName _ _) = True
+ambiguous (InType _ _ err) = ambiguous err
+ambiguous (InCon _ _ err) = ambiguous err
+ambiguous (InLHS _ _ err) = ambiguous err
+ambiguous (InRHS _ _ err) = ambiguous err
+ambiguous (WhenUnifying _ _ _ _ err) = ambiguous err
+ambiguous _ = False
 
 mutual
   export
@@ -155,7 +165,7 @@ mutual
              Just delay =>
                 if isDelayType n defs && not (explicitLazy defs (getFn tm))
                    then let loc = getAnnot tm in
-                            IAlternative loc False 
+                            IAlternative loc FirstSuccess 
                              [IApp loc (IVar loc delay) (ICoerced loc tm), tm]
                    else tm
   insertLazy defs tm _ = tm
@@ -249,27 +259,39 @@ mutual
            -- try again to solve the holes, including the search we've just added.
            solveConstraints umode False
            pure (mkConstantApp n env, expected)
+  checkImp rigc process elabinfo env nest (IAlternative loc (UniqueDefault def) alts) mexpected
+      = do expected <- maybe (do t <- addHole loc env TType
+                                 pure (mkConstantApp t env))
+                             pure mexpected
+           delayOnFailure loc env expected ambiguous $
+            (\delayed =>
+               do gam <- get Ctxt
+                  log 5 $ "Ambiguous elaboration " ++ show alts ++ 
+                          "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
+                  if delayed -- use the default if there's still ambiguity
+                     then try (exactlyOne loc (map (\t => 
+                                 checkImp rigc process elabinfo env nest t 
+                                     (Just expected)) alts))
+                              (checkImp rigc process elabinfo env nest def
+                                     (Just expected))
+                     else exactlyOne loc (map (\t => 
+                             checkImp rigc process elabinfo env nest t 
+                                 (Just expected)) alts))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
       = do expected <- maybe (do t <- addHole loc env TType
                                  pure (mkConstantApp t env))
                              pure mexpected
            delayOnFailure loc env expected ambiguous $
-            (do gam <- get Ctxt
-                log 5 $ "Ambiguous elaboration " ++ show alts ++ 
-                        "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
-                let tryall = if uniq then exactlyOne else anyOne 
-                tryall loc (map (\t => 
-                       checkImp rigc process elabinfo env nest t (Just expected)) alts))
-    where
-      ambiguous : Error annot -> Bool
-      ambiguous (AmbiguousElab _ _) = True
-      ambiguous (AmbiguousName _ _) = True
-      ambiguous (InType _ _ err) = ambiguous err
-      ambiguous (InCon _ _ err) = ambiguous err
-      ambiguous (InLHS _ _ err) = ambiguous err
-      ambiguous (InRHS _ _ err) = ambiguous err
-      ambiguous (WhenUnifying _ _ _ _ err) = ambiguous err
-      ambiguous _ = False
+            (\delayed =>
+               do gam <- get Ctxt
+                  log 5 $ "Ambiguous elaboration " ++ show alts ++ 
+                          "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
+                  let tryall = case uniq of
+                                    FirstSuccess => anyOne
+                                    _ => exactlyOne
+                  tryall loc (map (\t => 
+                         checkImp rigc process elabinfo env nest t 
+                             (Just expected)) alts))
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected

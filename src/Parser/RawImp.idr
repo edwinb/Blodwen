@@ -20,8 +20,9 @@ collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
 
 expandInt : RawImp () -> RawImp ()
 expandInt (IPrimVal () (BI x)) 
-    = IAlternative () False [IPrimVal () (BI x),
-                             IPrimVal () (I (fromInteger x))]
+    = IAlternative () (UniqueDefault (IPrimVal () (BI x)))
+                             [IPrimVal () (BI x),
+                              IPrimVal () (I (fromInteger x))]
 expandInt x = x
 
 atom : Rule (RawImp ())
@@ -98,7 +99,7 @@ mutual
            commit
            alts <- sepBy1 (symbol ",") (expr indents)
            symbol "|)"
-           pure (IAlternative () True alts)
+           pure (IAlternative () FirstSuccess alts)
     <|> do symbol "("
            e <- expr indents
            symbol ")"

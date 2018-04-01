@@ -15,7 +15,7 @@ the _ x = x
 -- safely do the "must be exactly one solution" for integers rather
 -- than "take the first solution"
 emptyFC : FC
-emptyFC = MkFC "(empty)" (the Int 0, the Int 0) (the Int 0, the Int 0)
+emptyFC = MkFC "(empty)" (0, 0) (0, 0)
 
 data Name = UN String
           | MN String Int

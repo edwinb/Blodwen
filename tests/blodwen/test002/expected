@@ -1,7 +1,7 @@
 Processing as Idris
 1/1: Building op (op.blod)
 Welcome to Blodwen. Good luck.
-Main> 42 : Integer
-Main> 3 :: (4 :: (5 :: Nil)) : List Integer
-Main> 2 :: (4 :: (6 :: Nil)) : List Integer
+Main> 42 : Int
+Main> 3 :: (4 :: (5 :: Nil)) : List Int
+Main> 2 :: (4 :: (6 :: Nil)) : List Int
 Main> Bye for now!

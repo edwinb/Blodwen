@@ -192,8 +192,9 @@ mutual
                  (POp fc op arg (PRef fc (MN "arg" 0))))
   desugar (PSearch fc depth) = pure $ ISearch fc depth
   desugar (PPrimVal fc (BI x))
-      = pure $ IAlternative fc False [IPrimVal fc (BI x), 
-                                      IPrimVal fc (I (fromInteger x))]
+      = pure $ IAlternative fc (UniqueDefault (IPrimVal fc (BI x)))
+                               [IPrimVal fc (BI x), 
+                                IPrimVal fc (I (fromInteger x))]
   desugar (PPrimVal fc x) = pure $ IPrimVal fc x
   desugar (PHole fc holename) = pure $ IHole fc holename
   desugar (PType fc) = pure $ IType fc
@@ -207,11 +208,11 @@ mutual
   desugar (PPair fc l r) 
       = do l' <- desugar l
            r' <- desugar r
-           pure $ IAlternative fc True
+           pure $ IAlternative fc Unique
                   [apply (IVar fc (UN "Pair")) [l', r'],
                    apply (IVar fc (UN "MkPair")) [l', r']]
   desugar (PUnit fc) 
-      = pure $ IAlternative fc True 
+      = pure $ IAlternative fc Unique 
                [IVar fc (UN "Unit"), 
                 IVar fc (UN "MkUnit")]
   
