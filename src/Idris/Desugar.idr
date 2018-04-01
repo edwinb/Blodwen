@@ -196,6 +196,8 @@ mutual
                                [IPrimVal fc (BI x), 
                                 IPrimVal fc (I (fromInteger x))]
   desugar (PPrimVal fc x) = pure $ IPrimVal fc x
+  desugar (PQuote fc x) = pure $ IQuote fc !(desugar x)
+  desugar (PUnquote fc x) = pure $ IUnquote fc !(desugar x)
   desugar (PHole fc holename) = pure $ IHole fc holename
   desugar (PType fc) = pure $ IType fc
   desugar (PAs fc vname pattern) 

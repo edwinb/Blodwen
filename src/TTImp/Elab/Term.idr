@@ -295,6 +295,10 @@ mutual
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected
+  checkImp rigc process elabinfo env nest (IQuote loc tm) expected
+      = throw (GenericMsg loc "Quotation not implemented yet")
+  checkImp rigc process elabinfo env nest (IUnquote loc tm) expected
+      = throw (GenericMsg loc "Quotation not implemented yet")
   checkImp rigc process elabinfo env nest (IType loc) exp
       = checkExp rigc process loc elabinfo env nest TType TType exp
   checkImp rigc process elabinfo env nest (IBindVar loc str) exp with (elabMode elabinfo)

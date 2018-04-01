@@ -19,20 +19,54 @@ data Count = M0 | M1 | MW
 
 data PiInfo = Implicit | Explicit | AutoImplicit
 
+data Constant 
+    = I Int
+    | BI Integer
+    | Str String
+    | Ch Char
+    | Db Double
+
+    | IntType
+    | IntegerType
+    | StringType
+    | CharType
+    | DoubleType
+
 data TTImp : Type where
      Var : FC -> Name -> TTImp
      Pi : FC -> Count -> PiInfo -> Maybe Name -> 
           (argTy : TTImp) -> (retTy : TTImp) -> TTImp
      Lam : FC -> Count -> PiInfo -> Name -> 
            (argTy : TTImp) -> (scope : TTImp) -> TTImp
+     Let : FC -> Count -> Name ->
+           (ty : TTImp) -> (val : TTImp) -> (scope : TTImp) -> TTImp
      App : FC -> TTImp -> TTImp -> TTImp
      ImplicitApp : FC -> TTImp -> Name -> TTImp -> TTImp
+     PrimVal : FC -> Constant -> TTImp
      Implicit : FC -> TTImp
      TType : FC -> TTImp
+
+data Visibility = Private | Export | Public
+data FnOpt = Inline | Hint | GlobalHint
+
+data TyDecl : Type where
+     MkTy : FC -> (n : Name) -> TTImp -> TyDecl
 
 data Clause : Type where
      PatClause : FC -> (lhs : TTImp) -> (rhs : TTImp) -> Clause
      Impossible : FC -> (lhs : TTImp) -> Clause
+
+data DataOpt = SearchBy (List Name) | NoHints
+
+data DataDecl : Type where
+     MkData : FC -> (tyn : Name) -> TTImp -> List DataOpt ->
+              (cons : List TyDecl) -> DataDecl
+--      MkLater : FC -> (tyn : Name) -> TTImp -> DataDecl
+
+data Decl : Type where
+     Claim : FC -> Visibility -> List FnOpt -> TyDecl -> Decl
+     Def : FC -> Visibility -> List FnOpt -> List Clause -> Decl
+     Data : FC -> Visibility -> DataDecl -> Decl
 
 data Elab : Type -> Type where
      Pure : a -> Elab a

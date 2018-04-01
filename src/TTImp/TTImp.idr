@@ -41,6 +41,8 @@ mutual
                       List (RawImp annot) -> RawImp annot
        ICoerced : annot -> RawImp annot -> RawImp annot
        IPrimVal : annot -> Constant -> RawImp annot
+       IQuote : annot -> RawImp annot -> RawImp annot
+       IUnquote : annot -> RawImp annot -> RawImp annot
        IHole : annot -> String -> RawImp annot
        IType : annot -> RawImp annot
        IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
@@ -222,6 +224,8 @@ getAnnot (ISearch x _) = x
 getAnnot (IAlternative x _ _) = x
 getAnnot (ICoerced x _) = x
 getAnnot (IPrimVal x _) = x
+getAnnot (IQuote x _) = x
+getAnnot (IUnquote x _) = x
 getAnnot (IHole x _) = x
 getAnnot (IType x) = x
 getAnnot (IBindVar x _) = x
@@ -276,6 +280,8 @@ mutual
         = "(|" ++ showSep "," (map show alts) ++ "|)"
     show (ICoerced _ tm) = show tm
     show (IPrimVal _ y) = show y
+    show (IQuote _ y) = "`(" ++ show y ++ ")"
+    show (IUnquote _ y) = "~(" ++ show y ++ ")"
     show (IHole _ x) = "?" ++ x
     show (IType _) = "Type"
     show (IBindVar _ n) = "$" ++ show n

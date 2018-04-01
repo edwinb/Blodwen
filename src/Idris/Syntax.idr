@@ -96,6 +96,8 @@ mutual
        PImplicitApp : FC -> PTerm -> (argn : Name) -> PTerm -> PTerm
        PSearch : FC -> (depth : Nat) -> PTerm
        PPrimVal : FC -> Constant -> PTerm
+       PQuote : FC -> PTerm -> PTerm
+       PUnquote : FC -> PTerm -> PTerm
        PHole : FC -> (holename : String) -> PTerm
        PType : FC -> PTerm
        PAs : FC -> (vname : String) -> (pattern : PTerm) -> PTerm

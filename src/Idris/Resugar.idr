@@ -104,6 +104,8 @@ mutual
   toPTerm p (IAlternative _ _ _) = pure (PImplicit emptyFC)
   toPTerm p (ICoerced _ tm) = toPTerm p tm
   toPTerm p (IPrimVal _ c) = pure (PPrimVal emptyFC c)
+  toPTerm p (IQuote _ tm) = pure (PQuote emptyFC !(toPTerm startPrec tm))
+  toPTerm p (IUnquote _ tm) = pure (PUnquote emptyFC !(toPTerm startPrec tm))
   toPTerm p (IHole _ str) = pure (PHole emptyFC str)
   toPTerm p (IType _) = pure (PType emptyFC)
   toPTerm p (IBindVar _ v) = pure (PRef emptyFC (UN v))
@@ -202,6 +204,8 @@ Show PTerm where
   show (PImplicitApp _ f n a) 
       = show f ++ " {" ++ show n ++ " = " ++ show a ++ "}"
   show (PSearch _ d) = "%search"
+  show (PQuote _ tm) = "`(" ++ show tm ++ ")"
+  show (PUnquote _ tm) = "~(" ++ show tm ++ ")"
   show (PPrimVal _ c) = show c
   show (PHole _ n) = "?" ++ n
   show (PType _) = "Type"
