@@ -2,7 +2,7 @@ module TTImp.RunElab
 
 import Core.Context
 import Core.Normalise
-import public Core.Reflect
+import public TTImp.Reflect
 import Core.Unify
 import Core.TT
 
@@ -15,7 +15,7 @@ import TTImp.TTImp
 elabScript : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
-             Reflect annot =>
+             Reify annot =>
              annot -> Elaborator annot ->
              Env Term vars -> NestedNames vars -> NF vars -> 
              Core annot (NF vars) 
@@ -26,18 +26,18 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
     failWith : Defs -> Core annot a
     failWith defs = throw (BadRunElab loc (quote (noGam defs) env tm))
 
-    doReflect : Reflect a => NF vars -> Core annot a
-    doReflect tm 
+    doReify : Reify a => NF vars -> Core annot a
+    doReify tm 
         = do defs <- get Ctxt
-             case reflect {a} defs tm of
+             case reify {a} defs tm of
                   Nothing => failWith defs
                   Just x => pure x
 
-    retReify : Reify a => Defs -> a -> Core annot (NF vars)
-    retReify defs tm 
-        = case reify defs tm of
-               Nothing => throw (GenericMsg loc "Unsupported reification")
-               Just res => pure (nf defs env (embed res))
+    retReflect : Reflect a => Defs -> a -> Core annot (NF vars)
+    retReflect defs tm 
+        = case reflect defs env tm of
+               Nothing => throw (GenericMsg loc "Unsupported reflection")
+               Just res => pure (nf defs env res)
 
     retUnit : Core annot (NF vars)
     retUnit = pure (NDCon (NS ["Stuff"] (UN "MkUnit")) 0 0 [])
@@ -53,22 +53,22 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
                             (sc (toClosure False env (quote defs env p)))
                   tm => failWith defs
     elabCon defs "Log" [i, msg]
-        = do i' <- doReflect (evalClosure defs i)
-             msg' <- doReflect (evalClosure defs msg)
+        = do i' <- doReify (evalClosure defs i)
+             msg' <- doReify (evalClosure defs msg)
              log (cast {from = Int} i') msg'
              retUnit
     elabCon defs "GenSym" [root]
-        = do root' <- doReflect (evalClosure defs root)
+        = do root' <- doReify (evalClosure defs root)
              n <- genName root'
-             retReify defs n
+             retReflect defs n
     elabCon defs "DeclareType" [fn, fty]
-        = do fn <- doReflect (evalClosure defs fn)
-             ty <- doReflect (evalClosure defs fty)
+        = do fn <- doReify (evalClosure defs fn)
+             ty <- doReify (evalClosure defs fty)
              processType elab env nest Public [] (MkImpTy loc fn ty)
              retUnit
     elabCon defs "DefineFunc" [fn, cs]
-        = do fn <- doReflect (evalClosure defs fn)
-             cs <- doReflect (evalClosure defs cs)
+        = do fn <- doReify (evalClosure defs fn)
+             cs <- doReify (evalClosure defs cs)
              processDef elab env nest loc fn cs
              retUnit
     elabCon defs n args = failWith defs
@@ -80,7 +80,7 @@ export
 processReflect : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
                  {auto i : Ref ImpST (ImpState annot)} ->
-                 Reflect annot =>
+                 Reify annot =>
                  annot ->
                  Elaborator annot ->
                  Env Term vars -> NestedNames vars -> RawImp annot -> 

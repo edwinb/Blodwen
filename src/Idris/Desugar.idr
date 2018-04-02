@@ -265,6 +265,7 @@ mutual
            pure $ ICase fc tm' (PatClause fc (bindNames False [] pat') rest'
                                   :: alts')
 
+
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
                 Tree FC PTerm -> Core FC (RawImp FC)
   desugarTree (Inf loc op l r)

@@ -30,13 +30,13 @@ record FC where
   endPos : FilePos
 
 export
-Reflect FC where
-  reflect defs (NDCon (NS _ (UN "MkFC")) _ _ [file, start, end])
-      = do file' <- reflect defs (evalClosure defs file)
-           start' <- reflect defs (evalClosure defs start)
-           end' <- reflect defs (evalClosure defs end)
+Reify FC where
+  reify defs (NDCon (NS _ (UN "MkFC")) _ _ [file, start, end])
+      = do file' <- reify defs (evalClosure defs file)
+           start' <- reify defs (evalClosure defs start)
+           end' <- reify defs (evalClosure defs end)
            pure (MkFC file' start' end')
-  reflect defs _ = Nothing
+  reify defs _ = Nothing
 
 export
 emptyFC : FC

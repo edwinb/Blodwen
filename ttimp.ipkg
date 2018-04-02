@@ -46,6 +46,7 @@ modules = Core.AutoSearch,
           TTImp.ProcessTTImp,
           TTImp.Reflect,
           TTImp.REPL,
+          TTImp.RunElab,
           TTImp.TTImp,
 
           Utils.Binary
