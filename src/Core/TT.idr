@@ -104,6 +104,10 @@ data PrimFn : Nat -> Type where
      StrLength : PrimFn 1
      StrHead : PrimFn 1
      StrTail : PrimFn 1
+     StrAppend : PrimFn 2
+     StrReverse : PrimFn 1
+
+     Cast : Constant -> Constant -> PrimFn 1
 
 public export
 data PiInfo = Implicit | Explicit | AutoImplicit

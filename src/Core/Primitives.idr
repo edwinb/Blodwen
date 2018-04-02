@@ -26,6 +26,33 @@ unaryOp fn [NPrimVal x]
     = map NPrimVal (fn x)
 unaryOp _ _ = Nothing
 
+castString : Vect 1 (NF vars) -> Maybe (NF vars)
+castString [NPrimVal (I i)] = Just (NPrimVal (Str (show i)))
+castString [NPrimVal (BI i)] = Just (NPrimVal (Str (show i)))
+castString [NPrimVal (Ch i)] = Just (NPrimVal (Str (show i)))
+castString [NPrimVal (Db i)] = Just (NPrimVal (Str (show i)))
+castString _ = Nothing
+
+castInteger : Vect 1 (NF vars) -> Maybe (NF vars)
+castInteger [NPrimVal (I i)] = Just (NPrimVal (BI (cast i)))
+castInteger [NPrimVal (Db i)] = Just (NPrimVal (BI (cast i)))
+castInteger _ = Nothing
+
+castInt : Vect 1 (NF vars) -> Maybe (NF vars)
+castInt [NPrimVal (BI i)] = Just (NPrimVal (I (fromInteger i)))
+castInt [NPrimVal (Db i)] = Just (NPrimVal (I (cast i)))
+castInt [NPrimVal (Ch i)] = Just (NPrimVal (I (cast i)))
+castInt _ = Nothing
+
+castDouble : Vect 1 (NF vars) -> Maybe (NF vars)
+castDouble [NPrimVal (I i)] = Just (NPrimVal (Db (cast i)))
+castDouble [NPrimVal (BI i)] = Just (NPrimVal (Db (cast i)))
+castDouble _ = Nothing
+
+castChar : Vect 1 (NF vars) -> Maybe (NF vars)
+castChar [NPrimVal (I i)] = Just (NPrimVal (Ch (cast i)))
+castChar _ = Nothing
+
 strLength : Vect 1 (NF vars) -> Maybe (NF vars)
 strLength [NPrimVal (Str s)] = Just (NPrimVal (I (cast (length s))))
 strLength _ = Nothing
@@ -41,6 +68,16 @@ strTail [NPrimVal (Str "")] = Nothing
 strTail [NPrimVal (Str str)] 
     = Just (NPrimVal (Str (assert_total (strTail str))))
 strTail _ = Nothing
+
+strAppend : Vect 2 (NF vars) -> Maybe (NF vars)
+strAppend [NPrimVal (Str x), NPrimVal (Str y)] 
+    = Just (NPrimVal (Str (x ++ y)))
+strAppend _ = Nothing
+
+strReverse : Vect 1 (NF vars) -> Maybe (NF vars)
+strReverse [NPrimVal (Str x)] 
+    = Just (NPrimVal (Str (reverse x)))
+strReverse _ = Nothing
 
 add : Constant -> Constant -> Maybe Constant
 add (BI x) (BI y) = pure $ BI (x + y)
@@ -139,6 +176,14 @@ arithTy t = constTy t t t
 cmpTy : Constant -> ClosedTerm
 cmpTy t = constTy t t IntType
 
+castTo : Constant -> Vect 1 (NF vars) -> Maybe (NF vars)
+castTo IntType = castInt
+castTo IntegerType = castInteger
+castTo StringType = castString
+castTo CharType = castChar
+castTo DoubleType = castDouble
+castTo _ = const Nothing
+
 export
 getOp : PrimFn arity -> 
         {vars : List Name} -> Vect arity (NF vars) -> Maybe (NF vars)
@@ -158,6 +203,10 @@ getOp (GT ty) = binOp gt
 getOp StrLength = strLength
 getOp StrHead = strHead
 getOp StrTail = strTail
+getOp StrAppend = strAppend
+getOp StrReverse = strReverse
+
+getOp (Cast _ y) = castTo y
 
 getOp _ = const Nothing
 
@@ -179,6 +228,9 @@ opName (GT ty) = prim $ "gt_" ++ show ty
 opName StrLength = prim "strLength"
 opName StrHead = prim "strHead"
 opName StrTail = prim "strTail"
+opName StrAppend = prim "strAppend"
+opName StrReverse = prim "strReverse"
+opName (Cast x y) = prim $ "cast_" ++ show x ++ show y
 
 allPrimitives : List Prim
 allPrimitives =
@@ -197,7 +249,15 @@ allPrimitives =
 
     [MkPrim StrLength (predTy StringType IntType) Total,
      MkPrim StrHead (predTy StringType CharType) (Partial NotCovering),
-     MkPrim StrTail (predTy StringType StringType) (Partial NotCovering)]
+     MkPrim StrTail (predTy StringType StringType) (Partial NotCovering),
+     MkPrim StrAppend (arithTy StringType) Total,
+     MkPrim StrReverse (predTy StringType StringType) Total] ++
+
+    map (\t => MkPrim (Cast t StringType) (predTy t StringType) Total) [IntType, IntegerType, CharType, DoubleType] ++
+    map (\t => MkPrim (Cast t IntegerType) (predTy t IntegerType) Total) [IntType, DoubleType] ++
+    map (\t => MkPrim (Cast t IntType) (predTy t IntType) Total) [IntegerType, CharType, DoubleType] ++
+    map (\t => MkPrim (Cast t DoubleType) (predTy t DoubleType) Total) [IntType, IntegerType] ++
+    map (\t => MkPrim (Cast t CharType) (predTy t CharType) Total) [IntType]
 
 addPrim : {auto c : Ref Ctxt Defs} ->
           Prim -> Core annot ()
