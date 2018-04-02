@@ -135,6 +135,13 @@ mutual
             -- all the other bracketed expressions
             tuple fname start indents e)
 
+  listExpr : FileName -> FilePos -> IndentInfo -> Rule PTerm
+  listExpr fname start indents
+      = do xs <- sepBy (symbol ",") (expr fname indents)
+           symbol "]"
+           end <- location
+           pure (PList (MkFC fname start end) xs)
+
   -- A pair, dependent pair, or just a single expression
   tuple : FileName -> FilePos -> IndentInfo -> PTerm -> Rule PTerm
   tuple fname start indents e
@@ -175,8 +182,22 @@ mutual
            end <- location
            pure (PDotted (MkFC fname start end) e)
     <|> do start <- location
+           symbol "`("
+           e <- expr fname indents
+           symbol ")"
+           end <- location
+           pure (PQuote (MkFC fname start end) e)
+    <|> do start <- location
+           symbol "~"
+           e <- simpleExpr fname indents
+           end <- location
+           pure (PUnquote (MkFC fname start end) e)
+    <|> do start <- location
            symbol "("
            bracketedExpr fname start indents
+    <|> do start <- location
+           symbol "["
+           listExpr fname start indents
   
   getMult : Constant -> EmptyRule RigCount
   getMult (BI 0) = pure Rig0

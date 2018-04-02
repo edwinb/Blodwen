@@ -85,7 +85,8 @@ symbols : List String
 symbols 
     = [".(", -- for things such as Foo.Bar.(+)
        "(|", "|)",
-       "(", ")", "{", "}", "[", "]", "`", ",", ";", "_"]
+       "(", ")", "{", "}", "[", "]", ",", ";", "_", 
+       "`(", "`", "~"]
 
 validSymbol : Lexer
 validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")

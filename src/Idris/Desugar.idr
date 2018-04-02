@@ -207,6 +207,8 @@ mutual
   desugar (PImplicit fc) = pure $ Implicit fc
   desugar (PDoBlock fc block)
       = expandDo fc block
+  desugar (PList fc args)
+      = expandList fc args
   desugar (PPair fc l r) 
       = do l' <- desugar l
            r' <- desugar r
@@ -217,6 +219,12 @@ mutual
       = pure $ IAlternative fc Unique 
                [IVar fc (UN "Unit"), 
                 IVar fc (UN "MkUnit")]
+  
+  expandList : {auto s : Ref Syn SyntaxInfo} ->
+               FC -> List PTerm -> Core FC (RawImp FC)
+  expandList fc [] = pure (IVar fc (UN "Nil"))
+  expandList fc (x :: xs)
+      = pure $ apply (IVar fc (UN "::")) [!(desugar x), !(expandList fc xs)]
   
   expandDo : {auto s : Ref Syn SyntaxInfo} ->
              FC -> List PDo -> Core FC (RawImp FC)

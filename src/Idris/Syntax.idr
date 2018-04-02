@@ -115,10 +115,11 @@ mutual
        -- Syntactic sugar
        
        PDoBlock : FC -> List PDo -> PTerm
+       PList : FC -> List PTerm -> PTerm
        PPair : FC -> PTerm -> PTerm -> PTerm
        PUnit : FC -> PTerm
 
-       -- TODO: Dependent pairs, lists, idiom brackets, equality,
+       -- TODO: Dependent pairs, enumerations, idiom brackets, equality,
        -- comprehensions, if/then/else, rewrites
 
   public export

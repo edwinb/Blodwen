@@ -232,6 +232,7 @@ Show PTerm where
       showDo (DoLet _ l rig tm) = "let " ++ show l ++ " = " ++ show tm
       showDo (DoLetPat _ l tm alts) 
           = "let " ++ show l ++ " = " ++ show tm ++ concatMap showAlt alts
-
+  show (PList _ xs)
+      = "[" ++ showSep ", " (map show xs) ++ "]"
   show (PPair _ l r) = "(" ++ show l ++ ", " ++ show r ++ ")"
   show (PUnit _) = "()"
