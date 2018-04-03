@@ -5,6 +5,7 @@ import Core.Unify
 import Core.Context
 import Core.CaseTree
 import Core.Normalise
+import Core.Reflect
 
 import TTImp.Elab
 import TTImp.TTImp
@@ -83,6 +84,7 @@ impossibleOK _ _ _ = False
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              Reflect annot =>
               Elaborator annot ->
               Name ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
@@ -162,6 +164,7 @@ export
 processDef : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             Reflect annot =>
              Elaborator annot ->
              Env Term vars -> NestedNames vars -> annot ->
              Name -> List (ImpClause annot) -> 

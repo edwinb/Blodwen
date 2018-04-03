@@ -4,6 +4,7 @@ import public Core.Binary
 import public Core.Context
 import public Core.Core
 import public Core.Normalise
+import public Core.Reflect
 import public Core.TT
 
 import TTImp.Reflect
@@ -37,6 +38,14 @@ Reify FC where
            end' <- reify defs (evalClosure defs end)
            pure (MkFC file' start' end')
   reify defs _ = Nothing
+
+export
+Reflect FC where
+  reflect defs env fc
+      = do file' <- reflect defs env (file fc)
+           start' <- reflect defs env (startPos fc)
+           end' <- reflect defs env (endPos fc)
+           appCon defs (NS ["Reflect"] (UN "MkFC")) [file', start', end']
 
 export
 emptyFC : FC

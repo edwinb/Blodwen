@@ -3,6 +3,7 @@ module TTImp.ProcessData
 import Core.Context
 import Core.Normalise
 import Core.TT
+import Core.Reflect
 import Core.Unify
 
 import TTImp.Elab
@@ -21,6 +22,7 @@ processDataOpt loc ndef (SearchBy dets)
 checkCon : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
+           Reflect annot =>
            Elaborator annot -> 
            Env Term vars -> NestedNames vars -> Visibility -> ImpTy annot ->
            Core annot Constructor
@@ -47,6 +49,7 @@ export
 processData : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              Reflect annot =>
               Elaborator annot ->
               Env Term vars -> NestedNames vars -> 
               Visibility -> ImpData annot -> 

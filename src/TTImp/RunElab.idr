@@ -15,7 +15,7 @@ import TTImp.TTImp
 elabScript : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
-             Reify annot =>
+             (Reflect annot, Reify annot) =>
              annot -> Elaborator annot ->
              Env Term vars -> NestedNames vars -> NF vars -> 
              Core annot (NF vars) 
@@ -80,7 +80,7 @@ export
 processReflect : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
                  {auto i : Ref ImpST (ImpState annot)} ->
-                 Reify annot =>
+                 (Reflect annot, Reify annot) =>
                  annot ->
                  Elaborator annot ->
                  Env Term vars -> NestedNames vars -> RawImp annot -> 

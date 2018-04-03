@@ -2,10 +2,13 @@ module TTImp.Elab.Term
 
 import TTImp.TTImp
 import public TTImp.Elab.State
+import TTImp.Reflect
+
 import Core.AutoSearch
 import Core.CaseTree
 import Core.Context
 import Core.Normalise
+import Core.Reflect
 import Core.TT
 import Core.Typecheck
 import Core.Unify
@@ -89,6 +92,7 @@ mutual
   export
   check : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+          Reflect annot =>
           RigCount ->
           Elaborator annot -> -- the elaborator for top level declarations
                               -- used for nested definitions
@@ -172,6 +176,7 @@ mutual
 
   checkImp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             Reflect annot =>
              RigCount ->
              Elaborator annot ->
              ElabInfo annot ->
@@ -295,10 +300,15 @@ mutual
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected
-  checkImp rigc process elabinfo env nest (IQuote loc tm) expected
-      = throw (GenericMsg loc "Quotation not implemented yet")
+  checkImp {vars} rigc process elabinfo env nest (IQuote loc tm) expected
+      = do defs <- get Ctxt
+           let Just tm' = reflect defs env tm 
+                | Nothing => throw (GenericMsg loc "Reflection failed")
+           let Just ty = getCon {vars} defs (NS ["Reflect"] (UN "TTImp"))
+                | Nothing => throw (InternalError "Reflection failed")
+           checkExp rigc process loc elabinfo env nest tm' ty expected
   checkImp rigc process elabinfo env nest (IUnquote loc tm) expected
-      = throw (GenericMsg loc "Quotation not implemented yet")
+      = throw (InternalError "Escape should have been resolved before here")
   checkImp rigc process elabinfo env nest (IType loc) exp
       = checkExp rigc process loc elabinfo env nest TType TType exp
   checkImp rigc process elabinfo env nest (IBindVar loc str) exp with (elabMode elabinfo)
@@ -395,6 +405,7 @@ mutual
   -- a globally defined name
   checkName : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
               {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+              Reflect annot =>
               RigCount -> Elaborator annot -> ElabInfo annot -> annot -> Env Term vars -> 
               NestedNames vars -> Name -> Maybe (Term vars) ->
               Core annot (Term vars, Term vars)
@@ -435,7 +446,8 @@ mutual
                        throw $ InvisibleName loc (NS ns x)
       checkVisibleNS _ = pure ()
 
-      resolveRef : Name -> Def -> Defs -> Term vars -> 
+      resolveRef : Reflect annot =>
+                   Name -> Def -> Defs -> Term vars -> 
                    Core annot (Term vars, Term vars)
       resolveRef n def gam varty
           = do checkVisibleNS n
@@ -455,6 +467,7 @@ mutual
   checkCase : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
               {auto e : Ref EST (EState vars)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              Reflect annot =>
               RigCount -> Elaborator annot ->
               ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
               RawImp annot -> List (ImpClause annot) ->
@@ -592,6 +605,7 @@ mutual
   checkLocal : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} ->
                {auto i : Ref ImpST (ImpState annot)} ->
+               Reflect annot =>
                RigCount -> Elaborator annot ->
                ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
                List (ImpDecl annot) -> RawImp annot ->
@@ -651,6 +665,7 @@ mutual
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            Reflect annot =>
             RigCount -> Elaborator annot ->
             ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
             String -> (arg : RawImp annot) ->
@@ -677,6 +692,7 @@ mutual
   checkApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             Reflect annot =>
              RigCount -> Elaborator annot ->
              ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
              (fn : RawImp annot) -> (arg : RawImp annot) ->
@@ -725,6 +741,7 @@ mutual
   checkPi : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            Reflect annot =>
             RigCount -> Elaborator annot -> ElabInfo annot ->
             annot -> Env Term vars -> NestedNames vars -> RigCount -> PiInfo -> Name -> 
             (argty : RawImp annot) -> (retty : RawImp annot) ->
@@ -778,6 +795,7 @@ mutual
   checkLam : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             Reflect annot =>
              RigCount -> Elaborator annot -> ElabInfo annot ->
              annot -> Env Term vars -> NestedNames vars -> RigCount -> PiInfo -> Name ->
              (ty : RawImp annot) -> (scope : RawImp annot) ->
@@ -812,6 +830,7 @@ mutual
   checkLet : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             Reflect annot =>
              RigCount -> Elaborator annot ->
              ElabInfo annot -> annot -> Env Term vars -> NestedNames vars ->
              RigCount -> Name -> 
@@ -839,6 +858,7 @@ mutual
   makeImplicit 
           : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            Reflect annot =>
             RigCount -> Elaborator annot -> annot -> Env Term vars -> NestedNames vars ->
             ElabInfo annot -> Name -> (ty : NF vars) ->
             Core annot (Term vars) 
@@ -875,6 +895,7 @@ mutual
   makeAutoImplicit 
           : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            Reflect annot =>
             RigCount -> Elaborator annot -> annot -> Env Term vars -> NestedNames vars ->
             ElabInfo annot -> Name -> (ty : NF vars) ->
             Core annot (Term vars) 
@@ -917,6 +938,7 @@ mutual
   -- implicits added
   getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            Reflect annot =>
             RigCount -> Elaborator annot -> annot -> Env Term vars -> NestedNames vars ->
             ElabInfo annot ->
             (ty : NF vars) -> List (Term vars) ->
@@ -935,6 +957,7 @@ mutual
   --- expected type
   convertImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                 {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+                Reflect annot =>
                 RigCount -> Elaborator annot -> annot -> Env Term vars ->
                 NestedNames vars -> ElabInfo annot ->
                 (got : NF vars) -> (exp : NF vars) -> List (Term vars) ->
@@ -953,6 +976,7 @@ mutual
 
   checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             Reflect annot =>
              RigCount -> Elaborator annot -> annot -> ElabInfo annot -> Env Term vars ->
              NestedNames vars ->
              (term : Term vars) -> (got : Term vars) -> 

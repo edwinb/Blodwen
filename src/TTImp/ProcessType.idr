@@ -4,6 +4,7 @@ import Core.TT
 import Core.Unify
 import Core.Context
 import Core.Normalise
+import Core.Reflect
 
 import TTImp.Elab
 import TTImp.TTImp
@@ -33,6 +34,7 @@ export
 processType : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              Reflect annot =>
               Elaborator annot ->
               Env Term vars -> NestedNames vars ->
               Visibility -> List FnOpt -> ImpTy annot -> 

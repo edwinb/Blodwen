@@ -7,6 +7,7 @@ import Core.CaseTree
 import Core.Context
 import Core.LinearCheck
 import Core.Normalise
+import Core.Reflect
 import Core.TT
 import Core.Unify
 
@@ -22,6 +23,7 @@ getRigNeeded _ = Rig1
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
+           Reflect annot =>
            Elaborator annot ->
            Name ->
            Env Term vars -> NestedNames vars ->
@@ -76,6 +78,7 @@ export
 inferTerm : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            Reflect annot =>
             Elaborator annot -> 
             Name ->
             Env Term vars -> NestedNames vars ->
@@ -89,6 +92,7 @@ export
 checkTerm : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            Reflect annot =>
             Elaborator annot ->
             Name ->
             Env Term vars -> NestedNames vars ->

@@ -6,9 +6,6 @@ import public Core.Reflect
 import Core.Unify
 import Core.TT
 
-import TTImp.Elab
-import TTImp.ProcessDef
-import TTImp.ProcessType
 import TTImp.TTImp
 
 %default covering

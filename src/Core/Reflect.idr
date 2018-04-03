@@ -34,6 +34,10 @@ Reify () where
   reify defs _ = pure ()
 
 export
+Reflect () where
+  reflect defs env _ = getCon defs (NS ["Stuff"] (UN "MkUnit"))
+
+export
 Reify String where
   reify defs (NPrimVal (Str str)) = pure str
   reify defs _ = Nothing
@@ -103,6 +107,13 @@ export
            y' <- reify defs (evalClosure defs y)
            pure (x', y')
   reify defs _ = Nothing
+
+export
+(Reflect a, Reflect b) => Reflect (a, b) where
+  reflect defs env (x, y)
+      = do x' <- reflect defs env x
+           y' <- reflect defs env y
+           appCon defs (NS ["Stuff"] (UN "MkPair")) [Erased, Erased, x', y']
 
 export
 Reify Name where
