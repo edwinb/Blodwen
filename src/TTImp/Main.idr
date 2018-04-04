@@ -8,6 +8,7 @@ import Core.Unify
 import Core.Context
 import Core.ProcessTT
 import Core.RawContext
+import Core.Reflect
 import Core.Directory
 import Core.Options
 import Core.Primitives

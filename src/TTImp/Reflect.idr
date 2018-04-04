@@ -8,8 +8,11 @@ import Core.TT
 
 import TTImp.TTImp
 
+import Data.List
+
 %default covering
 
+-- TODO: Remaining cases!
 export
 Reify annot => Reify (RawImp annot) where
   reify defs (NDCon (NS ["Reflect"] (UN "Var")) _ _ [fc, n])
@@ -23,6 +26,7 @@ Reify annot => Reify (RawImp annot) where
            pure (IApp fc' f' a')
   reify defs _ = Nothing
 
+-- TODO: Remaining cases!
 export
 Reflect annot => Reflect (RawImp annot) where
   reflect defs env (IVar fc nm)
@@ -34,6 +38,9 @@ Reflect annot => Reflect (RawImp annot) where
            f' <- reflect defs env f
            a' <- reflect defs env a
            appCon defs (NS ["Reflect"] (UN "App")) [fc', f', a']
+  reflect defs env (IUnquote fc (IVar _ nm))
+      = do (count, el) <- defined nm env
+           pure (Local el)
   reflect defs env _ = Nothing
 
 export

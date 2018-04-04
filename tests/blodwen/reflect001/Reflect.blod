@@ -66,8 +66,9 @@ nameTest = GenSym "whatever"
 %runElab nameTest
 
 mkNatTerm : Nat -> TTImp
-mkNatTerm Z = Var emptyFC (UN "Z")
-mkNatTerm (S k) = App emptyFC (Var emptyFC (UN "S")) (mkNatTerm k)
+mkNatTerm Z = `( Z )
+mkNatTerm (S k) = let var = mkNatTerm k in
+                      `( S ~var ) -- TODO: as ~(mkNatTerm k) )
 
 mkNat : String -> Nat -> Elab ()
 mkNat n num = 

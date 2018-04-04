@@ -80,7 +80,6 @@ processDecls env nest decls
 export
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState ())} ->
-          (Reflect annot, Reify annot) =>
           String -> Core () ()
 process file
     = do Right res <- coreLift (readFile file)

@@ -300,6 +300,7 @@ mutual
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected
+  -- TODO: Lift out escaped subterms and elaborate as let bound
   checkImp {vars} rigc process elabinfo env nest (IQuote loc tm) expected
       = do defs <- get Ctxt
            let Just tm' = reflect defs env tm 
