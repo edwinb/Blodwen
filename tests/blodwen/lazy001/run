@@ -1,3 +1,5 @@
 $1 lazy.blod < input
+sleep 1
+$1 lazy.blod < input
 
 rm -rf build

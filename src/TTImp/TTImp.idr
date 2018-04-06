@@ -102,7 +102,7 @@ mutual
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
                ImpDecl annot
-       IPragma : (Ref Ctxt Defs -> Core annot ()) -> ImpDecl annot
+       IPragma : Core annot () -> ImpDecl annot
        ILog : Nat -> ImpDecl annot
        -- To add: IRecord
 

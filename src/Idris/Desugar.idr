@@ -150,6 +150,7 @@ toTokList t = pure [Expr t]
 mutual
   export
   desugar : {auto s : Ref Syn SyntaxInfo} ->
+            {auto c : Ref Ctxt Defs} ->
             PTerm -> Core FC (RawImp FC)
   desugar (PRef fc x) = pure $ IVar fc x
   desugar (PPi fc rig p mn argTy retTy) 
@@ -221,12 +222,14 @@ mutual
                 IVar fc (UN "MkUnit")]
   
   expandList : {auto s : Ref Syn SyntaxInfo} ->
+               {auto c : Ref Ctxt Defs} ->
                FC -> List PTerm -> Core FC (RawImp FC)
   expandList fc [] = pure (IVar fc (UN "Nil"))
   expandList fc (x :: xs)
       = pure $ apply (IVar fc (UN "::")) [!(desugar x), !(expandList fc xs)]
   
   expandDo : {auto s : Ref Syn SyntaxInfo} ->
+             {auto c : Ref Ctxt Defs} ->
              FC -> List PDo -> Core FC (RawImp FC)
   expandDo fc [] = throw (GenericMsg fc "Do block cannot be empty")
   expandDo _ [DoExp fc tm] = desugar tm
@@ -267,6 +270,7 @@ mutual
 
 
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
+                {auto c : Ref Ctxt Defs} ->
                 Tree FC PTerm -> Core FC (RawImp FC)
   desugarTree (Inf loc op l r)
       = do l' <- desugarTree l
@@ -278,11 +282,13 @@ mutual
   desugarTree (Leaf t) = desugar t
 
   desugarType : {auto s : Ref Syn SyntaxInfo} ->
+                {auto c : Ref Ctxt Defs} ->
                 PTypeDecl -> Core FC (ImpTy FC)
   desugarType (MkPTy fc n ty) 
       = pure $ MkImpTy fc n (bindNames True [] !(desugar ty))
 
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
+                  {auto c : Ref Ctxt Defs} ->
                   PClause -> Core FC (ImpClause FC)
   desugarClause (MkPatClause fc lhs rhs wheres)
       = do ws <- traverse desugarDecl wheres
@@ -295,6 +301,7 @@ mutual
       = pure $ ImpossibleClause fc (bindNames False [] !(desugar lhs))
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
+                {auto c : Ref Ctxt Defs} ->
                 PDataDecl -> Core FC (ImpData FC)
   desugarData (MkPData fc n tycon opts datacons) 
       = pure $ (MkImpData fc n (bindNames True [] !(desugar tycon))
@@ -305,6 +312,7 @@ mutual
   -- which process it, and update any necessary state on the way.
   export
   desugarDecl : {auto s : Ref Syn SyntaxInfo} ->
+                {auto c : Ref Ctxt Defs} ->
                 PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl (PClaim fc vis opts ty) 
       = pure [IClaim fc vis opts !(desugarType ty)]
@@ -327,5 +335,5 @@ mutual
   desugarDecl (PDirective fc d) 
       = case d of
              Logging i => pure [ILog i]
-             LazyNames ty d f => pure [IPragma (\defs => setLazy fc ty d f)]
+             LazyNames ty d f => pure [IPragma (setLazy fc ty d f)]
 
