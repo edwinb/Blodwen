@@ -262,7 +262,17 @@ occursCheck gam n tm
         = do fchk <- oc chk f
              oc fchk a
     oc chk tm = Just chk
-        
+       
+convertAll : Defs -> Env Term vars -> 
+             List (Closure vars) -> List (Closure vars) -> 
+             Maybe (List (Closure vars), List (Closure vars))
+convertAll defs env as [] = Just (reverse as, [])
+convertAll defs env (x :: xs) (y :: ys)
+    = if convert defs env x y 
+         then convertAll defs env xs ys
+         else Just (reverse (x :: xs), reverse (y :: ys))
+convertAll _ _ _ _ = Nothing
+
 mutual
   -- Find holes which are applied to environments which are too big, and
   -- solve them with a new hole applied to only the available arguments.
@@ -383,13 +393,73 @@ mutual
       = case lookupDefExact n gam of
              Just (Hole _ pvar) => not pvar
              _ => False
+  
+  unifyHoleApp : {auto c : Ref Ctxt Defs} ->
+                 {auto u : Ref UST (UState annot)} ->
+                 UnifyMode -> annot -> Env Term vars ->
+                 NameType -> Name -> List (Closure vars) -> NF vars ->
+                 Core annot (List Name)
+  unifyHoleApp mode loc env nt var args (NTCon n t a args')
+      = do gam <- get Ctxt
+           -- Convert arguments right to left, then unify the head with
+           -- the type. Arguments must be convertible (not merely unifiable)
+           case convertAll gam env (reverse args) (reverse args') of
+                Just (fargs, targs) => 
+                    unify mode loc env (NApp (NRef nt var) fargs) 
+                                       (NTCon n t a targs)
+                Nothing =>
+                   do log 10 $ "Postponing hole application " ++
+                            show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                            show (quote (noGam gam) env (NTCon n t a args'))
+                      postpone loc env
+                           (quote (noGam gam) env (NApp (NRef nt var) args)) 
+                           (quote (noGam gam) env (NTCon n t a args'))
+  unifyHoleApp mode loc env nt var args (NDCon n t a args')
+      = do gam <- get Ctxt
+           -- Convert arguments right to left, then unify the head with
+           -- the type. Arguments must be convertible (not merely unifiable)
+           case convertAll gam env (reverse args) (reverse args') of
+                Just (fargs, targs) => 
+                    unify mode loc env (NApp (NRef nt var) fargs) 
+                                       (NDCon n t a targs)
+                Nothing =>
+                   do log 10 $ "Postponing hole application " ++
+                            show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                            show (quote (noGam gam) env (NDCon n t a args'))
+                      postpone loc env
+                           (quote (noGam gam) env (NApp (NRef nt var) args)) 
+                           (quote (noGam gam) env (NDCon n t a args'))
+  unifyHoleApp mode loc env nt var args (NApp (NLocal lvar) args')
+      = do gam <- get Ctxt
+           -- Convert arguments right to left, then unify the head with
+           -- the type. Arguments must be convertible (not merely unifiable)
+           case convertAll gam env (reverse args) (reverse args') of
+                Just (fargs, targs) => 
+                    unify mode loc env (NApp (NRef nt var) fargs) 
+                                       (NApp (NLocal lvar) targs)
+                Nothing =>
+                   do log 10 $ "Postponing hole application " ++
+                            show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                            show (quote (noGam gam) env (NApp (NLocal lvar) args'))
+                      postpone loc env
+                           (quote (noGam gam) env (NApp (NRef nt var) args)) 
+                           (quote (noGam gam) env (NApp (NLocal lvar) args'))
+  unifyHoleApp mode loc env nt var args tm
+      = do gam <- get Ctxt
+           log 10 $ "Postponing constraint " ++
+                        show (quote (noGam gam) env (NApp (NRef nt var) args))
+                         ++ " =?= " ++
+                        show (quote (noGam gam) env tm)
+           postpone loc env 
+                 (quote (noGam gam) env (NApp (NRef nt var) args))
+                 (quote (noGam gam) env tm)
 
   unifyHole : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
-              annot -> Env Term vars ->
+              UnifyMode -> annot -> Env Term vars ->
               NameType -> Name -> List (Closure vars) -> NF vars ->
               Core annot (List Name)
-  unifyHole loc env nt var args tm
+  unifyHole mode loc env nt var args tm
       = case !(patternEnv env args) of
            Just (newvars ** submv) =>
                 do gam <- get Ctxt
@@ -435,38 +505,33 @@ mutual
                                                      (quote (noGam gam) env tm)))
                                       else do instantiate loc var submv tm'
                                               pure []
+           -- Not in the pattern fragment
            Nothing => do gam <- get Ctxt
-                         log 10 $ "Postponing constraint " ++
-                                      show (quote (noGam gam) env (NApp (NRef nt var) args))
-                                       ++ " =?= " ++
-                                      show (quote (noGam gam) env tm)
-                         postpone loc env 
-                               (quote (noGam gam) env (NApp (NRef nt var) args))
-                               (quote (noGam gam) env tm)
+                         unifyHoleApp mode loc env nt var args tm
 
   unifyApp : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
-             annot -> Env Term vars ->
+             UnifyMode -> annot -> Env Term vars ->
              NHead vars -> List (Closure vars) -> NF vars ->
              Core annot (List Name)
-  unifyApp loc env (NRef nt var) args tm 
+  unifyApp mode loc env (NRef nt var) args tm 
       = do gam <- get Ctxt
            if convert (noGam gam) env (NApp (NRef nt var) args) tm
               then pure []
               else
                if isHoleNF (gamma gam) var
-                  then unifyHole loc env nt var args tm
+                  then unifyHole mode loc env nt var args tm
                   else unifyIfEq True loc env (NApp (NRef nt var) args) tm
-  unifyApp loc env hd args (NApp (NRef nt var) args')
+  unifyApp mode loc env hd args (NApp (NRef nt var) args')
       = do gam <- get Ctxt
            if convert (noGam gam) env (NApp hd args) (NApp (NRef nt var) args')
               then pure []
               else
                 if isHoleNF (gamma gam) var
-                   then unifyHole loc env nt var args' (NApp hd args)
+                   then unifyHole mode loc env nt var args' (NApp hd args)
                    else unifyIfEq True loc env (NApp hd args)
                                                (NApp (NRef nt var) args')
-  unifyApp loc env (NLocal x) [] (NApp (NLocal y) [])
+  unifyApp mode loc env (NLocal x) [] (NApp (NLocal y) [])
       = do gam <- get Ctxt
            if sameVar x y then pure []
              else do log 10 $ "Postponing var constraint " ++
@@ -476,7 +541,7 @@ mutual
                      postpone loc env
                        (quote (noGam gam) env (NApp (NLocal x) [])) 
                        (quote (noGam gam) env (NApp (NLocal y) []))
-  unifyApp loc env hd args (NApp hd' args')
+  unifyApp mode loc env hd args (NApp hd' args')
       = do gam <- get Ctxt
            if convert (noGam gam) env (NApp hd args) (NApp hd' args')
              then pure []
@@ -488,18 +553,18 @@ mutual
                               (quote (noGam gam) env (NApp hd' args'))
   -- A local variable against a constructor is impossible, because the local
   -- should quantify over everything
-  unifyApp loc env (NLocal x) [] (NDCon n t a args)
+  unifyApp mode loc env (NLocal x) [] (NDCon n t a args)
       = do gam <- get Ctxt
            convertError loc env  
                (quote (noGam gam) env (NApp (NLocal x) []))
                (quote (noGam gam) env (NDCon n t a args))
-  unifyApp loc env (NLocal x) [] (NTCon n t a args)
+  unifyApp mode loc env (NLocal x) [] (NTCon n t a args)
       = do gam <- get Ctxt
            convertError loc env (quote (noGam gam) env (NApp (NLocal x) []))
                         (quote (noGam gam) env (NTCon n t a args))
   -- If they're already convertible without metavariables, we're done,
   -- otherwise postpone
-  unifyApp loc env hd args tm 
+  unifyApp mode loc env hd args tm 
       = do gam <- get Ctxt
            if convert gam env (quote (noGam gam) env (NApp hd args))
                               (quote (noGam gam) env tm)
@@ -551,18 +616,18 @@ mutual
            if isHoleNF (gamma gam) hdx && isHoleNF (gamma gam) hdy
               then
                  (if length argsx > length argsy
-                     then unifyApp loc env (NRef xt hdx) argsx 
+                     then unifyApp mode loc env (NRef xt hdx) argsx 
                                            (NApp (NRef yt hdy) argsy)
-                     else unifyApp loc env (NRef yt hdy) argsy 
+                     else unifyApp mode loc env (NRef yt hdy) argsy 
                                            (NApp (NRef xt hdx) argsx))
               else 
                  (if isHoleNF (gamma gam) hdx
-                     then unifyApp loc env (NRef xt hdx) argsx
+                     then unifyApp mode loc env (NRef xt hdx) argsx
                                            (NApp (NRef yt hdy) argsy)
-                     else unifyApp loc env (NRef yt hdy) argsy 
+                     else unifyApp mode loc env (NRef yt hdy) argsy 
                                            (NApp (NRef xt hdx) argsx))
   unifyBothApps mode loc env fx ax fy ay
-        = unifyApp loc env fx ax (NApp fy ay)
+        = unifyApp mode loc env fx ax (NApp fy ay)
   
   unifyBothBinders
            : {auto c : Ref Ctxt Defs} ->
@@ -703,9 +768,9 @@ mutual
     unifyD _ _ mode loc env (NApp fx ax) (NApp fy ay)
         = unifyBothApps mode loc env fx ax fy ay
     unifyD _ _ mode loc env (NApp hd args) y 
-        = unifyApp loc env hd args y
+        = unifyApp mode loc env hd args y
     unifyD _ _ mode loc env y (NApp hd args)
-        = unifyApp loc env hd args y
+        = unifyApp mode loc env hd args y
     unifyD _ _ mode loc env x NErased = pure []
     unifyD _ _ mode loc env NErased y = pure []
     unifyD _ _ mode loc env NType NType = pure []

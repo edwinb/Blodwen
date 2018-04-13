@@ -1,0 +1,38 @@
+import Stuff
+
+data Functor : (f : Type -> Type) -> Type where
+     [noHints, search f]
+     MkFunctor : (map : {a, b: Type} -> (a -> b) -> f a -> f b) -> Functor f 
+
+map : {auto c : Functor f} -> (a -> b) -> f a -> f b
+map {c = MkFunctor map_meth} = map_meth
+
+%hint
+ListFunctor : Functor List
+
+mapList : (a -> b) -> List a -> List b
+mapList f [] = []
+mapList f (x :: xs) = f x :: map f xs
+
+ListFunctor = MkFunctor mapList
+
+tryMap : Nat -> Nat -> List Nat
+tryMap x y = map (plus x) [y, S y]
+
+data Vect : Nat -> Type -> Type where
+     Nil : Vect a n
+     (::) : a -> Vect k a -> Vect (S k) a
+
+%hint
+VectFunctor : Functor (Vect n)
+
+mapVect : {n : Nat} -> {a, b : _} -> (a -> b) -> Vect n a -> Vect n b
+mapVect f [] = []
+mapVect f (x :: xs) = f x :: map f xs
+
+VectFunctor = MkFunctor mapVect
+
+tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
+tryVMap x y = map (plus x) [y, S y]
+
+
