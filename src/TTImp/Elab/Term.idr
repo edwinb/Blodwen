@@ -264,8 +264,11 @@ mutual
            -- try again to solve the holes, including the search we've just added.
            solveConstraints umode False
            pure (mkConstantApp n env, expected)
+  checkImp rigc process elabinfo env nest (IAlternative loc _ [alt]) expected
+      = checkImp rigc process elabinfo env nest alt expected
   checkImp rigc process elabinfo env nest (IAlternative loc (UniqueDefault def) alts) mexpected
       = do expected <- maybe (do t <- addHole loc env TType
+                                 log 5 $ "Added hole for ambiguous expression type (UniqueDefault) " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
            delayOnFailure loc env expected ambiguous $
@@ -284,6 +287,7 @@ mutual
                                  (Just expected)) alts))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
       = do expected <- maybe (do t <- addHole loc env TType
+                                 log 5 $ "Added hole for ambiguous expression type " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
            delayOnFailure loc env expected ambiguous $
@@ -317,12 +321,19 @@ mutual
       = throw (BadImplicit loc str)
     checkImp rigc process elabinfo env nest (IBindVar loc str) Nothing | elabmode
         = do let n = PV str
-             t <- addHole loc env TType
-             let hty = mkConstantApp t env
              est <- get EST
              case lookup n (boundNames est) of
                   Nothing =>
-                    do tm <- addBoundName loc n True env hty
+                    do t <- addHole loc env TType
+                       -- Use an empty environment, because if we can't
+                       -- resolve the hole type in the current scope, there'll
+                       -- be some names out of scope in the hole type and
+                       -- we'll never be able to resolve it.
+                       let hty_in = mkConstantApp t []
+                       tm_in <- addBoundName loc n True [] hty_in
+                       let hty = embed hty_in
+                       let tm = embed tm_in
+                       log 5 $ "Added Bound implicit (invented type) " ++ show (n, (tm, hty))
                        put EST 
                            (record { boundNames $= ((n, (tm, hty)) ::),
                                      toBind $= ((n, (tm, hty)) ::) } est)

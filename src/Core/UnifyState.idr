@@ -303,7 +303,7 @@ addSearchable : {auto u : Ref UST (UState annot)} ->
                 annot -> Env Term vars ->
                 (ty : Term vars) -> Nat -> Core annot Name
 addSearchable loc env ty depth
-    = do cn <- genName "h"
+    = do cn <- genName "s"
          let defty = mkConstantTy env ty
          let hole = newDef defty Public (BySearch depth)
          addHoleName loc cn
@@ -437,7 +437,7 @@ dumpConstraints loglevel all
 -- references to them have been removed with 'normaliseHoles' or by binding
 -- as pattern/pi bound arguments.
 -- It doesn't remove them from the context - but they won't get saved out as
--- .tti, and they may be overwritten with new definitions.
+-- .ttc, and they may be overwritten with new definitions.
 export
 clearSolvedHoles : {auto u : Ref UST (UState annot)} -> 
                    {auto c : Ref Ctxt Defs} ->

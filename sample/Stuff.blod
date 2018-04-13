@@ -72,3 +72,7 @@ data Unit = MkUnit
 public export
 data Pair : Type -> Type -> Type where
      MkPair : {a, b : Type} -> a -> b -> Pair a b
+
+public export
+the : (a : Type) -> a -> a
+the _ x = x

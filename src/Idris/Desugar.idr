@@ -94,27 +94,54 @@ lowerFirst str = assert_total (isLower (strHead str))
 
 -- Bind lower case names in argument position
 -- Don't go under lambda, case let, or local bindings, or IAlternative
-bindNames : (arg : Bool) -> List Name -> RawImp annot -> RawImp annot
-bindNames True env (IVar fc (UN n))
+findBindableNames : (arg : Bool) -> List Name -> RawImp annot -> List String
+findBindableNames True env (IVar fc (UN n))
     = if not (UN n `elem` env) && lowerFirst n
-         then IBindVar fc n
-         else IVar fc (UN n)
-bindNames arg env (IPi fc rig p mn aty retty)
+         then [n]
+         else []
+findBindableNames arg env (IPi fc rig p mn aty retty)
     = let env' = case mn of
                       Nothing => env
                       Just n => n :: env in
-          IPi fc rig p mn (bindNames True env' aty) (bindNames True env' retty)
-bindNames arg env (IApp fc fn av)
-    = IApp fc (bindNames False env fn) (bindNames True env av)
-bindNames arg env (IImplicitApp fc fn n av)
-    = IImplicitApp fc (bindNames False env fn) n (bindNames True env av)
-bindNames arg env (IAs fc n pat)
-    = IAs fc n (bindNames arg env pat)
-bindNames arg env (IAlternative fc u alts)
-    = IAlternative fc u (map (bindNames arg env) alts)
+          findBindableNames True env' aty ++
+          findBindableNames True env' retty
+findBindableNames arg env (IApp fc fn av)
+    = findBindableNames False env fn ++ findBindableNames True env av
+findBindableNames arg env (IImplicitApp fc fn n av)
+    = findBindableNames False env fn ++ findBindableNames True env av
+findBindableNames arg env (IAs fc n pat)
+    = findBindableNames arg env pat
+findBindableNames arg env (IAlternative fc u alts)
+    = concatMap (findBindableNames arg env) alts
 -- We've skipped lambda, case, let and local - rather than guess where the
 -- name should be bound, leave it to the programmer
-bindNames arg env tm = tm
+findBindableNames arg env tm = []
+
+doBind : List String -> RawImp annot -> RawImp annot
+doBind [] tm = tm
+doBind ns (IVar fc (UN n))
+    = if n `elem` ns
+         then IBindVar fc n
+         else IVar fc (UN n)
+doBind ns (IPi fc rig p mn aty retty)
+    = let ns' = case mn of
+                     Just (UN n) => ns \\ [n]
+                     _ => ns in
+          IPi fc rig p mn (doBind ns' aty) (doBind ns' retty)
+doBind ns (IApp fc fn av)
+    = IApp fc (doBind ns fn) (doBind ns av)
+doBind ns (IImplicitApp fc fn n av)
+    = IImplicitApp fc (doBind ns fn) n (doBind ns av)
+doBind ns (IAs fc n pat)
+    = IAs fc n (doBind ns pat)
+doBind ns (IAlternative fc u alts)
+    = IAlternative fc u (map (doBind ns) alts)
+doBind ns tm = tm
+
+bindNames : (arg : Bool) -> List Name -> RawImp annot -> RawImp annot
+bindNames arg env tm
+    = let ns = findBindableNames arg env tm in
+          doBind (nub ns) tm
 
 -- Add 'IMustUnify' for any duplicated names, and any function application
 addDots : RawImp annot -> RawImp annot
