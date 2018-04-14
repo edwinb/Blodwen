@@ -710,7 +710,7 @@ mutual
              (fn : RawImp annot) -> (arg : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot (Term vars, Term vars) 
-  checkApp rigc process elabinfo loc env nest fn arg expected
+  checkApp {vars} rigc process elabinfo loc env nest fn arg expected
       = do (fntm, fnty) <- check rigc process elabinfo env nest fn Nothing
            gam <- get Ctxt
            case nf gam env fnty of
@@ -735,7 +735,12 @@ mutual
                   do bn <- genName "aTy"
                      -- invent names for the argument and return types
                      log 5 $ "Inventing arg type for " ++ show (fn, fnty)
-                     (expty, scty) <- inventFnType loc env bn
+                     -- Use an empty environment for the holes in the function
+                     -- type - we'll only get some simple types inferred, but
+                     -- otherwise we end up with unsolvable constraints
+                     (expty_in, scty_in) <- inventFnType loc [] bn
+                     let expty = embed expty_in
+                     let scty = embed {more=vars} scty_in
                      -- Check the argument type against the invented arg type
                      impsUsed <- saveImps
                      (argtm, argty) <- check rigc process (record { implicitsGiven = [] } elabinfo)

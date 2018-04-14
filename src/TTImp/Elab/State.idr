@@ -453,7 +453,6 @@ convert loc elabmode env x y
 
 export
 inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-               {auto e : Ref EST (EState vars)} ->
                annot -> Env Term vars -> (bname : Name) ->
                Core annot (Term vars, Term (bname :: vars))
 inventFnType loc env bname

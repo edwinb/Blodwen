@@ -1,0 +1,7 @@
+Processing as Idris
+1/2: Building Stuff (Stuff.blod)
+2/2: Building Functor (Functor.blod)
+Welcome to Blodwen. Good luck.
+Main> (S (S (S Z))) :: ((S (S (S (S Z)))) :: Nil) : List Nat
+Main> (S (S (S Z))) :: ((S (S (S (S Z)))) :: Nil) : Vect (S (S Z)) Nat
+Main> Bye for now!
