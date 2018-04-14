@@ -560,13 +560,21 @@ gadtData fname start n indents
          end <- location
          pure (MkPData (MkFC fname start end) n ty opts cs)
 
-dataDecl : FileName -> IndentInfo -> Rule PDataDecl
-dataDecl fname indents
+dataDeclBody : FileName -> IndentInfo -> Rule PDataDecl
+dataDeclBody fname indents
     = do start <- location
          keyword "data"
          n <- name
          simpleData fname start n indents 
            <|> gadtData fname start n indents
+
+dataDecl : FileName -> IndentInfo -> Rule PDecl
+dataDecl fname indents
+    = do start <- location
+         vis <- visibility
+         dat <- dataDeclBody fname indents
+         end <- location
+         pure (PData (MkFC fname start end) vis dat)
 
 directive : IndentInfo -> Rule Directive
 directive indents
@@ -581,19 +589,27 @@ directive indents
          atEnd indents
          pure (LazyNames ty f d)
 
-fixDecl : Rule Fixity
-fixDecl
+fix : Rule Fixity
+fix
     = do keyword "infixl"; pure InfixL
   <|> do keyword "infixr"; pure InfixR
   <|> do keyword "infix"; pure Infix
   <|> do keyword "prefix"; pure Prefix
 
-namespaceDecl : Rule (List String)
-namespaceDecl 
+namespaceHead : Rule (List String)
+namespaceHead 
     = do keyword "namespace"
          commit
          ns <- namespace_
          pure ns
+
+namespaceDecl : FileName -> IndentInfo -> Rule PDecl
+namespaceDecl fname indents
+    = do start <- location
+         ns <- namespaceHead
+         end <- location
+         ds <- assert_total (nonEmptyBlock (topDecl fname))
+         pure (PNamespace (MkFC fname start end) ns (concat ds))
 
 fnOpt : Rule FnOpt
 fnOpt
@@ -625,48 +641,132 @@ getRight : Either a b -> Maybe b
 getRight (Left _) = Nothing
 getRight (Right v) = Just v
 
--- Declared at the top
--- topDecl : FileName -> IndentInfo -> Rule (List PDecl)
-topDecl fname indents
+constraints : FileName -> IndentInfo -> EmptyRule (List (Maybe Name, PTerm))
+constraints fname indents
+    = do tm <- expr fname indents
+         symbol "=>"
+         more <- constraints fname indents
+         pure ((Nothing, tm) :: more)
+  <|> do symbol "("
+         n <- name
+         symbol ":"
+         tm <- expr fname indents
+         symbol ")"
+         symbol "=>"
+         more <- constraints fname indents
+         pure ((Just n, tm) :: more)
+  <|> pure []
+
+ifaceParam : FileName -> IndentInfo -> Rule (Name, PTerm)
+ifaceParam fname indents
+    = do symbol "("
+         n <- name
+         symbol ":"
+         tm <- expr fname indents
+         symbol ")"
+         pure (n, tm)
+  <|> do start <- location
+         n <- name
+         end <- location
+         pure (n, PImplicit (MkFC fname start end))
+
+ifaceDecl : FileName -> IndentInfo -> Rule PDecl
+ifaceDecl fname indents
     = do start <- location
          vis <- visibility
-         dat <- dataDecl fname indents
+         keyword "interface"
+         commit
+         cons <- constraints fname indents
+         n <- name
+         params <- many (ifaceParam fname indents)
+         det <- option [] (do symbol "|"
+                              sepBy (symbol ",") name)
+         keyword "where"
+         dc <- option Nothing (do exactIdent "constructor"
+                                  n <- name
+                                  pure (Just n))
+         body <- assert_total (nonEmptyBlock (topDecl fname))
          end <- location
-         pure [PData (MkFC fname start end) vis dat]
-  <|> do start <- location
-         ns <- namespaceDecl
+         pure (PInterface (MkFC fname start end) 
+                      vis cons n params det dc (collectDefs (concat body)))
+
+implDecl : FileName -> IndentInfo -> Rule PDecl
+implDecl fname indents
+    = do start <- location
+         vis <- visibility
+         cons <- constraints fname indents
+         option () (keyword "implementation")
+         iname <- option Nothing (do symbol "["
+                                     iname <- name
+                                     symbol "]"
+                                     pure (Just iname))
+         n <- name
+         params <- many (simpleExpr fname indents)
+         keyword "where"
+         body <- assert_total (nonEmptyBlock (topDecl fname))
          end <- location
-         ds <- assert_total (nonEmptyBlock (topDecl fname))
-         pure [PNamespace (MkFC fname start end) ns (concat ds)]
-  <|> do start <- location
-         symbol "%" 
-         (do d <- directive indents
-             end <- location
-             pure [PDirective (MkFC fname start end) d])
-           <|>
-          (do exactIdent "runElab"
-              tm <- expr fname indents
-              end <- location
-              atEnd indents
-              pure [PReflect (MkFC fname start end) tm])
-  <|> do start <- location
-         fixity <- fixDecl
+         pure (PImplementation (MkFC fname start end)
+                         vis cons n params iname (collectDefs (concat body)))
+
+claim : FileName -> IndentInfo -> Rule PDecl
+claim fname indents
+    = do start <- location
+         visOpts <- many visOpt
+         vis <- getVisibility Nothing visOpts
+         let opts = mapMaybe getRight visOpts
+         cl <- tyDecl fname indents
+         end <- location
+         pure (PClaim (MkFC fname start end) vis opts cl)
+         
+definition : FileName -> IndentInfo -> Rule PDecl
+definition fname indents
+    = do start <- location
+         nd <- clause fname indents
+         end <- location
+         pure (PDef (MkFC fname start end) (fst nd) [snd nd])
+
+fixDecl : FileName -> IndentInfo -> Rule (List PDecl)
+fixDecl fname indents
+    = do start <- location
+         fixity <- fix
          commit
          prec <- intLit
          ops <- sepBy1 (symbol ",") operator
          end <- location
          pure (map (PFixity (MkFC fname start end) fixity (cast prec)) ops)
-  <|> do start <- location
-         visOpts <- many visOpt
-         vis <- getVisibility Nothing visOpts
-         let opts = mapMaybe getRight visOpts
-         claim <- tyDecl fname indents
-         end <- location
-         pure [PClaim (MkFC fname start end) vis opts claim]
-  <|> do start <- location
-         nd <- clause fname indents
-         end <- location
-         pure [PDef (MkFC fname start end) (fst nd) [snd nd]]
+
+directiveDecl : FileName -> IndentInfo -> Rule PDecl
+directiveDecl fname indents
+    = do start <- location
+         symbol "%" 
+         (do d <- directive indents
+             end <- location
+             pure (PDirective (MkFC fname start end) d))
+           <|>
+          (do exactIdent "runElab"
+              tm <- expr fname indents
+              end <- location
+              atEnd indents
+              pure (PReflect (MkFC fname start end) tm))
+
+-- Declared at the top
+-- topDecl : FileName -> IndentInfo -> Rule (List PDecl)
+topDecl fname indents
+    = do d <- dataDecl fname indents
+         pure [d]
+  <|> do d <- namespaceDecl fname indents
+         pure [d]
+  <|> do d <- directiveDecl fname indents
+         pure [d]
+  <|> fixDecl fname indents
+  <|> do d <- ifaceDecl fname indents
+         pure [d]
+  <|> do d <- implDecl fname indents
+         pure [d]
+  <|> do d <- claim fname indents
+         pure [d]
+  <|> do d <- definition fname indents
+         pure [d]
 
 -- All the clauses get parsed as one-clause definitions. Collect any
 -- neighbouring clauses with the same function name into one definition.

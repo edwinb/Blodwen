@@ -349,6 +349,10 @@ mutual
       = pure [IData fc vis !(desugarData ddecl)]
   desugarDecl (PReflect fc tm)
       = pure [IReflect fc !(desugar tm)]
+  desugarDecl (PInterface fc vis cons tn params det conname body)
+      = throw (InternalError "Interfaces not done yet")
+  desugarDecl (PImplementation fc vis cons tn params impname body)
+      = throw (InternalError "Implementations not done yet")
   desugarDecl (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)

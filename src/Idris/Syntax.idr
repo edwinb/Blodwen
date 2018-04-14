@@ -180,9 +180,24 @@ mutual
        PDef : FC -> Name -> List PClause -> PDecl
        PData : FC -> Visibility -> PDataDecl -> PDecl
        PReflect : FC -> PTerm -> PDecl
+       PInterface : FC -> 
+                    Visibility ->
+                    (constraints : List (Maybe Name, PTerm)) ->
+                    Name ->
+                    (params : List (Name, PTerm)) ->
+                    (det : List Name) ->
+                    (conName : Maybe Name) ->
+                    List PDecl ->
+                    PDecl
+       PImplementation : FC ->
+                         Visibility ->
+                         (constraints : List (Maybe Name, PTerm)) ->
+                         Name ->
+                         (params : List PTerm) ->
+                         (implName : Maybe Name) ->
+                         List PDecl ->
+                         PDecl
        -- TODO: PRecord
-       -- TODO: PInterface
-       -- TODO: PImplementation
        -- TODO: PPostulate
        -- TODO: POpen (for opening named interfaces)
        PFixity : FC -> Fixity -> Nat -> OpStr -> PDecl
