@@ -72,6 +72,10 @@ elabTerm process defining env nest impmode elabmode tm tyin
          clearSolvedHoles
          dumpConstraints 2 False
          linearCheck (getAnnot tm) rigc env ptm'
+         -- If there are remaining holes, we need to save them to the ttc
+         -- since they haven't been normalised away yet, and they may be
+         -- solved later
+         traverse addToSave !getHoleNames
          pure (ptm', pty')
 
 export

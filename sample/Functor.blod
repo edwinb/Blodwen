@@ -19,8 +19,8 @@ ListFunctor = MkFunctor mapList
 tryMap : Nat -> Nat -> List Nat
 tryMap x y = map (plus x) [y, S y]
 
-data Vect : Nat -> Type -> Type where
-     Nil : Vect a n
+data Vect : _ -> Type -> Type where
+     Nil : Vect Z a
      (::) : a -> Vect k a -> Vect (S k) a
 
 %hint
