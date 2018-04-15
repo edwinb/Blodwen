@@ -546,12 +546,13 @@ dataOpt
          ns <- some name
          pure (SearchBy ns)
 
-gadtData : FileName -> FilePos -> Name -> IndentInfo -> Rule PDataDecl
-gadtData fname start n indents
-    = do symbol ":"
-         commit
-         ty <- expr fname indents
-         keyword "where"
+dataBody : FileName -> FilePos -> Name -> IndentInfo -> PTerm -> 
+           EmptyRule PDataDecl
+dataBody fname start n indents ty
+    = do atEnd indents
+         end <- location
+         pure (MkPLater (MkFC fname start end) n ty)
+  <|> do keyword "where"
          opts <- option [] (do symbol "["
                                dopts <- sepBy1 (symbol ",") dataOpt
                                symbol "]"
@@ -559,6 +560,13 @@ gadtData fname start n indents
          cs <- block (tyDecl fname)
          end <- location
          pure (MkPData (MkFC fname start end) n ty opts cs)
+
+gadtData : FileName -> FilePos -> Name -> IndentInfo -> Rule PDataDecl
+gadtData fname start n indents
+    = do symbol ":"
+         commit
+         ty <- expr fname indents
+         dataBody fname start n indents ty
 
 dataDeclBody : FileName -> IndentInfo -> Rule PDataDecl
 dataDeclBody fname indents

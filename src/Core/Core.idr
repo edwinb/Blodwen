@@ -27,6 +27,8 @@ data Error annot
     | ValidCase annot (Env Term vars) (Either (Term vars) (Error annot))
     | UndefinedName annot Name
     | InvisibleName annot Name
+    | BadTypeConType annot Name 
+    | BadDataConType annot Name Name
     | LinearUsed annot Nat Name
     | LinearMisuse annot Name RigCount RigCount
     | AmbiguousName annot (List Name)
@@ -86,6 +88,10 @@ Show annot => Show (Error annot) where
   show (InvisibleName fc (NS ns x)) 
        = show fc ++ ":Name " ++ show x ++ " is inaccessible since " ++
          showSep "." (reverse ns) ++ " is not explicitly imported"
+  show (BadTypeConType fc n) 
+       = show fc ++ ":Return type of " ++ show n ++ " must be Type"
+  show (BadDataConType fc n fam) 
+       = show fc ++ ":Return type of " ++ show n ++ " must be in " ++ show fam
   show (InvisibleName fc x) = show fc ++ ":Name " ++ show x ++ " is inaccessible since "
   show (LinearUsed fc count n)
       = show fc ++ ":There are " ++ show count ++ " uses of linear name " ++ show n

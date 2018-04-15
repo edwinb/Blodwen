@@ -135,6 +135,8 @@ mutual
   toPData (MkImpData _ n ty opts cs)
       = pure (MkPData emptyFC n !(toPTerm startPrec ty) opts
                    !(traverse toPTypeDecl cs))
+  toPData (MkImpLater _ n ty)
+      = pure (MkPLater emptyFC n !(toPTerm startPrec ty))
 
   toPDecl : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->

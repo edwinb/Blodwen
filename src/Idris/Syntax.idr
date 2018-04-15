@@ -161,6 +161,7 @@ mutual
        MkPData : FC -> (tyname : Name) -> (tycon : PTerm) ->
                  (opts : List DataOpt) ->
                  (datacons : List PTypeDecl) -> PDataDecl
+       MkPLater : FC -> (tyname : Name) -> (tycon : PTerm) -> PDataDecl
 
   public export
   data PClause : Type where

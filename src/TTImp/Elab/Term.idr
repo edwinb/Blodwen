@@ -664,6 +664,8 @@ mutual
       updateDataName nest (MkImpData loc' n tycons dopts dcons)
           = MkImpData loc' (newName nest n) tycons dopts
                            (map (updateTyName nest) dcons)
+      updateDataName nest (MkImpLater loc' n tycons)
+          = MkImpLater loc' (newName nest n) tycons
 
       updateName : NestedNames vars -> ImpDecl annot -> ImpDecl annot
       updateName nest (IClaim loc' vis fnopts ty) 

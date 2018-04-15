@@ -41,6 +41,13 @@ processType : {auto c : Ref Ctxt Defs} ->
               Core annot ()
 processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
     = do n <- inCurrentNS n_in
+
+         -- Check 'n' is undefined
+         gam <- get Ctxt
+         case lookupDefTyExact n (gamma gam) of
+              Just (_, _) => throw (AlreadyDefined loc n)
+              Nothing => pure ()
+
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InType loc n) $
                   checkTerm elab n env nest (PI RigW) InType ty_imp TType

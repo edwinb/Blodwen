@@ -122,10 +122,15 @@ Reify annot => Reify (ImpData annot) where
   reify defs (NDCon (NS ["Reflect"] (UN "MkData")) _ _ [fc, tyn, ty, opts, cons])
       = do fc' <- reify defs (evalClosure defs fc)
            tyn' <- reify defs (evalClosure defs tyn)
-           ty' <- reify defs (evalClosure defs opts)
+           ty' <- reify defs (evalClosure defs ty)
            opts' <- reify defs (evalClosure defs opts)
            cons' <- reify defs (evalClosure defs cons)
            pure (MkImpData fc' tyn' ty' opts' cons')
+  reify defs (NDCon (NS ["Reflect"] (UN "MkLater")) _ _ [fc, tyn, ty])
+      = do fc' <- reify defs (evalClosure defs fc)
+           tyn' <- reify defs (evalClosure defs tyn)
+           ty' <- reify defs (evalClosure defs ty)
+           pure (MkImpLater fc' tyn' ty')
   reify defs _ = Nothing
 
 export
@@ -137,6 +142,11 @@ Reflect annot => Reflect (ImpData annot) where
            opts' <- reflect defs env opts
            cons' <- reflect defs env cons
            appCon defs (NS ["Reflect"] (UN "MkData")) [fc', n', tycon', opts', cons']
+  reflect defs env (MkImpLater fc n tycon)
+      = do fc' <- reflect defs env fc
+           n' <- reflect defs env n
+           tycon' <- reflect defs env tycon
+           appCon defs (NS ["Reflect"] (UN "MkLater")) [fc', n', tycon']
 
 export
 Reify annot => Reify (ImpDecl annot) where

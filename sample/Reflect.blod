@@ -61,7 +61,7 @@ data DataOpt = SearchBy (List Name) | NoHints
 data DataDecl : Type where
      MkData : FC -> (tyn : Name) -> TTImp -> List DataOpt ->
               (cons : List TyDecl) -> DataDecl
---      MkLater : FC -> (tyn : Name) -> TTImp -> DataDecl
+     MkLater : FC -> (tyn : Name) -> TTImp -> DataDecl
 
 data Decl : Type where
      Claim : FC -> Visibility -> List FnOpt -> TyDecl -> Decl

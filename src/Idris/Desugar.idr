@@ -4,11 +4,16 @@ import Core.Binary
 import Core.Context
 import Core.Core
 import Core.TT
+import Core.Unify
 
 import Data.StringMap
 
 import Utils.Shunting
+
+import Idris.BindImplicits
 import Idris.Syntax
+
+import Idris.Elab.Interface
 
 import TTImp.TTImp
 
@@ -22,13 +27,13 @@ import TTImp.TTImp
 -- * Shunting infix operators into function applications according to precedence
 -- * Replacing 'do' notating with applications of (>>=)
 -- * Replacing pattern matching binds with 'case'
+-- * Changing tuples to 'Pair/MkPair'
+-- * List notation
 
 -- Still TODO:
 -- * Replacing !-notation
--- * Changing tuples to 'Pair/MkPair'
 -- * Dependent pair notation
 -- * Idiom brackets
--- * List notation
 
 %default covering
 
@@ -82,67 +87,6 @@ extend newsyn
          put Syn (record { infixes $= mergeLeft (infixes newsyn),
                            prefixes $= mergeLeft (prefixes newsyn) } syn)
 
--- Whether names are turned into IBindVar or not
--- on the lhs and in types, by default, lower case variable names which
--- are not bound explicitly are turned ito IBindVar
-public export
-data BindMode = LowerCase | None
-
-lowerFirst : String -> Bool
-lowerFirst "" = False
-lowerFirst str = assert_total (isLower (strHead str))
-
--- Bind lower case names in argument position
--- Don't go under lambda, case let, or local bindings, or IAlternative
-findBindableNames : (arg : Bool) -> List Name -> RawImp annot -> List String
-findBindableNames True env (IVar fc (UN n))
-    = if not (UN n `elem` env) && lowerFirst n
-         then [n]
-         else []
-findBindableNames arg env (IPi fc rig p mn aty retty)
-    = let env' = case mn of
-                      Nothing => env
-                      Just n => n :: env in
-          findBindableNames True env' aty ++
-          findBindableNames True env' retty
-findBindableNames arg env (IApp fc fn av)
-    = findBindableNames False env fn ++ findBindableNames True env av
-findBindableNames arg env (IImplicitApp fc fn n av)
-    = findBindableNames False env fn ++ findBindableNames True env av
-findBindableNames arg env (IAs fc n pat)
-    = findBindableNames arg env pat
-findBindableNames arg env (IAlternative fc u alts)
-    = concatMap (findBindableNames arg env) alts
--- We've skipped lambda, case, let and local - rather than guess where the
--- name should be bound, leave it to the programmer
-findBindableNames arg env tm = []
-
-doBind : List String -> RawImp annot -> RawImp annot
-doBind [] tm = tm
-doBind ns (IVar fc (UN n))
-    = if n `elem` ns
-         then IBindVar fc n
-         else IVar fc (UN n)
-doBind ns (IPi fc rig p mn aty retty)
-    = let ns' = case mn of
-                     Just (UN n) => ns \\ [n]
-                     _ => ns in
-          IPi fc rig p mn (doBind ns' aty) (doBind ns' retty)
-doBind ns (IApp fc fn av)
-    = IApp fc (doBind ns fn) (doBind ns av)
-doBind ns (IImplicitApp fc fn n av)
-    = IImplicitApp fc (doBind ns fn) n (doBind ns av)
-doBind ns (IAs fc n pat)
-    = IAs fc n (doBind ns pat)
-doBind ns (IAlternative fc u alts)
-    = IAlternative fc u (map (doBind ns) alts)
-doBind ns tm = tm
-
-bindNames : (arg : Bool) -> List Name -> RawImp annot -> RawImp annot
-bindNames arg env tm
-    = let ns = findBindableNames arg env tm in
-          doBind (nub ns) tm
-
 -- Add 'IMustUnify' for any duplicated names, and any function application
 addDots : RawImp annot -> RawImp annot
 addDots tm = tm
@@ -178,6 +122,7 @@ mutual
   export
   desugar : {auto s : Ref Syn SyntaxInfo} ->
             {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState FC)} ->
             PTerm -> Core FC (RawImp FC)
   desugar (PRef fc x) = pure $ IVar fc x
   desugar (PPi fc rig p mn argTy retTy) 
@@ -250,13 +195,15 @@ mutual
   
   expandList : {auto s : Ref Syn SyntaxInfo} ->
                {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState FC)} ->
                FC -> List PTerm -> Core FC (RawImp FC)
   expandList fc [] = pure (IVar fc (UN "Nil"))
   expandList fc (x :: xs)
       = pure $ apply (IVar fc (UN "::")) [!(desugar x), !(expandList fc xs)]
-  
+
   expandDo : {auto s : Ref Syn SyntaxInfo} ->
              {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState FC)} ->
              FC -> List PDo -> Core FC (RawImp FC)
   expandDo fc [] = throw (GenericMsg fc "Do block cannot be empty")
   expandDo _ [DoExp fc tm] = desugar tm
@@ -298,6 +245,7 @@ mutual
 
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState FC)} ->
                 Tree FC PTerm -> Core FC (RawImp FC)
   desugarTree (Inf loc op l r)
       = do l' <- desugarTree l
@@ -310,12 +258,14 @@ mutual
 
   desugarType : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState FC)} ->
                 PTypeDecl -> Core FC (ImpTy FC)
   desugarType (MkPTy fc n ty) 
       = pure $ MkImpTy fc n (bindNames True [] !(desugar ty))
 
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
                   {auto c : Ref Ctxt Defs} ->
+                  {auto u : Ref UST (UState FC)} ->
                   PClause -> Core FC (ImpClause FC)
   desugarClause (MkPatClause fc lhs rhs wheres)
       = do ws <- traverse desugarDecl wheres
@@ -329,17 +279,21 @@ mutual
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState FC)} ->
                 PDataDecl -> Core FC (ImpData FC)
   desugarData (MkPData fc n tycon opts datacons) 
-      = pure $ (MkImpData fc n (bindNames True [] !(desugar tycon))
-                               opts
-                              !(traverse desugarType datacons))
+      = pure $ MkImpData fc n (bindNames True [] !(desugar tycon))
+                              opts
+                              !(traverse desugarType datacons)
+  desugarData (MkPLater fc n tycon) 
+      = pure $ MkImpLater fc n (bindNames True [] !(desugar tycon))
 
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
   export
   desugarDecl : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState FC)} ->
                 PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl (PClaim fc vis opts ty) 
       = pure [IClaim fc vis opts !(desugarType ty)]
@@ -350,7 +304,15 @@ mutual
   desugarDecl (PReflect fc tm)
       = pure [IReflect fc !(desugar tm)]
   desugarDecl (PInterface fc vis cons tn params det conname body)
-      = throw (InternalError "Interfaces not done yet")
+      = do cons' <- traverse (\ (n, tm) => do tm' <- desugar tm
+                                              pure (n, tm')) cons
+           params' <- traverse (\ (n, tm) => do tm' <- desugar tm
+                                                pure (n, tm')) params
+           body' <- traverse desugarDecl body
+           pure [IPragma (\env, nest => 
+                             elabInterface fc vis env nest cons' 
+                                           tn params' det conname 
+                                           (concat body'))]
   desugarDecl (PImplementation fc vis cons tn params impname body)
       = throw (InternalError "Implementations not done yet")
   desugarDecl (PFixity fc Prefix prec n) 
@@ -366,5 +328,5 @@ mutual
   desugarDecl (PDirective fc d) 
       = case d of
              Logging i => pure [ILog i]
-             LazyNames ty d f => pure [IPragma (setLazy fc ty d f)]
+             LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]
 

@@ -26,9 +26,11 @@ Where to find things:
 
 Core/ -- anything related to the core TT, typechecking and unification
 TTImp/ -- anything related to the implicit TT and its elaboration
+  TTImp/Elab/ -- Elaboration state and elaboration of terms 
 Parser/ -- various utilities for parsing and lexing TT and TTImp (and other things)
 Utils/ -- some generally useful utilities
 Idris/ -- anything relating to the high level language, translating to TTImp
+  Idris/Elab/ -- High level construct elaboration machinery (e.g. interfaces)
 
 The Core Type, and Ref
 ----------------------

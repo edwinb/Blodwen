@@ -9,6 +9,22 @@ import Data.CSet
 
 %default covering
 
+-- Information about names in nested blocks
+public export
+record NestedNames (vars : List Name) where
+  constructor MkNested
+  -- A map from names to the decorated version of the name, and the new name
+  -- applied to its enclosing environment
+  names : List (Name, (Name, Term vars))
+
+export
+Weaken NestedNames where
+  weaken (MkNested ns) = MkNested (map wknName ns)
+    where
+      wknName : (Name, (Name, Term vars)) ->
+                (Name, (Name, Term (n :: vars)))
+      wknName (n, (n', rep)) = (n, (n', weaken rep))
+
 -- Unchecked terms, with implicit arguments
 -- This is the raw, elaboratable form.
 -- Higher level expressions (e.g. case, pattern matching let, where blocks,
@@ -84,6 +100,8 @@ mutual
        MkImpData : annot -> (n : Name) -> (tycon : RawImp annot) ->
                    (opts : List DataOpt) ->
                    (datacons : List (ImpTy annot)) -> ImpData annot
+       MkImpLater : annot -> (n : Name) -> (tycon : RawImp annot) ->
+                    ImpData annot
   
   public export
   data FnOpt : Type where
@@ -102,7 +120,8 @@ mutual
        ImplicitNames : annot -> List (String, RawImp annot) -> ImpDecl annot
        IHint : annot -> (hintname : Name) -> (target : Maybe Name) -> 
                ImpDecl annot
-       IPragma : Core annot () -> ImpDecl annot
+       IPragma : ({vars : _} -> Env Term vars -> NestedNames vars -> Core annot ()) -> 
+                 ImpDecl annot
        ILog : Nat -> ImpDecl annot
        -- To add: IRecord
 
@@ -172,22 +191,6 @@ data ImpREPL : Type -> Type where
      DebugInfo : Name -> ImpREPL annot
      Quit : ImpREPL annot
 
--- Information about names in nested blocks
-public export
-record NestedNames (vars : List Name) where
-  constructor MkNested
-  -- A map from names to the decorated version of the name, and the new name
-  -- applied to its enclosing environment
-  names : List (Name, (Name, Term vars))
-
-export
-Weaken NestedNames where
-  weaken (MkNested ns) = MkNested (map wknName ns)
-    where
-      wknName : (Name, (Name, Term vars)) ->
-                (Name, (Name, Term (n :: vars)))
-      wknName (n, (n', rep)) = (n, (n', weaken rep))
-
 export
 dropName : Name -> NestedNames vars -> NestedNames vars
 dropName n nest = record { names $= drop } nest
@@ -208,6 +211,7 @@ definedInBlock = concatMap defName
     defName : ImpDecl annot -> List Name
     defName (IClaim _ _ _ ty) = [getName ty]
     defName (IData _ _ (MkImpData _ n _ _ cons)) = n :: map getName cons
+    defName (IData _ _ (MkImpLater _ n _)) = [n]
     defName _ = []
 
 export
@@ -303,6 +307,8 @@ mutual
     show (MkImpData _ n tycon dopts dcons)
         = "data " ++ show n ++ " : " ++ show tycon ++ " where {\n\t" ++
           showSep "\n\t" (map show dcons) ++ "\n}"
+    show (MkImpLater _ n tycon)
+        = "data " ++ show n ++ " : " ++ show tycon
 
   export
   Show (ImpDecl annot) where
