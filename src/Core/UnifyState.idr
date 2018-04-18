@@ -301,11 +301,11 @@ export
 addSearchable : {auto u : Ref UST (UState annot)} ->
                 {auto c : Ref Ctxt Defs} ->       
                 annot -> Env Term vars ->
-                (ty : Term vars) -> Nat -> Core annot Name
-addSearchable loc env ty depth
+                (ty : Term vars) -> Nat -> Name -> Core annot Name
+addSearchable loc env ty depth def
     = do cn <- genName "s"
          let defty = mkConstantTy env ty
-         let hole = newDef defty Public (BySearch depth)
+         let hole = newDef defty Public (BySearch depth def)
          addHoleName loc cn
          addDef cn hole
          pure cn
@@ -386,7 +386,7 @@ dumpHole lvl hole
                     Just (Hole _ _, ty) =>
                          log lvl $ "?" ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
-                    Just (BySearch _, ty) =>
+                    Just (BySearch _ _, ty) =>
                          log lvl $ "Search " ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
                     Just (PMDef _ args t, ty) =>

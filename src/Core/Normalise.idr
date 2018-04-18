@@ -348,9 +348,11 @@ mutual
     convGen num defs env (NDCon _ tag _ xs) (NDCon _ tag' _ xs') 
         = do as <- allConv num defs env xs xs'
              pure (tag == tag' && as)
-    convGen num defs env (NTCon _ tag _ xs) (NTCon _ tag' _ xs')
+    convGen num defs env (NTCon name tag _ xs) (NTCon name' tag' _ xs')
         = do as <- allConv num defs env xs xs'
-             pure (tag == tag' && as)
+             -- Need to compare names rather than tags since tags may be
+             -- reused in different namespaces!
+             pure (name == name' && as)
     convGen num defs env (NPrimVal x) (NPrimVal y) = pure (x == y)
     convGen num defs env NErased _ = pure True
     convGen num defs env _ NErased = pure True

@@ -51,7 +51,7 @@ convertError loc env x y = throw (CantConvert loc env x y)
 export
 search : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
-         annot -> Nat -> Name -> Core annot ClosedTerm
+         annot -> Nat -> List ClosedTerm -> Name -> Name -> Core annot ClosedTerm
 
 -- try one elaborator; if it fails, try another
 export
@@ -850,10 +850,10 @@ retryHole mode lastChance (loc, hole)
                            [] => do updateDef hole (PMDef True [] (STerm tm))
                                     removeHoleName hole
                            newcs => updateDef hole (Guess tm newcs)
-              Just (BySearch depth) => 
+              Just (BySearch depth fn) => 
                    if lastChance
-                      then do search loc depth hole; pure ()
-                      else try (do search loc depth hole
+                      then do search loc depth [] fn hole; pure ()
+                      else try (do search loc depth [] fn hole
                                    pure ())
                        (pure ()) -- postpone again
               Just _ => pure () -- Nothing we can do

@@ -49,7 +49,7 @@ process (Check itm)
          coreLift (putStrLn (show itm ++ " : " ++ show ity))
          pure True
 process (ProofSearch n)
-    = do tm <- search (MkFC "(interactive)" (0, 0) (0, 0)) 1000 n
+    = do tm <- search (MkFC "(interactive)" (0, 0) (0, 0)) 1000 [] n (UN "(interactive)")
          gam <- get Ctxt
          itm <- resugar [] (normaliseHoles gam [] tm)
          coreLift (putStrLn (show itm))

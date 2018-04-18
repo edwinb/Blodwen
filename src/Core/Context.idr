@@ -143,7 +143,10 @@ data Def : Type where
 		           -- Unsolved hole, under 'numlocs' locals, and whether it
 						   -- is standing for a pattern variable (and therefore mustn't
 							 -- be solved)
-     BySearch : Nat -> Def -- Undefined name, to be defined by proof search
+     BySearch : Nat -> Name -> Def 
+                    -- Undefined name, to be defined by proof search. Stores
+                    -- the maximum search depth, and the function it's being
+                    -- used in (to prevent recursive search)
                     -- e.g. auto implicit or interface implementation
      ImpBind : Def -- Hole turned into an implicitly bound variable
                    -- (which will be deleted after elaboration)
@@ -175,7 +178,7 @@ Show Def where
       = "Hole with " ++ show locs ++ " locals"
   show (Hole locs True)
       = "Pattern variable with " ++ show locs ++ " locals"
-  show (BySearch n)
+  show (BySearch n _)
       = "Search with depth " ++ show n
   show ImpBind = "Implicitly bound name"
   show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
@@ -194,8 +197,8 @@ TTC annot Def where
            toBuf b detpos; toBuf b datacons
   toBuf b (Hole numlocs pvar) 
       = do tag 4; toBuf b numlocs; toBuf b pvar
-  toBuf b (BySearch k) 
-      = do tag 5; toBuf b k
+  toBuf b (BySearch k d) 
+      = do tag 5; toBuf b k; toBuf b d
   toBuf b ImpBind = tag 6
   toBuf b (Guess guess constraints) 
       = do tag 7; toBuf b guess; toBuf b constraints
@@ -213,8 +216,8 @@ TTC annot Def where
                      pure (TCon v w x y z)
              4 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (Hole x y)
-             5 => do x <- fromBuf s b
-                     pure (BySearch x)
+             5 => do x <- fromBuf s b; y <- fromBuf s b
+                     pure (BySearch x y)
              6 => pure ImpBind
              7 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (Guess x y)
@@ -279,7 +282,7 @@ getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
 getRefs (TCon tag arity params dets datacons) = []
 getRefs (Hole numlocs _) = []
-getRefs (BySearch _) = []
+getRefs (BySearch _ _) = []
 getRefs ImpBind = []
 getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 getRefs (Delayed n) = []

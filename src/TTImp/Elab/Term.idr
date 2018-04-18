@@ -257,7 +257,8 @@ mutual
   checkImp rigc process elabinfo env nest (ISearch loc depth) Nothing
       = throw (InternalError "Trying to search for a term with an unknown type")
   checkImp rigc process elabinfo env nest (ISearch loc depth) (Just expected)
-      = do n <- addSearchable loc env expected depth
+      = do est <- get EST
+           n <- addSearchable loc env expected depth (defining est)
            let umode = case elabMode elabinfo of
                             InLHS => InLHS
                             _ => InTerm
@@ -944,7 +945,9 @@ mutual
                           pure tm
                     _ => 
                        do gam <- get Ctxt
+                          est <- get EST
                           n <- addSearchable loc env (quote (noGam gam) env ty) 500
+                                             (defining est)
                           log 5 $ "Initiate search: " ++ show n ++
                                   " for " ++ show (quote (noGam gam) env ty)
                           solveConstraints InTerm False

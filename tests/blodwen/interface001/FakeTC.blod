@@ -66,9 +66,8 @@ eqNat Z Z = True
 eqNat (S j) (S k) = j == k
 eqNat _ _ = False
 
--- Rest of instance, populated with defaults where necessary
--- (we'll actually need to specialise the default definition in practice...)
-EqNat = MkEq eqNat defaultNotEq
+-- Rest of instance
+EqNat = MkEq eqNat (\x, y => not (eqNat x y))
 
 %hint
 EqMaybe : {auto c : Eq a} -> Eq (Maybe a)
@@ -78,7 +77,7 @@ eqMaybe Nothing Nothing = True
 eqMaybe (Just x) (Just y) = x == y
 eqMaybe _ _ = False
 
-EqMaybe = MkEq eqMaybe defaultNotEq
+EqMaybe = MkEq eqMaybe (\x, y => not (eqMaybe x y))
 
 public export
 data Compare = LT | EQ | GT

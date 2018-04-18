@@ -68,6 +68,8 @@ elabTerm process defining env nest impmode elabmode tm tyin
          gam <- get Ctxt
          let ptm' = renameImplicits (gamma gam) (normaliseHoles gam env restm)
          let pty' = renameImplicits (gamma gam) resty
+         log 5 $ "Elaboration result " ++ show ptm'
+
          normaliseHoleTypes
          clearSolvedHoles
          dumpConstraints 2 False
