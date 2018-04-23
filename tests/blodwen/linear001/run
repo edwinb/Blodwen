@@ -1,0 +1,3 @@
+echo ':q' | $1 door.blod
+
+rm -rf build

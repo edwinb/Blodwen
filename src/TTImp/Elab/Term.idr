@@ -493,6 +493,7 @@ mutual
            est <- get EST
            casen <- genCaseName (defining est)
            let usedNs = usedInAlts alts
+           let caseRig = getCaseRig env scrtm
 
            log 6 $ "Names used in case block: " ++ show usedNs
 
@@ -511,7 +512,7 @@ mutual
                                    pure (mkConstantApp t env)
            let casefnty = abstractEnvType env $
                             absSmaller {done = []} env smaller 
-                              (Bind scrn (Pi RigW Explicit scrty) 
+                              (Bind scrn (Pi caseRig Explicit scrty) 
                                          (weaken caseretty))
 
            log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
@@ -556,6 +557,13 @@ mutual
         asParam gam ppos var (apply f []) | ArgsList = True
         asParam gam ppos var (apply f args) | ArgsList 
             = all (asParam gam False var) args
+
+      -- If the scrutinee is a linear variable, the argument to the case
+      -- function should be Rig1, otherwise it's RigW
+      getCaseRig : Env Term vs -> Term vs -> RigCount
+      getCaseRig env (Local el)
+          = multiplicity (getBinder el env)
+      getCaseRig env tm = RigW
 
       -- Drop names from the SubVars list which are *only* used in a
       -- parameter position in the term
@@ -783,7 +791,7 @@ mutual
            when top $ clearToBind 
            e' <- weakenedEState 
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} rigc process elabinfo env' (weaken nest') retty (Just TType)
+           (scopev, scopet) <- check {e=e'} Rig0 process elabinfo env' (weaken nest') retty (Just TType)
            scopeImps <- getToBind {e=e'} env'
            -- note the names as now being bound implicits, so we don't bind again
            setBound (map fst scopeImps)
@@ -821,8 +829,9 @@ mutual
              (ty : RawImp annot) -> (scope : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot (Term vars, Term vars) 
-  checkLam rigc process elabinfo loc env nest rigl plicity n ty scope (Just (Bind bn (Pi c Explicit pty) psc))
-      = do (tyv, tyt) <- check rigc process elabinfo env nest ty (Just TType)
+  checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope (Just (Bind bn (Pi c Explicit pty) psc))
+      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+           (tyv, tyt) <- check Rig0 process elabinfo env nest ty (Just TType)
            e' <- weakenedEState
            let rigb = rigMult rigc (min rigl c)
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
@@ -834,8 +843,9 @@ mutual
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
                         (Just (Bind bn (Pi rigb plicity pty) psc))
-  checkLam rigc process elabinfo loc env nest rigl plicity n ty scope expected
-      = do (tyv, tyt) <- check rigc process elabinfo env nest ty (Just TType)
+  checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope expected
+      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+           (tyv, tyt) <- check Rig0 process elabinfo env nest ty (Just TType)
            let rigb = rigMult rigl rigc
            let env' : Env Term (n :: _) = Pi rigb Explicit tyv :: env
            e' <- weakenedEState
@@ -859,8 +869,9 @@ mutual
              (scope : RawImp annot) ->
              Maybe (Term vars) ->
              Core annot (Term vars, Term vars) 
-  checkLet rigc process elabinfo loc env nest rigl n ty val scope expected
-      = do (tyv, tyt) <- check rigc process elabinfo env nest ty (Just TType)
+  checkLet rigc_in process elabinfo loc env nest rigl n ty val scope expected
+      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+           (tyv, tyt) <- check Rig0 process elabinfo env nest ty (Just TType)
            (valv, valt) <- check rigc process elabinfo env nest val (Just tyv)
            let rigb = rigMult rigl rigc
            let env' : Env Term (n :: _) = Let rigb valv tyv :: env

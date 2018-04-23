@@ -145,7 +145,7 @@ mutual
           = Bind n (Pi Rig0 e ty) (unusedHoleArgs k sc)
       unusedHoleArgs _ ty = ty
 
-  lcheck loc rig env (Bind nm b sc)
+  lcheck loc rig_in env (Bind nm b sc)
       = do (b', bt, usedb) <- lcheckBinder loc rig env b
            (sc', sct, usedsc) <- lcheck loc rig (b' :: env) sc
            let used = count Here usedsc
@@ -158,6 +158,11 @@ mutual
                         (rigMult (multiplicity b) rig)
            pure $ discharge nm b' bt sc' sct (usedb ++ doneScope usedsc)
     where
+      rig : RigCount
+      rig = case b of
+                 Pi _ _ _ => Rig0
+                 _ => rig_in
+
       checkUsageOK : Nat -> RigCount -> Core annot ()
       checkUsageOK used Rig0 = pure ()
       checkUsageOK used RigW = pure ()

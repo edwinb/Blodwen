@@ -136,7 +136,7 @@ mutual
                              !(desugar scope)
   desugar (PCase fc x xs) 
       = pure $ ICase fc !(desugar x) 
-                        !(traverse desugarClause xs)
+                        !(traverse (desugarClause True) xs)
   desugar (PLocal fc xs scope) 
       = pure $ ILocal fc (concat !(traverse desugarDecl xs)) 
                          !(desugar scope)
@@ -223,7 +223,7 @@ mutual
   expandDo topfc (DoBindPat fc pat exp alts :: rest)
       = do pat' <- desugar pat
            exp' <- desugar exp
-           alts' <- traverse desugarClause alts
+           alts' <- traverse (desugarClause True) alts
            rest' <- expandDo topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) exp')
                     (ILam fc RigW Explicit (MN "bind" 0) (Implicit fc)
@@ -237,7 +237,7 @@ mutual
   expandDo topfc (DoLetPat fc pat tm alts :: rest) 
       = do pat' <- desugar pat
            tm' <- desugar tm
-           alts' <- traverse desugarClause alts
+           alts' <- traverse (desugarClause True) alts
            rest' <- expandDo topfc rest
            pure $ ICase fc tm' (PatClause fc (bindNames False [] pat') rest'
                                   :: alts')
@@ -266,16 +266,16 @@ mutual
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
                   {auto c : Ref Ctxt Defs} ->
                   {auto u : Ref UST (UState FC)} ->
-                  PClause -> Core FC (ImpClause FC)
-  desugarClause (MkPatClause fc lhs rhs wheres)
+                  Bool -> PClause -> Core FC (ImpClause FC)
+  desugarClause arg (MkPatClause fc lhs rhs wheres)
       = do ws <- traverse desugarDecl wheres
            rhs' <- desugar rhs
-           pure $ PatClause fc (bindNames False [] !(desugar lhs)) 
+           pure $ PatClause fc (bindNames arg [] !(desugar lhs)) 
                      (case ws of
                            [] => rhs'
                            _ => ILocal fc (concat ws) rhs')
-  desugarClause (MkImpossible fc lhs) 
-      = pure $ ImpossibleClause fc (bindNames False [] !(desugar lhs))
+  desugarClause arg (MkImpossible fc lhs) 
+      = pure $ ImpossibleClause fc (bindNames arg [] !(desugar lhs))
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
@@ -298,7 +298,7 @@ mutual
   desugarDecl (PClaim fc vis opts ty) 
       = pure [IClaim fc vis opts !(desugarType ty)]
   desugarDecl (PDef fc n clauses) 
-      = pure [IDef fc n !(traverse desugarClause clauses)]
+      = pure [IDef fc n !(traverse (desugarClause False) clauses)]
   desugarDecl (PData fc vis ddecl) 
       = pure [IData fc vis !(desugarData ddecl)]
   desugarDecl (PReflect fc tm)
