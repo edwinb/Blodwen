@@ -68,7 +68,8 @@ mutual
            pure (ILet () rig x ty' val' sc, Bind x (Let rig val ty) scty)
   unelabBinder env x (Pi rig p ty) sctm sc scty 
       = do (ty', _) <- unelabTy env ty
-           let nm = if used Here sctm then Just x else Nothing
+           let nm = if used Here sctm || rig /= RigW
+                       then Just x else Nothing
            pure (IPi () rig p nm ty' sc, TType)
   unelabBinder env x (PVar rig ty) sctm sc scty
       = do (ty', _) <- unelabTy env ty

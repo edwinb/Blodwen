@@ -164,6 +164,11 @@ resugar : {auto c : Ref Ctxt Defs} ->
 resugar env tm
     = do tti <- unelab env tm
          toPTerm startPrec tti
+        
+showCount : RigCount -> String
+showCount Rig0 = "0 "
+showCount Rig1 = "1 "
+showCount RigW = ""
 
 export
 Show PTerm where
@@ -171,23 +176,23 @@ Show PTerm where
   show (PPi _ rig Explicit Nothing arg ret)
       = show arg ++ " -> " ++ show ret
   show (PPi _ rig Explicit (Just n) arg ret)
-      = "(" ++ show n ++ " : " ++ show arg ++ ") -> " ++ show ret
+      = "(" ++ showCount rig ++ show n ++ " : " ++ show arg ++ ") -> " ++ show ret
   show (PPi _ rig Implicit Nothing arg ret) -- shouldn't happen
-      = "{_ : " ++ show arg ++ "} -> " ++ show ret
+      = "{" ++ showCount rig ++ "_ : " ++ show arg ++ "} -> " ++ show ret
   show (PPi _ rig Implicit (Just n) arg ret)
-      = "{" ++ show n ++ " : " ++ show arg ++ "} -> " ++ show ret
+      = "{" ++ showCount rig ++ show n ++ " : " ++ show arg ++ "} -> " ++ show ret
   show (PPi _ rig AutoImplicit Nothing arg ret) -- shouldn't happen
-      = "{auto _ : " ++ show arg ++ "} -> " ++ show ret
+      = "{auto " ++ showCount rig ++ "_ : " ++ show arg ++ "} -> " ++ show ret
   show (PPi _ rig AutoImplicit (Just n) arg ret)
-      = "{auto " ++ show n ++ " : " ++ show arg ++ "} -> " ++ show ret
+      = "{auto " ++ showCount rig ++ show n ++ " : " ++ show arg ++ "} -> " ++ show ret
   show (PLam _ rig _ n (PImplicit _) sc)
-      = "\\" ++ show n ++ " => " ++ show sc
+      = "\\" ++ showCount rig ++ show n ++ " => " ++ show sc
   show (PLam _ rig _ n ty sc)
-      = "\\" ++ show n ++ " : " ++ show ty ++ " => " ++ show sc
+      = "\\" ++ showCount rig ++ show n ++ " : " ++ show ty ++ " => " ++ show sc
   show (PLet _ rig n (PImplicit _) val sc)
-      = "let " ++ show n ++ " = " ++ show val ++ " in " ++ show sc
+      = "let " ++ showCount rig ++ show n ++ " = " ++ show val ++ " in " ++ show sc
   show (PLet _ rig n ty val sc)
-      = "let " ++ show n ++ " : " ++ show ty ++ " = " 
+      = "let " ++ showCount rig ++ show n ++ " : " ++ show ty ++ " = " 
                ++ show val ++ " in " ++ show sc
   show (PCase _ tm cs) 
       = "case " ++ show tm ++ " of { " ++ 
