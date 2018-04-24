@@ -23,6 +23,54 @@ import TTImp.Reflect
 showInfo : (Name, Def) -> Core annot ()
 showInfo (n, d) = coreLift $ putStrLn (show n ++ " ==> " ++ show d)
 
+isHole : GlobalDef -> Bool
+isHole def
+    = case definition def of
+           Hole _ _ => True
+           _ => False
+
+showHole : {auto c : Ref Ctxt Defs} ->
+           {auto s : Ref Syn SyntaxInfo} ->
+           Defs -> Env Term vars -> Name -> Term vars -> Core FC ()
+showHole gam env fn (Bind x (Pi c inf ty) sc)
+    = do ity <- resugar env (normaliseHoles gam env ty)
+         when (showName x) $
+           coreLift $ putStrLn $
+              showCount c ++ impBracket inf (tidy x ++ " : " ++ show ity)
+         showHole gam (Pi c inf ty :: env) fn sc
+  where
+    showCount : RigCount -> String
+    showCount Rig0 = " 0 "
+    showCount Rig1 = " 1 "
+    showCount RigW = "   "
+
+    impBracket : PiInfo -> String -> String
+    impBracket Explicit str = str
+    impBracket _ str = "{" ++ str ++ "}"
+
+    showName : Name -> Bool
+    showName (UN "_") = False
+    showName (MN "_" _) = False
+    showName _ = True
+
+    tidy : Name -> String
+    tidy (MN n _) = n
+    tidy n = show n
+
+showHole gam env fn ty
+    = do coreLift $ putStrLn "-------------------------------------"
+         ity <- resugar env (normaliseHoles gam env ty)
+         coreLift $ putStrLn $ nameRoot fn ++ " : " ++ show ity
+
+displayType : {auto c : Ref Ctxt Defs} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              Defs -> (Name, GlobalDef) -> Core FC ()
+displayType gam (n, def) 
+    = if isHole def
+         then showHole gam [] n (type def)
+         else do tm <- resugar [] (normaliseHoles gam [] (type def))
+                 coreLift $ putStrLn $ show n ++ " : " ++ show tm
+
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
@@ -38,6 +86,12 @@ process (Eval itm)
          ity <- resugar [] (normalise gam [] ty)
          coreLift (putStrLn (show itm ++ " : " ++ show ity))
          pure True
+process (Check (PRef fc fn))
+    = do defs <- get Ctxt
+         case lookupGlobalName fn (gamma defs) of
+              [] => throw (UndefinedName fc fn)
+              ts => do traverse (displayType defs) ts
+                       pure True
 process (Check itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar itm

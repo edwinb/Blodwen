@@ -1,0 +1,12 @@
+Processing as Idris
+1/1: Building linear (linear.blod)
+Welcome to Blodwen. Good luck.
+Main>  0 y : Nat
+ 1 x : Nat
+-------------------------------------
+this : Nat
+Main>  1 y : Nat
+ 0 x : Nat
+-------------------------------------
+that : Nat
+Main> Bye for now!

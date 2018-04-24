@@ -214,7 +214,7 @@ mutual
       = do tm' <- desugar tm
            rest' <- expandDo topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
-                     (ILam fc RigW Explicit (UN "__bind") (Implicit fc) rest')
+                     (ILam fc RigW Explicit (UN "_") (Implicit fc) rest')
   expandDo topfc (DoBind fc n tm :: rest)
       = do tm' <- desugar tm
            rest' <- expandDo topfc rest
@@ -226,8 +226,8 @@ mutual
            alts' <- traverse (desugarClause True) alts
            rest' <- expandDo topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) exp')
-                    (ILam fc RigW Explicit (MN "bind" 0) (Implicit fc)
-                          (ICase fc (IVar fc (MN "bind" 0))
+                    (ILam fc RigW Explicit (MN "_" 0) (Implicit fc)
+                          (ICase fc (IVar fc (MN "_" 0))
                                (PatClause fc (bindNames False [] pat') rest' 
                                   :: alts')))
   expandDo topfc (DoLet fc n rig tm :: rest) 

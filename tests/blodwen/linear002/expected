@@ -2,5 +2,9 @@ Processing as Idris
 1/2: Building Stuff (Stuff.blod)
 2/2: Building door (door.blod)
 Welcome to Blodwen. Good luck.
-Main> foo : ({m:36} : (Type -> Type)) -> (0 d : Door Closed) -> (0 {bind:0} : Either (Door Closed) (Door Open)) -> (1 d : Door Open) -> Use Many {m:36} Unit
+Main>    m : Type -> Type
+ 0 d : Door Closed
+ 1 d : Door Open
+-------------------------------------
+foo : Use Many m Unit
 Main> Bye for now!

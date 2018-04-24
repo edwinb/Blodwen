@@ -13,6 +13,11 @@ import Data.StringMap
 
 %default covering
 
+-- Convert checked terms back to source syntax. Note that this is entirely
+-- for readability therefore there is NO GUARANTEE that the result will
+-- type check (in fact it probably won't due to tidying up names for
+-- readability).
+
 mkOp : {auto s : Ref Syn SyntaxInfo} ->
        PTerm -> Core FC PTerm
 mkOp tm@(PApp fc (PApp _ (PRef _ n) x) y)
@@ -52,6 +57,8 @@ mutual
   toPTerm : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             (prec : Nat) -> RawImp annot -> Core FC PTerm
+  toPTerm p (IVar _ (MN n _))
+      = pure (PRef emptyFC (UN n))
   toPTerm p (IVar _ n) 
       = do imp <- showImplicits
            pure (PRef emptyFC (if imp then n else dropNS n))
