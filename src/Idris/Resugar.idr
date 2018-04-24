@@ -53,15 +53,32 @@ showImplicits
     = do pp <- getPPrint
          pure (show_implicits pp)
 
+unbracket : PTerm -> PTerm
+unbracket (PBracketed _ tm) = tm
+unbracket tm = tm
+
+-- Put the special names (Nil, ::, Pair etc) back as syntax
+sugarApp : PTerm -> PTerm
+sugarApp (PApp fc (PApp _ (PRef _ (UN "Pair")) l) r)
+    = PPair fc l r
+sugarApp (PApp fc (PApp _ (PRef _ (UN "MkPair")) l) r)
+    = PPair fc l r
+sugarApp (PRef fc (UN "Nil")) = PList fc []
+sugarApp tm@(PApp fc (PApp _ (PRef _ (UN "::")) x) xs)
+    = case sugarApp (unbracket xs) of
+           PList fc xs' => PList fc (x :: xs')
+           _ => tm
+sugarApp tm = tm
+
 mutual
   toPTerm : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             (prec : Nat) -> RawImp annot -> Core FC PTerm
   toPTerm p (IVar _ (MN n _))
-      = pure (PRef emptyFC (UN n))
+      = pure (sugarApp (PRef emptyFC (UN n)))
   toPTerm p (IVar _ n) 
       = do imp <- showImplicits
-           pure (PRef emptyFC (if imp then n else dropNS n))
+           pure (sugarApp (PRef emptyFC (if imp then n else dropNS n)))
   toPTerm p (IPi _ rig Implicit n arg ret)
       = do imp <- showImplicits
            if imp
@@ -97,7 +114,7 @@ mutual
   toPTerm p (IApp _ fn arg)
       = do fn' <- toPTerm appPrec fn
            arg' <- toPTerm argPrec arg
-           bracket p appPrec (PApp emptyFC fn' arg')
+           bracket p appPrec (sugarApp (PApp emptyFC fn' arg'))
   toPTerm p (IImplicitApp _ fn n arg) 
       = do imp <- showImplicits
            if imp

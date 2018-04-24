@@ -1,7 +1,7 @@
 Processing as Idris
 1/1: Building vect (vect.blod)
 Welcome to Blodwen. Good luck.
-Main> Cons (S Z) (Cons (S (S Z)) Nil) : Vect (S (S Z)) Nat
+Main> Cons (S Z) (Cons (S (S Z)) []) : Vect (S (S Z)) Nat
 Main> (interactive):1:28--1:51:When unifying: (Main.Vect (Main.S (Main.S Main.Z)) Main.Nat) and (Main.Vect (Main.S Main.Z) Main.Nat)
 	(interactive):1:28--1:51:Type mismatch: (Main.S Main.Z) and Main.Z
 Main> Bye for now!
