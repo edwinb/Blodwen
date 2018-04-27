@@ -840,6 +840,29 @@ progHdr fname
          pure (MkModule (MkFC fname start end)
                         nspace imports [])
 
+parseMode : Rule REPLEval
+parseMode
+     = do exactIdent "typecheck"
+          pure EvalTC
+   <|> do exactIdent "normalise"
+          pure NormaliseAll
+   <|> do exactIdent "normalize" -- oh alright then
+          pure NormaliseAll
+   <|> do exactIdent "execute"
+          pure Execute
+
+setOption : Bool -> Rule REPLOpt
+setOption set
+    = do exactIdent "showimplicits"
+         pure (ShowImplicits set)
+  <|> do exactIdent "showtypes"
+         pure (ShowTypes set)
+  <|> if set
+         then do exactIdent "eval"
+                 mode <- parseMode
+                 pure (EvalMode mode)
+         else fail "Invalid option"
+
 export
 command : Rule REPLCmd
 command
@@ -854,5 +877,11 @@ command
          pure (DebugInfo n)
   <|> do symbol ":"; exactIdent "q"
          pure Quit
+  <|> do symbol ":"; exactIdent "set"
+         opt <- setOption True
+         pure (SetOpt opt)
+  <|> do symbol ":"; exactIdent "unset"
+         opt <- setOption False
+         pure (SetOpt opt)
   <|> do tm <- expr "(interactive)" init
          pure (Eval tm)

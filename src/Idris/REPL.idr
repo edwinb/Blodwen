@@ -3,6 +3,7 @@ module Idris.REPL
 import Core.AutoSearch
 import Core.Context
 import Core.Normalise
+import Core.Options
 import Core.TT
 import Core.Unify
 
@@ -19,6 +20,19 @@ import Control.Catchable
 import TTImp.Reflect
 
 %default covering
+
+public export
+record REPLOpts where
+  constructor MkREPLOpts
+  showTypes : Bool
+  evalMode : REPLEval
+
+export
+defaultOpts : REPLOpts
+defaultOpts = MkREPLOpts False NormaliseAll
+
+export
+data ROpts : Type where
 
 showInfo : (Name, Def) -> Core annot ()
 showInfo (n, d) = coreLift $ putStrLn (show n ++ " ==> " ++ show d)
@@ -71,10 +85,24 @@ displayType gam (n, def)
          else do tm <- resugar [] (normaliseHoles gam [] (type def))
                  coreLift $ putStrLn $ show n ++ " : " ++ show tm
 
+setOpt : {auto c : Ref Ctxt Defs} ->
+         {auto o : Ref ROpts REPLOpts} ->
+         REPLOpt -> Core FC ()
+setOpt (ShowImplicits t) 
+    = do pp <- getPPrint
+         setPPrint (record { showImplicits = t } pp)
+setOpt (ShowTypes t) 
+    = do opts <- get ROpts
+         put ROpts (record { showTypes = t } opts)
+setOpt (EvalMode m) 
+    = do opts <- get ROpts
+         put ROpts (record { evalMode = m } opts)
+
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
+          {auto o : Ref ROpts REPLOpts} ->
           REPLCmd -> Core FC Bool
 process (Eval itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
@@ -83,8 +111,10 @@ process (Eval itm)
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
          itm <- resugar [] (normalise gam [] tm)
-         ity <- resugar [] (normalise gam [] ty)
-         coreLift (putStrLn (show itm ++ " : " ++ show ity))
+         if showTypes !(get ROpts)
+            then do ity <- resugar [] (normalise gam [] ty)
+                    coreLift (putStrLn (show itm ++ " : " ++ show ity))
+            else coreLift (putStrLn (show itm))
          pure True
 process (Check (PRef fc fn))
     = do defs <- get Ctxt
@@ -113,6 +143,9 @@ process (DebugInfo n)
     = do gam <- get Ctxt
          traverse showInfo (lookupDefName n (gamma gam))
          pure True
+process (SetOpt opt)
+    = do setOpt opt
+         pure True
 process Quit 
     = do coreLift $ putStrLn "Bye for now!"
          pure False
@@ -120,6 +153,7 @@ process Quit
 processCatch : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto s : Ref Syn SyntaxInfo} ->
+               {auto o : Ref ROpts REPLOpts} ->
                REPLCmd -> Core FC Bool
 processCatch cmd
     = catch (process cmd) (\err => do coreLift (putStrLn (show err))
@@ -129,6 +163,7 @@ export
 repl : {auto c : Ref Ctxt Defs} ->
        {auto u : Ref UST (UState FC)} ->
        {auto s : Ref Syn SyntaxInfo} ->
+       {auto o : Ref ROpts REPLOpts} ->
        Core FC ()
 repl
     = do ns <- getNS

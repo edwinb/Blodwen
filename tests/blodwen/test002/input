@@ -1,4 +1,6 @@
+:set showtypes
 6+6*6
 map (+2) (1 :: 2 :: 3 :: Nil)
+:unset showtypes
 map (2*) (1 :: 2 :: 3 :: Nil)
 :q

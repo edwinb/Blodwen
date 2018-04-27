@@ -33,7 +33,7 @@ record Dirs where
 public export
 record PPrinter where
   constructor MkPPOpts
-  show_implicits : Bool
+  showImplicits : Bool
 
 public export
 record Options where

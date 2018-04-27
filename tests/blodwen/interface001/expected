@@ -2,8 +2,8 @@ Processing as Idris
 1/2: Building Stuff (Stuff.blod)
 2/2: Building FakeTC (FakeTC.blod)
 Welcome to Blodwen. Good luck.
-FakeTC> LT : Compare
-FakeTC> GT : Compare
-FakeTC> False : Bool
-FakeTC> True : Bool
+FakeTC> LT
+FakeTC> GT
+FakeTC> False
+FakeTC> True
 FakeTC> Bye for now!

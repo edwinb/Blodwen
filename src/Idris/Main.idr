@@ -29,6 +29,7 @@ stMain
          [_, fname] <- coreLift getArgs | _ => usageMsg
          u <- newRef UST initUState
          s <- newRef Syn initSyntax
+         opts <- newRef ROpts defaultOpts
 
          case span (/= '.') fname of
               -- This is temporary, until we get module chasing and

@@ -1,8 +1,8 @@
 Processing as Idris
 1/1: Building do (do.blod)
 Welcome to Blodwen. Good luck.
-Main> Just (S (S (S Z))) : Maybe Nat
-Main> Just Z : Maybe Nat
-Main> Just (S (S (S Z))) : Maybe Nat
-Main> Just Z : Maybe Nat
+Main> Just (S (S (S Z)))
+Main> Just Z
+Main> Just (S (S (S Z)))
+Main> Just Z
 Main> Bye for now!

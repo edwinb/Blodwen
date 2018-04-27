@@ -1,11 +1,11 @@
 Processing as Idris
 1/1: Building lazy (lazy.blod)
 Welcome to Blodwen. Good luck.
-Main> 1 :: (Delay ones) : Stream Integer
-Main> [1, 1, 1, 1] : List Integer
+Main> 1 :: (Delay ones)
+Main> [1, 1, 1, 1]
 Main> Bye for now!
 Processing as Idris
 Welcome to Blodwen. Good luck.
-Main> 1 :: (Delay ones) : Stream Integer
-Main> [1, 1, 1, 1] : List Integer
+Main> 1 :: (Delay ones)
+Main> [1, 1, 1, 1]
 Main> Bye for now!

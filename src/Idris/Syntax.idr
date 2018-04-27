@@ -206,11 +206,24 @@ mutual
        PDirective : FC -> Directive -> PDecl
 
 public export
+data REPLEval : Type where
+     EvalTC : REPLEval
+     NormaliseAll : REPLEval
+     Execute : REPLEval
+
+public export
+data REPLOpt : Type where
+     ShowImplicits : Bool -> REPLOpt
+     ShowTypes : Bool -> REPLOpt
+     EvalMode : REPLEval -> REPLOpt
+
+public export
 data REPLCmd : Type where
      Eval : PTerm -> REPLCmd
      Check : PTerm -> REPLCmd
      ProofSearch : Name -> REPLCmd
      DebugInfo : Name -> REPLCmd
+     SetOpt : REPLOpt -> REPLCmd
      Quit : REPLCmd
 
 public export

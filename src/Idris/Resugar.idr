@@ -51,7 +51,7 @@ showImplicits : {auto c : Ref Ctxt Defs} ->
                 Core annot Bool
 showImplicits
     = do pp <- getPPrint
-         pure (show_implicits pp)
+         pure (showImplicits pp)
 
 unbracket : PTerm -> PTerm
 unbracket (PBracketed _ tm) = tm

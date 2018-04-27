@@ -1,7 +1,7 @@
 Processing as Idris
 1/1: Building pair (pair.blod)
 Welcome to Blodwen. Good luck.
-Main> 1 : Integer
-Main> Int : Type
-Main> 3 : Integer
+Main> 1
+Main> Int
+Main> 3
 Main> Bye for now!
