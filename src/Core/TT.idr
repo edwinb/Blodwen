@@ -29,12 +29,14 @@ data Constant
     | Str String
     | Ch Char
     | Db Double
+    | WorldVal
 
     | IntType
 		| IntegerType
     | StringType
     | CharType
     | DoubleType
+    | WorldType
 
 export
 constantEq : (x, y : Constant) -> Maybe (x = y)
@@ -51,11 +53,13 @@ constantEq (Ch x) (Ch y) = case decEq x y of
                                 Yes Refl => Just Refl
                                 No contra => Nothing
 constantEq (Db x) (Db y) = Nothing -- no DecEq for Doubles!
+constantEq WorldVal WorldVal = Just Refl
 constantEq IntType IntType = Just Refl
 constantEq IntegerType IntegerType = Just Refl
 constantEq StringType StringType = Just Refl
 constantEq CharType CharType = Just Refl
 constantEq DoubleType DoubleType = Just Refl
+constantEq WorldType WorldType = Just Refl
 constantEq _ _ = Nothing
 
 export
@@ -65,11 +69,13 @@ Show Constant where
   show (Str x) = show x
   show (Ch x) = show x
   show (Db x) = show x
+  show WorldVal = "%MkWorld"
   show IntType = "Int"
   show IntegerType = "Integer"
   show StringType = "String"
   show CharType = "Char"
   show DoubleType = "Double"
+  show WorldType = "%World"
 
 export
 Eq Constant where
@@ -78,11 +84,13 @@ Eq Constant where
   (Str x) == (Str y) = x == y
   (Ch x) == (Ch y) = x == y
   (Db x) == (Db y) = x == y
+  WorldVal == WorldVal = True
   IntType == IntType = True
   IntegerType == IntegerType = True
   StringType == StringType = True
   CharType == CharType = True
   DoubleType == DoubleType = True
+  WorldType == WorldType = True
   _ == _ = False
 
 -- All the internal operators, parameterised by their arity

@@ -207,9 +207,9 @@ mutual
 
 public export
 data REPLEval : Type where
-     EvalTC : REPLEval
-     NormaliseAll : REPLEval
-     Execute : REPLEval
+     EvalTC : REPLEval -- Evaluate as if part of the typechecker
+     NormaliseAll : REPLEval -- Normalise everything (default)
+     Execute : REPLEval -- Evaluate then pass to an executer
 
 public export
 data REPLOpt : Type where

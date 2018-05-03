@@ -162,6 +162,8 @@ Reify Constant where
   reify defs (NDCon (NS ["Reflect"] (UN "Db")) _ _ [x])
       = do x' <- reify defs (evalClosure defs x)
            pure (Db x')
+  reify defs (NDCon (NS ["Reflect"] (UN "WorldVal")) _ _ [])
+      = pure WorldVal
   reify defs (NDCon (NS ["Reflect"] (UN "IntType")) _ _ [])
       = pure IntType
   reify defs (NDCon (NS ["Reflect"] (UN "IntegerType")) _ _ [])
@@ -172,6 +174,8 @@ Reify Constant where
       = pure CharType
   reify defs (NDCon (NS ["Reflect"] (UN "DoubleType")) _ _ [])
       = pure DoubleType
+  reify defs (NDCon (NS ["Reflect"] (UN "WorldType")) _ _ [])
+      = pure WorldType
   reify defs _ = Nothing
 
 export
@@ -191,6 +195,8 @@ Reflect Constant where
   reflect defs env (Db x)
       = do x' <- reflect defs env x
            appCon defs (NS ["Reflect"] (UN "Db")) [x']
+  reflect defs env WorldVal
+      = getCon defs (NS ["Reflect"] (UN "WorldVal"))
   reflect defs env IntType
       = getCon defs (NS ["Reflect"] (UN "IntType"))
   reflect defs env IntegerType
@@ -201,6 +207,8 @@ Reflect Constant where
       = getCon defs (NS ["Reflect"] (UN "CharType"))
   reflect defs env DoubleType
       = getCon defs (NS ["Reflect"] (UN "DoubleType"))
+  reflect defs env WorldType
+      = getCon defs (NS ["Reflect"] (UN "WorldType"))
 
 export
 Reify Visibility where

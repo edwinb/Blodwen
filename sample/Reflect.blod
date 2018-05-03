@@ -25,12 +25,14 @@ data Constant
     | Str String
     | Ch Char
     | Db Double
+    | WorldVal
 
     | IntType
     | IntegerType
     | StringType
     | CharType
     | DoubleType
+    | WorldType
 
 data TTImp : Type where
      Var : FC -> Name -> TTImp

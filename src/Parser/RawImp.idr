@@ -40,6 +40,12 @@ atom
          x <- unqualifiedName
          pure (IHole () x)
   <|> do symbol "%"
+         exactIdent "MkWorld"
+         pure (IPrimVal () WorldVal)
+  <|> do symbol "%"
+         exactIdent "World"
+         pure (IPrimVal () WorldType)
+  <|> do symbol "%"
          exactIdent "search"
          pure (ISearch () 1000)
   <|> do x <- name

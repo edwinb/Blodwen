@@ -35,6 +35,16 @@ atom fname
          pure (PHole (MkFC fname start end) x)
   <|> do start <- location
          symbol "%"
+         exactIdent "MkWorld"
+         end <- location
+         pure (PPrimVal (MkFC fname start end) WorldVal)
+  <|> do start <- location
+         symbol "%"
+         exactIdent "World"
+         end <- location
+         pure (PPrimVal (MkFC fname start end) WorldType)
+  <|> do start <- location
+         symbol "%"
          exactIdent "search"
          end <- location
          pure (PSearch (MkFC fname start end) 1000)

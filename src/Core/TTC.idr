@@ -151,11 +151,13 @@ TTC annot Constant where
   toBuf b (Ch x) = do tag 3; toBuf b x
   toBuf b (Db x) = do tag 4; toBuf b x
   
-  toBuf b IntType = tag 5
-  toBuf b IntegerType = tag 6 
-  toBuf b StringType = tag 7
-  toBuf b CharType = tag 8
-  toBuf b DoubleType = tag 9
+  toBuf b WorldVal = tag 5
+  toBuf b IntType = tag 6
+  toBuf b IntegerType = tag 7 
+  toBuf b StringType = tag 8
+  toBuf b CharType = tag 9
+  toBuf b DoubleType = tag 10
+  toBuf b WorldType = tag 11
 
   fromBuf s b
       = case !getTag of
@@ -164,11 +166,13 @@ TTC annot Constant where
              2 => do x <- fromBuf s b; pure (Str x)
              3 => do x <- fromBuf s b; pure (Ch x)
              4 => do x <- fromBuf s b; pure (Db x)
-             5 => pure IntType
-             6 => pure IntegerType
-             7 => pure StringType
-             8 => pure CharType
-             9 => pure DoubleType
+             5 => pure WorldVal
+             6 => pure IntType
+             7 => pure IntegerType
+             8 => pure StringType
+             9 => pure CharType
+             10 => pure DoubleType
+             11 => pure WorldType
              _ => corrupt "Constant"
 
 export
