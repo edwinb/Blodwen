@@ -1,6 +1,6 @@
 module Core.Context
 
-import Core.CaseTree
+import Core.CaseBuilder
 import public Core.Core
 import Core.TT
 import Core.TTC

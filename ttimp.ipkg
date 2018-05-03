@@ -4,6 +4,7 @@ pkgs = contrib
 
 modules = Core.AutoSearch,
           Core.Binary,
+          Core.CaseBuilder,
           Core.CaseTree,
           Core.Context, 
           Core.Core,
