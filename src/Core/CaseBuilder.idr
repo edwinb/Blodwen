@@ -1,6 +1,8 @@
 module Core.CaseBuilder
 
 import public Core.CaseTree
+import Core.Context
+import Core.Normalise
 import Core.TT
 
 import Control.Monad.State
@@ -59,7 +61,8 @@ data PatClause : (vars : List Name) -> (todo : List Name) -> Type where
                    (rhs : Term vars) -> PatClause vars todo
 
 Show (PatClause vars todo) where
-  show (MkPatClause ps rhs) = show ps ++ " => " ++ show rhs
+  show (MkPatClause ps rhs) 
+     = show ps ++ " => " ++ show rhs
 
 data LengthMatch : List a -> List b -> Type where
      NilMatch : LengthMatch [] []
@@ -210,7 +213,7 @@ groupCons cs
                   (newargs ++ weakenNs patnames pats) 
                   (weakenNs patnames rhs)]]
     addConG {todo} n tag pargs pats rhs (g :: gs) with (checkGroupMatch (CName n tag) pargs g)
-      addConG {todo} n tag pargs pats rhs 
+      addConG {todo} n tag pargs pats rhs
               ((ConGroup {newargs} n tag ((MkPatClause ps tm) :: rest)) :: gs)
                    | (ConMatch {newargs} lprf) 
         = do let newps = newPats pargs lprf ps
@@ -232,7 +235,7 @@ groupCons cs
     addConstG c pats rhs [] 
         = pure [ConstGroup c [MkPatClause pats rhs]]
     addConstG {todo} c pats rhs (g :: gs) with (checkGroupMatch (CConst c) [] g)
-      addConstG {todo} c pats rhs 
+      addConstG {todo} c pats rhs
               ((ConstGroup c ((MkPatClause ps tm) :: rest)) :: gs) | ConstMatch                    
           = let newclause : PatClause vars todo
                   = MkPatClause pats rhs in
@@ -320,7 +323,7 @@ mutual
       updateVar : PatClause vars (a :: todo) -> PatClause vars todo
       -- replace the name with the relevant variable on the rhs
       updateVar (MkPatClause ((PVar n, prf) :: pats) rhs)
-          = MkPatClause pats (substName n (Local prf) rhs)
+          = MkPatClause pats (substName n (Local prf) rhs) 
       -- match anything, name won't appear in rhs
       updateVar (MkPatClause ((p, _) :: pats) rhs)
           = MkPatClause pats rhs
@@ -336,9 +339,9 @@ mutual
            varRule vs fallthrough
   mixture {a} {todo} NoClauses err = pure err
 
-mkPatClause : (args : List Name) -> (List Pat, ClosedTerm) ->
+mkPatClause : (args : List Name) -> ClosedTerm -> (List Pat, ClosedTerm) ->
               Either CaseError (PatClause args args)
-mkPatClause args (ps, rhs) 
+mkPatClause args ty (ps, rhs) 
     = case checkLengthMatch args ps of
            Nothing => Left DifferingArgNumbers
            Just eq => 
@@ -354,12 +357,12 @@ mkPatClause args (ps, rhs)
         = (p, Here) :: weaken (mkNames args ps eq) 
 
 export
-patCompile : List (List Pat, ClosedTerm) -> CaseTree [] ->
+patCompile : ClosedTerm -> List (List Pat, ClosedTerm) -> CaseTree [] ->
              Either CaseError (args ** CaseTree args)
-patCompile [] def = pure ([] ** def)
-patCompile (p :: ps) def 
+patCompile ty [] def = pure ([] ** def)
+patCompile ty (p :: ps) def 
     = do let ns = getNames 0 (fst p)
-         pats <- traverse (mkPatClause ns) (p :: ps)
+         pats <- traverse (mkPatClause ns ty) (p :: ps)
          let cases = evalState (match pats 
                                   (rewrite sym (appendNilRightNeutral ns) in
                                            weakenNs ns def)) 0
@@ -368,4 +371,55 @@ patCompile (p :: ps) def
     getNames : Int -> List Pat -> List Name
     getNames i [] = []
     getNames i (x :: xs) = MN "arg" i :: getNames (i + 1) xs
+
+argToPat : ClosedTerm -> Pat
+argToPat tm with (unapply tm)
+  argToPat (apply (Ref (DataCon tag _) cn) args) | ArgsList 
+         = PCon cn tag (assert_total (map argToPat args))
+  argToPat (apply (Ref _ var) []) | ArgsList = PVar var
+  argToPat (apply (PrimVal c) []) | ArgsList = PConst c
+  argToPat (apply f args) | ArgsList = PAny
+
+toPatClause : annot -> Name -> (ClosedTerm, ClosedTerm) ->
+              Core annot (List Pat, ClosedTerm)
+toPatClause loc n (lhs, rhs) with (unapply lhs)
+  toPatClause loc n (apply (Ref Func fn) args, rhs) | ArgsList 
+      = case nameEq n fn of
+             Nothing => throw (GenericMsg loc ("Wrong function name in pattern LHS " ++ show (n, fn)))
+             Just Refl => do -- putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
+                             pure (map argToPat args, rhs)
+  toPatClause loc n (apply f args, rhs) | ArgsList 
+      = throw (GenericMsg loc "Not a function name in pattern LHS")
+
+
+-- Assumption (given 'ClosedTerm') is that the pattern variables are
+-- explicitly named. We'll assign de Bruijn indices when we're done, and
+-- the names of the top level variables we created are returned in 'args'
+export
+simpleCase : annot -> Name -> ClosedTerm -> (def : CaseTree []) ->
+             (clauses : List (ClosedTerm, ClosedTerm)) ->
+             Core annot (args ** CaseTree args)
+simpleCase loc fn ty def clauses 
+    = do ps <- traverse (toPatClause loc fn) clauses
+         case patCompile ty ps def of
+              Left err => throw (CaseCompile loc fn err)
+              Right ok => pure ok
+
+export
+getPMDef : annot -> Name -> ClosedTerm -> List Clause -> 
+           Core annot (args ** CaseTree args)
+getPMDef loc fn ty clauses
+    = let cs = map toClosed clauses in
+          simpleCase loc fn ty (Unmatched "Unmatched case") cs
+  where
+    close : Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm
+    close i plets [] tm = tm
+    close i True (PLet c val ty :: bs) tm 
+		    = close (i + 1) True bs (Bind (MN "pat" i) (Let c val ty) (renameTop _ tm))
+    close i plets (b :: bs) tm 
+        = close (i + 1) plets bs (subst (Ref Bound (MN "pat" i)) tm)
+
+    toClosed : Clause -> (ClosedTerm, ClosedTerm)
+    toClosed (MkClause env lhs rhs) 
+          = (close 0 False env lhs, close 0 True env rhs)
 

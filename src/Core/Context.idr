@@ -1,6 +1,6 @@
 module Core.Context
 
-import Core.CaseBuilder
+import Core.CaseTree
 import public Core.Core
 import Core.TT
 import Core.TTC
@@ -763,52 +763,16 @@ checkNameVisibility loc n vis tm
                           else pure ()
                   Nothing => pure ()
 
-argToPat : ClosedTerm -> Pat
-argToPat tm with (unapply tm)
-  argToPat (apply (Ref (DataCon tag _) cn) args) | ArgsList 
-         = PCon cn tag (assert_total (map argToPat args))
-  argToPat (apply (Ref _ var) []) | ArgsList = PVar var
-  argToPat (apply (PrimVal c) []) | ArgsList = PConst c
-  argToPat (apply f args) | ArgsList = PAny
-
-toPatClause : {auto x : Ref Ctxt Defs} ->
-							annot -> Name -> (ClosedTerm, ClosedTerm) ->
-              Core annot (List Pat, ClosedTerm)
-toPatClause loc n (lhs, rhs) with (unapply lhs)
-  toPatClause loc n (apply (Ref Func fn) args, rhs) | ArgsList 
-      = case nameEq n fn of
-             Nothing => throw (GenericMsg loc ("Wrong function name in pattern LHS " ++ show (n, fn)))
-             Just Refl => do -- putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
-                             pure (map argToPat args, rhs)
-  toPatClause loc n (apply f args, rhs) | ArgsList 
-      = throw (GenericMsg loc "Not a function name in pattern LHS")
-
--- Assumption (given 'ClosedTerm') is that the pattern variables are
--- explicitly named. We'll assign de Bruijn indices when we're done, and
--- the names of the top level variables we created are returned in 'args'
-export
-simpleCase : {auto x : Ref Ctxt Defs} ->
-						 annot -> Name -> (def : CaseTree []) ->
-             (clauses : List (ClosedTerm, ClosedTerm)) ->
-             Core annot (args ** CaseTree args)
-simpleCase loc fn def clauses 
-    = do ps <- traverse (toPatClause loc fn) clauses
-         case patCompile ps def of
-              Left err => throw (CaseCompile loc fn err)
-              Right ok => pure ok
-
 -- Add a function definition, as long as the type exists already
 export
 addFnDef : {auto x : Ref Ctxt Defs} ->
-					 annot -> FnDef -> Core annot ()
-addFnDef loc (MkFn n ty clauses) 
+					 annot -> Name -> CaseTree args -> Core annot ()
+addFnDef loc n tree
     = do ctxt <- get Ctxt
          case lookupGlobalExact n (gamma ctxt) of
               Just def => 
-                 do let cs = map toClosed clauses
-                    (args ** tree) <- simpleCase loc n (Unmatched "Unmatched case") cs
-                    let def' = record { definition = PMDef False args tree } def
-                    addDef n def'
+                 let def' = record { definition = PMDef False _ tree } def in
+                     addDef n def'
               Nothing => throw (NoDeclaration loc n)
   where
     close : Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm

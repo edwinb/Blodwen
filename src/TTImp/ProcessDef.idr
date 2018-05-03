@@ -3,7 +3,7 @@ module TTImp.ProcessDef
 import Core.TT
 import Core.Unify
 import Core.Context
-import Core.CaseTree
+import Core.CaseBuilder
 import Core.Normalise
 import Core.Reflect
 
@@ -178,7 +178,8 @@ processDef elab env nest loc n_in cs_raw
                 do cs <- traverse (checkClause elab n env nest) cs_raw
                    -- Any non user defined holes should be resolved by now
                    checkUserHoles loc True
-                   addFnDef loc (MkFn n ty (mapMaybe id cs))
+                   (_ ** tree) <- getPMDef loc n ty (mapMaybe id cs)
+                   addFnDef loc n tree
                    addToSave n
                    gam <- getCtxt
                    log 3 $

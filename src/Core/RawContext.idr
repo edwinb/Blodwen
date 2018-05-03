@@ -1,5 +1,6 @@
 module Core.RawContext
 
+import Core.CaseBuilder
 import Core.Context
 import Core.Typecheck
 import Core.Normalise
@@ -62,7 +63,8 @@ addFn loc (MkRawFn n ty cs)
     = do tyc <- check loc [] ty TType
          addDef n (newDef tyc Public None)
          csc <- traverse (\x => checkClause loc x) cs
-         addFnDef loc (MkFn n tyc csc)
+         (_ ** tree) <- getPMDef loc n tyc csc
+         addFnDef loc n tree
 
 addData : {auto c : Ref Ctxt Defs} ->
           annot -> (def : RawData) -> Core annot ()
