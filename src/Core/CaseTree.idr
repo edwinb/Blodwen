@@ -29,6 +29,7 @@ mutual
 
 public export
 data CaseError = DifferingArgNumbers
+               | DifferingTypes
 
 export
 getRefs : CaseTree vars_in -> List Name
@@ -56,7 +57,7 @@ mutual
   Show (CaseTree vars) where
     show (Case {var} prf alts)
         = "case " ++ show var ++ " of { " ++
-                     showSep "| " (assert_total (map show alts))
+                showSep "| " (assert_total (map show alts)) ++ "}"
     show (STerm tm) = show tm
     show (Unmatched msg) = "Error: " ++ show msg
     show Impossible = "Impossible"
@@ -114,14 +115,48 @@ mutual
 
 public export
 data Pat = PCon Name Int (List Pat)
+         | PTCon Name Int (List Pat)
          | PConst Constant
+         | PConstTy Constant
          | PVar Name
          | PAny
 
 export
 Show Pat where
   show (PCon n i args) = show n ++ " " ++ show i ++ " " ++ assert_total (show args)
+  show (PTCon n i args) = "<TyCon>" ++ show n ++ " " ++ show i ++ " " ++ assert_total (show args)
   show (PConst c) = show c
+  show (PConstTy c) = "<PrimTy>" ++ show c
   show (PVar n) = show n
   show PAny = "_"
+
+export
+argToPat : ClosedTerm -> Pat
+argToPat tm with (unapply tm)
+  argToPat (apply (Ref (DataCon tag _) cn) args) | ArgsList 
+         = PCon cn tag (assert_total (map argToPat args))
+  argToPat (apply (Ref (TyCon tag _) cn) args) | ArgsList 
+         = PTCon cn tag (assert_total (map argToPat args))
+  argToPat (apply (Ref Bound var) []) | ArgsList = PVar var
+  -- Only the ones we can match on become PConst
+  argToPat (apply (PrimVal c@(I i)) []) | ArgsList = PConst c
+  argToPat (apply (PrimVal c@(BI i)) []) | ArgsList = PConst c
+  argToPat (apply (PrimVal c@(Str i)) []) | ArgsList = PConst c
+  argToPat (apply (PrimVal c@(Ch i)) []) | ArgsList = PConst c
+  argToPat (apply (PrimVal c) []) | ArgsList = PConstTy c
+  argToPat (apply f args) | ArgsList = PAny
+    
+export
+mkTerm : Pat -> ClosedTerm
+mkTerm (PCon n t args) 
+    = apply (Ref (DataCon t (length args)) n) 
+            (assert_total (map mkTerm args))
+mkTerm (PTCon n t args) 
+    = apply (Ref (TyCon t (length args)) n) 
+            (assert_total (map mkTerm args))
+mkTerm (PConst c) = PrimVal c
+mkTerm (PConstTy c) = PrimVal c
+mkTerm (PVar n) = Ref Bound n
+mkTerm _ = Erased
+
 

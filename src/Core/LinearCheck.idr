@@ -178,7 +178,7 @@ mutual
                 NBind _ (Pi rigf _ ty) scdone =>
                    do (a', aty, aused) <- lcheck loc (rigMult rigf rig) env a
                       let sc' = scdone (toClosure False env a')
-                      pure (App f' a', quote gam env sc', fused ++ aused)
+                      pure (App f' a', quote (noGam gam) env sc', fused ++ aused)
                 _ => throw (InternalError ("Linearity checking failed on " ++ show f' ++ " (not a function)"))
 
   lcheck loc rig env (PrimVal x) = pure (PrimVal x, Erased, [])

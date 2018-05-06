@@ -128,6 +128,8 @@ Show annot => Show (Error annot) where
   show (NotFunctionType fc tm) = show fc ++ ":Not a function type: " ++ show tm
   show (CaseCompile fc n DifferingArgNumbers) 
       = show fc ++ ":Patterns for " ++ show n ++ " have different numbers of arguments"
+  show (CaseCompile fc n DifferingTypes) 
+      = show fc ++ ":Patterns for " ++ show n ++ " require matching on different types"
   show (BadDotPattern fc x y)
       = show fc ++ ":Can't match on " ++ show x
   show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"

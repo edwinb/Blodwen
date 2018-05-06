@@ -36,4 +36,3 @@ data IsSuc : Nat -> Type where Yes : IsSuc (S k)
 
 nonZero : IsSuc hundredthousand
 nonZero = Yes
-
