@@ -167,7 +167,7 @@ parameters (defs : Defs, holesonly : Bool)
                LocalEnv free (args ++ vars) -> Stack free -> 
                CaseTree args ->
                Maybe (NF free)
-    evalTree {args} {vars} {free} env loc stk (Case x alts) 
+    evalTree {args} {vars} {free} env loc stk (Case x _ alts) 
       = let x' : List.Elem _ ((args ++ vars) ++ free) 
                = rewrite sym (appendAssociative args vars free) in
                          elemExtend x

@@ -130,6 +130,8 @@ Show annot => Show (Error annot) where
       = show fc ++ ":Patterns for " ++ show n ++ " have different numbers of arguments"
   show (CaseCompile fc n DifferingTypes) 
       = show fc ++ ":Patterns for " ++ show n ++ " require matching on different types"
+  show (CaseCompile fc n UnknownType) 
+      = show fc ++ ":Can't infer type to match in " ++ show n
   show (BadDotPattern fc x y)
       = show fc ++ ":Can't match on " ++ show x
   show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"

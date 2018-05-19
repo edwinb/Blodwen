@@ -2,7 +2,7 @@ module Core.CaseTree
 
 import Core.TT
 
-import Control.Monad.State -- TODO: Use StateE for consistency?
+import Control.Monad.State
 import Data.CSet
 import Data.List
 
@@ -11,7 +11,8 @@ import Data.List
 mutual
   public export
   data CaseTree : List Name -> Type where
-       Case : Elem var vars -> List (CaseAlt vars) -> CaseTree vars
+       Case : Elem var vars -> (scTy : Term vars) -> 
+              List (CaseAlt vars) -> CaseTree vars
        STerm : Term vars -> CaseTree vars
        Unmatched : (msg : String) -> CaseTree vars
        Impossible : CaseTree vars
@@ -30,6 +31,7 @@ mutual
 public export
 data CaseError = DifferingArgNumbers
                | DifferingTypes
+               | UnknownType
 
 export
 getRefs : CaseTree vars_in -> List Name
@@ -47,7 +49,7 @@ getRefs sc = CSet.toList (getSet empty sc)
           = assert_total $ getAltSets (getAltSet ns a) as
 
       getSet : SortedSet -> CaseTree vars -> SortedSet
-      getSet ns (Case x xs) = getAltSets ns xs
+      getSet ns (Case x ty xs) = getAltSets ns xs
       getSet ns (STerm tm) = assert_total $ union ns (getRefs tm)
       getSet ns (Unmatched msg) = ns
       getSet ns Impossible = ns
@@ -55,9 +57,9 @@ getRefs sc = CSet.toList (getSet empty sc)
 mutual
   export
   Show (CaseTree vars) where
-    show (Case {var} prf alts)
-        = "case " ++ show var ++ " of { " ++
-                showSep "| " (assert_total (map show alts)) ++ "}"
+    show (Case {var} prf ty alts)
+        = "case " ++ show var ++ " : " ++ show ty ++ " of { " ++
+                showSep " | " (assert_total (map show alts)) ++ " }"
     show (STerm tm) = show tm
     show (Unmatched msg) = "Error: " ++ show msg
     show Impossible = "Impossible"
@@ -75,8 +77,9 @@ mutual
 mutual
   insertCaseNames : (ns : List Name) -> CaseTree (outer ++ inner) ->
                     CaseTree (outer ++ (ns ++ inner))
-  insertCaseNames {outer} {inner} ns (Case x xs) 
-      = Case (insertElemNames {outer} {inner} ns x)
+  insertCaseNames {outer} {inner} ns (Case x ty xs) 
+      = Case (insertElemNames {outer} {inner} ns x) 
+             (insertNames {outer} ns ty)
              (assert_total (map (insertCaseAltNames {outer} {inner} ns) xs))
   insertCaseNames {outer} ns (STerm tm) = STerm (insertNames {outer} ns tm)
   insertCaseNames ns (Unmatched msg) = Unmatched msg
@@ -100,7 +103,7 @@ Weaken CaseTree where
 mutual
   export
   embed : CaseTree args -> CaseTree (args ++ more)
-  embed (Case x xs) = Case (elemExtend x) (assert_total (map embedAlt xs))
+  embed (Case x t xs) = Case (elemExtend x) (embed t) (assert_total (map embedAlt xs))
   embed (STerm tm) = STerm (embed tm)
   embed (Unmatched msg) = Unmatched msg
   embed Impossible = Impossible

@@ -242,8 +242,8 @@ mutual
 
   export
   TTC annot (CaseTree vars) where
-    toBuf b (Case {var} x xs) 
-        = do tag 0; toBuf b var; toBuf b x
+    toBuf b (Case {var} x ty xs) 
+        = do tag 0; toBuf b var; toBuf b ty; toBuf b x
              assert_total (toBuf b xs)
     toBuf b (STerm tm) 
         = do tag 1; toBuf b tm
@@ -254,9 +254,11 @@ mutual
 
     fromBuf s b -- total because it'll fail at the end of the buffer!
         = assert_total $ case !getTag of
-               0 => do var <- fromBuf s b; x <- fromBuf s b
+               0 => do var <- fromBuf s b
+                       ty <- fromBuf s b
+                       x <- fromBuf s b
                        y <- fromBuf s b
-                       pure (Case {var} x y)
+                       pure (Case {var} x ty y)
                1 => do x <- fromBuf s b
                        pure (STerm x)
                2 => do x <- fromBuf s b
