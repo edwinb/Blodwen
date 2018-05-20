@@ -11,7 +11,7 @@ import Data.List
 %default covering
 
 data ArgType : List Name -> Type where
-     Known : (ty : Term vars) -> ArgType vars -- arg has type 'ty'
+     Known : RigCount -> (ty : Term vars) -> ArgType vars -- arg has type 'ty'
      Stuck : (fty : Term vars) -> ArgType vars 
          -- ^ arg will have argument type of 'fty' when we know enough to
          -- calculate it
@@ -19,7 +19,7 @@ data ArgType : List Name -> Type where
          -- arg's type is not yet known due to a previously stuck argument
 
 Show (ArgType ns) where
-  show (Known t) = "Known " ++ show t
+  show (Known c t) = "Known " ++ show c ++ show t
   show (Stuck t) = "Stuck " ++ show t
   show Unknown = "Unknown"
 
@@ -27,8 +27,8 @@ record PatInfo (pvar : Name) (vars : List Name) where
   constructor MkInfo
   pat : Pat
   loc : Elem pvar vars
-  multiplicity : RigCount
-  argType : ArgType vars
+  argType : ArgType vars -- Type of the argument being inspected (i.e. 
+                         -- *not* refined by this particular pattern)
 
 {-
 NamedPats is a list of patterns on the LHS of a clause. Each entry in
@@ -58,8 +58,7 @@ updatePats env nf [] = []
 updatePats {todo = pvar :: ns} env (NBind _ (Pi c _ farg) fsc) (p :: ps)
   = case argType p of
          Unknown =>
-            record { argType = Known (quote initCtxt env farg),
-                     multiplicity = c } p
+            record { argType = Known c (quote initCtxt env farg) } p
               :: updatePats env (fsc (toClosure False env (Ref Bound pvar))) ps
          _ => p :: ps
 updatePats env nf (p :: ps)
@@ -75,11 +74,11 @@ substInPatInfo : Defs -> Name -> Term vars -> PatInfo pvar vars ->
                  NamedPats vars todo -> (PatInfo pvar vars, NamedPats vars todo)
 substInPatInfo {pvar} {vars} defs n tm p ps 
     = case argType p of
-           Known ty => (record { argType = Known (substName n tm ty) } p, ps)
+           Known c ty => (record { argType = Known c (substName n tm ty) } p, ps)
            Stuck fty => let env = mkEnv vars in
                           case nf defs env (substName n tm fty) of
-                             NBind _ (Pi _ _ farg) fsc =>
-                               (record { argType = Known (quote initCtxt env farg) } p,
+                             NBind _ (Pi c _ farg) fsc =>
+                               (record { argType = Known c (quote initCtxt env farg) } p,
                                    updatePats env 
                                       (fsc (toClosure False env
                                                 (Ref Bound pvar))) ps)
@@ -107,20 +106,18 @@ Show (NamedPats vars todo) where
       showAll : NamedPats vs ts -> String
       showAll [] = ""
       showAll {ts = t :: _ } [x]
-          = show t ++ " " ++ show (multiplicity x) ++ " " ++
-            show (pat x) ++ " [" ++ show (argType x) ++ "]" 
+          = show t ++ " " ++ show (pat x) ++ " [" ++ show (argType x) ++ "]" 
       showAll {ts = t :: _ } (x :: xs) 
-          = show t ++ " " ++ show (multiplicity x) ++ " " ++
-            show (pat x) ++ " [" ++ show (argType x) ++ "]"
+          = show t ++ " " ++ show (pat x) ++ " [" ++ show (argType x) ++ "]"
                      ++ ", " ++ showAll xs
 
 Weaken ArgType where
-  weaken (Known ty) = Known (weaken ty)
+  weaken (Known c ty) = Known c (weaken ty)
   weaken (Stuck fty) = Stuck (weaken fty)
   weaken Unknown = Unknown
 
 Weaken (PatInfo p) where
-  weaken (MkInfo p el m fty) = MkInfo p (There el) m (weaken fty)
+  weaken (MkInfo p el fty) = MkInfo p (There el) (weaken fty)
 
 -- FIXME: oops, 'vars' should be second argument so we can use Weaken interface
 weaken : NamedPats vars todo -> NamedPats (x :: vars) todo
@@ -156,8 +153,8 @@ Show (PatClause vars todo) where
      = show ps ++ " => " ++ show rhs
 
 substInClause : Defs -> PatClause vars (a :: todo) -> PatClause vars (a :: todo)
-substInClause {a} defs (MkPatClause (MkInfo pat pprf m fty :: pats) rhs)
-    = MkPatClause (MkInfo pat pprf m fty :: 
+substInClause {a} defs (MkPatClause (MkInfo pat pprf fty :: pats) rhs)
+    = MkPatClause (MkInfo pat pprf fty :: 
                      substInPats defs a (embed (mkTerm pat)) pats) rhs
 
 data LengthMatch : List a -> List b -> Type where
@@ -186,8 +183,8 @@ Show (Partitions ps) where
 data ClauseType = ConClause | VarClause
 
 clauseType : PatClause vars (a :: as) -> ClauseType
-clauseType (MkPatClause (MkInfo (PCon x y xs) _ _ _ :: _) rhs) = ConClause
-clauseType (MkPatClause (MkInfo (PConst x) _ _ _ :: _) rhs) = ConClause
+clauseType (MkPatClause (MkInfo (PCon x y xs) _ _ :: _) rhs) = ConClause
+clauseType (MkPatClause (MkInfo (PConst x) _ _ :: _) rhs) = ConClause
 clauseType (MkPatClause (_ :: _) rhs) = VarClause
 
 partition : (ps : List (PatClause vars (a :: as))) -> Partitions ps
@@ -272,22 +269,21 @@ nextNames root [] fty = pure ([] ** [])
 nextNames {vars} root (p :: pats) fty
      = do n <- nextName root
           let env = mkEnv vars
-          let fa_tys : (Maybe (NF vars), RigCount, ArgType vars)
+          let fa_tys : (Maybe (NF vars), ArgType vars)
                   = case fty of
-                         Nothing => (Nothing, RigW, Unknown)
+                         Nothing => (Nothing, Unknown)
                          Just (NBind _ (Pi c _ farg) fsc) =>
                             (Just (fsc (toClosure False env (Ref Bound n))),
-                              c, Known (quote initCtxt env farg))
+                              Known c (quote initCtxt env farg))
                          Just t =>
-                            (Nothing, RigW, Stuck (quote initCtxt env t))
+                            (Nothing, Stuck (quote initCtxt env t))
           (args ** ps) <- nextNames {vars} root pats
                                (fst fa_tys)
-          let rig = fst (snd fa_tys)
-          let argTy = case snd (snd fa_tys) of
+          let argTy = case snd fa_tys of
                            Unknown => Unknown
-                           Known t => Known (weakenNs (n :: args) t)
+                           Known rig t => Known rig (weakenNs (n :: args) t)
                            Stuck t => Stuck (weakenNs (n :: args) t)
-          pure (n :: args ** MkInfo p Here rig argTy :: weaken ps)
+          pure (n :: args ** MkInfo p Here argTy :: weaken ps)
 
 -- replace the prefix of patterns with 'pargs'
 newPats : (pargs : List Pat) -> LengthMatch pargs ns ->
@@ -299,7 +295,7 @@ newPats (newpat :: xs) (ConsMatch w) (pi :: rest)
 
 substPatNames : (ns : _) -> NamedPats vars ns -> Term vars -> Term vars
 substPatNames [] [] tm = tm
-substPatNames (n :: ns) (MkInfo (PVar pn) _ _ _ :: ps) tm 
+substPatNames (n :: ns) (MkInfo (PVar pn) _ _ :: ps) tm 
      = substName pn (Ref Bound n) (substPatNames ns ps tm)
 substPatNames (n :: ns) (_ :: ps) tm = substPatNames ns ps tm
 
@@ -383,7 +379,7 @@ groupCons defs cs
          List (PatClause vars (a :: todo)) -> 
          StateT Int (Either CaseError) (List (Group vars todo))
     gc acc [] = pure acc
-    gc {a} acc ((MkPatClause (MkInfo pat pprf rig fty :: pats) rhs) :: cs) 
+    gc {a} acc ((MkPatClause (MkInfo pat pprf fty :: pats) rhs) :: cs) 
         = do acc' <- addGroup pat pats rhs acc
              gc acc' cs
 
@@ -393,24 +389,25 @@ getFirstPat (p :: _) = pat p
 getFirstArgType : NamedPats ns (p :: ps) -> ArgType ns
 getFirstArgType (p :: _) = argType p
 
--- Check whether all the initial patterns have the same concrete, known type.
+-- Check whether all the initial patterns have the same concrete, known
+-- and matchable type, which is multiplicity > 0. 
 -- If so, it's okay to match on it
 sameType : Defs -> Env Term ns -> List (NamedPats ns (p :: ps)) -> Bool
 sameType defs env [] = True
 sameType {ns} defs env (p :: xs) = -- all known (map getFirstArgType (p :: xs)) &&
     case getFirstArgType p of
-         Known t => sameTypeAs (nf defs env t) (map getFirstArgType xs)
+         Known _ t => sameTypeAs (nf defs env t) (map getFirstArgType xs)
          _ => False
   where
     headEq : NF ns -> NF ns -> Bool
     headEq (NTCon n _ _ _) (NTCon n' _ _ _) = n == n'
     headEq (NPrimVal c) (NPrimVal c') = c == c'
-    headEq NType NType = True
     headEq _ _ = False
 
     sameTypeAs : NF ns -> List (ArgType ns) -> Bool
     sameTypeAs ty [] = True
-    sameTypeAs ty (Known t :: xs) 
+    sameTypeAs ty (Known Rig0 t :: xs) = False -- Can't match on erased thing
+    sameTypeAs ty (Known c t :: xs) 
           = headEq ty (nf defs env t) && sameTypeAs ty xs
     sameTypeAs ty _ = False
 
@@ -423,6 +420,7 @@ sameTyCon (pi :: xs) =
       case p of
            PTCon n t _ => sameTyConAs p (map getFirstPat xs)
            PConstTy c => sameTyConAs p (map getFirstPat xs)
+           PVar n => sameTyConAs p (map getFirstPat xs)
            _ => False
   where
     sameTyConAs : Pat -> List Pat -> Bool
@@ -435,7 +433,8 @@ sameTyCon (pi :: xs) =
         = if c == c' 
              then sameTyConAs (PConstTy c) ps
              else False
-    sameTyConAs _ _ = False
+    sameTyConAs (PVar n) (PVar _ :: ps) = sameTyConAs (PVar n) ps
+    sameTyConAs x y = False
 
 getFirstCon : NamedPats ns (p :: ps) -> Pat
 getFirstCon (p :: _) = pat p
@@ -475,34 +474,36 @@ bestOf Nothing Nothing = Nothing
 bestOf Nothing (Just p) = Just (_ ** p)
 bestOf (Just p) Nothing = Just (_ ** p)
 bestOf (Just (p, psc)) (Just (q, qsc))
-    = if psc > qsc
-         then Just (_ ** (p, psc))
-         else Just (_ ** (q, qsc))
+    = Just (_ ** (p, psc))
+         -- at compile time, left to right helps coverage check
+         -- TODO: At run time pick most distinct, as below?
+--     if psc >= qsc
+--          then Just (_ ** (p, psc))
+--          else Just (_ ** (q, qsc))
 
 pickBest : Defs -> List (NamedPats ns (p :: ps)) -> 
            Maybe (x ** (Elem x (p :: ps), Nat))
 pickBest {ps = []} defs npss 
-    = do el <- getScore defs Here npss
-         pure (_ ** el)
+    = if sameTyCon npss
+         then pure (_ ** (Here, 0))
+         else do el <- getScore defs Here npss
+                 pure (_ ** el)
 pickBest {ps = q :: qs} defs npss 
-    = -- if they're all Types, and all the same, use this one
+    = -- Pick the leftmost thing with all constructors in the same family,
+      -- or all variables, or all the same type constructor
       if sameTyCon npss
          then pure (_ ** (Here, 0))
-      -- otherwise, pick the one with the most distinct constructors
-         else 
-           case pickBest defs (map tail npss) of
-             Nothing => 
-                do el <- getScore defs Here npss
-                   pure (_ ** el)
-             Just (_ ** (var, score)) =>
-                bestOf (getScore defs Here npss) (Just (There var, score))
+         else
+            case pickBest defs (map tail npss) of
+                 Nothing => 
+                    do el <- getScore defs Here npss
+                       pure (_ ** el)
+                 Just (_ ** (var, score)) =>
+                    bestOf (getScore defs Here npss) (Just (There var, score))
 
 -- Pick the next variable to inspect from the list of LHSs.
--- Choice *must* be the same type family. 
--- If every pattern is the same, pick that one (to refine the types of the
--- later arguments)
--- Otherwise, pick the one with most distinct constructors as a heuristic to
--- generate a smaller case tree
+-- Choice *must* be the same type family, so pick the leftmost argument
+-- where this applies.
 pickNext : Defs -> List (NamedPats ns (p :: ps)) -> 
            Maybe (x ** Elem x (p :: ps))
 pickNext defs npss 
@@ -544,10 +545,9 @@ mutual
              Just (_ ** next) =>
                 let clauses' = map (shuffleVars next) clauses
                     ps = partition clauses' in
---                     trace ("Clauses:\n" ++ show clauses') $
                     maybe (pure (Unmatched "No clauses"))
                           pure
-                          !(mixture defs (partition clauses') err)
+                          !(mixture defs ps err)
 
   caseGroups : Defs ->
                Elem pvar vars -> Term vars ->
@@ -580,11 +580,11 @@ mutual
   -- the same variable (pprf) for the first argument. If not, the result
   -- will be a broken case tree... so we should find a way to express this
   -- in the type if we can.
-  conRule {a} defs cs@(MkPatClause (MkInfo pat pprf rig fty :: pats) rhs :: rest) err 
+  conRule {a} defs cs@(MkPatClause (MkInfo pat pprf fty :: pats) rhs :: rest) err 
       = do let refinedcs = map (substInClause defs) cs
            groups <- groupCons defs refinedcs
            ty <- case fty of
-                      Known t => pure t
+                      Known _ t => pure t
                       _ => lift $ Left UnknownType
            caseGroups defs pprf ty groups err
 
@@ -598,12 +598,12 @@ mutual
     where
       updateVar : PatClause vars (a :: todo) -> PatClause vars todo
       -- replace the name with the relevant variable on the rhs
-      updateVar (MkPatClause (MkInfo (PVar n) prf rig fty :: pats) rhs)
+      updateVar (MkPatClause (MkInfo (PVar n) prf fty :: pats) rhs)
           = MkPatClause (substInPats defs a (Local prf) pats)
                         (substName n (Local prf) rhs) 
       -- match anything, name won't appear in rhs but need to update
       -- LHS pattern types based on what we've learned
-      updateVar (MkPatClause (MkInfo pat prf rig fty :: pats) rhs)
+      updateVar (MkPatClause (MkInfo pat prf fty :: pats) rhs)
           = MkPatClause (substInPats defs a (embed (mkTerm pat)) pats) rhs
 
   mixture : {ps : List (PatClause vars (a :: todo))} ->
@@ -638,17 +638,16 @@ mkPatClause defs args ty (ps, rhs)
     mkNames [] [] NilMatch fty = []
     mkNames (arg :: args) (p :: ps) (ConsMatch eq) fty
         = let fa_tys = case fty of
-                            Nothing => (Nothing, RigW, Unknown)
+                            Nothing => (Nothing, Unknown)
                             Just (NBind _ (Pi c _ farg) fsc) => 
                                 (Just (fsc (toClosure False [] (Ref Bound arg))),
-                                   c,
-                                   Known (embed {more = arg :: args} 
+                                   Known c (embed {more = arg :: args} 
                                              (quote initCtxt [] farg)))
                             Just t => 
-                                (Nothing, RigW,
+                                (Nothing, 
                                    Stuck (embed {more = arg :: args} 
                                              (quote initCtxt [] t))) in
-              MkInfo p Here (fst (snd fa_tys)) (snd (snd fa_tys))
+              MkInfo p Here (snd fa_tys)
                     :: weaken (mkNames args ps eq 
                              (fst fa_tys)) 
 
