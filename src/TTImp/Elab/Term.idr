@@ -369,7 +369,7 @@ mutual
            n <- addHole loc env expected
            gam <- getCtxt
            let tm = mkConstantApp n env
-           addDot loc env wantedTm tm
+           addDot loc env n wantedTm tm
            checkExp rigc process loc (record { elabMode= InExpr } elabinfo) 
                     env nest tm wantedTy (Just expected)
     checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) | elabmode

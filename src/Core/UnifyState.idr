@@ -73,10 +73,12 @@ record UnifyState annot where
                               -- their dependencies, which don't have to be 
                               -- resolved
      constraints : Context (Constraint annot) -- metavariable constraints 
-     dotConstraints : List (Constraint annot) -- dot pattern constraints
+     dotConstraints : List (Name, Constraint annot) -- dot pattern constraints
                           -- after elaboration, we check that the equations
                           -- are already solved, which shows that the term
-                          -- in the pattern is valid by unification
+                          -- in the pattern is valid by unification. The Name
+                          -- is the metavariable standing for the dot pattern,
+                          -- which must be solved at the end
      delayedElab : Context (Core annot ClosedTerm)
                    -- Elaborators which we need to try again later, because
                    -- we didn't have enough type information to elaborate
@@ -357,11 +359,11 @@ addConstraint constr
 
 export
 addDot : {auto u : Ref UST (UState annot)} ->
-         annot -> Env Term vars -> Term vars -> Term vars ->
+         annot -> Env Term vars -> Name -> Term vars -> Term vars ->
          Core annot ()
-addDot loc env x y
+addDot loc env dotarg x y
     = do ust <- get UST
-         put UST (record { dotConstraints $= ((MkConstraint loc env x y) ::) }
+         put UST (record { dotConstraints $= ((dotarg, MkConstraint loc env x y) ::) }
                          ust)
 
 export
@@ -497,29 +499,11 @@ dumpDots
          traverse (dumpConstraint gam) (dotConstraints ust)
          pure ()
   where
-    dumpConstraint : Defs -> Constraint annot -> Core annot ()
-    dumpConstraint gam (MkConstraint _ env x y)
-        = do log 2 $ "\t  " ++ show (normalise gam env x) 
+    dumpConstraint : Defs -> (Name, Constraint annot) -> Core annot ()
+    dumpConstraint gam (n, MkConstraint _ env x y)
+        = do log 2 $ "\t (" ++ show n ++ ") " ++ show (normalise gam env x) 
                             ++ " =?= " ++ show (normalise gam env y)
              log 5 $ "\t    from " ++ show x 
                             ++ " =?= " ++ show y
     dumpConstraint gam _ = pure ()
-
-export
-checkDots : {auto u : Ref UST (UState annot)} ->
-            {auto c : Ref Ctxt Defs} ->
-            Core annot ()
-checkDots
-    = do ust <- get UST
-         gam <- get Ctxt
-         traverse (checkConstraint gam) (dotConstraints ust)
-         put UST (record { dotConstraints = [] } ust)
-         pure ()
-  where
-    checkConstraint : Defs -> Constraint annot -> Core annot ()
-    checkConstraint gam (MkConstraint loc env x y)
-        = if convert gam env x y
-             then pure ()
-             else throw (BadDotPattern loc x y)
-    checkConstraint gam _ = pure ()
 

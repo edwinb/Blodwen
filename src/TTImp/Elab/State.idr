@@ -282,8 +282,10 @@ getToBind {vars} env
                Core annot (List (Name, Term vars))
     normImps gam ns [] = pure []
     normImps gam ns ((PV n, tm, ty) :: ts) 
-        = do rest <- normImps gam (PV n :: ns) ts
-             pure ((PV n, normaliseHoles gam env ty) :: rest)
+        = if PV n `elem` ns
+             then normImps gam ns ts
+             else do rest <- normImps gam (PV n :: ns) ts
+                     pure ((PV n, normaliseHoles gam env ty) :: rest)
     normImps gam ns ((n, tm, ty) :: ts)
         = case (getFnArgs (normaliseHoles gam env tm)) of
              (Ref nt n', args) => 

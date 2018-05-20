@@ -908,3 +908,22 @@ retryAllDelayed
                          else do traverse (retryDelayed True) hs
                                  pure ()
 
+export
+checkDots : {auto u : Ref UST (UState annot)} ->
+            {auto c : Ref Ctxt Defs} ->
+            Core annot ()
+checkDots
+    = do ust <- get UST
+         gam <- get Ctxt
+         traverse (checkConstraint gam) (dotConstraints ust)
+         put UST (record { dotConstraints = [] } ust)
+         pure ()
+  where
+    checkConstraint : Defs -> (Name, Constraint annot) -> Core annot ()
+    checkConstraint gam (n, MkConstraint loc env x y)
+        = do cs <- unify InLHS loc env x y
+             if isNil cs && not (isHoleNF (gamma gam) n)
+                then pure ()
+                else throw (BadDotPattern loc x y)
+    checkConstraint gam _ = pure ()
+
