@@ -73,6 +73,42 @@ setLinear vs (Bind x (PVTy c ty) sc)
            _ => Bind x (PVTy c ty) (setLinear vs sc)
 setLinear vs tm = tm
 
+-- Combining multiplicities on LHS:
+-- Rig1 + Rig1/W not valid, since it means we have repeated use of name
+-- Rig0 + RigW = RigW
+-- Rig0 + Rig1 = Rig1
+combineLinear : annot -> List (Name, RigCount) ->
+                Core annot (List (Name, RigCount))
+combineLinear loc [] = pure []
+combineLinear loc ((n, count) :: cs)
+    = case lookupAll n cs of
+           [] => pure $ (n, count) :: !(combineLinear loc cs)
+           counts => do count' <- combineAll count counts
+                        pure $ (n, count') :: 
+                               !(combineLinear loc (filter notN cs))
+  where
+    notN : (Name, RigCount) -> Bool
+    notN (n', _) = n /= n'
+
+    lookupAll : Name -> List (Name, RigCount) -> List RigCount
+    lookupAll n [] = []
+    lookupAll n ((n', c) :: cs) 
+       = if n == n' then c :: lookupAll n cs else lookupAll n cs
+
+    combine : RigCount -> RigCount -> Core annot RigCount
+    combine Rig1 Rig1 = throw (LinearUsed loc 2 n)
+    combine Rig1 RigW = throw (LinearUsed loc 2 n)
+    combine RigW Rig1 = throw (LinearUsed loc 2 n)
+    combine RigW RigW = pure RigW
+    combine Rig0 c = pure c
+    combine c Rig0 = pure c
+
+    combineAll : RigCount -> List RigCount -> Core annot RigCount
+    combineAll c [] = pure c
+    combineAll c (c' :: cs)
+        = do newc <- combine c c'
+             combineAll newc cs
+
 -- If the terms have the same type constructor at the head, and one of
 -- the argument positions has different constructors at its head, then this
 -- is an impossible case, so return True
@@ -117,12 +153,14 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          wrapError (InLHS loc defining) $ checkUserHoles loc True
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
-         let linvars = findLinear gam 0 Rig1 lhs
+         let linvars_in = findLinear gam 0 Rig1 lhs
          log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
-                 show linvars
+                 show linvars_in
+
+         linvars <- combineLinear loc linvars_in
          let lhs' = setLinear linvars lhs
          let lhsty' = setLinear linvars lhsty
-         
+
          (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs' lhsty'
          log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
          log 5 ("Checking RHS: " ++ show rhs_raw)
