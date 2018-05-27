@@ -412,7 +412,8 @@ sameType {ns} defs env (p :: xs) = -- all known (map getFirstArgType (p :: xs)) 
     sameTypeAs ty _ = False
 
 -- Check whether all the initial patterns are a Type, and have exactly the
--- same value. If so, we'll match it to refine later types and move on
+-- same value, or all a variable. If so, we'll match it to refine later 
+-- types and move on
 sameTyCon : List (NamedPats ns (p :: ps)) -> Bool
 sameTyCon [] = True
 sameTyCon (pi :: xs) =
@@ -476,6 +477,8 @@ bestOf (Just p) Nothing = Just (_ ** p)
 bestOf (Just (p, psc)) (Just (q, qsc))
     = Just (_ ** (p, psc))
          -- at compile time, left to right helps coverage check
+         -- (by refining types, so we know the type of the thing we're
+         -- discriminating on)
          -- TODO: At run time pick most distinct, as below?
 --     if psc >= qsc
 --          then Just (_ ** (p, psc))

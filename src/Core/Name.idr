@@ -15,6 +15,19 @@ mutual
             | PV String -- implicitly bound pattern variable name
             | GN GenName -- various kinds of generated names
 
+gnameTag : GenName -> Int
+gnameTag (Nested _ _) = 0
+gnameTag (CaseBlock _ _) = 1
+gnameTag (WithBlock _ _) = 2
+
+nameTag : Name -> Int
+nameTag (UN _) = 0
+nameTag (MN _ _) = 1
+nameTag (NS _ _) = 2
+nameTag (HN _ _) = 3
+nameTag (PV _) = 4
+nameTag (GN _) = 5
+
 mutual
   export
   gnameRoot : GenName -> String
@@ -149,16 +162,6 @@ mutual
 mutual
   export
   Ord GenName where
-    compare (Nested _ _) (CaseBlock _ _) = LT
-    compare (Nested _ _) (WithBlock _ _) = LT
-
-    compare (CaseBlock _ _) (WithBlock _ _) = LT
-
-    compare (CaseBlock _ _) (Nested _ _) = GT
-    compare (WithBlock _ _) (Nested _ _) = GT
-    
-    compare (WithBlock _ _) (CaseBlock _ _) = GT
-
     compare (Nested x1 x2) (Nested y1 y2) 
         = case compare x1 y1 of
                EQ => compare x2 y2
@@ -171,49 +174,10 @@ mutual
         = case compare x1 y1 of
                EQ => compare x2 y2
                t => t
+    compare x y = compare (gnameTag x) (gnameTag y)
 
   export
   Ord Name where
-    compare (UN _) (MN _ _) = LT
-    compare (UN _) (NS _ _) = LT
-    compare (UN _) (HN _ _) = LT
-    compare (UN _) (PV _) = LT
-    compare (UN _) (GN _) = LT
-
-    compare (MN _ _) (NS _ _) = LT
-    compare (MN _ _) (HN _ _) = LT
-    compare (MN _ _) (PV _) = LT
-    compare (MN _ _) (GN _) = LT
-
-    compare (NS _ _) (HN _ _) = LT
-    compare (NS _ _) (PV _) = LT
-    compare (NS _ _) (GN _) = LT
-
-    compare (HN _ _) (PV _) = LT
-    compare (HN _ _) (GN _) = LT
-
-    compare (PV _) (GN _) = LT
-
-    compare (MN _ _) (UN _) = GT
-    compare (NS _ _) (UN _) = GT
-    compare (HN _ _) (UN _) = GT
-    compare (PV _) (UN _) = GT
-    compare (GN _) (UN _) = GT
-
-    compare (NS _ _) (MN _ _) = GT
-    compare (HN _ _) (MN _ _) = GT
-    compare (PV _) (MN _ _) = GT
-    compare (GN _) (MN _ _) = GT
-
-    compare (HN _ _) (NS _ _) = GT
-    compare (PV _) (NS _ _) = GT
-    compare (GN _) (NS _ _) = GT
-
-    compare (PV _) (HN _ _) = GT
-    compare (GN _) (HN _ _) = GT
-
-    compare (GN _) (PV _) = GT
-
     compare (UN x) (UN y) = compare x y
     compare (MN x y) (MN x' y') 
         = case compare x x' of
@@ -229,6 +193,8 @@ mutual
                t => t
     compare (PV x) (PV y) = compare x y
     compare (GN x) (GN y) = compare x y
+
+    compare x y = compare (nameTag x) (nameTag y)
 
 hashString : String -> Int
 hashString "" = 1
