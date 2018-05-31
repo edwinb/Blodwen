@@ -18,10 +18,10 @@ data DelayReason = Infinite | LazyValue
 
 public export
 data Delayed : DelayReason -> Type -> Type where
-     Delay : {t, a : _} -> (val : a) -> Delayed t a
+     Delay : {0 t, a : _} -> (val : a) -> Delayed t a
 
 public export
-Force : {t, a : _} -> Delayed t a -> a
+Force : {0 t, a : _} -> Delayed t a -> a
 Force (Delay x) = x
 
 %lazy Delayed Delay Force
@@ -71,7 +71,7 @@ data Unit = MkUnit
 
 public export
 data Pair : Type -> Type -> Type where
-     MkPair : {a, b : Type} -> a -> b -> Pair a b
+     MkPair : {0 a, b : Type} -> a -> b -> Pair a b
 
 public export
 the : (a : Type) -> a -> a

@@ -2,7 +2,7 @@ Processing as Idris
 1/2: Building Stuff (Stuff.blod)
 2/2: Building door (door.blod)
 Welcome to Blodwen. Good luck.
-Main>    m : Type -> Type
+Main>  0 m : Type -> Type
  0 d : Door Closed
  1 d : Door Open
 -------------------------------------

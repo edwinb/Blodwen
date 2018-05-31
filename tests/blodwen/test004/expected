@@ -5,6 +5,6 @@ Main> Bye for now!
 Processing as Idris
 1/1: Building ambig2 (ambig2.blod)
 ambig2.blod:22:1--24:1:When elaborating right hand side of Main.keepUnique:
-ambig2.blod:22:21--22:28:Ambiguous elaboration [(Main.Vect.toList (Main.{a:12} b xs) (Main.Vect.fromList (Main.{a:13} b xs) xs)), (Main.Set.toList (Main.{a:12} b xs) (Main.Set.fromList (Main.{a:13} b xs) xs))]
+ambig2.blod:22:21--22:28:Ambiguous elaboration [(Main.Vect.toList (Main.{a:12} !b !xs) (Main.Vect.fromList (Main.{a:13} !b !xs) !xs)), (Main.Set.toList (Main.{a:12} !b !xs) (Main.Set.fromList (Main.{a:13} !b !xs) !xs))]
 Welcome to Blodwen. Good luck.
 Main> Bye for now!

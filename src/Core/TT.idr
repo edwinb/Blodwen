@@ -558,6 +558,29 @@ refToLocals : (ns : List Name) -> Term vars -> Term (ns ++ vars)
 refToLocals [] tm = tm
 refToLocals (n :: ns) tm = refToLocal n n (refToLocals ns tm)
 
+-- Oops, no DecEq for Name, so we need this
+export
+isVar : (n : Name) -> (ns : List Name) -> Maybe (Elem n ns)
+isVar n [] = Nothing
+isVar n (m :: ms) 
+    = case nameEq n m of
+           Nothing => do p <- isVar n ms
+                         pure (There p)
+           Just Refl => pure Here
+
+-- Replace any Ref Bound with appropriate proof
+export
+resolveRefs : (vars : List Name) -> Term vars -> Term vars
+resolveRefs vars (Ref Bound n)
+    = case isVar n vars of
+           Just prf => Local prf
+           _ => Ref Bound n
+resolveRefs vars (Bind x b sc)
+    = Bind x (assert_total (map (resolveRefs vars) b))
+             (resolveRefs (x :: vars) sc)
+resolveRefs vars (App f a) = App (resolveRefs vars f) (resolveRefs vars a)
+resolveRefs vars tm = tm
+
 export
 innerRefToLocals : (ns : List Name) -> 
                    Term (outer ++ vars) -> Term (outer ++ ns ++ vars)
@@ -947,7 +970,9 @@ Show (Term vars) where
         vCount (There p) = 1 + vCount p
 
         showApp : Term vars -> List (Term vars) -> String
-        showApp (Local {x} y) [] = show x -- ++ "[" ++ show (vCount y) ++ "]"
+        -- It's for debugging purposes, so it's useful to mark resolved
+        -- names somehow; resolved names are prefixed with a '!'
+        showApp (Local {x} y) [] = "!" ++ show x -- ++ "[" ++ show (vCount y) ++ "]"
         showApp (Ref x fn) [] = show fn
         showApp (Bind n (Lam c x ty) sc) [] 
             = assert_total ("\\" ++ showCount c ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
@@ -1020,3 +1045,4 @@ export
 rawApply : Raw -> List Raw -> Raw
 rawApply fn [] = fn
 rawApply fn (arg :: args) = rawApply (RApp fn arg) args
+

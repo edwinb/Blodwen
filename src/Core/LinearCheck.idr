@@ -179,7 +179,8 @@ mutual
                    do (a', aty, aused) <- lcheck loc (rigMult rigf rig) env a
                       let sc' = scdone (toClosure False env a')
                       pure (App f' a', quote (noGam gam) env sc', fused ++ aused)
-                _ => throw (InternalError ("Linearity checking failed on " ++ show f' ++ " (not a function)"))
+                _ => throw (InternalError ("Linearity checking failed on " ++ show f' ++ 
+                              " (" ++ show fty ++ " not a function type)"))
 
   lcheck loc rig env (PrimVal x) = pure (PrimVal x, Erased, [])
   lcheck loc rig env Erased = pure (Erased, Erased, [])

@@ -2,11 +2,11 @@ Welcome to TTImp. Good luck.
 Loading auto.tti
 Processing as TTImp
 Blodwen> 3 : Integer
-Blodwen> ():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
+Blodwen> ():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons Integer 2 (Main.List.Cons Integer 3 (Main.List.Cons Integer 4 (Main.List.Nil Integer)))))
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
 Loading build/auto.ttc
 Processing as TTC
 Blodwen> 3 : Integer
-Blodwen> ():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons __ 2 (Main.List.Cons __ 3 (Main.List.Cons __ 4 (Main.List.Nil __)))))
+Blodwen> ():Can't solve goal (Main.List.Elem Integer 1 (Main.List.Cons Integer 2 (Main.List.Cons Integer 3 (Main.List.Cons Integer 4 (Main.List.Nil Integer)))))
 Blodwen> Bye for now!

@@ -100,9 +100,9 @@ Show annot => Show (Error annot) where
                    " in " ++ showRel ctx ++ " context"
      where
        showRig : RigCount -> String
-       showRig Rig0 = "erased"
+       showRig Rig0 = "irrelevant"
        showRig Rig1 = "linear"
-       showRig RigW = "non-linear"
+       showRig RigW = "unrestricted"
 
        showRel : RigCount -> String
        showRel Rig0 = "irrelevant"

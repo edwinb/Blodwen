@@ -369,3 +369,32 @@ mutual
         = convGen num defs env (evalClosure defs thunkx)
                                (evalClosure defs thunky)
 
+-- Erase any Rig0 arguments from a term. This is only valid after type
+-- checking is complete!
+export
+eraseRig0 : Defs -> Env Term vars -> Term vars -> Term vars
+eraseRig0 {vars} gam env tm with (unapply tm)
+  eraseRig0 {vars} gam env (apply (Ref nty n) args) | ArgsList 
+      = case lookupTyExact n (gamma gam) of
+             Just ty
+                  => let epos = getErased 0 (nf gam env (embed ty)) args in
+                         apply (Ref nty n) (dropPos 0 epos args)
+             _ => apply (Ref nty n) args
+    where
+      getErased : Nat -> NF vars -> List (Term vars) -> List Nat
+      getErased n (NBind x (Pi r p ty) sc) (a :: as)
+          = let rest = getErased (1 + n) (sc (toClosure False env a)) as in
+                case r of
+                     Rig0 => n :: rest
+                     _ => rest
+      getErased _ _ _ = []
+
+      dropPos : Nat -> List Nat -> List (Term vars) -> List (Term vars)
+      dropPos i fs [] = []
+      dropPos i fs (x :: xs)
+          = if i `elem` fs then Erased :: dropPos (S i) fs xs
+                           else x :: dropPos (S i) fs xs
+  eraseRig0 gam env (apply f args) | ArgsList 
+       = apply f (map (eraseRig0 gam env) args)
+
+

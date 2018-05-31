@@ -58,23 +58,6 @@ expandAmbigName defs env nest orig args (IApp loc f a) exp
    = expandAmbigName defs env nest orig ((loc, a) :: args) f exp
 expandAmbigName defs env nest orig args _ _ = orig
 
--- Erase any forced arguments from a top level application
-eraseForced : Gamma -> ElabMode -> Term vars -> Term vars
-eraseForced gam InLHS tm = tm -- Need info for case compiler; erase at that point
-eraseForced gam mode tm with (unapply tm)
-  eraseForced gam mode (apply (Ref (DataCon t ar) n) args) | ArgsList 
-      = case lookupDefExact n gam of
-             Just (DCon _ _ forcedpos)
-                  => apply (Ref (DataCon t ar) n) (dropPos 0 forcedpos args)
-             _ => apply (Ref (DataCon t ar) n) args
-    where
-      dropPos : Nat -> List Nat -> List (Term vars) -> List (Term vars)
-      dropPos i fs [] = []
-      dropPos i fs (x :: xs)
-          = if i `elem` fs then Erased :: dropPos (S i) fs xs
-                           else x :: dropPos (S i) fs xs
-  eraseForced gam mode (apply f args) | ArgsList = apply f args
-
 bindRig : RigCount -> RigCount
 bindRig Rig0 = Rig0
 bindRig _ = Rig1
@@ -1017,15 +1000,15 @@ mutual
              (exp : Maybe (Term vars)) ->
              Core annot (Term vars, Term vars) 
   checkExp rigc process loc elabinfo env nest tm got Nothing
-      = do gam <- getCtxt
-           pure (eraseForced gam (elabMode elabinfo) tm, got)
+      = do gam <- get Ctxt
+           pure (tm, got)
   checkExp rigc process loc elabinfo env nest tm got (Just exp) 
       = do gam <- get Ctxt
            let expnf = nf gam env exp
            (got', imps) <- convertImps rigc process loc env nest elabinfo (nf gam env got) expnf []
            constr <- convert loc (elabMode elabinfo) env got' expnf
            case constr of
-                [] => pure (eraseForced (gamma gam) (elabMode elabinfo) (apply tm imps), quote (noGam gam) env got')
+                [] => pure (apply tm imps, quote (noGam gam) env got')
                 cs => do gam <- getCtxt
                          c <- addConstant loc env (apply tm imps) exp cs
                          dumpConstraints 4 False

@@ -2,7 +2,7 @@ import Stuff
 
 data Functor : (f : _) -> Type where
      [noHints, search f]
-     MkFunctor : (map : {a, b: Type} -> (a -> b) -> f a -> f b) -> Functor f 
+     MkFunctor : (map : {0 a, b: Type} -> (a -> b) -> f a -> f b) -> Functor f 
 
 map : {auto c : Functor f} -> (a -> b) -> f a -> f b
 map {c = MkFunctor map_meth} = map_meth
@@ -26,7 +26,7 @@ data Vect : _ -> Type -> Type where
 %hint
 VectFunctor : Functor (Vect n)
 
-mapVect : {n : Nat} -> {a, b : _} -> (a -> b) -> Vect n a -> Vect n b
+mapVect : {0 n : Nat} -> {0 a, b : _} -> (a -> b) -> Vect n a -> Vect n b
 mapVect f [] = []
 mapVect f (x :: xs) = f x :: map f xs
 

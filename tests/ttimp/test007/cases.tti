@@ -16,7 +16,7 @@ data Vect : Nat -> Type -> Type where {
 
 append : Vect n a -> Vect m a -> Vect (plus n m) a;
 append {a=a} {n=n} {m=m} xs ys
-    = let { case_app : {n : _} -> Vect n a -> Vect (plus n m) a;
+    = let { case_app : {0 n : _} -> Vect n a -> Vect (plus n m) a;
             case_app Nil = ys;
             case_app (Cons x xs) = Cons x (append xs ys);
           } in case_app xs;

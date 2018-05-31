@@ -148,18 +148,21 @@ argToPat tm with (unapply tm)
   argToPat (apply (PrimVal c@(Ch i)) []) | ArgsList = PConst c
   argToPat (apply (PrimVal c) []) | ArgsList = PConstTy c
   argToPat (apply f args) | ArgsList = PAny
-    
+   
 export
-mkTerm : Pat -> ClosedTerm
-mkTerm (PCon n t args) 
+mkTerm : (vars : List Name) -> Pat -> Term vars
+mkTerm vars (PCon n t args) 
     = apply (Ref (DataCon t (length args)) n) 
-            (assert_total (map mkTerm args))
-mkTerm (PTCon n t args) 
+            (assert_total (map (mkTerm vars) args))
+mkTerm vars (PTCon n t args) 
     = apply (Ref (TyCon t (length args)) n) 
-            (assert_total (map mkTerm args))
-mkTerm (PConst c) = PrimVal c
-mkTerm (PConstTy c) = PrimVal c
-mkTerm (PVar n) = Ref Bound n
-mkTerm _ = Erased
+            (assert_total (map (mkTerm vars) args))
+mkTerm vars (PConst c) = PrimVal c
+mkTerm vars (PConstTy c) = PrimVal c
+mkTerm vars (PVar n) 
+    = case isVar n vars of
+           Just prf => Local prf
+           _ => Ref Bound n
+mkTerm _ _ = Erased
 
 
