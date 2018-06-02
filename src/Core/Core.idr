@@ -22,6 +22,7 @@ public export
 data Error annot
     = Fatal (Error annot) -- flag as unrecoverable (so don't postpone awaiting further info)
     | CantConvert annot (Env Term vars) (Term vars) (Term vars)
+    | CantSolveEq annot (Env Term vars) (Term vars) (Term vars)
     | Cycle annot (Env Term vars) (Term vars) (Term vars)
     | WhenUnifying annot (Env Term vars) (Term vars) (Term vars) (Error annot)
     | ValidCase annot (Env Term vars) (Either (Term vars) (Error annot))
@@ -36,7 +37,7 @@ data Error annot
     | AllFailed (List (Error annot))
     | InvalidImplicit annot Name (Term vars)
     | CantSolveGoal annot (Env Term vars) (Term vars)
-    | UnsolvedHoles annot (List Name)
+    | UnsolvedHoles annot (List (annot, Name))
     | SolvedNamedHole annot Name
     | VisibilityError annot Visibility Name Visibility Name
     | NonLinearPattern annot Name
@@ -75,6 +76,8 @@ Show annot => Show (Error annot) where
   show (Fatal err) = show err
   show (CantConvert fc env x y) 
       = show fc ++ ":Type mismatch: " ++ show x ++ " and " ++ show y
+  show (CantSolveEq fc env x y) 
+      = show fc ++ ":" ++ show x ++ " and " ++ show y ++ " are not equal"
   show (Cycle fc env x y) 
       = show fc ++ ":Occurs check failed: " ++ show x ++ " and " ++ show y
   show (WhenUnifying fc _ x y err)

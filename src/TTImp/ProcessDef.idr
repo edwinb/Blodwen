@@ -214,8 +214,7 @@ processDef elab env nest loc n_in cs_raw
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
-                   -- Any non user defined holes should be resolved by now
-                   checkUserHoles loc True
+                   checkUserHoles loc False
                    (_ ** tree) <- getPMDef loc n ty (mapMaybe id cs)
                    addFnDef loc n tree
                    addToSave n

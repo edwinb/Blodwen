@@ -138,7 +138,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
          cons <- traverse (checkCon elab env nest cvis n) cons_raw
 
          -- Any non user defined holes should be resolved by now
-         wrapError (InCon loc n) $ checkUserHoles loc True
+         wrapError (InCon loc n) $ checkUserHoles loc False
          let def = MkData (MkCon n arity ty') cons
          addData vis def
         

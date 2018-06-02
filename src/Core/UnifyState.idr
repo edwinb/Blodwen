@@ -63,7 +63,7 @@ record UnifyState annot where
      holes : List (annot, Name)
             -- unsolved metavariables in gamma (holes and guarded constants)
             -- along with where they were introduced
-     currentHoles : List Name -- unsolved metavariables in this session
+     currentHoles : List (annot, Name) -- unsolved metavariables in this session
      delayedHoles : List Name -- unsolved metavariables which must be resolved 
                               -- but not necessarily in
                               -- the current session (any time later in the
@@ -146,6 +146,13 @@ getCurrentHoleNames : {auto u : Ref UST (UState annot)} ->
                       Core annot (List Name)
 getCurrentHoleNames 
     = do ust <- get UST
+         pure (map snd (currentHoles ust))
+
+export
+getCurrentHoleInfo : {auto u : Ref UST (UState annot)} ->
+                     Core annot (List (annot, Name))
+getCurrentHoleInfo
+    = do ust <- get UST
          pure (currentHoles ust)
 
 export
@@ -169,7 +176,7 @@ addHoleName : {auto u : Ref UST (UState annot)} ->
 addHoleName loc n
     = do ust <- get UST
          put UST (record { holes $= ((loc, n) ::),
-                           currentHoles $= (n ::) } ust)
+                           currentHoles $= ((loc, n) ::) } ust)
 
 -- Note that the given hole name arises from a type declaration, so needs
 -- to be resolved later
@@ -190,20 +197,43 @@ removeHoleName : {auto u : Ref UST (UState annot)} ->
 removeHoleName n
     = do ust <- get UST
          put UST (record { holes $= dropFirst (\x, y => x == snd y) n,
-                           currentHoles $= dropFirst (==) n,
+                           currentHoles $= dropFirst (\x, y => x == snd y) n,
                            delayedHoles $= dropFirst (==) n } ust)
 
 export
+failIfGuard : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState annot)} ->
+              (anot, Name) -> Core annot ()
+failIfGuard (loc, hole)
+    = do gam <- get Ctxt
+         ust <- get UST
+         case lookupDefTyExact hole (gamma gam) of
+              Nothing => pure ()
+              Just (Guess tm (c :: _), ty) =>
+                  case lookupCtxtExact c (constraints ust) of
+                       Just (MkConstraint loc env x y) =>
+                            throw (CantSolveEq loc env x y)
+                       Just (MkSeqConstraint loc env (x :: xs) (y :: ys)) =>
+                            throw (CantSolveEq loc env x y)
+                       _ => pure ()
+              _ => pure ()
+
+-- Bool flag says whether it's an error for their to have been holes left
+-- in the last session. Usually we can leave them to the end, but it's not
+-- valid for their to be holes remaining when checking a LHS.
+-- Also throw an error if there are unresolved guarded constants
+export
 checkUserHoles : {auto u : Ref UST (UState annot)} ->
+                 {auto c : Ref Ctxt Defs} ->
                  annot -> Bool -> Core annot ()
 checkUserHoles loc now
-    = do hs <- getCurrentHoleNames
-         let hs' = if any isUserName hs then [] else hs
+    = do hs <- getCurrentHoleInfo
+         let hs' = if any isUserName (map snd hs) then [] else map snd hs
          when (not (isNil hs') && now) $ throw (UnsolvedHoles loc hs)
+         traverse failIfGuard hs
          -- Note the hole names, to ensure they are resolved
          -- by the end of elaborating the current source file
-         hs <- getCurrentHoleNames
-         traverse addDelayedHoleName hs
+         traverse addDelayedHoleName hs'
          pure ()
 
 -- Make a new constant by applying a term to everything in the current
