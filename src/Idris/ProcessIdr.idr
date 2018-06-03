@@ -33,6 +33,7 @@ processDecls : {auto c : Ref Ctxt Defs} ->
                List PDecl -> Core FC ()
 processDecls decls
     = do xs <- traverse processDecl decls
+         checkDelayedHoles 
          hs <- getHoleNames
          traverse addToSave hs
          pure ()

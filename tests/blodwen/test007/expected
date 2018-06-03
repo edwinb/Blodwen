@@ -1,0 +1,5 @@
+Processing as Idris
+1/1: Building noinfer (noinfer.blod)
+Unsolved holes [(noinfer.blod:1:7--1:9, Main.{h:1})]
+Welcome to Blodwen. Good luck.
+Main> Bye for now!

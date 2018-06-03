@@ -1,0 +1,13 @@
+data Nat = Z | S Nat
+
+plus : Nat -> Nat -> Nat
+plus Z     y = y
+plus (S k) y = S (plus k y)
+
+data Vect : Nat -> Type -> Type where
+     Nil  : Vect Z a
+     Cons : a -> Vect k a -> Vect (S k) a
+
+append : Vect n a -> Vect m a -> Vect (plus m n) a
+append (Cons x xs) ys = Cons x (append xs ys)
+append Nil ys = ys

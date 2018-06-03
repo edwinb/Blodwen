@@ -55,7 +55,7 @@ checkCon elab env nest vis tn (MkImpTy loc cn_in ty_raw)
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc cn) $
                   checkTerm elab cn env nest (PI Rig0) InType ty_imp TType
-         wrapError (InCon loc cn) $ checkUserHoles loc False
+         wrapError (InCon loc cn) $ checkUserHoles False
          
          checkNameVisibility loc cn vis ty
          gam <- get Ctxt
@@ -85,7 +85,7 @@ processData elab env nest vis (MkImpLater loc n_in ty_raw)
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc n) $
                   checkTerm elab n env nest (PI Rig0) InType ty_imp TType
-         wrapError (InCon loc n) $ checkUserHoles loc False
+         wrapError (InCon loc n) $ checkUserHoles False
          checkNameVisibility loc n vis ty
 
          gam <- get Ctxt
@@ -108,7 +108,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
          ty_imp <- mkBindImps env ty_raw
          ty <- wrapError (InCon loc n) $
                   checkTerm elab n env nest (PI Rig0) InType ty_imp TType
-         wrapError (InCon loc n) $ checkUserHoles loc False
+         wrapError (InCon loc n) $ checkUserHoles False
          checkNameVisibility loc n vis ty
 
          gam <- get Ctxt
@@ -138,7 +138,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
          cons <- traverse (checkCon elab env nest cvis n) cons_raw
 
          -- Any non user defined holes should be resolved by now
-         wrapError (InCon loc n) $ checkUserHoles loc False
+         wrapError (InCon loc n) $ checkUserHoles False
          let def = MkData (MkCon n arity ty') cons
          addData vis def
         

@@ -64,14 +64,11 @@ record UnifyState annot where
             -- unsolved metavariables in gamma (holes and guarded constants)
             -- along with where they were introduced
      currentHoles : List (annot, Name) -- unsolved metavariables in this session
-     delayedHoles : List Name -- unsolved metavariables which must be resolved 
+     delayedHoles : List (annot, Name)
+                              -- unsolved metavariables which must be resolved 
                               -- but not necessarily in
                               -- the current session (any time later in the
                               -- source file is okay)
-                              -- Differs from 'holes' in that holes may
-                              -- contain named holes given by the user and
-                              -- their dependencies, which don't have to be 
-                              -- resolved
      constraints : Context (Constraint annot) -- metavariable constraints 
      dotConstraints : List (Name, Constraint annot) -- dot pattern constraints
                           -- after elaboration, we check that the equations
@@ -156,9 +153,9 @@ getCurrentHoleInfo
          pure (currentHoles ust)
 
 export
-getDelayedHoleNames : {auto u : Ref UST (UState annot)} ->
-                   Core annot (List Name)
-getDelayedHoleNames 
+getDelayedHoleInfo : {auto u : Ref UST (UState annot)} ->
+                   Core annot (List (annot, Name))
+getDelayedHoleInfo 
     = do ust <- get UST
          pure (delayedHoles ust)
 
@@ -182,10 +179,10 @@ addHoleName loc n
 -- to be resolved later
 export
 addDelayedHoleName : {auto u : Ref UST (UState annot)} ->
-                  Name -> Core annot ()
-addDelayedHoleName n
+                     annot -> Name -> Core annot ()
+addDelayedHoleName loc n
     = do ust <- get UST
-         put UST (record { delayedHoles $= (n ::) } ust)
+         put UST (record { delayedHoles $= ((loc, n) ::) } ust)
 
 dropFirst : (a -> b -> Bool) -> a -> List b -> List b
 dropFirst f x [] = []
@@ -198,7 +195,8 @@ removeHoleName n
     = do ust <- get UST
          put UST (record { holes $= dropFirst (\x, y => x == snd y) n,
                            currentHoles $= dropFirst (\x, y => x == snd y) n,
-                           delayedHoles $= dropFirst (==) n } ust)
+                           delayedHoles $= dropFirst (\x, y => x == snd y) n } 
+                  ust)
 
 export
 failIfGuard : {auto c : Ref Ctxt Defs} ->
@@ -218,22 +216,31 @@ failIfGuard (loc, hole)
                        _ => pure ()
               _ => pure ()
 
--- Bool flag says whether it's an error for their to have been holes left
+-- Bool flag says whether it's an error for there to have been holes left
 -- in the last session. Usually we can leave them to the end, but it's not
--- valid for their to be holes remaining when checking a LHS.
+-- valid for there to be holes remaining when checking a LHS.
 -- Also throw an error if there are unresolved guarded constants
 export
 checkUserHoles : {auto u : Ref UST (UState annot)} ->
                  {auto c : Ref Ctxt Defs} ->
-                 annot -> Bool -> Core annot ()
-checkUserHoles loc now
+                 Bool -> Core annot ()
+checkUserHoles now
     = do hs <- getCurrentHoleInfo
-         let hs' = if any isUserName (map snd hs) then [] else map snd hs
-         when (not (isNil hs') && now) $ throw (UnsolvedHoles loc hs)
+         let hs' = if any isUserName (map snd hs) then [] else hs
+         when (not (isNil hs') && now) $ throw (UnsolvedHoles hs)
          traverse failIfGuard hs
          -- Note the hole names, to ensure they are resolved
          -- by the end of elaborating the current source file
-         traverse addDelayedHoleName hs'
+         traverse (\x => addDelayedHoleName (fst x) (snd x)) hs'
+         pure ()
+
+export
+checkDelayedHoles : {auto u : Ref UST (UState annot)} ->
+                    {auto c : Ref Ctxt Defs} ->
+                    Core annot ()
+checkDelayedHoles
+    = do hs <- getDelayedHoleInfo
+         when (not (isNil hs)) $ throw (UnsolvedHoles hs)
          pure ()
 
 -- Make a new constant by applying a term to everything in the current

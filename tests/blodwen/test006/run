@@ -1,0 +1,3 @@
+echo ':q' | $1 vect.blod
+
+rm -rf build

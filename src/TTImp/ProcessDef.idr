@@ -150,7 +150,7 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          -- Check there's no holes or constraints in the left hand side
          -- we've just checked - they must be resolved now (that's what
          -- True means)
-         wrapError (InLHS loc defining) $ checkUserHoles loc True
+         wrapError (InLHS loc defining) $ checkUserHoles True
          let lhs = normaliseHoles gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          let linvars_in = findLinear gam 0 Rig1 lhs
@@ -177,7 +177,7 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
            checkNameVisibility loc defining vis lhs
            checkNameVisibility loc defining vis rhs
 
-         wrapError (InRHS loc defining) $ checkUserHoles loc False
+         wrapError (InRHS loc defining) $ checkUserHoles False
 
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs))
@@ -214,7 +214,7 @@ processDef elab env nest loc n_in cs_raw
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
-                   checkUserHoles loc False
+                   checkUserHoles False
                    (_ ** tree) <- getPMDef loc n ty (mapMaybe id cs)
                    addFnDef loc n tree
                    addToSave n
