@@ -263,15 +263,23 @@ occursCheck gam n tm
              oc fchk a
     oc chk tm = Just chk
        
+-- Convert corresponding lists of reversedarguments. Returns the fragment 
+-- which don't convert (as long as at least one pair does convert)
 convertAll : Defs -> Env Term vars -> 
              List (Closure vars) -> List (Closure vars) -> 
              Maybe (List (Closure vars), List (Closure vars))
-convertAll defs env as [] = Just (reverse as, [])
-convertAll defs env (x :: xs) (y :: ys)
-    = if convert defs env x y 
-         then convertAll defs env xs ys
-         else Just (reverse (x :: xs), reverse (y :: ys))
-convertAll _ _ _ _ = Nothing
+convertAll {vars} defs env xs ys = convertP False xs ys
+  where
+    convertP : (progress : Bool) -> 
+               List (Closure vars) -> List (Closure vars) ->
+               Maybe (List (Closure vars), List (Closure vars))
+    convertP False as [] = Nothing
+    convertP True as [] = Just (reverse as, [])
+    convertP _ (x :: xs) (y :: ys)
+        = if convert defs env x y 
+             then convertP True xs ys
+             else Just (reverse (x :: xs), reverse (y :: ys))
+    convertP _ _ _ = Nothing
 
 mutual
   -- Find holes which are applied to environments which are too big, and
@@ -403,10 +411,15 @@ mutual
       = do gam <- get Ctxt
            -- Convert arguments right to left, then unify the head with
            -- the type. Arguments must be convertible (not merely unifiable)
+           -- and there must be at least one consumed
            case convertAll gam env (reverse args) (reverse args') of
                 Just (fargs, targs) => 
-                    unify mode loc env (NApp (NRef nt var) fargs) 
-                                       (NTCon n t a targs)
+                   do log 10 $ "Continuing with " ++
+                            show (quote (noGam gam) env (NApp (NRef nt var) fargs))
+                              ++ " =?= " ++
+                            show (quote (noGam gam) env (NTCon n t a targs))
+                      unify mode loc env (NApp (NRef nt var) fargs) 
+                                         (NTCon n t a targs)
                 Nothing =>
                    do log 10 $ "Postponing hole application " ++
                             show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
@@ -418,10 +431,15 @@ mutual
       = do gam <- get Ctxt
            -- Convert arguments right to left, then unify the head with
            -- the type. Arguments must be convertible (not merely unifiable)
+           -- and there must be at least one consumed
            case convertAll gam env (reverse args) (reverse args') of
                 Just (fargs, targs) => 
-                    unify mode loc env (NApp (NRef nt var) fargs) 
-                                       (NDCon n t a targs)
+                   do log 10 $ "Continuing with " ++
+                            show (quote (noGam gam) env (NApp (NRef nt var) fargs))
+                              ++ " =?= " ++
+                            show (quote (noGam gam) env (NDCon n t a targs))
+                      unify mode loc env (NApp (NRef nt var) fargs) 
+                                         (NDCon n t a targs)
                 Nothing =>
                    do log 10 $ "Postponing hole application " ++
                             show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
@@ -460,9 +478,14 @@ mutual
               NameType -> Name -> List (Closure vars) -> NF vars ->
               Core annot (List Name)
   unifyHole mode loc env nt var args tm
-      = case !(patternEnv env args) of
+   = do gam <- get Ctxt
+        log 10 $ "Unifying: " ++ show var ++ " " ++
+                                 show (map (\t => quote (noGam gam) env (evalClosure (noGam gam) t)) args) ++
+                 " with " ++ show (quote (noGam gam) env tm)
+        case !(patternEnv env args) of
            Just (newvars ** submv) =>
-                do gam <- get Ctxt
+                do log 10 $ "Progress: " ++ show newvars
+                   gam <- get Ctxt
 --                    tm' <- shrinkHoles loc env (map (quote gam env) args) 
 --                                               (quote gam env tm)
 --                    gam <- get Ctxt
@@ -506,7 +529,11 @@ mutual
                                       else do instantiate loc var submv tm'
                                               pure []
            -- Not in the pattern fragment
-           Nothing => do gam <- get Ctxt
+           Nothing => do log 10 $ "Not in pattern fragment"
+                         gam <- get Ctxt
+--                          postpone loc env
+--                              (quote (noGam gam) env (NApp (NRef nt var) args))
+--                              (quote (noGam gam) env tm)
                          unifyHoleApp mode loc env nt var args tm
 
   unifyApp : {auto c : Ref Ctxt Defs} ->

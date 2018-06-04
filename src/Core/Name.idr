@@ -1,5 +1,7 @@
 module Core.Name
 
+%default total
+
 mutual
   public export
   data GenName = Nested Name Name -- a name in a nested scope

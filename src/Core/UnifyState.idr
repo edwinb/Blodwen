@@ -226,9 +226,9 @@ checkUserHoles : {auto u : Ref UST (UState annot)} ->
                  Bool -> Core annot ()
 checkUserHoles now
     = do hs <- getCurrentHoleInfo
+         traverse failIfGuard hs
          let hs' = if any isUserName (map snd hs) then [] else hs
          when (not (isNil hs') && now) $ throw (UnsolvedHoles hs)
-         traverse failIfGuard hs
          -- Note the hole names, to ensure they are resolved
          -- by the end of elaborating the current source file
          traverse (\x => addDelayedHoleName (fst x) (snd x)) hs'
