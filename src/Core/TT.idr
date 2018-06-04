@@ -511,14 +511,6 @@ getBinder : Weaken tm => Elem x vars -> Env tm vars -> Binder (tm vars)
 getBinder Here (b :: env) = map weaken b
 getBinder (There later) (b :: env) = map weaken (getBinder later env)
 
--- Make a type which abstracts over an environment
-export
-abstractEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
-abstractEnvType [] tm = tm
-abstractEnvType (b :: env) tm 
-    = abstractEnvType env (Bind _ 
-						(Pi (multiplicity b) Explicit (binderType b)) tm)
-
 -- Some syntax manipulation
 
 export
@@ -642,6 +634,18 @@ substName x new (App fn arg) = App (substName x new fn) (substName x new arg)
 substName x new (PrimVal y) = PrimVal y
 substName x new Erased = Erased
 substName x new TType = TType
+
+-- Make a type which abstracts over an environment
+-- Don't include 'let' bindings, since they have a concrete value and
+-- shouldn't be generalised
+export
+abstractEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
+abstractEnvType [] tm = tm
+abstractEnvType (Let c val ty :: env) tm
+    = abstractEnvType env (subst val tm)
+abstractEnvType (b :: env) tm 
+    = abstractEnvType env (Bind _ 
+						(Pi (multiplicity b) Explicit (binderType b)) tm)
 
 public export
 data SubVars : List Name -> List Name -> Type where

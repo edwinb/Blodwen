@@ -244,9 +244,11 @@ checkDelayedHoles
          pure ()
 
 -- Make a new constant by applying a term to everything in the current
--- environment
+-- environment (except the lets, which aren't in the constant's type)
 mkConstant : Env Term vars -> Term vars -> ClosedTerm
 mkConstant [] tm = tm
+mkConstant (Let c val ty :: env) tm
+    = mkConstant env (subst val tm)
 mkConstant {vars = x :: _} (b :: env) tm 
     = let ty = binderType b in
           mkConstant env (Bind x (Lam (multiplicity b) Explicit ty) tm)
@@ -259,6 +261,8 @@ mkConstantTy = abstractEnvType
 mkConstantAppArgs : Env Term vars -> 
                     List (Term done) -> List (Term (vars ++ done))
 mkConstantAppArgs [] xs = xs
+mkConstantAppArgs (Let c val ty :: env) xs
+    = map weaken (mkConstantAppArgs env xs)
 mkConstantAppArgs (b :: env) xs 
     = let rec = mkConstantAppArgs env xs in
           Local Here :: map weaken rec
@@ -273,11 +277,17 @@ mkConstantAppArgsSub : Env Term vars -> SubVars smaller vars ->
                        List (Term done) -> List (Term (vars ++ done))
 mkConstantAppArgsSub [] p xs = xs
 mkConstantAppArgsSub (b :: env) SubRefl xs
-    = Local Here :: map weaken (mkConstantAppArgsSub env SubRefl xs)
+    = let rec = mkConstantAppArgsSub env SubRefl xs in
+          case b of
+               Let _ _ _ => map weaken rec
+               _ => Local Here :: map weaken rec
 mkConstantAppArgsSub (b :: env) (DropCons p) xs
     = map weaken (mkConstantAppArgsSub env p xs)
 mkConstantAppArgsSub (b :: env) (KeepCons p) xs
-    = Local Here :: map weaken (mkConstantAppArgsSub env p xs)
+    = let rec = mkConstantAppArgsSub env p xs in
+          case b of
+               Let _ _ _ => map weaken rec
+               _ => Local Here :: map weaken rec
 
 export
 applyToSub : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars
