@@ -74,5 +74,9 @@ data Pair : Type -> Type -> Type where
      MkPair : {0 a, b : Type} -> (1 x : a) -> (1 y : b) -> Pair a b
 
 public export
+data Unrestricted : Type -> Type where
+     Un : (x : a) -> Unrestricted a
+
+public export
 the : (a : Type) -> a -> a
 the _ x = x

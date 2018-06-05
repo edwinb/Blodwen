@@ -6,5 +6,5 @@ Main>  0 m : Type -> Type
  0 d : Door Closed
  1 d : Door Open
 -------------------------------------
-foo : Use Many m Unit
+foo : Use Many m ()
 Main> Bye for now!

@@ -647,6 +647,12 @@ abstractEnvType (b :: env) tm
     = abstractEnvType env (Bind _ 
 						(Pi (multiplicity b) Explicit (binderType b)) tm)
 
+export
+letToLam : Env Term vars -> Env Term vars
+letToLam [] = []
+letToLam (Let c val ty :: env) = Lam c Explicit ty :: letToLam env
+letToLam (b :: env) = b :: letToLam env
+
 public export
 data SubVars : List Name -> List Name -> Type where
      SubRefl  : SubVars xs xs

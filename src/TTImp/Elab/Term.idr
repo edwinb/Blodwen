@@ -366,14 +366,21 @@ mutual
         = throw (GenericMsg loc "@-pattern not valid here")
   checkImp rigc process elabinfo env nest (IHole loc n_in) Nothing
       = do t <- addHole loc env TType
-           let hty = mkConstantApp t env
+           -- Turn lets into lambda before making the hole so that they
+           -- get abstracted over in the hole (it's fine here, unlike other
+           -- holes, because we're not trying to unify it so it's okay if
+           -- applying the metavariable isn't a pattern form)
+           let env' = letToLam env
+           let hty = mkConstantApp t env'
            n <- inCurrentNS (UN n_in)
-           addNamedHole loc n False env hty
-           pure (mkConstantApp n env, hty)
+           addNamedHole loc n False env' hty
+           pure (mkConstantApp n env', hty)
   checkImp rigc process elabinfo env nest (IHole loc n_in) (Just expected) 
       = do n <- inCurrentNS (UN n_in)
-           addNamedHole loc n False env expected
-           pure (mkConstantApp n env, expected)
+           -- Let to lambda as above
+           let env' = letToLam env
+           addNamedHole loc n False env' expected
+           pure (mkConstantApp n env', expected)
   checkImp rigc process elabinfo env nest (Implicit loc) Nothing
       = do t <- addHole loc env TType
            let hty = mkConstantApp t env
@@ -382,7 +389,7 @@ mutual
   checkImp rigc process elabinfo env nest (Implicit loc) (Just expected) 
       = case elabMode elabinfo of
              InLHS =>
-                do hn <- genName "imp_pat"
+                do hn <- genName "_"
                    -- Add as a pattern variable, but let it unify with other
                    -- things, hence 'False' as an argument to addBoundName
                    tm <- addBoundName loc hn False env expected
@@ -471,13 +478,23 @@ mutual
               Maybe (Term vars) ->
               Core annot (Term vars, Term vars)
   checkCase {c} {u} {i} rigc process elabinfo loc env nest scr alts expected
-      = do (scrtm, scrty) <- check rigc process elabinfo env nest scr Nothing
-           log 5 $ "Case scrutinee: " ++ show scrtm ++ " : " ++ show scrty
+      = do -- Try checking at the given multiplicity; if that doesn't work,
+           -- try checking at Rig1 (meaning that we're using a linear variable
+           -- so the scrutinee should be linear)
+           (scrtm, scrty, caseRig) <- handle
+              (do c <- check RigW process elabinfo env nest scr Nothing
+                  pure (fst c, snd c, RigW))
+              (\err => case err of
+                            LinearMisuse _ _ Rig1 _
+                              => do c <- check Rig1 process elabinfo env nest scr Nothing
+                                    pure (fst c, snd c, Rig1)
+                            e => throw e)
+
+           log 5 $ "Case scrutinee: " ++ show caseRig ++ " " ++ show scrtm ++ " : " ++ show scrty
            scrn <- genName "scr"
            est <- get EST
            casen <- genCaseName (defining est)
            let usedNs = usedInAlts alts
-           let caseRig = getCaseRig env scrtm
 
            log 6 $ "Names used in case block: " ++ show usedNs
 
@@ -541,13 +558,6 @@ mutual
         asParam gam ppos var (apply f []) | ArgsList = True
         asParam gam ppos var (apply f args) | ArgsList 
             = all (asParam gam False var) args
-
-      -- If the scrutinee is a linear variable, the argument to the case
-      -- function should be Rig1, otherwise it's RigW
-      getCaseRig : Env Term vs -> Term vs -> RigCount
-      getCaseRig env (Local el)
-          = multiplicity (getBinder el env)
-      getCaseRig env tm = RigW
 
       -- Drop names from the SubVars list which are *only* used in a
       -- parameter position in the term
@@ -856,8 +866,17 @@ mutual
   checkLet rigc_in process elabinfo loc env nest rigl n ty val scope expected
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
            (tyv, tyt) <- check Rig0 process elabinfo env nest ty (Just TType)
-           (valv, valt) <- check rigc process elabinfo env nest val (Just tyv)
-           let rigb = rigMult rigl rigc
+           -- Try checking at the given multiplicity; if that doesn't work,
+           -- try checking at Rig1 (meaning that we're using a linear variable
+           -- so the resulting binding should be linear)
+           (valv, valt, rigb) <- handle
+                (do c <- check (rigMult rigl rigc) process elabinfo env nest val (Just tyv)
+                    pure (fst c, snd c, rigMult rigl rigc))
+                (\err => case err of
+                              LinearMisuse _ _ Rig1 _
+                                => do c <- check Rig1 process elabinfo env nest val (Just tyv)
+                                      pure (fst c, snd c, Rig1)
+                              e => throw e)
            let env' : Env Term (n :: _) = Let rigb valv tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound

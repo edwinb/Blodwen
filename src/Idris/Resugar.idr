@@ -64,6 +64,8 @@ sugarApp (PApp fc (PApp _ (PRef _ (UN "Pair")) l) r)
 sugarApp (PApp fc (PApp _ (PRef _ (UN "MkPair")) l) r)
     = PPair fc l r
 sugarApp (PRef fc (UN "Nil")) = PList fc []
+sugarApp (PRef fc (UN "Unit")) = PUnit fc
+sugarApp (PRef fc (UN "MkUnit")) = PUnit fc
 sugarApp tm@(PApp fc (PApp _ (PRef _ (UN "::")) x) xs)
     = case sugarApp (unbracket xs) of
            PList fc xs' => PList fc (x :: xs')

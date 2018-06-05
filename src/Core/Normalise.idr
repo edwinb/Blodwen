@@ -35,8 +35,11 @@ parameters (defs : Defs, holesonly : Bool)
          = evalRef env loc stk nt fn
     eval env loc (closure :: stk) (Bind x (Lam _ _ ty) sc) 
          = eval env (closure :: loc) stk sc
-    eval env loc stk (Bind x (Let _ val ty) sc) 
-         = eval env (MkClosure holesonly loc env val :: loc) stk sc
+    eval env loc stk (Bind x b@(Let n val ty) sc) 
+         = if holesonly
+              then NBind x (map (eval env loc stk) b)
+                      (\arg => eval env (arg :: loc) stk sc)
+              else eval env (MkClosure holesonly loc env val :: loc) stk sc
     eval env loc stk (Bind x b sc) 
          = NBind x (map (eval env loc stk) b)
                (\arg => eval env (arg :: loc) stk sc)
