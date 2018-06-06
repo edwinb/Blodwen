@@ -310,7 +310,7 @@ mutual
       = do start <- location
            keyword "let"
            rig <- multiplicity
-           n <- name
+           pat <- expr fname indents
            symbol "="
            commit
            val <- expr fname indents
@@ -318,7 +318,8 @@ mutual
            keyword "in"
            scope <- typeExpr fname indents
            end <- location
-           pure (PLet (MkFC fname start end) rig n (PImplicit (MkFC fname start end)) val scope)
+           pure (PLet (MkFC fname start end) rig pat 
+                      (PImplicit (MkFC fname start end)) val scope)
     <|> do start <- location
            keyword "let"
            ds <- block (topDecl fname)

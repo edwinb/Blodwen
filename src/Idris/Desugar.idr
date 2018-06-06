@@ -131,11 +131,14 @@ mutual
   desugar (PLam fc rig p n argTy scope) 
       = pure $ ILam fc rig p n !(desugar argTy) 
                                !(desugar scope)
-  desugar (PLet fc rig n nTy nVal scope) 
+  desugar (PLet fc rig (PRef _ n) nTy nVal scope) 
       = pure $ ILet fc rig n !(desugar nTy) !(desugar nVal) 
                              !(desugar scope)
+  desugar (PLet fc rig pat nTy nVal scope) 
+      = throw (InternalError "Pattern matching let not implemented")
   desugar (PCase fc x xs) 
       = pure $ ICase fc !(desugar x) 
+                        (Implicit fc)
                         !(traverse (desugarClause True) xs)
   desugar (PLocal fc xs scope) 
       = pure $ ILocal fc (concat !(traverse desugarDecl xs)) 
@@ -228,6 +231,7 @@ mutual
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) exp')
                     (ILam fc RigW Explicit (MN "_" 0) (Implicit fc)
                           (ICase fc (IVar fc (MN "_" 0))
+                               (Implicit fc)
                                (PatClause fc (bindNames False [] pat') rest' 
                                   :: alts')))
   expandDo topfc (DoLet fc n rig tm :: rest) 
@@ -239,7 +243,8 @@ mutual
            tm' <- desugar tm
            alts' <- traverse (desugarClause True) alts
            rest' <- expandDo topfc rest
-           pure $ ICase fc tm' (PatClause fc (bindNames False [] pat') rest'
+           pure $ ICase fc tm' (Implicit fc) 
+                       (PatClause fc (bindNames False [] pat') rest'
                                   :: alts')
 
 

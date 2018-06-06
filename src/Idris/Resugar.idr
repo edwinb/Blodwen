@@ -104,8 +104,9 @@ mutual
                          else pure (PImplicit emptyFC)
            val' <- toPTerm startPrec val
            sc' <- toPTerm startPrec sc
-           bracket p startPrec (PLet emptyFC rig n ty' val' sc')
-  toPTerm p (ICase _ sc alts)
+           bracket p startPrec (PLet emptyFC rig (PRef emptyFC n)
+                                     ty' val' sc')
+  toPTerm p (ICase _ sc scty alts)
       = do sc' <- toPTerm startPrec sc
            alts' <- traverse toPClause alts
            bracket p startPrec (PCase emptyFC sc' alts')

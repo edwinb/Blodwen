@@ -96,8 +96,8 @@ mutual
              (argTy : PTerm) -> (retTy : PTerm) -> PTerm
        PLam : FC -> RigCount -> PiInfo -> Name ->
               (argTy : PTerm) -> (scope : PTerm) -> PTerm
-       -- TODO: LHS should be pattern, and allow alternatives on RHS
-       PLet : FC -> RigCount -> Name ->
+       -- TODO: allow alternatives on RHS
+       PLet : FC -> RigCount -> (pat : PTerm) -> 
               (nTy : PTerm) -> (nVal : PTerm) -> (scope : PTerm) -> PTerm
        PCase : FC -> PTerm -> List PClause -> PTerm
        PLocal : FC -> List PDecl -> (scope : PTerm) -> PTerm

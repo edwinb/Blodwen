@@ -201,7 +201,7 @@ mutual
            scr <- expr indents
            keyword "of"
            alts <- block caseAlt
-           pure (ICase () scr alts)
+           pure (ICase () scr (Implicit ()) alts)
 
   caseAlt : IndentInfo -> Rule (ImpClause ())
   caseAlt indents

@@ -199,8 +199,8 @@ mutual
       = checkLam (bindRig rigc) process elabinfo loc env nest rigl plicity n ty scope expected
   checkImp rigc process elabinfo env nest (ILet loc rigl n nTy nVal scope) expected 
       = checkLet (bindRig rigc) process elabinfo loc env nest rigl n nTy nVal scope expected
-  checkImp rigc process elabinfo env nest (ICase loc scr alts) expected 
-      = checkCase rigc process elabinfo loc env nest scr alts expected
+  checkImp rigc process elabinfo env nest (ICase loc scr scrty alts) expected 
+      = checkCase rigc process elabinfo loc env nest scr scrty alts expected
   checkImp rigc process elabinfo env nest (ILocal loc nested scope) expected 
       = checkLocal rigc process elabinfo loc env nest nested scope expected
   checkImp rigc process elabinfo env nest (IApp loc fn arg) expected 
@@ -474,15 +474,16 @@ mutual
               Reflect annot =>
               RigCount -> Elaborator annot ->
               ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
-              RawImp annot -> List (ImpClause annot) ->
+              RawImp annot -> RawImp annot -> List (ImpClause annot) ->
               Maybe (Term vars) ->
               Core annot (Term vars, Term vars)
-  checkCase {c} {u} {i} rigc process elabinfo loc env nest scr alts expected
-      = do -- Try checking at the given multiplicity; if that doesn't work,
+  checkCase {c} {u} {i} rigc process elabinfo loc env nest scr scrty_exp alts expected
+      = do (scrtyv, scrtyt) <- check Rig0 process elabinfo env nest scrty_exp (Just TType)
+           -- Try checking at the given multiplicity; if that doesn't work,
            -- try checking at Rig1 (meaning that we're using a linear variable
            -- so the scrutinee should be linear)
            (scrtm, scrty, caseRig) <- handle
-              (do c <- check RigW process elabinfo env nest scr Nothing
+              (do c <- check RigW process elabinfo env nest scr (Just scrtyv)
                   pure (fst c, snd c, RigW))
               (\err => case err of
                             LinearMisuse _ _ Rig1 _

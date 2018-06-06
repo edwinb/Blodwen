@@ -46,7 +46,8 @@ mutual
               (nTy : RawImp annot) -> (nVal : RawImp annot) -> 
               (scope : RawImp annot) ->
               RawImp annot
-       ICase : annot -> RawImp annot -> List (ImpClause annot) -> RawImp annot
+       ICase : annot -> RawImp annot -> (ty : RawImp annot) ->
+               List (ImpClause annot) -> RawImp annot
        ILocal : annot -> List (ImpDecl annot) -> RawImp annot -> RawImp annot
        IApp : annot -> 
               (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
@@ -140,7 +141,7 @@ mutual
      = union (used ns argTy) (used ns scope)
   used ns (ILet _ _ n nTy nVal scope) 
      = union (union (used ns nTy) (used ns nVal)) (used ns scope)
-  used ns (ICase _ sc xs) 
+  used ns (ICase _ sc scty xs) 
      = union (used ns sc) (usedCases ns xs)
   used ns (ILocal _ ds sc) 
      = union (usedDecls ns ds) (used ns sc)
@@ -220,7 +221,7 @@ getAnnot (IVar x _) = x
 getAnnot (IPi x _ _ _ _ _) = x
 getAnnot (ILam x _ _ _ _ _) = x
 getAnnot (ILet x _ _ _ _ _) = x
-getAnnot (ICase x _ _) = x
+getAnnot (ICase x _ _ _) = x
 getAnnot (ILocal x _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IImplicitApp x _ _ _) = x
@@ -270,7 +271,7 @@ mutual
     show (ILet _ _ n nTy nVal scope)
         = "(%let (" ++ show n ++ " " ++ show nTy ++ " " ++ show nVal ++ ") "
                ++ show scope ++ ")"
-    show (ICase _ scr alts)
+    show (ICase _ scr scrty alts)
         = "(%case (" ++ show scr ++ ") " ++ show alts ++ ")"
     show (ILocal _ def scope)
         = "(%local (" ++ show def ++ ") " ++ show scope ++ ")"
