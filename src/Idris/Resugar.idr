@@ -63,6 +63,8 @@ sugarApp (PApp fc (PApp _ (PRef _ (UN "Pair")) l) r)
     = PPair fc l r
 sugarApp (PApp fc (PApp _ (PRef _ (UN "MkPair")) l) r)
     = PPair fc l r
+sugarApp (PApp fc (PApp _ (PRef _ (UN "Equal")) l) r)
+    = PEq fc l r
 sugarApp (PRef fc (UN "Nil")) = PList fc []
 sugarApp (PRef fc (UN "Unit")) = PUnit fc
 sugarApp (PRef fc (UN "MkUnit")) = PUnit fc
@@ -192,81 +194,3 @@ resugar env tm
     = do tti <- unelab env tm
          toPTerm startPrec tti
         
-showCount : RigCount -> String
-showCount Rig0 = "0 "
-showCount Rig1 = "1 "
-showCount RigW = ""
-
-export
-Show PTerm where
-  show (PRef _ n) = show n
-  show (PPi _ rig Explicit Nothing arg ret)
-      = show arg ++ " -> " ++ show ret
-  show (PPi _ rig Explicit (Just n) arg ret)
-      = "(" ++ showCount rig ++ show n ++ " : " ++ show arg ++ ") -> " ++ show ret
-  show (PPi _ rig Implicit Nothing arg ret) -- shouldn't happen
-      = "{" ++ showCount rig ++ "_ : " ++ show arg ++ "} -> " ++ show ret
-  show (PPi _ rig Implicit (Just n) arg ret)
-      = "{" ++ showCount rig ++ show n ++ " : " ++ show arg ++ "} -> " ++ show ret
-  show (PPi _ rig AutoImplicit Nothing arg ret) -- shouldn't happen
-      = "{auto " ++ showCount rig ++ "_ : " ++ show arg ++ "} -> " ++ show ret
-  show (PPi _ rig AutoImplicit (Just n) arg ret)
-      = "{auto " ++ showCount rig ++ show n ++ " : " ++ show arg ++ "} -> " ++ show ret
-  show (PLam _ rig _ n (PImplicit _) sc)
-      = "\\" ++ showCount rig ++ show n ++ " => " ++ show sc
-  show (PLam _ rig _ n ty sc)
-      = "\\" ++ showCount rig ++ show n ++ " : " ++ show ty ++ " => " ++ show sc
-  show (PLet _ rig n (PImplicit _) val sc)
-      = "let " ++ showCount rig ++ show n ++ " = " ++ show val ++ " in " ++ show sc
-  show (PLet _ rig n ty val sc)
-      = "let " ++ showCount rig ++ show n ++ " : " ++ show ty ++ " = " 
-               ++ show val ++ " in " ++ show sc
-  show (PCase _ tm cs) 
-      = "case " ++ show tm ++ " of { " ++ 
-          showSep " ; " (map showCase cs) ++ " }"
-    where
-      showCase : PClause -> String
-      showCase (MkPatClause _ lhs rhs _) = show lhs ++ " => " ++ show rhs
-      showCase (MkImpossible _ lhs) = show lhs ++ " impossible"
-  show (PLocal _ ds sc) -- We'll never see this when displaying a normal form...
-      = "let { << definitions >>  } in " ++ show sc
-  show (PApp _ f a) = show f ++ " " ++ show a
-  show (PImplicitApp _ f n (PRef _ a)) 
-      = if n == a
-           then show f ++ " {" ++ show n ++ "}"
-           else show f ++ " {" ++ show n ++ " = " ++ show a ++ "}"
-  show (PImplicitApp _ f n a) 
-      = show f ++ " {" ++ show n ++ " = " ++ show a ++ "}"
-  show (PSearch _ d) = "%search"
-  show (PQuote _ tm) = "`(" ++ show tm ++ ")"
-  show (PUnquote _ tm) = "~(" ++ show tm ++ ")"
-  show (PPrimVal _ c) = show c
-  show (PHole _ n) = "?" ++ n
-  show (PType _) = "Type"
-  show (PAs _ n p) = n ++ "@" ++ show p
-  show (PDotted _ p) = "." ++ show p
-  show (PImplicit _) = "_"
-  show (POp _ op x y) = show x ++ " " ++ op ++ " " ++ show y
-  show (PPrefixOp _ op x) = op ++ show x
-  show (PSectionL _ op x) = "(" ++ op ++ " " ++ show x ++ ")"
-  show (PSectionR _ x op) = "(" ++ show x ++ " " ++ op ++ ")"
-  show (PBracketed _ tm) = "(" ++ show tm ++ ")"
-  show (PDoBlock _ ds) 
-      = "do " ++ showSep " ; " (map showDo ds)
-    where
-      showAlt : PClause -> String
-      showAlt (MkPatClause _ lhs rhs _) = " | " ++ show lhs ++ " => " ++ show rhs ++ ";"
-      showAlt (MkImpossible _ lhs) = " | " ++ show lhs ++ " impossible;"
-
-      showDo : PDo -> String
-      showDo (DoExp _ tm) = show tm
-      showDo (DoBind _ n tm) = show n ++ " <- " ++ show tm
-      showDo (DoBindPat _ l tm alts) 
-          = show l ++ " <- " ++ show tm ++ concatMap showAlt alts
-      showDo (DoLet _ l rig tm) = "let " ++ show l ++ " = " ++ show tm
-      showDo (DoLetPat _ l tm alts) 
-          = "let " ++ show l ++ " = " ++ show tm ++ concatMap showAlt alts
-  show (PList _ xs)
-      = "[" ++ showSep ", " (map show xs) ++ "]"
-  show (PPair _ l r) = "(" ++ show l ++ ", " ++ show r ++ ")"
-  show (PUnit _) = "()"

@@ -63,8 +63,8 @@ public export
 data List a = Nil | (::) a (List a)
 
 public export
-data Eq : a -> b -> Type where
-     Refl : (x : a) -> Eq x x
+data Equal : a -> b -> Type where
+     Refl : (0 x : a) -> Equal x x
 
 public export
 data Unit = MkUnit

@@ -95,7 +95,7 @@ validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
 export
 reservedSymbols : List String
 reservedSymbols
-    = symbols ++ ["=", "|", "<-", "->", "=>"]
+    = symbols ++ [":", "=", "|", "<-", "->", "=>"]
 
 symbolChar : Char -> Bool
 symbolChar c = c `elem` unpack ":!#$%&*+./<=>?@\\^|-~"

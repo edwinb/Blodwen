@@ -135,7 +135,7 @@ mutual
       = pure $ ILet fc rig n !(desugar nTy) !(desugar nVal) 
                              !(desugar scope)
   desugar (PLet fc rig pat nTy nVal scope) 
-      = throw (InternalError "Pattern matching let not implemented")
+      = throw (InternalError ("Pattern matching let not implemented " ++ show pat))
   desugar (PCase fc x xs) 
       = pure $ ICase fc !(desugar x) 
                         (Implicit fc)
@@ -147,6 +147,10 @@ mutual
       = pure $ IApp fc !(desugar x) !(desugar y)
   desugar (PImplicitApp fc x argn y) 
       = pure $ IImplicitApp fc !(desugar x) argn !(desugar y)
+  desugar (PEq fc l r)
+      = do l' <- desugar l
+           r' <- desugar r
+           pure $ apply (IVar fc (UN "Equal")) [l', r']
   desugar (PBracketed fc e) = desugar e
   desugar (POp fc op l r) 
       = do ts <- toTokList (POp fc op l r)
