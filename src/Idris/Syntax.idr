@@ -128,9 +128,10 @@ mutual
        PList : FC -> List PTerm -> PTerm
        PPair : FC -> PTerm -> PTerm -> PTerm
        PUnit : FC -> PTerm
+       PIfThenElse : FC -> PTerm -> PTerm -> PTerm -> PTerm
 
        -- TODO: Dependent pairs, enumerations, idiom brackets, 
-       -- comprehensions, if/then/else, rewrites
+       -- comprehensions, rewrites
 
   public export
   data PDo : Type where
@@ -328,4 +329,6 @@ Show PTerm where
       = "[" ++ showSep ", " (map show xs) ++ "]"
   show (PPair _ l r) = "(" ++ show l ++ ", " ++ show r ++ ")"
   show (PUnit _) = "()"
+  show (PIfThenElse _ x t e) = "if " ++ show x ++ " then " ++ show t ++
+                               " else " ++ show e
 

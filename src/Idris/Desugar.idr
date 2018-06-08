@@ -201,6 +201,10 @@ mutual
       = pure $ IAlternative fc Unique 
                [IVar fc (UN "Unit"), 
                 IVar fc (UN "MkUnit")]
+  desugar (PIfThenElse fc x t e)
+      = pure $ ICase fc !(desugar x) (Implicit fc)
+                   [PatClause fc (IVar fc (UN "True")) !(desugar t),
+                    PatClause fc (IVar fc (UN "False")) !(desugar e)]
   
   expandList : {auto s : Ref Syn SyntaxInfo} ->
                {auto c : Ref Ctxt Defs} ->

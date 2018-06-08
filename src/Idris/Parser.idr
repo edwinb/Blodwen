@@ -73,6 +73,7 @@ mutual
   appExpr : FileName -> IndentInfo -> Rule PTerm
   appExpr fname indents
       = case_ fname indents
+    <|> if_ fname indents
     <|> doBlock fname indents
     <|> do start <- location
            f <- simpleExpr fname indents
@@ -404,6 +405,19 @@ mutual
            atEnd indents
            end <- location
            pure (MkImpossible (MkFC fname start end) lhs)
+
+  if_ : FileName -> IndentInfo -> Rule PTerm
+  if_ fname indents
+      = do start <- location
+           keyword "if"
+           x <- expr EqOK fname indents
+           keyword "then"
+           t <- expr EqOK fname indents
+           keyword "else"
+           e <- expr EqOK fname indents
+           atEnd indents
+           end <- location
+           pure (PIfThenElse (MkFC fname start end) x t e)
 
   doBlock : FileName -> IndentInfo -> Rule PTerm
   doBlock fname indents
