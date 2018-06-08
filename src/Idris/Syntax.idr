@@ -96,9 +96,9 @@ mutual
              (argTy : PTerm) -> (retTy : PTerm) -> PTerm
        PLam : FC -> RigCount -> PiInfo -> Name ->
               (argTy : PTerm) -> (scope : PTerm) -> PTerm
-       -- TODO: allow alternatives on RHS
        PLet : FC -> RigCount -> (pat : PTerm) -> 
-              (nTy : PTerm) -> (nVal : PTerm) -> (scope : PTerm) -> PTerm
+              (nTy : PTerm) -> (nVal : PTerm) -> (scope : PTerm) -> 
+              (alts : List PClause) -> PTerm
        PCase : FC -> PTerm -> List PClause -> PTerm
        PLocal : FC -> List PDecl -> (scope : PTerm) -> PTerm
        PApp : FC -> PTerm -> PTerm -> PTerm
@@ -267,11 +267,16 @@ Show PTerm where
       = "\\" ++ showCount rig ++ show n ++ " => " ++ show sc
   show (PLam _ rig _ n ty sc)
       = "\\" ++ showCount rig ++ show n ++ " : " ++ show ty ++ " => " ++ show sc
-  show (PLet _ rig n (PImplicit _) val sc)
+  show (PLet _ rig n (PImplicit _) val sc alts)
       = "let " ++ showCount rig ++ show n ++ " = " ++ show val ++ " in " ++ show sc
-  show (PLet _ rig n ty val sc)
+  show (PLet _ rig n ty val sc alts)
       = "let " ++ showCount rig ++ show n ++ " : " ++ show ty ++ " = " 
-               ++ show val ++ " in " ++ show sc
+               ++ show val ++ concatMap showAlt alts ++
+               " in " ++ show sc
+    where
+      showAlt : PClause -> String
+      showAlt (MkPatClause _ lhs rhs _) = " | " ++ show lhs ++ " => " ++ show rhs ++ ";"
+      showAlt (MkImpossible _ lhs) = " | " ++ show lhs ++ " impossible;"
   show (PCase _ tm cs) 
       = "case " ++ show tm ++ " of { " ++ 
           showSep " ; " (map showCase cs) ++ " }"

@@ -321,21 +321,35 @@ mutual
        bindAll fc ((rig, n, ty) :: rest) scope
            = PLam fc rig Explicit n ty (bindAll fc rest scope)
 
+  letBinder : FileName -> IndentInfo -> 
+              Rule (RigCount, PTerm, PTerm, List PClause)
+  letBinder fname indents
+      = do rig <- multiplicity
+           pat <- expr NoEq fname indents
+           symbol "="
+           val <- expr EqOK fname indents
+           alts <- block (patAlt fname)
+           pure (rig, pat, val, alts)
+
+  buildLets : FC ->
+              List (RigCount, PTerm, PTerm, List PClause) ->
+              PTerm -> PTerm
+  buildLets fc [] sc = sc
+  buildLets fc ((rig, pat, val, alts) :: rest) sc
+      = PLet fc rig pat (PImplicit fc) val 
+             (buildLets fc rest sc) alts
+
   let_ : FileName -> IndentInfo -> Rule PTerm
   let_ fname indents
       = do start <- location
            keyword "let"
-           rig <- multiplicity
-           pat <- expr NoEq fname indents
-           symbol "="
-           commit
-           val <- expr EqOK fname indents
+           res <- block (letBinder fname) 
            continue indents
            keyword "in"
            scope <- typeExpr EqOK fname indents
            end <- location
-           pure (PLet (MkFC fname start end) rig pat 
-                      (PImplicit (MkFC fname start end)) val scope)
+           pure (buildLets (MkFC fname start end) res scope)
+                
     <|> do start <- location
            keyword "let"
            ds <- block (topDecl fname)
