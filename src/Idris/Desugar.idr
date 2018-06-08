@@ -252,7 +252,10 @@ mutual
            pure $ ICase fc tm' (Implicit fc) 
                        (PatClause fc (bindNames False [] pat') rest'
                                   :: alts')
-
+  expandDo topfc (DoLetLocal fc decls :: rest)
+      = do rest' <- expandDo topfc rest
+           decls' <- traverse desugarDecl decls
+           pure $ ILocal fc (concat decls') rest'
 
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->

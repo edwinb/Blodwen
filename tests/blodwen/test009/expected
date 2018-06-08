@@ -1,0 +1,10 @@
+Processing as Idris
+1/2: Building Stuff (Stuff.blod)
+2/2: Building dolocal (dolocal.blod)
+Welcome to Blodwen. Good luck.
+Main> Just 1
+Main> Just 0
+Main> Just 94
+Main> Nothing
+Main> Nothing
+Main> Bye for now!

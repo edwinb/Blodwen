@@ -322,22 +322,39 @@ mutual
            = PLam fc rig Explicit n ty (bindAll fc rest scope)
 
   letBinder : FileName -> IndentInfo -> 
-              Rule (RigCount, PTerm, PTerm, List PClause)
+              Rule (FilePos, FilePos, RigCount, PTerm, PTerm, List PClause)
   letBinder fname indents
-      = do rig <- multiplicity
+      = do start <- location
+           rig <- multiplicity
            pat <- expr NoEq fname indents
            symbol "="
            val <- expr EqOK fname indents
            alts <- block (patAlt fname)
-           pure (rig, pat, val, alts)
+           end <- location
+           pure (start, end, rig, pat, val, alts)
 
-  buildLets : FC ->
-              List (RigCount, PTerm, PTerm, List PClause) ->
+  buildLets : FileName ->
+              List (FilePos, FilePos, RigCount, PTerm, PTerm, List PClause) ->
               PTerm -> PTerm
-  buildLets fc [] sc = sc
-  buildLets fc ((rig, pat, val, alts) :: rest) sc
-      = PLet fc rig pat (PImplicit fc) val 
-             (buildLets fc rest sc) alts
+  buildLets fname [] sc = sc
+  buildLets fname ((start, end, rig, pat, val, alts) :: rest) sc
+      = let fc = MkFC fname start end in
+            PLet fc rig pat (PImplicit fc) val 
+                 (buildLets fname rest sc) alts
+
+  buildDoLets : FileName ->
+                List (FilePos, FilePos, RigCount, PTerm, PTerm, List PClause) ->
+                List PDo
+  buildDoLets fname [] = []
+  buildDoLets fname ((start, end, rig, PRef fc' (UN n), val, []) :: rest)
+      = let fc = MkFC fname start end in
+            if lowerFirst n
+               then DoLet fc (UN n) rig val :: buildDoLets fname rest
+               else DoLetPat fc (PRef fc' (UN n)) val [] 
+                         :: buildDoLets fname rest
+  buildDoLets fname ((start, end, rig, pat, val, alts) :: rest)
+      = let fc = MkFC fname start end in
+            DoLetPat fc pat val alts :: buildDoLets fname rest
 
   let_ : FileName -> IndentInfo -> Rule PTerm
   let_ fname indents
@@ -348,7 +365,7 @@ mutual
            keyword "in"
            scope <- typeExpr EqOK fname indents
            end <- location
-           pure (buildLets (MkFC fname start end) res scope)
+           pure (buildLets fname res scope)
                 
     <|> do start <- location
            keyword "let"
@@ -394,7 +411,7 @@ mutual
            keyword "do"
            actions <- block (doAct fname)
            end <- location
-           pure (PDoBlock (MkFC fname start end) actions)
+           pure (PDoBlock (MkFC fname start end) (concat actions))
 
   lowerFirst : String -> Bool
   lowerFirst "" = False
@@ -406,7 +423,7 @@ mutual
                         else fail "Not a pattern variable"
   validPatternVar _ = fail "Not a pattern variable"
 
-  doAct : FileName -> IndentInfo -> Rule PDo
+  doAct : FileName -> IndentInfo -> Rule (List PDo)
   doAct fname indents
       = do start <- location
            n <- name
@@ -417,38 +434,28 @@ mutual
            val <- expr EqOK fname indents
            atEnd indents
            end <- location
-           pure (DoBind (MkFC fname start end) n val)
+           pure [DoBind (MkFC fname start end) n val]
+    <|> do keyword "let"
+           res <- block (letBinder fname)
+           atEnd indents
+           pure (buildDoLets fname res)
     <|> do start <- location
            keyword "let"
-           rig <- multiplicity
-           n <- name
-           validPatternVar n
-           commit
-           symbol "="
-           val <- expr EqOK fname indents
-           atEnd indents
+           res <- block (topDecl fname)
            end <- location
-           pure (DoLet (MkFC fname start end) n rig val)
-    <|> do start <- location
-           keyword "let"
-           e <- expr NoEq fname indents
-           symbol "="
-           val <- expr EqOK fname indents
-           alts <- block (patAlt fname)
            atEnd indents
-           end <- location
-           pure (DoLetPat (MkFC fname start end) e val alts)
+           pure [DoLetLocal (MkFC fname start end) (concat res)]
     <|> do start <- location
            e <- expr NoEq fname indents
            (do atEnd indents
                end <- location
-               pure (DoExp (MkFC fname start end) e))
+               pure [DoExp (MkFC fname start end) e])
              <|> (do symbol "<-"
                      val <- expr EqOK fname indents
                      alts <- block (patAlt fname)
                      atEnd indents
                      end <- location
-                     pure (DoBindPat (MkFC fname start end) e val alts))
+                     pure [DoBindPat (MkFC fname start end) e val alts])
 
   patAlt : FileName -> IndentInfo -> Rule PClause
   patAlt fname indents

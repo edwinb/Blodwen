@@ -139,6 +139,7 @@ mutual
        DoBindPat : FC -> PTerm -> PTerm -> List PClause -> PDo
        DoLet : FC -> Name -> RigCount -> PTerm -> PDo
        DoLetPat : FC -> PTerm -> PTerm -> List PClause -> PDo
+       DoLetLocal : FC -> List PDecl -> PDo
 
   export
   getLoc : PDo -> FC
