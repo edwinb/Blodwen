@@ -236,7 +236,7 @@ mutual
       = do c <- constant
            getMult c
     <|> pure RigW
-       
+
   pibindAll : FC -> PiInfo -> List (RigCount, Maybe Name, PTerm) -> 
               PTerm -> PTerm
   pibindAll fc p [] scope = scope
@@ -259,7 +259,7 @@ mutual
                Rule (List (RigCount, Maybe Name, PTerm))
   pibindList fname start indents
        = do rig <- multiplicity
-            ns <- sepBy (symbol ",") name
+            ns <- sepBy1 (symbol ",") name
             symbol ":"
             ty <- expr EqOK fname indents
             atEnd indents
@@ -294,6 +294,20 @@ mutual
            scope <- typeExpr EqOK fname indents
            end <- location
            pure (pibindAll (MkFC fname start end) AutoImplicit binders scope)
+
+  forall_ : FileName -> IndentInfo -> Rule PTerm
+  forall_ fname indents
+      = do start <- location
+           keyword "forall"
+           nstart <- location
+           ns <- sepBy1 (symbol ",") name
+           nend <- location
+           let nfc = MkFC fname nstart nend
+           let binders = map (\n => (Rig0, Just n, PImplicit nfc)) ns
+           symbol "."
+           scope <- typeExpr EqOK fname indents
+           end <- location
+           pure (pibindAll (MkFC fname start end) Implicit binders scope)
 
   implicitPi : FileName -> IndentInfo -> Rule PTerm
   implicitPi fname indents
@@ -479,6 +493,7 @@ mutual
   binder : FileName -> IndentInfo -> Rule PTerm
   binder fname indents
       = autoImplicitPi fname indents
+    <|> forall_ fname indents
     <|> implicitPi fname indents
     <|> explicitPi fname indents
     <|> lam fname indents

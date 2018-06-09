@@ -1,14 +1,14 @@
 import Stuff
 
--- data Functor : (f : _) -> Type where
---      [noHints, search f]
---      MkFunctor : (map : {a, b: Type} -> (a -> b) -> f a -> f b) -> Functor f 
+data Functor : (f : _) -> Type where
+     [noHints, search f]
+     MkFunctor : (map : forall a,b . (a -> b) -> f a -> f b) -> Functor f 
 
-interface Functor (f : Type -> Type) where
-    map : (a -> b) -> f a -> f b
+-- interface Functor (f : Type -> Type) where
+--     map : (a -> b) -> f a -> f b
 
--- map : {auto c : Functor f} -> (a -> b) -> f a -> f b
--- map {c = MkFunctor map_meth} = map_meth
+map : {auto c : Functor f} -> (a -> b) -> f a -> f b
+map {c = MkFunctor map_meth} = map_meth
 
 %hint
 ListFunctor : Functor List
@@ -29,7 +29,7 @@ data Vect : _ -> Type -> Type where
 %hint
 VectFunctor : Functor (Vect n)
 
-mapVect : {n : Nat} -> {a, b : _} -> (a -> b) -> Vect n a -> Vect n b
+mapVect : forall n, a, b . (a -> b) -> Vect n a -> Vect n b
 mapVect f [] = []
 mapVect f (x :: xs) = f x :: map f xs
 

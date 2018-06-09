@@ -69,7 +69,7 @@ doubleLit = digits <+> is '.' <+> digits <+> opt
 keywords : List String
 keywords = ["data", "module", "where", "let", "in", "do", "record",
             "auto", "implicit", "namespace", "impossible", "case", "of",
-            "if", "then", "else",
+            "if", "then", "else", "forall",
             "using", "interface", "implementation", "open", "import",
             "public", "export", "private",
             "infixl", "infixr", "infix", "prefix",
