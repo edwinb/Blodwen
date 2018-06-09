@@ -163,12 +163,20 @@ Parameters
 The parameters to a data type are taken to be the arguments which appear,
 unchanged, in the same position, everywhere across a data definition.
 
-Forcing
--------
+Forcing and Erasure
+-------------------
 Forced arguments to constructors are those which are constructor guarded in
-the indices of the constructor. They get erased during elaboration (in
-TTImp.Elab.Term) in 'checkExp' so the result of type checking has already
-erased arguments.
+the indices of the constructor. We don't currently use these for erasure, 
+though, because we're using 0 multiplicities in types to mark what can be
+erased, and this is incompatible with forcing (because there's no longer any
+guarantee that the forced argument will be available elsewhere at runtime).
+
+Unbound implicits are given '0' multiplicity, so the rule is now that if you
+don't explicitly write it in the type of a function or constructor, the 
+argument is erased at run time.
+
+Elaboration and the case tree compiler check ensure that 0-multiplicity
+arguments are not inspected in case trees.
 
 Namespaces and name visibility
 ------------------------------
