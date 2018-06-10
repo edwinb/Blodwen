@@ -309,7 +309,7 @@ mutual
              est <- get EST
              case lookup n (boundNames est) of
                   Nothing =>
-                    do t <- addHole loc env TType
+                    do t <- addHole loc [] TType
                        -- Use an empty environment, because if we can't
                        -- resolve the hole type in the current scope, there'll
                        -- be some names out of scope in the hole type and

@@ -37,48 +37,6 @@ import TTImp.TTImp
 
 %default covering
 
-public export
-record SyntaxInfo where
-  constructor MkSyntax
-  -- Keep infix/prefix, then we can define operators which are both
-  -- (most obviously, -)
-  infixes : StringMap (Fixity, Nat)
-  prefixes : StringMap Nat
-
-export
-TTC annot Fixity where
-  toBuf b InfixL = tag 0
-  toBuf b InfixR = tag 1
-  toBuf b Infix = tag 2
-  toBuf b Prefix = tag 3
-
-  fromBuf s b 
-      = case !getTag of
-             0 => pure InfixL
-             1 => pure InfixR
-             2 => pure Infix
-             3 => pure Prefix
-             _ => corrupt "Fixity"
-
-export
-TTC annot SyntaxInfo where
-  toBuf b syn 
-      = do toBuf b (toList (infixes syn))
-           toBuf b (toList (prefixes syn))
-
-  fromBuf s b 
-      = do inf <- fromBuf s b
-           pre <- fromBuf s b
-           pure (MkSyntax (fromList inf) (fromList pre))
-
-export
-initSyntax : SyntaxInfo
-initSyntax = MkSyntax empty empty
-
--- A label for Syntax info in the global state
-export
-data Syn : Type where
-
 export
 extend : {auto s : Ref Syn SyntaxInfo} ->
          SyntaxInfo -> Core annot ()
@@ -123,6 +81,7 @@ mutual
   desugar : {auto s : Ref Syn SyntaxInfo} ->
             {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState FC)} ->
+            {auto i : Ref ImpST (ImpState FC)} ->
             PTerm -> Core FC (RawImp FC)
   desugar (PRef fc x) = pure $ IVar fc x
   desugar (PPi fc rig p mn argTy retTy) 
@@ -209,6 +168,7 @@ mutual
   expandList : {auto s : Ref Syn SyntaxInfo} ->
                {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
+               {auto i : Ref ImpST (ImpState FC)} ->
                FC -> List PTerm -> Core FC (RawImp FC)
   expandList fc [] = pure (IVar fc (UN "Nil"))
   expandList fc (x :: xs)
@@ -217,6 +177,7 @@ mutual
   expandDo : {auto s : Ref Syn SyntaxInfo} ->
              {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
+             {auto i : Ref ImpST (ImpState FC)} ->
              FC -> List PDo -> Core FC (RawImp FC)
   expandDo fc [] = throw (GenericMsg fc "Do block cannot be empty")
   expandDo _ [DoExp fc tm] = desugar tm
@@ -242,7 +203,7 @@ mutual
                     (ILam fc RigW Explicit (MN "_" 0) (Implicit fc)
                           (ICase fc (IVar fc (MN "_" 0))
                                (Implicit fc)
-                               (PatClause fc (bindNames False [] pat') rest' 
+                               (PatClause fc (bindPatNames False [] pat') rest' 
                                   :: alts')))
   expandDo topfc (DoLet fc n rig tm :: rest) 
       = do tm' <- desugar tm
@@ -254,7 +215,7 @@ mutual
            alts' <- traverse (desugarClause True) alts
            rest' <- expandDo topfc rest
            pure $ ICase fc tm' (Implicit fc) 
-                       (PatClause fc (bindNames False [] pat') rest'
+                       (PatClause fc (bindPatNames False [] pat') rest'
                                   :: alts')
   expandDo topfc (DoLetLocal fc decls :: rest)
       = do rest' <- expandDo topfc rest
@@ -264,6 +225,7 @@ mutual
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
+                {auto i : Ref ImpST (ImpState FC)} ->
                 Tree FC PTerm -> Core FC (RawImp FC)
   desugarTree (Inf loc op l r)
       = do l' <- desugarTree l
@@ -277,34 +239,37 @@ mutual
   desugarType : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
+                {auto i : Ref ImpST (ImpState FC)} ->
                 PTypeDecl -> Core FC (ImpTy FC)
   desugarType (MkPTy fc n ty) 
-      = pure $ MkImpTy fc n (bindNames True [] !(desugar ty))
+      = pure $ MkImpTy fc n (bindTypeNames fc [] !(desugar ty))
 
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
                   {auto c : Ref Ctxt Defs} ->
                   {auto u : Ref UST (UState FC)} ->
+                  {auto i : Ref ImpST (ImpState FC)} ->
                   Bool -> PClause -> Core FC (ImpClause FC)
   desugarClause arg (MkPatClause fc lhs rhs wheres)
       = do ws <- traverse desugarDecl wheres
            rhs' <- desugar rhs
-           pure $ PatClause fc (bindNames arg [] !(desugar lhs)) 
+           pure $ PatClause fc (bindPatNames arg [] !(desugar lhs)) 
                      (case ws of
                            [] => rhs'
                            _ => ILocal fc (concat ws) rhs')
   desugarClause arg (MkImpossible fc lhs) 
-      = pure $ ImpossibleClause fc (bindNames arg [] !(desugar lhs))
+      = pure $ ImpossibleClause fc (bindPatNames arg [] !(desugar lhs))
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
+                {auto i : Ref ImpST (ImpState FC)} ->
                 PDataDecl -> Core FC (ImpData FC)
   desugarData (MkPData fc n tycon opts datacons) 
-      = pure $ MkImpData fc n (bindNames True [] !(desugar tycon))
+      = pure $ MkImpData fc n (bindTypeNames fc [] !(desugar tycon))
                               opts
                               !(traverse desugarType datacons)
   desugarData (MkPLater fc n tycon) 
-      = pure $ MkImpLater fc n (bindNames True [] !(desugar tycon))
+      = pure $ MkImpLater fc n (bindTypeNames fc [] !(desugar tycon))
 
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
@@ -312,6 +277,7 @@ mutual
   desugarDecl : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
+                {auto i : Ref ImpST (ImpState FC)} ->
                 PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl (PClaim fc vis opts ty) 
       = pure [IClaim fc vis opts !(desugarType ty)]

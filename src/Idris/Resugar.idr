@@ -3,7 +3,6 @@ module Idris.Resugar
 import Core.Context
 import Core.Options
 
-import Idris.Desugar
 import Idris.Syntax
 
 import TTImp.TTImp
@@ -191,6 +190,11 @@ resugar : {auto c : Ref Ctxt Defs} ->
           {auto s : Ref Syn SyntaxInfo} ->
           Env Term vars -> Term vars -> Core FC PTerm
 resugar env tm
-    = do tti <- unelab env tm
+    = do tti <- unelab emptyFC env tm
          toPTerm startPrec tti
         
+export
+pterm : {auto c : Ref Ctxt Defs} ->
+        {auto s : Ref Syn SyntaxInfo} ->
+        RawImp FC -> Core FC PTerm
+pterm raw = toPTerm startPrec raw

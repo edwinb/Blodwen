@@ -203,6 +203,7 @@ mutual
                          PDecl
        -- TODO: PRecord
        -- TODO: PPostulate
+       -- TODO: PMutual
        -- TODO: POpen (for opening named interfaces)
        PFixity : FC -> Fixity -> Nat -> OpStr -> PDecl
        PNamespace : FC -> List String -> List PDecl -> PDecl
@@ -331,4 +332,46 @@ Show PTerm where
   show (PUnit _) = "()"
   show (PIfThenElse _ x t e) = "if " ++ show x ++ " then " ++ show t ++
                                " else " ++ show e
+
+public export
+record SyntaxInfo where
+  constructor MkSyntax
+  -- Keep infix/prefix, then we can define operators which are both
+  -- (most obviously, -)
+  infixes : StringMap (Fixity, Nat)
+  prefixes : StringMap Nat
+
+export
+TTC annot Fixity where
+  toBuf b InfixL = tag 0
+  toBuf b InfixR = tag 1
+  toBuf b Infix = tag 2
+  toBuf b Prefix = tag 3
+
+  fromBuf s b 
+      = case !getTag of
+             0 => pure InfixL
+             1 => pure InfixR
+             2 => pure Infix
+             3 => pure Prefix
+             _ => corrupt "Fixity"
+
+export
+TTC annot SyntaxInfo where
+  toBuf b syn 
+      = do toBuf b (toList (infixes syn))
+           toBuf b (toList (prefixes syn))
+
+  fromBuf s b 
+      = do inf <- fromBuf s b
+           pre <- fromBuf s b
+           pure (MkSyntax (fromList inf) (fromList pre))
+
+export
+initSyntax : SyntaxInfo
+initSyntax = MkSyntax empty empty
+
+-- A label for Syntax info in the global state
+export
+data Syn : Type where
 

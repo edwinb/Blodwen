@@ -82,6 +82,26 @@ Once we know what the bound implicits need to be, we bind them in
 gets turned into a local binding (either Pi or Pat as appropriate, or PLet for
 @-patterns).
 
+Unbound Implicits
+-----------------
+In the Idris front end, we only use IBindVar in patterns, not in types. In
+types, we take a simpler approach (because it's easier to explain...). Any
+name beginning with a lower case letter is considered an unbound implicit,
+and before elaboration they are given an implicit pi binding, with multiplicity
+0. So, for example:
+
+map : {f : _} -> (a -> b) -> f a -> f b
+becomes
+map : {0 a : _} -> {0 b : _} -> {f : _} -> (a -> b) -> f a -> f b
+
+Bindings appear in the order they appeared in the explicitly given type.
+It'll still infer any additional names, e.g. in
+
+lookup : HasType i xs t -> Env xs -> t
+...where 'xs' is a Vect n a, it infers bindings for n and a.
+
+(TODO: %auto_implicits directive)
+
 Implicit arguments
 ------------------
 When we encounter an implicit argument ('_' in the raw syntax, or added when

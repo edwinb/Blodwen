@@ -299,6 +299,7 @@ mutual
   forall_ fname indents
       = do start <- location
            keyword "forall"
+           commit
            nstart <- location
            ns <- sepBy1 (symbol ",") name
            nend <- location

@@ -25,64 +25,65 @@ mutual
   -- unelaborated term so that we can work out where to put the implicit 
   -- applications
   unelabTy : {auto c : Ref Ctxt Defs} ->
-           Env Term vars -> Term vars -> Core annot (RawImp (), Term vars)
-  unelabTy env (Local {x} el) 
-      = pure (IVar () x, binderType (getBinder el env))
-  unelabTy env (Ref nt n)
+           annot -> Env Term vars -> Term vars -> 
+           Core annot (RawImp annot, Term vars)
+  unelabTy loc env (Local {x} el) 
+      = pure (IVar loc x, binderType (getBinder el env))
+  unelabTy loc env (Ref nt n)
       = do defs <- get Ctxt
            case lookupTyExact n (gamma defs) of
-                Nothing => pure (IVar () (UN ("BADNAME[" ++ show n ++"]")), 
+                Nothing => pure (IVar loc (UN ("BADNAME[" ++ show n ++"]")), 
                                  Erased) -- should never happen!
-                Just ty => pure (IVar () n, embed ty)
-  unelabTy env (Bind x b sc)
-      = do (sc', scty) <- unelabTy (b :: env) sc
-           unelabBinder env x b sc sc' scty
-  unelabTy env (App fn arg)
-      = do (fn', fnty) <- unelabTy env fn
-           (arg', argty) <- unelabTy env arg
+                Just ty => pure (IVar loc n, embed ty)
+  unelabTy loc env (Bind x b sc)
+      = do (sc', scty) <- unelabTy loc (b :: env) sc
+           unelabBinder loc env x b sc sc' scty
+  unelabTy loc env (App fn arg)
+      = do (fn', fnty) <- unelabTy loc env fn
+           (arg', argty) <- unelabTy loc env arg
            defs <- get Ctxt
            case nf defs env fnty of
                 NBind x (Pi rig Explicit ty) sc
-                  => pure (IApp () fn' arg', 
+                  => pure (IApp loc fn' arg', 
                            quote defs env (sc (toClosure False env arg)))
                 NBind x (Pi rig p ty) sc
-                  => pure (IImplicitApp () fn' x arg', 
+                  => pure (IImplicitApp loc fn' x arg', 
                            quote defs env (sc (toClosure False env arg)))
-                _ => pure (IApp () fn' arg', Erased)
-  unelabTy env (PrimVal c) = pure (IPrimVal () c, Erased)
-  unelabTy env Erased = pure (Implicit (), Erased)
-  unelabTy env TType = pure (IType (), TType)
-  unelabTy _ _ = pure (Implicit (), Erased)
+                _ => pure (IApp loc fn' arg', Erased)
+  unelabTy loc env (PrimVal c) = pure (IPrimVal loc c, Erased)
+  unelabTy loc env Erased = pure (Implicit loc, Erased)
+  unelabTy loc env TType = pure (IType loc, TType)
+  unelabTy loc _ _ = pure (Implicit loc, Erased)
 
   unelabBinder : {auto c : Ref Ctxt Defs} ->
-                 Env Term vars -> (x : Name) ->
+                 annot -> Env Term vars -> (x : Name) ->
                  Binder (Term vars) -> Term (x :: vars) ->
-                 RawImp () -> Term (x :: vars) -> 
-                 Core annot (RawImp (), Term vars)
-  unelabBinder env x (Lam rig p ty) sctm sc scty
-      = do (ty', _) <- unelabTy env ty
-           pure (ILam () rig p x ty' sc, Bind x (Pi rig p ty) scty)
-  unelabBinder env x (Let rig val ty) sctm sc scty
-      = do (val', vty) <- unelabTy env val
-           (ty', _) <- unelabTy env ty
-           pure (ILet () rig x ty' val' sc, Bind x (Let rig val ty) scty)
-  unelabBinder env x (Pi rig p ty) sctm sc scty 
-      = do (ty', _) <- unelabTy env ty
+                 RawImp annot -> Term (x :: vars) -> 
+                 Core annot (RawImp annot, Term vars)
+  unelabBinder loc env x (Lam rig p ty) sctm sc scty
+      = do (ty', _) <- unelabTy loc env ty
+           pure (ILam loc rig p x ty' sc, Bind x (Pi rig p ty) scty)
+  unelabBinder loc env x (Let rig val ty) sctm sc scty
+      = do (val', vty) <- unelabTy loc env val
+           (ty', _) <- unelabTy loc env ty
+           pure (ILet loc rig x ty' val' sc, Bind x (Let rig val ty) scty)
+  unelabBinder loc env x (Pi rig p ty) sctm sc scty 
+      = do (ty', _) <- unelabTy loc env ty
            let nm = if used Here sctm || rig /= RigW
                        then Just x else Nothing
-           pure (IPi () rig p nm ty' sc, TType)
-  unelabBinder env x (PVar rig ty) sctm sc scty
-      = do (ty', _) <- unelabTy env ty
+           pure (IPi loc rig p nm ty' sc, TType)
+  unelabBinder loc env x (PVar rig ty) sctm sc scty
+      = do (ty', _) <- unelabTy loc env ty
            pure (sc, Bind x (PVTy rig ty) scty)
-  unelabBinder env x (PLet rig val ty) sctm sc scty
-      = do (val', vty) <- unelabTy env val
-           (ty', _) <- unelabTy env ty
-           pure (ILet () rig x ty' val' sc, Bind x (PLet rig val ty) scty)
-  unelabBinder env x (PVTy rig ty) sctm sc scty
-      = do (ty', _) <- unelabTy env ty
+  unelabBinder loc env x (PLet rig val ty) sctm sc scty
+      = do (val', vty) <- unelabTy loc env val
+           (ty', _) <- unelabTy loc env ty
+           pure (ILet loc rig x ty' val' sc, Bind x (PLet rig val ty) scty)
+  unelabBinder loc env x (PVTy rig ty) sctm sc scty
+      = do (ty', _) <- unelabTy loc env ty
            pure (sc, TType)
 
 export
 unelab : {auto c : Ref Ctxt Defs} ->
-         Env Term vars -> Term vars -> Core annot (RawImp ())
-unelab env tm = pure $ fst !(unelabTy env tm)
+         annot -> Env Term vars -> Term vars -> Core annot (RawImp annot)
+unelab loc env tm = pure $ fst !(unelabTy loc env tm)
