@@ -38,7 +38,7 @@ infixl 5 ==, /=
 (/=) : {auto c : Eq a} -> a -> a -> Bool
 
 -- Top level method bodies
-(==) {c = MkEq eq' neq'} x y = eq' x y
+(==) {c = MkEq eq' neq'} = eq'
 (/=) {c = MkEq eq' neq'} x y = neq' x y
 
 -- Default definitions

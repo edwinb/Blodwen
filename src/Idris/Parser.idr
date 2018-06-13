@@ -270,6 +270,14 @@ mutual
                     symbol ":"
                     ty <- expr EqOK fname indents
                     pure (rig, Just n, ty))
+      
+  bindSymbol : Rule PiInfo
+  bindSymbol
+      = do symbol "->"
+           pure Explicit
+    <|> do symbol "=>"
+           pure AutoImplicit
+
 
   explicitPi : FileName -> IndentInfo -> Rule PTerm
   explicitPi fname indents
@@ -277,10 +285,10 @@ mutual
            symbol "("
            binders <- pibindList fname start indents
            symbol ")"
-           symbol "->"
+           exp <- bindSymbol
            scope <- typeExpr EqOK fname indents
            end <- location
-           pure (pibindAll (MkFC fname start end) Explicit binders scope)
+           pure (pibindAll (MkFC fname start end) exp binders scope)
 
   autoImplicitPi : FileName -> IndentInfo -> Rule PTerm
   autoImplicitPi fname indents
@@ -405,7 +413,7 @@ mutual
   caseAlt : FileName -> IndentInfo -> Rule PClause
   caseAlt fname indents
       = do start <- location
-           lhs <- expr NoEq fname indents
+           lhs <- appExpr fname indents
            caseRHS fname start indents lhs
           
   caseRHS : FileName -> FilePos -> IndentInfo -> PTerm -> Rule PClause
@@ -504,16 +512,17 @@ mutual
   typeExpr q fname indents
       = do start <- location
            arg <- opExpr q fname indents
-           (do symbol "->"
-               rest <- sepBy (symbol "->") (opExpr EqOK fname indents)
+           (do rest <- some (do exp <- bindSymbol
+                                op <- opExpr EqOK fname indents
+                                pure (exp, op))
                end <- location
                pure (mkPi start end arg rest))
              <|> pure arg
     where
-      mkPi : FilePos -> FilePos -> PTerm -> List PTerm -> PTerm
+      mkPi : FilePos -> FilePos -> PTerm -> List (PiInfo, PTerm) -> PTerm
       mkPi start end arg [] = arg
-      mkPi start end arg (a :: as) 
-            = PPi (MkFC fname start end) RigW Explicit Nothing arg 
+      mkPi start end arg ((exp, a) :: as) 
+            = PPi (MkFC fname start end) RigW exp Nothing arg 
                   (mkPi start end a as)
 
   export
@@ -729,7 +738,7 @@ getRight (Right v) = Just v
 
 constraints : FileName -> IndentInfo -> EmptyRule (List (Maybe Name, PTerm))
 constraints fname indents
-    = do tm <- expr EqOK fname indents
+    = do tm <- appExpr fname indents
          symbol "=>"
          more <- constraints fname indents
          pure ((Nothing, tm) :: more)

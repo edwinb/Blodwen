@@ -1,0 +1,23 @@
+module IFace
+
+import Stuff
+
+infixl 5 ==, /=
+
+interface Eq a where
+  (==) : a -> a -> Bool
+  (/=) : a -> a -> Bool
+
+data Compare = LT | EQ | GT
+
+interface Eq a => Ord a where
+  compare : a -> a -> Compare
+
+foo : Ord a => a -> a -> Bool
+foo x y = x == y
+
+%hint
+testEq : Eq Integer
+
+%hint
+testOrd : Ord Integer
