@@ -738,7 +738,7 @@ mutual
                      checkExp rigc process loc elabinfo env nest (App fntm argtm)
                                   (quote gam env sc') expected
                 _ => 
-                  do bn <- genName "aTy"
+                  do bn <- genVarName "aTy"
                      -- invent names for the argument and return types
                      log 5 $ "Inventing arg type for " ++ show (fn, fnty)
                      -- Use an empty environment for the holes in the function

@@ -5,6 +5,7 @@ import public Core.Context
 import public Core.Core
 import public Core.Normalise
 import public Core.Reflect
+import public Core.TTC
 import public Core.TT
 
 import TTImp.Reflect
@@ -334,12 +335,37 @@ Show PTerm where
                                " else " ++ show e
 
 public export
+record IFaceInfo where
+  constructor MkIFaceInfo
+  iconstructor : Name
+  params : List Name
+  methods : List (Name, RawImp FC) 
+     -- ^ name and desugared type (without constraint)
+  defaults : List (Name, ImpDecl FC)
+
+export
+TTC FC IFaceInfo where
+  toBuf b (MkIFaceInfo ic ps ms ds)
+      = do toBuf b ic
+           toBuf b ps
+           toBuf b ms
+           toBuf b ds
+
+  fromBuf s b
+      = do ic <- fromBuf s b
+           ps <- fromBuf s b
+           ms <- fromBuf s b
+           ds <- fromBuf s b
+           pure (MkIFaceInfo ic ps ms ds)
+
+public export
 record SyntaxInfo where
   constructor MkSyntax
   -- Keep infix/prefix, then we can define operators which are both
   -- (most obviously, -)
   infixes : StringMap (Fixity, Nat)
   prefixes : StringMap Nat
+  ifaces : Context IFaceInfo
 
 export
 TTC annot Fixity where
@@ -357,19 +383,21 @@ TTC annot Fixity where
              _ => corrupt "Fixity"
 
 export
-TTC annot SyntaxInfo where
+TTC FC SyntaxInfo where
   toBuf b syn 
       = do toBuf b (toList (infixes syn))
            toBuf b (toList (prefixes syn))
+           toBuf b (ifaces syn) 
 
   fromBuf s b 
       = do inf <- fromBuf s b
            pre <- fromBuf s b
-           pure (MkSyntax (fromList inf) (fromList pre))
+           ifs <- fromBuf s b
+           pure (MkSyntax (fromList inf) (fromList pre) ifs)
 
 export
 initSyntax : SyntaxInfo
-initSyntax = MkSyntax empty empty
+initSyntax = MkSyntax empty empty empty
 
 -- A label for Syntax info in the global state
 export

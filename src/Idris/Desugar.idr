@@ -13,6 +13,7 @@ import Utils.Shunting
 import Idris.BindImplicits
 import Idris.Syntax
 
+import Idris.Elab.Implementation
 import Idris.Elab.Interface
 
 import TTImp.TTImp
@@ -38,12 +39,14 @@ import TTImp.TTImp
 %default covering
 
 export
-extend : {auto s : Ref Syn SyntaxInfo} ->
-         SyntaxInfo -> Core annot ()
-extend newsyn
+extendAs : {auto s : Ref Syn SyntaxInfo} ->
+         List String -> List String -> SyntaxInfo -> Core annot ()
+extendAs old as newsyn
     = do syn <- get Syn
          put Syn (record { infixes $= mergeLeft (infixes newsyn),
-                           prefixes $= mergeLeft (prefixes newsyn) } syn)
+                           prefixes $= mergeLeft (prefixes newsyn),
+                           ifaces $= mergeContextAs old as (ifaces newsyn) } 
+                  syn)
 
 -- Add 'IMustUnify' for any duplicated names, and any function application
 addDots : RawImp annot -> RawImp annot
@@ -82,194 +85,200 @@ mutual
             {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState FC)} ->
             {auto i : Ref ImpST (ImpState FC)} ->
-            PTerm -> Core FC (RawImp FC)
-  desugar (PRef fc x) = pure $ IVar fc x
-  desugar (PPi fc rig p mn argTy retTy) 
-      = pure $ IPi fc rig p mn !(desugar argTy) 
-                               !(desugar retTy)
-  desugar (PLam fc rig p n argTy scope) 
-      = pure $ ILam fc rig p n !(desugar argTy) 
-                               !(desugar scope)
-  desugar (PLet fc rig (PRef _ n) nTy nVal scope [])
-      = pure $ ILet fc rig n !(desugar nTy) !(desugar nVal) 
-                             !(desugar scope)
-  desugar (PLet fc rig pat nTy nVal scope alts) 
-      = pure $ ICase fc !(desugar nVal) !(desugar nTy)
-                        !(traverse (desugarClause True) 
+            List Name -> PTerm -> Core FC (RawImp FC)
+  desugar ps (PRef fc x) = pure $ IVar fc x
+  desugar ps (PPi fc rig p mn argTy retTy) 
+      = let ps' = maybe ps (:: ps) mn in
+            pure $ IPi fc rig p mn !(desugar ps argTy) 
+                                   !(desugar ps' retTy)
+  desugar ps (PLam fc rig p n argTy scope) 
+      = pure $ ILam fc rig p n !(desugar ps argTy) 
+                               !(desugar (n :: ps) scope)
+  desugar ps (PLet fc rig (PRef _ n) nTy nVal scope [])
+      = pure $ ILet fc rig n !(desugar ps nTy) !(desugar ps nVal) 
+                             !(desugar (n :: ps) scope)
+  desugar ps (PLet fc rig pat nTy nVal scope alts) 
+      = pure $ ICase fc !(desugar ps nVal) !(desugar ps nTy)
+                        !(traverse (desugarClause ps True) 
                             (MkPatClause fc pat scope [] :: alts))
-  desugar (PCase fc x xs) 
-      = pure $ ICase fc !(desugar x) 
+  desugar ps (PCase fc x xs) 
+      = pure $ ICase fc !(desugar ps x) 
                         (Implicit fc)
-                        !(traverse (desugarClause True) xs)
-  desugar (PLocal fc xs scope) 
-      = pure $ ILocal fc (concat !(traverse desugarDecl xs)) 
-                         !(desugar scope)
-  desugar (PApp fc x y) 
-      = pure $ IApp fc !(desugar x) !(desugar y)
-  desugar (PImplicitApp fc x argn y) 
-      = pure $ IImplicitApp fc !(desugar x) argn !(desugar y)
-  desugar (PEq fc l r)
-      = do l' <- desugar l
-           r' <- desugar r
+                        !(traverse (desugarClause ps True) xs)
+  desugar ps (PLocal fc xs scope) 
+      = pure $ ILocal fc (concat !(traverse (desugarDecl ps) xs)) 
+                         !(desugar ps scope)
+  desugar ps (PApp fc x y) 
+      = pure $ IApp fc !(desugar ps x) !(desugar ps y)
+  desugar ps (PImplicitApp fc x argn y) 
+      = pure $ IImplicitApp fc !(desugar ps x) argn !(desugar ps y)
+  desugar ps (PEq fc l r)
+      = do l' <- desugar ps l
+           r' <- desugar ps r
            pure $ apply (IVar fc (UN "Equal")) [l', r']
-  desugar (PBracketed fc e) = desugar e
-  desugar (POp fc op l r) 
+  desugar ps (PBracketed fc e) = desugar ps e
+  desugar ps (POp fc op l r) 
       = do ts <- toTokList (POp fc op l r)
-           desugarTree !(parseOps ts)
-  desugar (PPrefixOp fc op arg) 
+           desugarTree ps !(parseOps ts)
+  desugar ps (PPrefixOp fc op arg) 
       = do ts <- toTokList (PPrefixOp fc op arg)
-           desugarTree !(parseOps ts)
-  desugar (PSectionL fc op arg) 
+           desugarTree ps !(parseOps ts)
+  desugar ps (PSectionL fc op arg) 
       = do syn <- get Syn
            -- It might actually be a prefix argument rather than a section
            -- so check that first, otherwise desugar as a lambda
            case lookup op (prefixes syn) of
                 Nothing => 
-                   desugar (PLam fc RigW Explicit (MN "arg" 0) (PImplicit fc)
+                   desugar ps (PLam fc RigW Explicit (MN "arg" 0) (PImplicit fc)
                                (POp fc op (PRef fc (MN "arg" 0)) arg))
-                Just prec => desugar (PPrefixOp fc op arg)
-  desugar (PSectionR fc arg op)
-      = desugar (PLam fc RigW Explicit (MN "arg" 0) (PImplicit fc)
+                Just prec => desugar ps (PPrefixOp fc op arg)
+  desugar ps (PSectionR fc arg op)
+      = desugar ps (PLam fc RigW Explicit (MN "arg" 0) (PImplicit fc)
                  (POp fc op arg (PRef fc (MN "arg" 0))))
-  desugar (PSearch fc depth) = pure $ ISearch fc depth
-  desugar (PPrimVal fc (BI x))
+  desugar ps (PSearch fc depth) = pure $ ISearch fc depth
+  desugar ps (PPrimVal fc (BI x))
       = pure $ IAlternative fc (UniqueDefault (IPrimVal fc (BI x)))
                                [IPrimVal fc (BI x), 
                                 IPrimVal fc (I (fromInteger x))]
-  desugar (PPrimVal fc x) = pure $ IPrimVal fc x
-  desugar (PQuote fc x) = pure $ IQuote fc !(desugar x)
-  desugar (PUnquote fc x) = pure $ IUnquote fc !(desugar x)
-  desugar (PHole fc holename) = pure $ IHole fc holename
-  desugar (PType fc) = pure $ IType fc
-  desugar (PAs fc vname pattern) 
-      = pure $ IAs fc vname !(desugar pattern)
-  desugar (PDotted fc x) 
-      = pure $ IMustUnify fc !(desugar x)
-  desugar (PImplicit fc) = pure $ Implicit fc
-  desugar (PDoBlock fc block)
-      = expandDo fc block
-  desugar (PList fc args)
-      = expandList fc args
-  desugar (PPair fc l r) 
-      = do l' <- desugar l
-           r' <- desugar r
+  desugar ps (PPrimVal fc x) = pure $ IPrimVal fc x
+  desugar ps (PQuote fc x) = pure $ IQuote fc !(desugar ps x)
+  desugar ps (PUnquote fc x) = pure $ IUnquote fc !(desugar ps x)
+  desugar ps (PHole fc holename) = pure $ IHole fc holename
+  desugar ps (PType fc) = pure $ IType fc
+  desugar ps (PAs fc vname pattern) 
+      = pure $ IAs fc vname !(desugar ps pattern)
+  desugar ps (PDotted fc x) 
+      = pure $ IMustUnify fc !(desugar ps x)
+  desugar ps (PImplicit fc) = pure $ Implicit fc
+  desugar ps (PDoBlock fc block)
+      = expandDo ps fc block
+  desugar ps (PList fc args)
+      = expandList ps fc args
+  desugar ps (PPair fc l r) 
+      = do l' <- desugar ps l
+           r' <- desugar ps r
            pure $ IAlternative fc Unique
                   [apply (IVar fc (UN "Pair")) [l', r'],
                    apply (IVar fc (UN "MkPair")) [l', r']]
-  desugar (PUnit fc) 
+  desugar ps (PUnit fc) 
       = pure $ IAlternative fc Unique 
                [IVar fc (UN "Unit"), 
                 IVar fc (UN "MkUnit")]
-  desugar (PIfThenElse fc x t e)
-      = pure $ ICase fc !(desugar x) (Implicit fc)
-                   [PatClause fc (IVar fc (UN "True")) !(desugar t),
-                    PatClause fc (IVar fc (UN "False")) !(desugar e)]
+  desugar ps (PIfThenElse fc x t e)
+      = pure $ ICase fc !(desugar ps x) (Implicit fc)
+                   [PatClause fc (IVar fc (UN "True")) !(desugar ps t),
+                    PatClause fc (IVar fc (UN "False")) !(desugar ps e)]
   
   expandList : {auto s : Ref Syn SyntaxInfo} ->
                {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto i : Ref ImpST (ImpState FC)} ->
-               FC -> List PTerm -> Core FC (RawImp FC)
-  expandList fc [] = pure (IVar fc (UN "Nil"))
-  expandList fc (x :: xs)
-      = pure $ apply (IVar fc (UN "::")) [!(desugar x), !(expandList fc xs)]
+               List Name -> FC -> List PTerm -> Core FC (RawImp FC)
+  expandList ps fc [] = pure (IVar fc (UN "Nil"))
+  expandList ps fc (x :: xs)
+      = pure $ apply (IVar fc (UN "::")) [!(desugar ps x), !(expandList ps fc xs)]
 
   expandDo : {auto s : Ref Syn SyntaxInfo} ->
              {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
              {auto i : Ref ImpST (ImpState FC)} ->
-             FC -> List PDo -> Core FC (RawImp FC)
-  expandDo fc [] = throw (GenericMsg fc "Do block cannot be empty")
-  expandDo _ [DoExp fc tm] = desugar tm
-  expandDo fc [e] 
+             List Name -> FC -> List PDo -> Core FC (RawImp FC)
+  expandDo ps fc [] = throw (GenericMsg fc "Do block cannot be empty")
+  expandDo ps _ [DoExp fc tm] = desugar ps tm
+  expandDo ps fc [e] 
       = throw (GenericMsg (getLoc e) 
                   "Last statement in do block must be an expression") 
-  expandDo topfc (DoExp fc tm :: rest)
-      = do tm' <- desugar tm
-           rest' <- expandDo topfc rest
+  expandDo ps topfc (DoExp fc tm :: rest)
+      = do tm' <- desugar ps tm
+           rest' <- expandDo ps topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
                      (ILam fc RigW Explicit (UN "_") (Implicit fc) rest')
-  expandDo topfc (DoBind fc n tm :: rest)
-      = do tm' <- desugar tm
-           rest' <- expandDo topfc rest
+  expandDo ps topfc (DoBind fc n tm :: rest)
+      = do tm' <- desugar ps tm
+           rest' <- expandDo ps topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
                      (ILam fc RigW Explicit n (Implicit fc) rest')
-  expandDo topfc (DoBindPat fc pat exp alts :: rest)
-      = do pat' <- desugar pat
-           exp' <- desugar exp
-           alts' <- traverse (desugarClause True) alts
-           rest' <- expandDo topfc rest
+  expandDo ps topfc (DoBindPat fc pat exp alts :: rest)
+      = do pat' <- desugar ps pat
+           let (newps, bpat) = bindPatNames False pat'
+           exp' <- desugar ps exp
+           alts' <- traverse (desugarClause ps True) alts
+           let ps' = newps ++ ps
+           rest' <- expandDo ps' topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) exp')
                     (ILam fc RigW Explicit (MN "_" 0) (Implicit fc)
                           (ICase fc (IVar fc (MN "_" 0))
                                (Implicit fc)
-                               (PatClause fc (bindPatNames False [] pat') rest' 
+                               (PatClause fc bpat rest' 
                                   :: alts')))
-  expandDo topfc (DoLet fc n rig tm :: rest) 
-      = do tm' <- desugar tm
-           rest' <- expandDo topfc rest
+  expandDo ps topfc (DoLet fc n rig tm :: rest) 
+      = do tm' <- desugar ps tm
+           rest' <- expandDo ps topfc rest
            pure $ ILet fc rig n (Implicit fc) tm' rest'
-  expandDo topfc (DoLetPat fc pat tm alts :: rest) 
-      = do pat' <- desugar pat
-           tm' <- desugar tm
-           alts' <- traverse (desugarClause True) alts
-           rest' <- expandDo topfc rest
+  expandDo ps topfc (DoLetPat fc pat tm alts :: rest) 
+      = do pat' <- desugar ps pat
+           let (newps, bpat) = bindPatNames False pat'
+           tm' <- desugar ps tm
+           alts' <- traverse (desugarClause ps True) alts
+           let ps' = newps ++ ps
+           rest' <- expandDo ps' topfc rest
            pure $ ICase fc tm' (Implicit fc) 
-                       (PatClause fc (bindPatNames False [] pat') rest'
+                       (PatClause fc bpat rest'
                                   :: alts')
-  expandDo topfc (DoLetLocal fc decls :: rest)
-      = do rest' <- expandDo topfc rest
-           decls' <- traverse desugarDecl decls
+  expandDo ps topfc (DoLetLocal fc decls :: rest)
+      = do rest' <- expandDo ps topfc rest
+           decls' <- traverse (desugarDecl ps) decls
            pure $ ILocal fc (concat decls') rest'
 
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
-                Tree FC PTerm -> Core FC (RawImp FC)
-  desugarTree (Inf loc op l r)
-      = do l' <- desugarTree l
-           r' <- desugarTree r
+                List Name -> Tree FC PTerm -> Core FC (RawImp FC)
+  desugarTree ps (Inf loc op l r)
+      = do l' <- desugarTree ps l
+           r' <- desugarTree ps r
            pure (IApp loc (IApp loc (IVar loc (UN op)) l') r')
-  desugarTree (Pre loc op arg)
-      = do arg' <- desugarTree arg
+  desugarTree ps (Pre loc op arg)
+      = do arg' <- desugarTree ps arg
            pure (IApp loc (IVar loc (UN op)) arg')
-  desugarTree (Leaf t) = desugar t
+  desugarTree ps (Leaf t) = desugar ps t
 
   desugarType : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
-                PTypeDecl -> Core FC (ImpTy FC)
-  desugarType (MkPTy fc n ty) 
-      = pure $ MkImpTy fc n (bindTypeNames fc [] !(desugar ty))
+                List Name -> PTypeDecl -> Core FC (ImpTy FC)
+  desugarType ps (MkPTy fc n ty) 
+      = pure $ MkImpTy fc n (bindTypeNames fc ps !(desugar ps ty))
 
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
                   {auto c : Ref Ctxt Defs} ->
                   {auto u : Ref UST (UState FC)} ->
                   {auto i : Ref ImpST (ImpState FC)} ->
-                  Bool -> PClause -> Core FC (ImpClause FC)
-  desugarClause arg (MkPatClause fc lhs rhs wheres)
-      = do ws <- traverse desugarDecl wheres
-           rhs' <- desugar rhs
-           pure $ PatClause fc (bindPatNames arg [] !(desugar lhs)) 
+                  List Name -> Bool -> PClause -> Core FC (ImpClause FC)
+  desugarClause ps arg (MkPatClause fc lhs rhs wheres)
+      = do ws <- traverse (desugarDecl ps) wheres
+           let (bound, blhs) = bindPatNames arg !(desugar ps lhs)
+           rhs' <- desugar (bound ++ ps) rhs
+           pure $ PatClause fc blhs 
                      (case ws of
                            [] => rhs'
                            _ => ILocal fc (concat ws) rhs')
-  desugarClause arg (MkImpossible fc lhs) 
-      = pure $ ImpossibleClause fc (bindPatNames arg [] !(desugar lhs))
+  desugarClause ps arg (MkImpossible fc lhs) 
+      = pure $ ImpossibleClause fc (snd (bindPatNames arg !(desugar ps lhs)))
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
-                PDataDecl -> Core FC (ImpData FC)
-  desugarData (MkPData fc n tycon opts datacons) 
-      = pure $ MkImpData fc n (bindTypeNames fc [] !(desugar tycon))
+                List Name -> PDataDecl -> Core FC (ImpData FC)
+  desugarData ps (MkPData fc n tycon opts datacons) 
+      = pure $ MkImpData fc n (bindTypeNames fc ps !(desugar ps tycon))
                               opts
-                              !(traverse desugarType datacons)
-  desugarData (MkPLater fc n tycon) 
-      = pure $ MkImpLater fc n (bindTypeNames fc [] !(desugar tycon))
+                              !(traverse (desugarType ps) datacons)
+  desugarData ps (MkPLater fc n tycon) 
+      = pure $ MkImpLater fc n (bindTypeNames fc ps !(desugar ps tycon))
 
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
@@ -278,38 +287,45 @@ mutual
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
-                PDecl -> Core FC (List (ImpDecl FC))
-  desugarDecl (PClaim fc vis opts ty) 
-      = pure [IClaim fc vis opts !(desugarType ty)]
-  desugarDecl (PDef fc n clauses) 
-      = pure [IDef fc n !(traverse (desugarClause False) clauses)]
-  desugarDecl (PData fc vis ddecl) 
-      = pure [IData fc vis !(desugarData ddecl)]
-  desugarDecl (PReflect fc tm)
-      = pure [IReflect fc !(desugar tm)]
-  desugarDecl (PInterface fc vis cons tn params det conname body)
-      = do cons' <- traverse (\ (n, tm) => do tm' <- desugar tm
+                List Name -> PDecl -> Core FC (List (ImpDecl FC))
+  desugarDecl ps (PClaim fc vis opts ty) 
+      = pure [IClaim fc vis opts !(desugarType ps ty)]
+  desugarDecl ps (PDef fc n clauses) 
+      = pure [IDef fc n !(traverse (desugarClause ps False) clauses)]
+  desugarDecl ps (PData fc vis ddecl) 
+      = pure [IData fc vis !(desugarData ps ddecl)]
+  desugarDecl ps (PReflect fc tm)
+      = pure [IReflect fc !(desugar ps tm)]
+  desugarDecl ps (PInterface fc vis cons tn params det conname body)
+      = do cons' <- traverse (\ (n, tm) => do tm' <- desugar ps tm
                                               pure (n, tm')) cons
-           params' <- traverse (\ (n, tm) => do tm' <- desugar tm
+           params' <- traverse (\ (n, tm) => do tm' <- desugar ps tm
                                                 pure (n, tm')) params
-           body' <- traverse desugarDecl body
+           body' <- traverse (desugarDecl (ps ++ map fst params)) body
            pure [IPragma (\env, nest => 
                              elabInterface fc vis env nest cons' 
                                            tn params' det conname 
                                            (concat body'))]
-  desugarDecl (PImplementation fc vis cons tn params impname body)
-      = throw (InternalError "Implementations not done yet")
-  desugarDecl (PFixity fc Prefix prec n) 
+  desugarDecl ps (PImplementation fc vis cons tn params impname body)
+      = do cons' <- traverse (\ (n, tm) => do tm' <- desugar ps tm
+                                              pure (n, tm')) cons
+           params' <- traverse (desugar ps) params
+           body' <- traverse (desugarDecl ps) body
+           pure [IPragma (\env, nest =>
+                             elabImplementation fc vis env nest cons'
+                                                tn params' impname 
+                                                (concat body'))]
+  desugarDecl ps (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)
            pure []
-  desugarDecl (PFixity fc fix prec n) 
+  desugarDecl ps (PFixity fc fix prec n) 
       = do syn <- get Syn
            put Syn (record { infixes $= insert n (fix, prec) } syn)
            pure []
-  desugarDecl (PNamespace fc ns decls)
-      = pure [INamespace fc ns (concat !(traverse desugarDecl decls))]
-  desugarDecl (PDirective fc d) 
+  desugarDecl ps (PNamespace fc ns decls)
+      = pure [INamespace fc ns (concat !(traverse (desugarDecl ps) decls))]
+  desugarDecl ps (PDirective fc d) 
       = case d of
              Logging i => pure [ILog i]
              LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]

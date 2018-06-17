@@ -106,7 +106,7 @@ process : {auto c : Ref Ctxt Defs} ->
           REPLCmd -> Core FC Bool
 process (Eval itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar itm
+         ttimp <- desugar [] itm
          (tm, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
@@ -124,7 +124,7 @@ process (Check (PRef fc fn))
                        pure True
 process (Check itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar itm
+         ttimp <- desugar [] itm
          (tm, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt

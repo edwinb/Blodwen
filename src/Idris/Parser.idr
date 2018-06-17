@@ -789,12 +789,12 @@ implDecl : FileName -> IndentInfo -> Rule PDecl
 implDecl fname indents
     = do start <- location
          vis <- visibility
-         cons <- constraints fname indents
          option () (keyword "implementation")
          iname <- option Nothing (do symbol "["
                                      iname <- name
                                      symbol "]"
                                      pure (Just iname))
+         cons <- constraints fname indents
          n <- name
          params <- many (simpleExpr fname indents)
          keyword "where"

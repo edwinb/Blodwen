@@ -76,7 +76,7 @@ AllState : List Name -> Type -> Type
 AllState vars annot = (Defs, UState annot, EState vars, ImpState annot)
 
 export
-getAllState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+getAllState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
               {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
               Core annot (AllState vars annot)
 getAllState
@@ -87,7 +87,7 @@ getAllState
          pure (ctxt, ust, est, ist)
 
 export
-putAllState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+putAllState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
            {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
            AllState vars annot -> Core annot ()
 putAllState (ctxt, ust, est, ist)
@@ -97,7 +97,7 @@ putAllState (ctxt, ust, est, ist)
          put ImpST ist
 
 export
-getState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+getState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
            Core annot (Defs, UState annot, ImpState annot)
 getState
@@ -107,13 +107,23 @@ getState
          pure (ctxt, ust, ist)
 
 export
-putState : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+putState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
            (Defs, UState annot, ImpState annot)-> Core annot ()
 putState (ctxt, ust, ist)
     = do put Ctxt ctxt
          put UST ust
          put ImpST ist
+
+export
+inTmpState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+             {auto i : Ref ImpST (ImpState annot)} ->
+             Core annot a -> Core annot a
+inTmpState p
+    = do st <- getState
+         p' <- p
+         putState st
+         pure p'
 
 export
 saveImps : {auto e : Ref EST (EState vars)} -> Core annot (List Name)

@@ -11,6 +11,7 @@ modules = Idris.BindImplicits,
           Idris.REPL,
           Idris.Resugar,
 
+          Idris.Elab.Implementation,
           Idris.Elab.Interface
 
 sourcedir = src

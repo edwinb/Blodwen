@@ -90,6 +90,7 @@ addCtxt n val (MkContext dict hier vis)
 
 -- Merge two contexts, with entries in the second overriding entries in
 -- the first
+export
 mergeContext : Context a -> Context a -> Context a
 mergeContext ctxt (MkContext exact hier vis)
     = record { visibleNS $= (vis ++) } (insertFrom (toList exact) ctxt)
@@ -99,6 +100,7 @@ mergeContext ctxt (MkContext exact hier vis)
     insertFrom ((n, val) :: cs) ctxt
         = insertFrom cs (addCtxt n val ctxt)
 
+export
 mergeContextAs : List String -> List String ->
                  Context a -> Context a -> Context a
 mergeContextAs oldns newns ctxt (MkContext exact hier vis)
@@ -661,6 +663,14 @@ genName root
     = do ust <- get Ctxt
          put Ctxt (record { nextVar $= (+1) } ust)
          inCurrentNS (MN root (nextVar ust))
+
+export
+genVarName : {auto x : Ref Ctxt Defs} ->
+					String -> Core annot Name
+genVarName root
+    = do ust <- get Ctxt
+         put Ctxt (record { nextVar $= (+1) } ust)
+         pure (MN root (nextVar ust))
 
 export
 genCaseName : {auto x : Ref Ctxt Defs} ->

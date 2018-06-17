@@ -88,7 +88,7 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, n, t
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
                        map (IBindVar fc) (map bindName allmeths))
-          fnclause = PatClause fc (IImplicitApp fc (IVar fc n) (UN "__con")
+          fnclause = PatClause fc (IImplicitApp fc (IVar fc n) (MN "__con" 0)
                                                    conapp)
                                   (IVar fc (methName n)) 
           fndef = IDef fc n [fnclause] in
@@ -101,7 +101,7 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, n, t
            = IPi fc rig Implicit n ty (bindIFace ity sc)
     bindIFace ity (IPi fc rig AutoImplicit n ty sc)
            = IPi fc rig AutoImplicit n ty (bindIFace ity sc)
-    bindIFace ity sc = IPi fc RigW AutoImplicit (Just (UN "__con")) ity sc
+    bindIFace ity sc = IPi fc RigW AutoImplicit (Just (MN "__con" 0)) ity sc
 
     bindName : Name -> String
     bindName (UN n) = "__bind_" ++ n
@@ -152,28 +152,14 @@ mkCon : Name -> Name
 mkCon (NS ns (UN n)) = NS ns (MN ("__mk" ++ n) 0)
 mkCon n = MN ("__mk" ++ show n) 0
 
--- Elaborate the data declaration part of the interface
-export
-elabAsData : {auto c : Ref Ctxt Defs} ->
-             {auto u : Ref UST (UState FC)} ->
-             {auto i : Ref ImpST (ImpState FC)} ->
-             {auto s : Ref Syn SyntaxInfo} ->
-             FC -> Visibility -> 
-             Env Term vars -> NestedNames vars ->
-             (constraints : List (Maybe Name, RawImp FC)) ->
-             Name ->
-             (params : List (Name, RawImp FC)) ->
-             (dets : List Name) ->
-             (conName : Name) ->
-             List (FC, Name, RawImp FC) ->
-             Core FC ()
-elabAsData fc vis env nest constraints iname params dets conName meth_sigs
-    = do let meths = map (getMethDecl env nest params) meth_sigs
-         let dt = mkIfaceData fc vis env constraints iname conName params 
-                              dets meths
-         log 10 $ "Methods: " ++ show meths
-         log 0 $ "Made interface data type " ++ show dt
-         processDecls env nest [dt]
+updateIfaceSyn : {auto s : Ref Syn SyntaxInfo} ->
+                 Name -> Name -> List Name -> 
+                 List (Name, RawImp FC) -> List (Name, ImpDecl FC) ->
+                 Core FC ()
+updateIfaceSyn iname cn ps ms ds
+    = do syn <- get Syn
+         let info = MkIFaceInfo cn ps ms ds
+         put Syn (record { ifaces $= addCtxt iname info } syn)
 
 export
 elabInterface : {auto c : Ref Ctxt Defs} ->
@@ -193,26 +179,56 @@ elabInterface fc vis env nest constraints iname params dets mcon body
     = do let conName_in = maybe (mkCon iname) id mcon
          -- Machine generated names need to be qualified when looking them up
          conName <- inCurrentNS conName_in
-         let meth_sigs = mapMaybe getSig body
-         elabAsData fc vis env nest constraints iname params dets conName meth_sigs
+         let meth_sigs = mapMaybe getSig body -- (FC, Name, RawImp FC)
+         let meth_decls = map snd meth_sigs -- (Name, RawIMp FC)
+         let meth_names = map fst meth_decls
 
-         -- Methods have same visibility as data declaration
-         let fns = concatMap (getMethToplevel env vis iname conName
-                                              (map fst constraints)
-                                              (map (Basics.fst . Basics.snd) meth_sigs)
-                                              (map fst params)) meth_sigs
-         log 0 $ "Top level methods: " ++ show fns
-         processDecls env nest fns
+         elabAsData conName meth_sigs
+         elabMethods conName meth_names meth_sigs
+         elabConstraintHints conName meth_names
 
-         let nconstraints = nameCons 0 constraints
-         let chints = concatMap (getConstraintHint fc env vis iname conName
-                                                   (map fst nconstraints)
-                                                   (map (Basics.fst . Basics.snd) meth_sigs)
-                                                   (map fst params)) nconstraints
-         log 0 $ "Constraint hints from " ++ show constraints ++ ": " ++ show chints
-         processDecls env nest chints
+         ns_meths <- traverse (\mt => do n <- inCurrentNS (fst mt)
+                                         pure (n, snd mt)) meth_decls
+         ns_iname <- inCurrentNS iname
+         updateIfaceSyn ns_iname conName (map fst params) ns_meths []
   where
     nameCons : Int -> List (Maybe Name, RawImp FC) -> List (Name, RawImp FC)
     nameCons i [] = []
     nameCons i ((_, ty) :: rest) 
         = (UN ("__con" ++ show i), ty) :: nameCons (i + 1) rest
+
+    -- Elaborate the data declaration part of the interface
+    elabAsData : (conName : Name) ->
+                 List (FC, Name, RawImp FC) ->
+                 Core FC ()
+    elabAsData conName meth_sigs
+        = do let meths = map (getMethDecl env nest params) meth_sigs
+             let dt = mkIfaceData fc vis env constraints iname conName params 
+                                  dets meths
+             log 10 $ "Methods: " ++ show meths
+             log 5 $ "Made interface data type " ++ show dt
+             processDecls env nest [dt]
+
+    elabMethods : (conName : Name) -> List Name -> 
+                  List (FC, Name, RawImp FC) ->
+                  Core FC ()
+    elabMethods conName meth_names meth_sigs
+        = do -- Methods have same visibility as data declaration
+             let fns = concatMap (getMethToplevel env vis iname conName
+                                                  (map fst constraints)
+                                                  meth_names
+                                                  (map fst params)) meth_sigs
+             log 5 $ "Top level methods: " ++ show fns
+             processDecls env nest fns
+
+    elabConstraintHints : (conName : Name) -> List Name ->
+                          Core FC()
+    elabConstraintHints conName meth_names
+        = do let nconstraints = nameCons 0 constraints
+             let chints = concatMap (getConstraintHint fc env vis iname conName
+                                                       (map fst nconstraints)
+                                                       meth_names
+                                                       (map fst params)) nconstraints
+             log 5 $ "Constraint hints from " ++ show constraints ++ ": " ++ show chints
+             processDecls env nest chints
+

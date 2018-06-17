@@ -22,7 +22,7 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->
               PDecl -> Core FC ()
 processDecl decl
-    = do impdecls <- desugarDecl decl 
+    = do impdecls <- desugarDecl [] decl 
          traverse (ProcessTTImp.processDecl [] (MkNested [])) impdecls
          pure ()
 
@@ -54,7 +54,7 @@ readModule loc vis reexp imp as
          Just (syn, more) <- readFromTTC {extra = SyntaxInfo} loc fname imp as
               | Nothing => pure () -- already loaded
          addImported (imp, reexp, as)
-         Desugar.extend syn
+         extendAs imp as syn
          modNS <- getNS
          when vis $ setVisible imp
          traverse (\ mimp => 
@@ -75,15 +75,15 @@ readImport imp
 -- Import a TTC for use as the main file (e.g. at the REPL)
 export
 readAsMain : {auto c : Ref Ctxt Defs} ->
-              {auto u : Ref UST (UState FC)} ->
-              {auto s : Ref Syn SyntaxInfo} ->
-              (fname : String) -> Core FC ()
+             {auto u : Ref UST (UState FC)} ->
+             {auto s : Ref Syn SyntaxInfo} ->
+             (fname : String) -> Core FC ()
 readAsMain fname
     = do Just (syn, more) <- readFromTTC {extra = SyntaxInfo} 
                                          toplevelFC fname [] []
               | Nothing => pure ()
-         Desugar.extend syn
          replNS <- getNS
+         extendAs replNS replNS syn
          traverse (\ mimp => 
                        do let m = fst mimp
                           let as = snd (snd mimp)
