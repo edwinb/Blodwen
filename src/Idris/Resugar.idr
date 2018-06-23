@@ -137,6 +137,7 @@ mutual
   toPTerm p (IHole _ str) = pure (PHole emptyFC str)
   toPTerm p (IType _) = pure (PType emptyFC)
   toPTerm p (IBindVar _ v) = pure (PRef emptyFC (UN v))
+  toPTerm p (IBindHere _ tm) = toPTerm p tm
   toPTerm p (IAs _ n pat) = pure (PAs emptyFC n !(toPTerm argPrec pat))
   toPTerm p (IMustUnify _ pat) = pure (PDotted emptyFC !(toPTerm argPrec pat))
   toPTerm p (Implicit _) = pure (PImplicit emptyFC)

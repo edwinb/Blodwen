@@ -11,6 +11,8 @@ import public Core.TT
 import TTImp.Reflect
 import TTImp.TTImp
 
+%default covering
+
 %hide Elab.Fixity
 
 public export
@@ -150,6 +152,7 @@ mutual
   getLoc (DoBindPat fc _ _ _) = fc
   getLoc (DoLet fc _ _ _) = fc
   getLoc (DoLetPat fc _ _ _) = fc
+  getLoc (DoLetLocal fc _) = fc
 
   export
   papply : FC -> PTerm -> List PTerm -> PTerm
@@ -327,6 +330,9 @@ Show PTerm where
       showDo (DoLet _ l rig tm) = "let " ++ show l ++ " = " ++ show tm
       showDo (DoLetPat _ l tm alts) 
           = "let " ++ show l ++ " = " ++ show tm ++ concatMap showAlt alts
+      showDo (DoLetLocal _ ds)
+          -- We'll never see this when displaying a normal form...
+          = "let { << definitions >>  }"
   show (PList _ xs)
       = "[" ++ showSep ", " (map show xs) ++ "]"
   show (PPair _ l r) = "(" ++ show l ++ ", " ++ show r ++ ")"

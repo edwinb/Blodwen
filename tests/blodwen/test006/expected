@@ -1,6 +1,6 @@
 Processing as Idris
 1/1: Building vect (vect.blod)
 vect.blod:12:1--13:1:When elaborating right hand side of Main.append:
-vect.blod:12:25--13:1:(Main.plus !{m:17} (Main.S !{k:19})) and (Main.S (Main.plus !{m:17} !{k:19})) are not equal
+vect.blod:12:25--13:1:(Main.plus !{m:13} (Main.S !{k:12})) and (Main.S (Main.plus !{m:13} !{k:12})) are not equal
 Welcome to Blodwen. Good luck.
 Main> Bye for now!

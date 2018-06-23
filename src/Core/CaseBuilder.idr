@@ -563,11 +563,6 @@ mutual
      level will be an error). -}
   match : Defs -> List (PatClause vars todo) -> (err : Maybe (CaseTree vars)) -> 
                StateT Int (Either CaseError) (CaseTree vars)
-  match {todo = []} defs [] err 
-       = maybe (pure (Unmatched "No patterns"))
-               pure err
-  match {todo = []} defs ((MkPatClause [] rhs) :: _) err 
-       = pure $ STerm rhs
   -- Before 'partition', reorder the arguments so that the one we
   -- inspect next has a concrete type that is the same in all cases, and
   -- has the most distinct constructors (via pickNext)
@@ -580,6 +575,11 @@ mutual
                     maybe (pure (Unmatched "No clauses"))
                           pure
                           !(mixture defs ps err)
+  match {todo = []} defs [] err 
+       = maybe (pure (Unmatched "No patterns"))
+               pure err
+  match {todo = []} defs ((MkPatClause [] rhs) :: _) err 
+       = pure $ STerm rhs
 
   caseGroups : Defs ->
                Elem pvar vars -> Term vars ->

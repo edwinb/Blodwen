@@ -240,7 +240,7 @@ Catchable (Core annot) (Error annot) where
 
 -- Traversable (specialised)
 export
-traverse : (a -> Core annot b) -> List a -> Core annot (List b)
+traverse : %static (a -> Core annot b) -> List a -> Core annot (List b)
 traverse f [] = pure []
 traverse f (x :: xs) = pure $ !(f x) :: !(traverse f xs)
 

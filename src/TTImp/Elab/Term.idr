@@ -344,6 +344,16 @@ mutual
         repeatBindOK : Bool -> ElabMode -> Bool
         repeatBindOK False InLHS = False
         repeatBindOK _ _ = True
+  checkImp rigc process elabinfo env nest (IBindHere loc tm) expected
+      = do (tmv, tmt) <- check rigc process elabinfo env nest tm expected
+           argImps <- getToBind env
+           setBound (map fst argImps)
+           clearToBind
+           gam <- get Ctxt
+           let (bv, bt) = bindImplicits (implicitMode elabinfo)
+                                        gam env argImps tmv TType
+           traverse implicitBind (map fst argImps)
+           checkExp rigc process loc elabinfo env nest bv bt expected
   checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) with (elabMode elabinfo)
     checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) | InLHS
       = do (wantedTm, wantedTy) <- checkImp rigc process 

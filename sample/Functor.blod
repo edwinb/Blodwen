@@ -4,9 +4,20 @@ import Stuff
 --      [noHints, search f]
 --      MkFunctor : (map : forall a,b . (a -> b) -> f a -> f b) -> Functor f 
 
-interface Functor f where
+data MFunctor : (f : Type -> Type) -> Type where
+     [noHints, search f]
+     MMkFunctor : (map : (a -> b) -> f a -> f b) -> MFunctor f 
+
+-- %logging 5
+interface Functor (f : Type -> Type) where
     constructor MkFunctor
     map : (a -> b) -> f a -> f b
+%logging 0
+
+{-
+Functor List where
+  map f [] = []
+  map f (x :: xs) = f x :: map f xs
 
 %hint
 ListFunctor : Functor List
@@ -35,3 +46,4 @@ VectFunctor = MkFunctor mapVect
 
 tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
 tryVMap x y = map (plus x) [y, S y]
+-}

@@ -84,18 +84,17 @@ gets turned into a local binding (either Pi or Pat as appropriate, or PLet for
 
 Unbound Implicits
 -----------------
-In the Idris front end, we only use IBindVar in patterns, not in types. In
-types, we take a simpler approach (because it's easier to explain...). Any
-name beginning with a lower case letter is considered an unbound implicit,
-and before elaboration they are given an implicit pi binding, with multiplicity
-0. So, for example:
+Any name beginning with a lower case letter is considered an unbound implicit.
+They are elaborated as holes, which may depend on whatever is in the
+environment when they first appear, and after elaboration they are converted to
+an implicit pi binding, with multiplicity 0. So, for example:
 
 map : {f : _} -> (a -> b) -> f a -> f b
 becomes
-map : {0 a : _} -> {0 b : _} -> {f : _} -> (a -> b) -> f a -> f b
+map : {f : _} -> {0 a : _} -> {0 b : _} -> (a -> b) -> f a -> f b
 
-Bindings appear in the order they appeared in the explicitly given type.
-It'll still infer any additional names, e.g. in
+Bindings are ordered according to dependency.  It'll infer any additional
+names, e.g. in
 
 lookup : HasType i xs t -> Env xs -> t
 ...where 'xs' is a Vect n a, it infers bindings for n and a.

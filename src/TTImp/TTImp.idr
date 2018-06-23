@@ -65,6 +65,7 @@ mutual
        IHole : annot -> String -> RawImp annot
        IType : annot -> RawImp annot
        IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
+       IBindHere : annot -> RawImp annot -> RawImp annot -- point where IBindVars get bound
        IAs : annot -> String -> (pattern : RawImp annot) -> RawImp annot
        IMustUnify : annot -> (pattern : RawImp annot) -> RawImp annot
        Implicit : annot -> RawImp annot
@@ -236,6 +237,7 @@ getAnnot (IUnquote x _) = x
 getAnnot (IHole x _) = x
 getAnnot (IType x) = x
 getAnnot (IBindVar x _) = x
+getAnnot (IBindHere x _) = x
 getAnnot (IMustUnify x _) = x
 getAnnot (IAs x _ _) = x
 getAnnot (Implicit x) = x
@@ -292,6 +294,7 @@ mutual
     show (IHole _ x) = "?" ++ x
     show (IType _) = "Type"
     show (IBindVar _ n) = "$" ++ show n
+    show (IBindHere _ t) = "{bindhere} . " ++ show t
     show (IMustUnify _ tm) = "(." ++ show tm ++ ")"
     show (IAs _ n tm) = n ++ "@(" ++ show tm ++ ")"
     show (Implicit _) = "_"
@@ -417,6 +420,9 @@ addBindImps is used (IImplicitApp x fn n arg)
     = let (fn', used1) = addBindImps is used fn
           (arg', used2) = addBindImps is used1 arg in
           (IImplicitApp x fn' n arg', used2)
+addBindImps is used (IBindHere x tm)
+    = let (tm', used) = addBindImps is used tm in
+          (IBindHere x tm', used)
 addBindImps is used tm = (tm, used)
 
 bindWith : annot ->
@@ -480,7 +486,7 @@ mkLCPatVars tm = mkPatVars True tm
 mutual
   export
   TTC annot annot => TTC annot (RawImp annot) where
-    toBuf b (IVar fc n) = do tag 0; toBuf b n
+    toBuf b (IVar fc n) = do tag 0; toBuf b fc; toBuf b n
     toBuf b (IPi fc r p n argTy retTy) 
         = do tag 1; toBuf b fc; toBuf b r; toBuf b p; toBuf b n
              toBuf b argTy; toBuf b retTy
@@ -516,19 +522,22 @@ mutual
         = do tag 15; toBuf b fc
     toBuf b (IBindVar fc y)
         = do tag 16; toBuf b fc; toBuf b y
+    toBuf b (IBindHere fc y)
+        = do tag 17; toBuf b fc; toBuf b y
     toBuf b (IAs fc y pattern)
-        = do tag 17; toBuf b fc; toBuf b y; toBuf b pattern
+        = do tag 18; toBuf b fc; toBuf b y; toBuf b pattern
     toBuf b (IMustUnify fc pattern)
-        = do tag 18; toBuf b fc; toBuf b pattern
+        = do tag 19; toBuf b fc; toBuf b pattern
     toBuf b (Implicit fc)
-        = do tag 19; toBuf b fc
+        = do tag 20; toBuf b fc
 
     fromBuf s b
         = case !getTag of
                0 => do fc <- fromBuf s b; n <- fromBuf s b;
                        pure (IVar fc n)
                1 => do fc <- fromBuf s b;
-                       r <- fromBuf s b; p <- fromBuf s b; n <- fromBuf s b
+                       r <- fromBuf s b; p <- fromBuf s b; 
+                       n <- fromBuf s b
                        argTy <- fromBuf s b; retTy <- fromBuf s b
                        pure (IPi fc r p n argTy retTy)
                2 => do fc <- fromBuf s b;
@@ -572,12 +581,14 @@ mutual
                16 => do fc <- fromBuf s b; y <- fromBuf s b
                         pure (IBindVar fc y)
                17 => do fc <- fromBuf s b; y <- fromBuf s b
+                        pure (IBindHere fc y)
+               18 => do fc <- fromBuf s b; y <- fromBuf s b
                         pattern <- fromBuf s b
                         pure (IAs fc y pattern)
-               18 => do fc <- fromBuf s b
+               19 => do fc <- fromBuf s b
                         pattern <- fromBuf s b
                         pure (IMustUnify fc pattern)
-               19 => do fc <- fromBuf s b
+               20 => do fc <- fromBuf s b
                         pure (Implicit fc)
                _ => corrupt "RawImp"
   

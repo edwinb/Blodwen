@@ -3,7 +3,7 @@ Processing as Idris
 2/2: Building Reflect (Reflect.blod)
 LOG 0: Doing things
 LOG 0: Elab script ended with (Stuff.S (Stuff.S (Stuff.S Stuff.Z)))
-LOG 0: Elab script ended with (Reflect.NS (Stuff.:: "Reflect" Stuff.Nil) (Reflect.MN "whatever" 67))
+LOG 0: Elab script ended with (Reflect.NS (Stuff.:: "Reflect" Stuff.Nil) (Reflect.MN "whatever" 66))
 LOG 0: Elab script ended with Stuff.MkUnit
 Welcome to Blodwen. Good luck.
 Reflect> Bye for now!

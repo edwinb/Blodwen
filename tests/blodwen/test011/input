@@ -1,0 +1,5 @@
+interp ENil testId
+interp ENil testAdd
+interp ENil (App (App testAdd (Val (S (S Z)))) (Val (S Z)))
+interp ENil testAdd (S (S Z)) (S Z)
+:q

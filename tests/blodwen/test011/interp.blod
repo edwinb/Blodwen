@@ -1,0 +1,62 @@
+module interp
+
+data Nat : Type where
+     Z : Nat
+     S : Nat -> Nat
+
+plus : Nat -> Nat -> Nat
+plus Z     y = y
+plus (S k) y = S (plus k y)
+
+data Vect : Nat -> Type -> Type where
+     Nil  : Vect Z a
+     Cons : a -> Vect k a -> Vect (S k) a
+
+data Fin : Nat -> Type where
+     FZ : Fin (S k)
+     FS : Fin k -> Fin (S k)
+
+lookup : Fin k -> Vect k ty -> ty
+lookup FZ (Cons t ts) = t
+lookup (FS i) (Cons t ts) = lookup i ts
+
+data Ty : Type where
+     Base : Type -> Ty
+     Arrow : Ty -> Ty -> Ty
+
+interpTy : Ty -> Type
+interpTy (Base t) = t
+interpTy (Arrow s t) = interpTy s -> interpTy t
+
+data HasType : Fin k -> Ty -> Vect k Ty -> Type where
+     Stop : HasType FZ t (Cons t gam)
+     Pop  : HasType i t gam -> HasType (FS i) t (Cons u gam)
+
+data Lang : Vect k Ty -> Ty -> Type where
+     Var : HasType i t gam -> Lang gam t
+     Val : (x : interpTy a) -> Lang gam a
+     Lam : (scope : Lang (Cons s gam) t) -> Lang gam (Arrow s t)
+     App : Lang gam (Arrow s t) -> Lang gam s -> Lang gam t
+     Op : (interpTy a -> interpTy b -> interpTy c) ->
+          Lang gam a -> Lang gam b -> Lang gam c
+
+data Env : Vect n Ty -> Type where
+     ENil : Env Nil
+     ECons : (x : interpTy a) -> Env gam -> Env (Cons a gam)
+
+lookupEnv : HasType i t gam -> Env gam -> interpTy t
+lookupEnv Stop (ECons x xs) = x
+lookupEnv (Pop var) (ECons x xs) = lookupEnv var xs
+
+interp : Env gam -> Lang gam t -> interpTy t
+interp env (Var i) = lookupEnv i env
+interp env (Val x) = x
+interp env (App f a) = interp env f (interp env a)
+interp env (Lam scope) = \var => interp (ECons var env) scope
+interp env (Op fn x y) = fn (interp env x) (interp env y)
+
+testId : Lang Nil (Arrow (Base Nat) (Base Nat))
+testId = Lam (Var Stop)
+
+testAdd : Lang gam (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)))
+testAdd = Lam (Lam (Op plus (Var Stop) (Var (Pop Stop))))

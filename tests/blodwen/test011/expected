@@ -1,0 +1,8 @@
+Processing as Idris
+1/1: Building interp (interp.blod)
+Welcome to Blodwen. Good luck.
+interp> \var => var
+interp> \var => \var => plus var var
+interp> S (S (S Z))
+interp> S (S (S Z))
+interp> Bye for now!

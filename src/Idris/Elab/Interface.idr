@@ -34,14 +34,18 @@ mkIfaceData {vars} fc vis env constraints n conName ps dets meths
                     else [NoHints, SearchBy dets] 
           retty = apply (IVar fc n) (map (IVar fc) (map fst ps))
           conty = mkTy Implicit Rig0 (map jname ps) $
-                  mkTy Explicit RigW (constraints ++ map jname meths) retty
-          con = MkImpTy fc conName (bindTypeNames fc vars conty) in
+                  mkTy Explicit RigW (constraints ++ map bname meths) retty
+          con = MkImpTy fc conName (bindTypeNames (map fst ps ++ vars) conty) in
           IData fc vis (MkImpData fc n 
-                                  (bindTypeNames fc vars (mkDataTy fc ps)) 
+                                  (bindTypeNames (map fst ps ++ vars)
+                                                 (mkDataTy fc ps)) 
                                   opts [con])
   where
-    jname : (Name, a) -> (Maybe Name, a)
+    jname : (Name, RawImp FC) -> (Maybe Name, RawImp FC)
     jname (n, t) = (Just n, t)
+
+    bname : (Name, RawImp FC) -> (Maybe Name, RawImp FC)
+    bname (n, t) = (Just n, IBindHere (getAnnot t) t)
 
     mkTy : PiInfo -> RigCount ->
            List (Maybe Name, RawImp FC) -> RawImp FC -> RawImp FC
@@ -58,7 +62,7 @@ getMethDecl : {auto c : Ref Ctxt Defs} ->
               (params : List (Name, RawImp FC)) ->
               (FC, Name, RawImp FC) -> (Name, RawImp FC)
 getMethDecl {vars} env nest params (fc, n, ty)
-    = let ty_imp = bindTypeNames fc vars ty in
+    = let ty_imp = bindTypeNames (map fst params ++ vars) ty in
           (n, stripParams (map fst params) ty_imp)
   where
     -- We don't want the parameters to explicitly appear in the method
@@ -83,7 +87,7 @@ getMethToplevel : {auto c : Ref Ctxt Defs} ->
                   (FC, Name, RawImp FC) -> List (ImpDecl FC)
 getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, n, ty)
     = let ity = apply (IVar fc iname) (map (IVar fc) params) 
-          ty_imp = bindTypeNames fc vars (bindIFace ity ty) 
+          ty_imp = bindTypeNames vars (bindIFace ity ty) 
           tydecl = IClaim fc vis [Inline] (MkImpTy fc n ty_imp) 
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
@@ -125,7 +129,7 @@ getConstraintHint : {auto c : Ref Ctxt Defs} ->
 getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, con)
     = let ity = apply (IVar fc iname) (map (IVar fc) params)
           fty = IPi fc RigW Explicit Nothing ity con
-          ty_imp = bindTypeNames fc vars fty 
+          ty_imp = bindTypeNames vars fty 
           hintname = MN ("__" ++ show iname ++ "_" ++ show con) 0
           tydecl = IClaim fc vis [Inline, Hint] (MkImpTy fc hintname ty_imp)
           conapp = apply (IVar fc cname)
@@ -206,8 +210,8 @@ elabInterface fc vis env nest constraints iname params dets mcon body
              let dt = mkIfaceData fc vis env constraints iname conName params 
                                   dets meths
              log 10 $ "Methods: " ++ show meths
-             log 5 $ "Made interface data type " ++ show dt
              processDecls env nest [dt]
+             log 5 $ "Made interface data type " ++ show dt
 
     elabMethods : (conName : Name) -> List Name -> 
                   List (FC, Name, RawImp FC) ->

@@ -200,7 +200,7 @@ mutual
                      (ILam fc RigW Explicit n (Implicit fc) rest')
   expandDo ps topfc (DoBindPat fc pat exp alts :: rest)
       = do pat' <- desugar ps pat
-           let (newps, bpat) = bindPatNames False pat'
+           let (newps, bpat) = bindNames False pat'
            exp' <- desugar ps exp
            alts' <- traverse (desugarClause ps True) alts
            let ps' = newps ++ ps
@@ -217,7 +217,7 @@ mutual
            pure $ ILet fc rig n (Implicit fc) tm' rest'
   expandDo ps topfc (DoLetPat fc pat tm alts :: rest) 
       = do pat' <- desugar ps pat
-           let (newps, bpat) = bindPatNames False pat'
+           let (newps, bpat) = bindNames False pat'
            tm' <- desugar ps tm
            alts' <- traverse (desugarClause ps True) alts
            let ps' = newps ++ ps
@@ -250,7 +250,7 @@ mutual
                 {auto i : Ref ImpST (ImpState FC)} ->
                 List Name -> PTypeDecl -> Core FC (ImpTy FC)
   desugarType ps (MkPTy fc n ty) 
-      = pure $ MkImpTy fc n (bindTypeNames fc ps !(desugar ps ty))
+      = pure $ MkImpTy fc n (bindTypeNames ps !(desugar ps ty))
 
   desugarClause : {auto s : Ref Syn SyntaxInfo} ->
                   {auto c : Ref Ctxt Defs} ->
@@ -259,14 +259,14 @@ mutual
                   List Name -> Bool -> PClause -> Core FC (ImpClause FC)
   desugarClause ps arg (MkPatClause fc lhs rhs wheres)
       = do ws <- traverse (desugarDecl ps) wheres
-           let (bound, blhs) = bindPatNames arg !(desugar ps lhs)
+           let (bound, blhs) = bindNames arg !(desugar ps lhs)
            rhs' <- desugar (bound ++ ps) rhs
            pure $ PatClause fc blhs 
                      (case ws of
                            [] => rhs'
                            _ => ILocal fc (concat ws) rhs')
   desugarClause ps arg (MkImpossible fc lhs) 
-      = pure $ ImpossibleClause fc (snd (bindPatNames arg !(desugar ps lhs)))
+      = pure $ ImpossibleClause fc (snd (bindNames arg !(desugar ps lhs)))
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
@@ -274,11 +274,11 @@ mutual
                 {auto i : Ref ImpST (ImpState FC)} ->
                 List Name -> PDataDecl -> Core FC (ImpData FC)
   desugarData ps (MkPData fc n tycon opts datacons) 
-      = pure $ MkImpData fc n (bindTypeNames fc ps !(desugar ps tycon))
+      = pure $ MkImpData fc n (bindTypeNames ps !(desugar ps tycon))
                               opts
                               !(traverse (desugarType ps) datacons)
   desugarData ps (MkPLater fc n tycon) 
-      = pure $ MkImpLater fc n (bindTypeNames fc ps !(desugar ps tycon))
+      = pure $ MkImpLater fc n (bindTypeNames ps !(desugar ps tycon))
 
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
@@ -297,18 +297,18 @@ mutual
   desugarDecl ps (PReflect fc tm)
       = pure [IReflect fc !(desugar ps tm)]
   desugarDecl ps (PInterface fc vis cons tn params det conname body)
-      = do cons' <- traverse (\ (n, tm) => do tm' <- desugar ps tm
-                                              pure (n, tm')) cons
-           params' <- traverse (\ (n, tm) => do tm' <- desugar ps tm
-                                                pure (n, tm')) params
+      = do cons' <- traverse (\ ntm => do tm' <- desugar ps (snd ntm)
+                                          pure (fst ntm, tm')) cons
+           params' <- traverse (\ ntm => do tm' <- desugar ps (snd ntm)
+                                            pure (fst ntm, tm')) params
            body' <- traverse (desugarDecl (ps ++ map fst params)) body
            pure [IPragma (\env, nest => 
                              elabInterface fc vis env nest cons' 
                                            tn params' det conname 
                                            (concat body'))]
   desugarDecl ps (PImplementation fc vis cons tn params impname body)
-      = do cons' <- traverse (\ (n, tm) => do tm' <- desugar ps tm
-                                              pure (n, tm')) cons
+      = do cons' <- traverse (\ ntm => do tm' <- desugar ps (snd ntm)
+                                          pure (fst ntm, tm')) cons
            params' <- traverse (desugar ps) params
            body' <- traverse (desugarDecl ps) body
            pure [IPragma (\env, nest =>

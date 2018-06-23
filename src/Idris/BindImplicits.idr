@@ -56,15 +56,20 @@ doBind ns (IAlternative fc u alts)
 doBind ns tm = tm
 
 export
-bindPatNames : (arg : Bool) -> RawImp annot -> 
-               (List Name, RawImp annot)
-bindPatNames arg tm
+bindNames : (arg : Bool) -> RawImp annot -> (List Name, RawImp annot)
+bindNames arg tm
     = let ns = nub (findBindableNames arg [] tm) in
           (map UN ns, doBind ns tm)
 
 export
-bindTypeNames : annot -> List Name -> RawImp annot -> RawImp annot
-bindTypeNames loc env tm
+bindTypeNames : List Name -> RawImp annot -> RawImp annot
+bindTypeNames env tm
+    = let ns = nub (findBindableNames True env tm) in
+          doBind ns tm
+
+export
+piBindNames : annot -> List Name -> RawImp annot -> RawImp annot
+piBindNames loc env tm
     = let ns = nub (findBindableNames True env tm) in
           piBind ns tm
   where

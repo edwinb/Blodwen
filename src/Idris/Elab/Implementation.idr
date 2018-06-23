@@ -146,7 +146,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
 
          -- 1. Build the type for the implementation
          --    {auto cs : Constraints} -> Impl params
-         let impTy = bindTypeNames fc vars $
+         let impTy = bindTypeNames vars $
                      bindConstraints fc Explicit cons 
                          (apply (IVar fc iname) ps)
          let impTyDecl = IClaim fc vis [Inline, Hint] (MkImpTy fc impName impTy)
