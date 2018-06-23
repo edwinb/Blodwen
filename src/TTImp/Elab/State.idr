@@ -471,8 +471,9 @@ inventFnType loc env bname
     = do an <- genName "arg_type"
          scn <- genName "res_type"
          argTy <- addBoundName loc an False env TType
-         scTy <- addBoundName loc scn False (Pi RigW Explicit argTy :: env) TType
-         pure (argTy, scTy)
+--          scTy <- addBoundName loc scn False (Pi RigW Explicit argTy :: env) TType
+         scTy <- addBoundName loc scn False env TType
+         pure (argTy, weaken scTy)
 
 -- Given a raw term, collect the explicitly given implicits {x = tm} in the
 -- top level application, and return an updated term without them

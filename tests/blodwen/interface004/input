@@ -1,0 +1,5 @@
+Just (S (S Z)) == Just (S Z)
+Just (S (S Z)) /= Just (S Z)
+[Z, Z] == [Z, S Z]
+[S Z, S Z] == [S Z, S Z]
+:q

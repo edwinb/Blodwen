@@ -22,18 +22,10 @@ Eq a => Eq (List a) where
    
    (/=) x y = not (x == y)
 
-data Compare = LT | EQ | GT
+Eq a => Eq (Maybe a) where
+   (==) Nothing Nothing = True
+   (==) (Just x) (Just y) = x == y
+   (==) _ _ = False
 
-interface Eq a => Ord a where
-  compare : a -> a -> Compare
+   (/=) x y = not (x == y)
 
-{-
-foo : Ord a => a -> a -> Bool
-foo x y = x == y
-
--- %hint
--- testEq : Eq Integer
--- 
--- %hint
--- testOrd : Ord Integer
--}

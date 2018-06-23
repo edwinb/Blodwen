@@ -138,14 +138,16 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
                      Nothing => throw (UndefinedName fc cn)
                      Just t => pure t
 
-         log 0 $ "Found interface " ++ show cn ++ " : "
+         log 5 $ "Found interface " ++ show cn ++ " : "
                  ++ show (normaliseHoles defs [] ity)
                  ++ " with params: " ++ show (params cdata)
                  ++ " and methods: " ++ show (methods cdata) ++ "\n"
                  ++ "Constructor: " ++ show (iconstructor cdata)
 
          -- 1. Build the type for the implementation
-         --    {auto cs : Constraints} -> Impl params
+         -- Make the constraints explicit arguments, so they can be explicitly
+         -- given when using named implementations
+         --    (cs : Constraints) -> Impl params
          let impTy = bindTypeNames vars $
                      bindConstraints fc Explicit cons 
                          (apply (IVar fc iname) ps)
@@ -154,90 +156,112 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
 
          -- 2. Elaborate top level function types for this interface
          defs <- get Ctxt
-         traverse (topMethType defs impName (params cdata) ity) 
-                  (methods cdata)
+         fns <- traverse (topMethType impName (params cdata)) 
+                         (methods cdata)
+         processDecls env nest (map mkTopMethDecl fns)
 
-         -- 3. (TODO: Generate default method bodies)
+         -- 3. Build the record for the implementation
+         let mtops = map (Basics.fst . snd) fns
+         let con = iconstructor cdata
+         let ilhs = apply (IVar fc impName) (map (const (Implicit fc)) cons)
+         let irhs = apply (IVar fc con) (map mkMethField (map Basics.snd fns))
+         let impFn = IDef fc impName [PatClause fc ilhs irhs]
+         log 5 $ "Implementation record: " ++ show impFn
+         processDecls env nest [impFn]
 
-         -- 4. Elaborate the method bodies
+         -- 4. (TODO: Generate default method bodies)
 
-         -- 5. Check that every top level function type has a definition now
+         -- 5. Elaborate the method bodies
+         body' <- traverse (updateBody (map methNameUpdate fns)) body
+         log 10 $ "Implementation body: " ++ show body'
+         processDecls env nest body'
 
-         -- 6. Build the record for the implementation
+         -- 6. Check that every top level function type has a definition now
 
-         throw (InternalError "Implementations not done yet")
+
+         pure () -- throw (InternalError "Implementations not done yet")
   where
+    getExplicitArgs : Int -> RawImp FC -> List Name
+    getExplicitArgs i (IPi _ _ Explicit n _ sc)
+        = MN "arg" i :: getExplicitArgs (i + 1) sc
+    getExplicitArgs i (IPi _ _ _ n _ sc) = getExplicitArgs i sc
+    getExplicitArgs i tm = []
+
+    mkLam : List Name -> RawImp FC -> RawImp FC
+    mkLam [] tm = tm
+    mkLam (x :: xs) tm = ILam fc RigW Explicit x (Implicit fc) (mkLam xs tm)
+
+    -- When applying the method in the field for the record, eta expand
+    -- the explicit arguments so that implicits get inserted in the right 
+    -- place
+    mkMethField : (Name, RawImp FC) -> RawImp FC
+    mkMethField (n, ty) 
+        = let argns = getExplicitArgs 0 ty in
+              mkLam argns (apply (IVar fc n) (map (IVar fc) argns))
+
     methName : Name -> Name
     methName (NS _ n) = methName n
     methName n = MN (show n ++ "_" ++ show iname ++ "_" ++
                      showSep "_" (map show ps)) 0
     
-    topMethType : Defs -> Name -> List Name -> ClosedTerm -> 
-                  (Name, RawImp FC) -> 
-                  Core FC ()
-    topMethType defs impName pnames ity (mn, mty_in)
+    topMethType : Name -> List Name -> (Name, RawImp FC) -> 
+                  Core FC (Name, Name, RawImp FC)
+    topMethType impName pnames (mn, mty_in)
         = do -- Get the specialised type by applying the method to the
              -- parameters
              n <- inCurrentNS (methName mn)
 
-             let mty = bindConstraints fc AutoImplicit cons $
+             let mty = bindTypeNames vars $
+                       bindConstraints fc AutoImplicit cons $
                        substParams vars (zip pnames ps) mty_in
 
-             log 0 $ "Method " ++ show n ++ " : " ++ show mty
-             log 0 $ "Parameters: " ++ show (zip pnames ps)
-             log 0 $ "Constraints: " ++ show cons
+             log 3 $ "Method " ++ show mn ++ " ==> " ++
+                     show n ++ " : " ++ show mty
+             pure (mn, n, mty)
              
+    mkTopMethDecl : (Name, Name, RawImp FC) -> ImpDecl FC
+    mkTopMethDecl (mn, n, mty) = IClaim fc vis [Inline] (MkImpTy fc n mty)
 
---              let specMeth = applyParams (zip pnames ps) 
---                               (IImplicitApp fc (IVar fc mn)
---                                                (MN "__con" 0)
---                                                (IVar fc impName))
---              -- Use 'inTmpState' because we don't want to keep the holes
---              -- that might result
---              log 0 $ "Specialise as " ++ show specMeth
---              (tm, ty) <- inTmpState $
---                     inferTerm elabTop (UN "[method spec]") env nest
---                               NONE InExpr specMeth
---              n <- inCurrentNS (methName mn)
--- 
---              let mty = mkSpecTy (gamma defs) (snd (getFnArgs tm)) (embed fty)
--- 
---              log 0 $ "Method " ++ show mn ++ " specialised to " ++ show tm
---              log 0 $ "Method " ++ show n ++ " type " ++ 
---                                   show (normaliseHoles defs env mty)
+    -- Given the method type (result of topMethType) return the mapping from
+    -- top level method name to current implementation's method name
+    methNameUpdate : (Name, Name, t) -> (Name, Name)
+    methNameUpdate (mn, fn, _) = (UN (nameRoot mn), fn)
 
-{-
-    applyParams : List (Name, RawImp FC) -> RawImp FC -> RawImp FC
-    applyParams [] tm = tm
-    applyParams ((n, t) :: rest) tm
-        = IImplicitApp fc (applyParams rest tm) n t
+    findMethName : List (Name, Name) -> FC -> Name -> Core FC Name
+    findMethName ns fc n
+        = case lookup n ns of
+               Nothing => throw (GenericMsg fc 
+                                (show n ++ " is not a method of " ++ 
+                                 show iname))
+               Just n' => pure n'
 
-    isUndefined : Gamma -> Term vs -> Bool
-    isUndefined gam tm
-        = case getFn tm of
-               Ref _ n => case lookupTyExact n gam of
-                               Nothing => True
-                               _ => False
-               _ => False
+    updateApp : List (Name, Name) -> RawImp FC -> Core FC (RawImp FC)
+    updateApp ns (IVar fc n)
+        = do n' <- findMethName ns fc n
+             pure (IVar fc n')
+    updateApp ns (IApp fc f arg)
+        = do f' <- updateApp ns f
+             pure (IApp fc f' arg)
+    updateApp ns (IImplicitApp fc f x arg)
+        = do f' <- updateApp ns f
+             pure (IImplicitApp fc f' x arg)
+    updateApp ns tm
+        = throw (GenericMsg (getAnnot tm) "Invalid method definition")
 
-    mkSpecTy : Gamma -> List (Term vs) -> Term vs -> Term vs
-    mkSpecTy gam (a :: as) (Bind n (Pi c p ty) sc) 
-        = -- if 'a' is a reference to something that doesn't exist,
-          -- it was a hole after checking the specialised application,
-          -- so leave it alone here
-          if isUndefined gam a
-             then Bind n (Pi c p ty) (mkSpecTy gam (map weaken as) sc)
-             else mkSpecTy gam as (subst a sc)
-    mkSpecTy gam _ ty = ty
-    -}
+    updateClause : List (Name, Name) -> ImpClause FC -> 
+                   Core FC (ImpClause FC)
+    updateClause ns (PatClause fc lhs rhs) 
+        = do lhs' <- updateApp ns lhs
+             pure (PatClause fc lhs' rhs)
+    updateClause ns (ImpossibleClause fc lhs)
+        = do lhs' <- updateApp ns lhs
+             pure (ImpossibleClause fc lhs')
 
-          
---           case lookupTyExact mn gam of
---                Nothing => throw (UndefinedName fc mn)
---                Just ty =>
---                   do let mty = specMethType ty
---                      n <- inCurrentNS (methName mn)
---                      log 0 $ "Method " ++ show n ++ " type " ++
---                             show mty
---                      pure (n, mty)
-
+    updateBody : List (Name, Name) -> ImpDecl FC -> Core FC (ImpDecl FC)
+    updateBody ns (IDef fc n cs) 
+        = do cs' <- traverse (updateClause ns) cs
+             n' <- findMethName ns fc n
+             pure (IDef fc n' cs')
+    updateBody ns _ 
+        = throw (GenericMsg fc 
+                   "Implementation body can only contain definitions")
