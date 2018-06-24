@@ -138,20 +138,24 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
                      Nothing => throw (UndefinedName fc cn)
                      Just t => pure t
 
-         log 5 $ "Found interface " ++ show cn ++ " : "
+         log 3 $ "Found interface " ++ show cn ++ " : "
                  ++ show (normaliseHoles defs [] ity)
                  ++ " with params: " ++ show (params cdata)
                  ++ " and methods: " ++ show (methods cdata) ++ "\n"
                  ++ "Constructor: " ++ show (iconstructor cdata)
+         log 5 $ "Making implementation " ++ show impName
 
          -- 1. Build the type for the implementation
-         -- Make the constraints explicit arguments, so they can be explicitly
+         -- Make the constraints auto implicit arguments, which can be explicitly
          -- given when using named implementations
          --    (cs : Constraints) -> Impl params
+         -- Don't make it a hint if it's a named implementation
+         let opts = maybe [Inline, Hint] (const [Inline]) impln
+
          let impTy = bindTypeNames vars $
-                     bindConstraints fc Explicit cons 
+                     bindConstraints fc AutoImplicit cons 
                          (apply (IVar fc iname) ps)
-         let impTyDecl = IClaim fc vis [Inline, Hint] (MkImpTy fc impName impTy)
+         let impTyDecl = IClaim fc vis opts (MkImpTy fc impName impTy)
          processDecl env nest impTyDecl
 
          -- 2. Elaborate top level function types for this interface
@@ -163,7 +167,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
          -- 3. Build the record for the implementation
          let mtops = map (Basics.fst . snd) fns
          let con = iconstructor cdata
-         let ilhs = apply (IVar fc impName) (map (const (Implicit fc)) cons)
+         let ilhs = IVar fc impName
          let irhs = apply (IVar fc con) (map mkMethField (map Basics.snd fns))
          let impFn = IDef fc impName [PatClause fc ilhs irhs]
          log 5 $ "Implementation record: " ++ show impFn
@@ -172,9 +176,18 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
          -- 4. (TODO: Generate default method bodies)
 
          -- 5. Elaborate the method bodies
+
+         -- If it's a named implementation, add it as a global hint while
+         -- elaborating the bodies
+         defs <- get Ctxt
+         let hs = openHints defs
+         maybe (pure ()) (\x => addOpenHint impName) impln
+
          body' <- traverse (updateBody (map methNameUpdate fns)) body
          log 10 $ "Implementation body: " ++ show body'
          processDecls env nest body'
+         -- Reset the open hints (remove the named implementation)
+         setOpenHints hs
 
          -- 6. Check that every top level function type has a definition now
 
@@ -202,6 +215,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
     methName : Name -> Name
     methName (NS _ n) = methName n
     methName n = MN (show n ++ "_" ++ show iname ++ "_" ++
+                     maybe "" show impln ++ "_" ++
                      showSep "_" (map show ps)) 0
     
     topMethType : Name -> List Name -> (Name, RawImp FC) -> 

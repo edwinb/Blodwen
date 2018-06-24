@@ -33,7 +33,8 @@ record EState (vars : List Name) where
                   -- names we've already decided will be bound implicits, no
                   -- we don't need to bind again
   asVariables : List Name -- Names bound in @-patterns
-  implicitsUsed : List Name -- explicitly given implicits which have been used
+  implicitsUsed : List (Maybe Name)
+                            -- explicitly given implicits which have been used
                             -- in the current application (need to keep track, as
                             -- they may not be given in the same order as they are 
                             -- needed in the type)
@@ -54,7 +55,7 @@ record ElabInfo annot where
   topLevel : Bool -- at the top level of a type sig (i.e not in a higher order type)
   implicitMode : ImplicitMode
   elabMode : ElabMode
-  implicitsGiven : List (Name, RawImp annot)
+  implicitsGiven : List (Maybe Name, RawImp annot)
   dotted : Bool -- are we under a dot pattern? (IMustUnify)
 
 export
@@ -126,19 +127,20 @@ inTmpState p
          pure p'
 
 export
-saveImps : {auto e : Ref EST (EState vars)} -> Core annot (List Name)
+saveImps : {auto e : Ref EST (EState vars)} -> Core annot (List (Maybe Name))
 saveImps
     = do est <- get EST
+         put EST (record { implicitsUsed = [] } est)
          pure (implicitsUsed est)
 
 export
-restoreImps : {auto e : Ref EST (EState vars)} -> List Name -> Core annot ()
+restoreImps : {auto e : Ref EST (EState vars)} -> List (Maybe Name) -> Core annot ()
 restoreImps imps
     = do est <- get EST
          put EST (record { implicitsUsed = imps } est)
 
 export
-usedImp : {auto e : Ref EST (EState vars)} -> Name -> Core annot ()
+usedImp : {auto e : Ref EST (EState vars)} -> Maybe Name -> Core annot ()
 usedImp imp
     = do est <- get EST
          put EST (record { implicitsUsed $= (imp :: ) } est)
@@ -147,7 +149,9 @@ usedImp imp
 -- the current application
 export
 checkUsedImplicits : {auto e : Ref EST (EState vars)} ->
-                     annot -> List Name -> List Name -> Term vars -> Core annot ()
+                     annot -> 
+                     List (Maybe Name) -> 
+                     List (Maybe Name) -> Term vars -> Core annot ()
 checkUsedImplicits loc used [] tm = pure ()
 checkUsedImplicits loc used given tm
     = let unused = filter (\x => not (x `elem` used)) given in
@@ -156,7 +160,8 @@ checkUsedImplicits loc used given tm
                      -- an application, from the 'implicitsUsed' list, because
                      -- we've now verified that they were used correctly.
                      restoreImps (filter (\x => not (x `elem` given)) used)
-               (n :: _) => throw (InvalidImplicit loc n tm)
+               (Just n :: _) => throw (InvalidImplicit loc n tm)
+               (Nothing :: _) => throw (GenericMsg loc "No auto implicit here")
 
 export
 weakenedEState : {auto e : Ref EST (EState vs)} ->
@@ -478,7 +483,7 @@ inventFnType loc env bname
 -- Given a raw term, collect the explicitly given implicits {x = tm} in the
 -- top level application, and return an updated term without them
 export
-collectGivenImps : RawImp annot -> (RawImp annot, List (Name, RawImp annot))
+collectGivenImps : RawImp annot -> (RawImp annot, List (Maybe Name, RawImp annot))
 collectGivenImps (IImplicitApp loc fn nm arg)
     = let (fn', args') = collectGivenImps fn in
           (fn', (nm, arg) :: args')

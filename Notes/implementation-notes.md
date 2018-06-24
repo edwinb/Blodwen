@@ -123,6 +123,19 @@ Core.Unify.solveConstraints revisits all of the currently unsolved holes and
 constrained definitions, and tries again to unify any constraints which they
 require. It also tries to resolve anything defined by proof search.
 
+Auto Implicits
+--------------
+Auto implicits are resolved by proof search, and can be given explicit
+arguments in the same way as ordinary implicits: i.e. {x = exp} to give
+'exp' as the value for auto implicit 'x'. Interfaces are syntactic sugar for
+auto implicits (it uses the resolution mechanism - interfaces translate into
+records, and implementations translate into hints for the search).
+
+The argument syntax @{exp} means that the value of the next auto implicit in
+the application should be 'exp' - this is the same as the syntax for invoking
+named implementations in Idris 1, but interfaces and auto implicits have been
+combined now.
+
 Dot Patterns
 ------------
 IMustUnify is a constructor of RawImp. When we elaborate this, we generate a

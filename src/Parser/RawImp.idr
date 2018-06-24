@@ -60,7 +60,7 @@ mutual
            pure (applyExpImp f args)
     where
       applyExpImp : RawImp () -> 
-                    List (Either (RawImp ()) (Name, RawImp ())) -> 
+                    List (Either (RawImp ()) (Maybe Name, RawImp ())) -> 
                     RawImp ()
       applyExpImp f [] = f
       applyExpImp f (Left exp :: args)
@@ -68,7 +68,7 @@ mutual
       applyExpImp f (Right (n, imp) :: args) 
           = applyExpImp (IImplicitApp () f n imp) args
 
-  argExpr : IndentInfo -> Rule (Either (RawImp ()) (Name, RawImp ()))
+  argExpr : IndentInfo -> Rule (Either (RawImp ()) (Maybe Name, RawImp ()))
   argExpr indents
       = do continue indents
            arg <- simpleExpr indents
@@ -77,7 +77,7 @@ mutual
            arg <- implicitArg indents
            pure (Right arg)
 
-  implicitArg : IndentInfo -> Rule (Name, RawImp ())
+  implicitArg : IndentInfo -> Rule (Maybe Name, RawImp ())
   implicitArg indents
       = do symbol "{"
            x <- unqualifiedName
@@ -85,7 +85,12 @@ mutual
            commit
            tm <- expr indents
            symbol "}"
-           pure (UN x, tm)
+           pure (Just (UN x), tm)
+    <|> do symbol "@{"
+           commit
+           tm <- expr indents
+           symbol "}"
+           pure (Nothing, tm)
 
   simpleExpr : IndentInfo -> Rule (RawImp ())
   simpleExpr indents

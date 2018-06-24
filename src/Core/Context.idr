@@ -314,6 +314,7 @@ record Defs where
           -- called 'readFromTTC' with, in practice)
       autoHints : List Name -- global auto hints
       typeHints : Context (List Name) -- type name hints
+      openHints : List Name -- global hints just for this module; prioritised
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
@@ -340,7 +341,7 @@ TTC annot Defs where
            lazy <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) modNS 
                             (record { laziness = lazy } defaults)
-                            empty imported [] [] empty 100 0 0)
+                            empty imported [] [] empty [] 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -349,7 +350,7 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty 100 0 0
+initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty [] 100 0 0
 
 export
 getSave : Defs -> List Name
@@ -917,7 +918,7 @@ getSearchData loc target
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
-                      pure (dets, hs ++ autoHints defs)
+                      pure (dets, openHints defs ++ hs ++ autoHints defs)
               _ => throw (UndefinedName loc target)
 
 export
@@ -1076,6 +1077,17 @@ addGlobalHint loc hint
          put Ctxt (record { autoHints $= (hint ::) } d)
          setFlag loc hint GlobalHint
 
+export
+addOpenHint : {auto x : Ref Ctxt Defs} -> Name -> Core annot ()
+addOpenHint hint
+    = do d <- get Ctxt
+         put Ctxt (record { openHints $= (hint ::) } d)
+
+export
+setOpenHints : {auto x : Ref Ctxt Defs} -> List Name -> Core annot ()
+setOpenHints hs
+    = do d <- get Ctxt
+         put Ctxt (record { openHints = hs } d)
 
 processFlags : {auto c : Ref Ctxt Defs} ->
                annot -> (Name, GlobalDef) -> Core annot ()

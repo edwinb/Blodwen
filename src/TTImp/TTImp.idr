@@ -54,7 +54,9 @@ mutual
        IApp : annot -> 
               (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
        IImplicitApp : annot -> 
-              (fn : RawImp annot) -> Name -> (arg : RawImp annot) -> RawImp annot
+              (fn : RawImp annot) -> 
+              Maybe Name -> -- Implicit to assign; if "Nothing" use next auto-implicit
+              (arg : RawImp annot) -> RawImp annot
        ISearch : annot -> (depth : Nat) -> RawImp annot
        IAlternative : annot -> AltType annot -> 
                       List (RawImp annot) -> RawImp annot
@@ -281,7 +283,9 @@ mutual
         = "(%local (" ++ show def ++ ") " ++ show scope ++ ")"
     show (IApp _ fn arg) 
         = "(" ++ show fn ++ " " ++ show arg ++ ")"
-    show (IImplicitApp _ fn n arg) 
+    show (IImplicitApp _ fn Nothing arg) 
+        = show fn ++ " @{" ++ show arg ++ "}"
+    show (IImplicitApp _ fn (Just n) arg) 
         = show fn ++ " {" ++ show n ++ " = " ++ show arg ++ "}"
     show (ISearch _ n) 
         = "%search"

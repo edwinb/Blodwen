@@ -411,7 +411,7 @@ mutual
                 do n <- addHole loc env expected
                    pure (mkConstantApp n env, expected)
 
-  addGivenImps : ElabInfo annot -> List (Name, RawImp annot) -> ElabInfo annot
+  addGivenImps : ElabInfo annot -> List (Maybe Name, RawImp annot) -> ElabInfo annot
   addGivenImps elabinfo ns = record { implicitsGiven $= (ns ++) } elabinfo
 
   -- Check a name. At this point, we've already established that it's not
@@ -908,12 +908,14 @@ mutual
             ElabInfo annot -> Name -> (ty : NF vars) ->
             Core annot (Term vars) 
   makeImplicit rigc process loc env nest elabinfo bn ty
-      = case lookup bn (implicitsGiven elabinfo) of
+      = case lookup (Just bn) (implicitsGiven elabinfo) of
              Just rawtm => 
                do gam <- get Ctxt
-                  usedImp bn
+                  usedImp (Just bn)
+                  impsUsed <- saveImps
                   (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
                                              env nest rawtm (Just (quote (noGam gam) env ty))
+                  restoreImps impsUsed
                   pure imptm
              Nothing =>
               -- In an expression, add a hole
@@ -937,6 +939,12 @@ mutual
                                           toBind $= ((hn, (tm, expected)) :: ) } est)
                         pure tm
 
+  lookupAuto : Name -> List (Maybe Name, a) -> Maybe (Maybe Name, a)
+  lookupAuto n [] = Nothing
+  lookupAuto n ((Nothing, v) :: vs) = Just (Nothing, v) -- first auto implicit
+  lookupAuto n ((Just n', v) :: vs)
+      = if n == n' then Just (Just n', v) else lookupAuto n vs
+
   makeAutoImplicit 
           : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
@@ -945,12 +953,14 @@ mutual
             ElabInfo annot -> Name -> (ty : NF vars) ->
             Core annot (Term vars) 
   makeAutoImplicit rigc process loc env nest elabinfo bn ty
-      = case lookup bn (implicitsGiven elabinfo) of
-             Just rawtm =>
+      = case lookupAuto bn (implicitsGiven elabinfo) of
+             Just (used, rawtm) =>
                do gam <- get Ctxt
-                  usedImp bn
+                  usedImp used
+                  impsUsed <- saveImps
                   (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
                                              env nest rawtm (Just (quote (noGam gam) env ty))
+                  restoreImps impsUsed
                   pure imptm
              Nothing => 
                -- on the LHS, just treat it as an implicit pattern variable.

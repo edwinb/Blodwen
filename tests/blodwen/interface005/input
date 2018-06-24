@@ -1,0 +1,6 @@
+test Z Z  -- True
+test @{silly} Z Z  -- False
+test [Z, Z] [Z, S Z] -- False
+test @{alsoSilly} [Z, Z] [Z] -- first item same, tail different; True
+test @{alsoSilly @{silly}} [S Z, Z] [Z] -- first item different, tail different length; True 
+:q

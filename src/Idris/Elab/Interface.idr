@@ -92,7 +92,8 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, n, t
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
                        map (IBindVar fc) (map bindName allmeths))
-          fnclause = PatClause fc (IImplicitApp fc (IVar fc n) (MN "__con" 0)
+          fnclause = PatClause fc (IImplicitApp fc (IVar fc n) 
+                                                   (Just (MN "__con" 0))
                                                    conapp)
                                   (IVar fc (methName n)) 
           fndef = IDef fc n [fnclause] in

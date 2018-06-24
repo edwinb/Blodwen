@@ -34,7 +34,7 @@ Show (TokenData Token) where
   show t = show (line t, col t, tok t)
 
 comment : Lexer
-comment = is '-' <+> is '-' <+> some (isNot '\n') <+> is '\n'
+comment = is '-' <+> is '-' <+> many (isNot '\n')
 
 toEndComment : (k : Nat) -> Recognise (k /= 0)
 toEndComment Z = empty
@@ -85,6 +85,7 @@ export
 symbols : List String
 symbols 
     = [".(", -- for things such as Foo.Bar.(+)
+       "@{",
        "(|", "|)",
        "(", ")", "{", "}", "[", "]", ",", ";", "_", 
        "`(", "`", "~"]

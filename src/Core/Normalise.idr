@@ -152,7 +152,15 @@ parameters (defs : Defs, holesonly : Bool)
     tryAlt env loc stk (NPrimVal c') (ConstCase c sc) 
          = if c == c' then evalTree env loc stk sc
                       else Nothing
-    tryAlt env loc stk val (DefaultCase sc) = evalTree env loc stk sc
+    tryAlt env loc stk val (DefaultCase sc) 
+         = if concrete val 
+              then evalTree env loc stk sc
+              else Nothing
+      where
+        concrete : NF free -> Bool
+        concrete (NDCon _ _ _ _) = True
+        concrete (NPrimVal _) = True
+        concrete _ = False
     tryAlt _ _ _ _ _ = Nothing
 
 

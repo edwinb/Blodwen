@@ -105,7 +105,7 @@ mutual
        PCase : FC -> PTerm -> List PClause -> PTerm
        PLocal : FC -> List PDecl -> (scope : PTerm) -> PTerm
        PApp : FC -> PTerm -> PTerm -> PTerm
-       PImplicitApp : FC -> PTerm -> (argn : Name) -> PTerm -> PTerm
+       PImplicitApp : FC -> PTerm -> (argn : Maybe Name) -> PTerm -> PTerm
        PSearch : FC -> (depth : Nat) -> PTerm
        PPrimVal : FC -> Constant -> PTerm
        PQuote : FC -> PTerm -> PTerm
@@ -294,7 +294,9 @@ Show PTerm where
   show (PLocal _ ds sc) -- We'll never see this when displaying a normal form...
       = "let { << definitions >>  } in " ++ show sc
   show (PApp _ f a) = show f ++ " " ++ show a
-  show (PImplicitApp _ f n (PRef _ a)) 
+  show (PImplicitApp _ f Nothing (PRef _ a)) 
+      = show f ++ " @{" ++ show a ++ "}"
+  show (PImplicitApp _ f (Just n) (PRef _ a)) 
       = if n == a
            then show f ++ " {" ++ show n ++ "}"
            else show f ++ " {" ++ show n ++ " = " ++ show a ++ "}"

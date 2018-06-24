@@ -87,7 +87,7 @@ mutual
            pure (PPrefixOp (MkFC fname start end) op arg)
     where
       applyExpImp : FilePos -> FilePos -> PTerm -> 
-                    List (Either PTerm (Name, PTerm)) -> 
+                    List (Either PTerm (Maybe Name, PTerm)) -> 
                     PTerm
       applyExpImp start end f [] = f
       applyExpImp start end f (Left exp :: args)
@@ -96,7 +96,7 @@ mutual
           = applyExpImp start end (PImplicitApp (MkFC fname start end) f n imp) args
 
   argExpr : FileName -> IndentInfo -> 
-            Rule (Either PTerm (Name, PTerm))
+            Rule (Either PTerm (Maybe Name, PTerm))
   argExpr fname indents
       = do continue indents
            arg <- simpleExpr fname indents
@@ -105,7 +105,7 @@ mutual
            arg <- implicitArg fname indents
            pure (Right arg)
 
-  implicitArg : FileName -> IndentInfo -> Rule (Name, PTerm)
+  implicitArg : FileName -> IndentInfo -> Rule (Maybe Name, PTerm)
   implicitArg fname indents
       = do start <- location
            symbol "{"
@@ -114,11 +114,15 @@ mutual
                commit
                tm <- expr EqOK fname indents
                symbol "}"
-               pure (UN x, tm))
+               pure (Just (UN x), tm))
              <|> (do symbol "}"
                      end <- location
-                     pure (UN x, PRef (MkFC fname start end) (UN x)))
-           
+                     pure (Just (UN x), PRef (MkFC fname start end) (UN x)))
+    <|> do symbol "@{"
+           commit
+           tm <- expr EqOK fname indents
+           symbol "}"
+           pure (Nothing, tm)
 
   opExpr : EqOp -> FileName -> IndentInfo -> Rule PTerm
   opExpr q fname indents
@@ -588,18 +592,18 @@ mkTyConType fc [] = PType fc
 mkTyConType fc (x :: xs) 
    = PPi fc Rig1 Explicit Nothing (PType fc) (mkTyConType fc xs)
 
-mkDataConType : FC -> PTerm -> List (Either PTerm (Name, PTerm)) -> PTerm
+mkDataConType : FC -> PTerm -> List (Either PTerm (Maybe Name, PTerm)) -> PTerm
 mkDataConType fc ret [] = ret
 mkDataConType fc ret (Left x :: xs)
     = PPi fc Rig1 Explicit Nothing x (mkDataConType fc ret xs)
 mkDataConType fc ret (Right (n, PRef fc' x) :: xs)
-    = if n == x
-         then PPi fc Rig1 Implicit (Just n) (PType fc') 
+    = if n == Just x
+         then PPi fc Rig1 Implicit n (PType fc') 
                           (mkDataConType fc ret xs)
-         else PPi fc Rig1 Implicit (Just n) (PRef fc' x) 
+         else PPi fc Rig1 Implicit n (PRef fc' x) 
                           (mkDataConType fc ret xs)
 mkDataConType fc ret (Right (n, x) :: xs)
-    = PPi fc Rig1 Implicit (Just n) x (mkDataConType fc ret xs)
+    = PPi fc Rig1 Implicit n x (mkDataConType fc ret xs)
 
 simpleCon : FileName -> PTerm -> IndentInfo -> Rule PTypeDecl
 simpleCon fname ret indents

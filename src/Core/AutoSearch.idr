@@ -136,8 +136,6 @@ concreteDets loc i ds err (cl :: cs)
 
 -- Type directed search - take the first thing of the given type it finds using
 -- the current environment.
--- TODO: Only search if the type is different from  any of the types we've
--- encountered on the way because then we're going around in circles?
 searchType : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Nat -> List ClosedTerm -> Env Term vars -> Name ->

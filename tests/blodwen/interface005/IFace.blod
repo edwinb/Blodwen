@@ -29,7 +29,6 @@ Eq a => Eq (List a) where
    
    (/=) x y = not (x == y)
 
-
 [alsoSilly] Eq a => Eq (List a) where
    (==) [] [] = False
    (==) (x :: xs) (y :: ys) = x == y && xs == ys
@@ -37,11 +36,7 @@ Eq a => Eq (List a) where
    
    (/=) x y = not (x == y)
 
-
 data Compare = LT | EQ | GT
-
--- interface Eq a => Ord a where
---   compare : a -> a -> Compare
 
 test : Eq a => a -> a -> Bool
 test x y = x == y
