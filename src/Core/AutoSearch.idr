@@ -133,6 +133,52 @@ searchName loc depth trying env ty defining con
                         pure candidate
               _ => throw (CantSolveGoal loc env (quote gam env ty))
 
+successful : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState annot)} ->
+             List (Core annot (Term vars)) ->
+             Core annot (List (Either (Error annot) (Term vars, Defs, UState annot)))
+successful [] = pure []
+successful (elab :: elabs)
+    = do st <- get Ctxt
+         ust <- get UST
+         catch (do res <- elab
+                   st' <- get Ctxt
+                   ust' <- get UST
+                   put Ctxt st
+                   put UST ust
+                   rest <- successful elabs
+                   pure (Right (res, st', ust') :: rest))
+               (\err => do put Ctxt st
+                           put UST ust
+                           rest <- successful elabs
+                           pure (Left err :: rest))
+
+exactlyOne : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState annot)} ->
+             annot -> Env Term vars -> NF vars -> 
+             List (Core annot (Term vars)) ->
+             Core annot (Term vars)
+exactlyOne loc env ty [elab] = elab
+exactlyOne loc env ty all
+    = do elabs <- successful all
+         case rights elabs of
+              [(res, state, ust)] => do put Ctxt state
+                                        put UST ust
+                                        pure res
+              [] => do gam <- get Ctxt
+                       throw (CantSolveGoal loc env (quote gam env ty))
+              rs => throw (AmbiguousSearch loc (map fst rs))
+
+anyOne : {auto c : Ref Ctxt Defs} ->
+         {auto u : Ref UST (UState annot)} ->
+         annot -> Env Term vars -> NF vars ->
+         List (Core annot (Term vars)) ->
+         Core annot (Term vars)
+anyOne loc env ty [] = do gam <- get Ctxt
+                          throw (CantSolveGoal loc env (quote gam env ty))
+anyOne loc env ty [elab] = elab
+anyOne loc env ty (e :: es) = try e (anyOne loc env ty es)
+
 searchNames : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               annot -> Nat -> List ClosedTerm -> Env Term vars -> NF vars -> 
@@ -142,9 +188,9 @@ searchNames loc depth trying env ty defining []
          throw (CantSolveGoal loc env (quote gam env ty))
 searchNames loc depth trying env ty defining (n :: ns)
     = do gam <- get Ctxt
-         log 5 $ "Searching " ++ show n ++ " for " ++ show (quote gam env ty)
-         handleError (searchName loc depth trying env ty defining n)
-           (\err => searchNames loc depth trying env ty defining ns)
+         log 5 $ "Searching " ++ show (n :: ns) ++ " for " ++ show (quote gam env ty)
+         exactlyOne loc env ty 
+            (map (searchName loc depth trying env ty defining) (n :: ns))
 
 -- Fail with the given error if any of the determining arguments are holes
 concreteDets : {auto c : Ref Ctxt Defs} ->
@@ -182,15 +228,29 @@ searchType loc depth trying env defining (NBind n (Pi c info ty) scfn)
 searchType loc depth trying env defining ty@(NTCon n t ar args)
     = do gam <- get Ctxt
          if length args == ar
-           then do (dets, allCons) <- getSearchData loc n
+           then do (dets, allOpens, allCons) <- getSearchData loc n
+                   let opens = filter (/=defining) allOpens
                    let cons = filter (/=defining) allCons
                    concreteDets loc 0 dets 
                                 (CantSolveGoal loc env (quote gam env ty)) 
                                 args
                    log 5 $ "Hints for " ++ show n ++ ": " ++ show cons
+                   -- Solutions is either:
+                   -- One of the locals
+                   -- or *Exactly one* of the open hints
+                   -- or, only if there are no open hints,
+                   --     *Exactly one* of the other hints
                    try (trivial loc env (quote (noGam gam) env ty))
-                       (searchNames loc depth trying env ty defining cons)
+                       (handleError 
+                         (searchNames loc depth trying env ty defining opens)
+                         (\err => if ambig err
+                                     then throw err
+                                     else searchNames loc depth trying env ty defining cons))
            else throw (CantSolveGoal loc env (quote gam env ty))
+  where
+    ambig : Error annot -> Bool
+    ambig (AmbiguousSearch _ _) = True
+    ambig _ = False
 searchType loc depth trying env defining (NPrimVal IntType)
     = pure (PrimVal (I 0))
 searchType loc depth trying env defining ty 
