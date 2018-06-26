@@ -329,4 +329,5 @@ mutual
       = case d of
              Logging i => pure [ILog i]
              LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]
+             PairNames ty f s => pure [IPragma (\env, nest => setPair fc ty f s)]
 

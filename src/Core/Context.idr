@@ -334,13 +334,16 @@ TTC annot Defs where
            toBuf b (currentNS val)
            toBuf b (imported val)
            toBuf b (laziness (options val))
+           toBuf b (pairnames (options val))
   fromBuf s b 
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
            modNS <- fromBuf s b
            imported <- fromBuf s b
            lazy <- fromBuf s b
+           pair <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) modNS 
-                            (record { laziness = lazy } defaults)
+                            (record { laziness = lazy,
+                                      pairnames = pair } defaults)
                             empty imported [] [] empty [] 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
@@ -500,6 +503,25 @@ forceName defs
          pure (force l)
 
 export
+isPairType : Name -> Defs -> Bool
+isPairType n defs
+    = case pairnames (options defs) of
+           Nothing => False
+           Just l => n == pairType l
+
+export
+fstName : Defs -> Maybe Name
+fstName defs
+    = do l <- pairnames (options defs)
+         pure (fstName l)
+
+export
+sndName : Defs -> Maybe Name
+sndName defs
+    = do l <- pairnames (options defs)
+         pure (sndName l)
+
+export
 setVisible : {auto c : Ref Ctxt Defs} -> 
              (nspace : List String) -> Core annot ()
 setVisible nspace
@@ -544,6 +566,17 @@ setLazy loc ty d f
          d' <- checkUnambig loc d
          f' <- checkUnambig loc f
          put Ctxt (record { options $= setLazy ty' d' f' } defs)
+
+export
+setPair : {auto c : Ref Ctxt Defs} ->
+          annot -> (pairType : Name) -> (fstn : Name) -> (sndn : Name) ->
+          Core annot ()
+setPair loc ty f s
+    = do defs <- get Ctxt
+         ty' <- checkUnambig loc ty
+         f' <- checkUnambig loc f
+         s' <- checkUnambig loc s
+         put Ctxt (record { options $= setPair ty' f' s' } defs)
 
 export
 setPPrint : {auto c : Ref Ctxt Defs} ->
@@ -906,11 +939,12 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
              addDataConstructors (tag + 1) cs gam'
 
 -- Get the auto search data for a name. That's: determining arguments
--- (the first element of the pair), and all the names that might solve a goal
+-- (the first element), the open hints (the second element) 
+-- and all the other names that might solve a goal
 -- of the given type (constructors, local hints, global hints, in that order)
 export
 getSearchData : {auto x : Ref Ctxt Defs} ->
-                annot -> Name -> Core annot (List Nat, List Name)
+                annot -> Name -> Core annot (List Nat, List Name, List Name)
 getSearchData loc target
     = do defs <- get Ctxt
          case lookupDefExact target (gamma defs) of
@@ -918,7 +952,7 @@ getSearchData loc target
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
-                      pure (dets, openHints defs ++ hs ++ autoHints defs)
+                      pure (dets, openHints defs, hs ++ autoHints defs)
               _ => throw (UndefinedName loc target)
 
 export

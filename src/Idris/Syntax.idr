@@ -181,6 +181,7 @@ mutual
   data Directive : Type where
        Logging : Nat -> Directive
        LazyNames : Name -> Name -> Name -> Directive
+       PairNames : Name -> Name -> Name -> Directive
 
   public export
   data PDecl : Type where

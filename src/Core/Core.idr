@@ -34,6 +34,7 @@ data Error annot
     | LinearMisuse annot Name RigCount RigCount
     | AmbiguousName annot (List Name)
     | AmbiguousElab annot (List (Term vars))
+    | AmbiguousSearch annot (List (Term vars))
     | AllFailed (List (Error annot))
     | InvalidImplicit annot Name (Term vars)
     | CantSolveGoal annot (Env Term vars) (Term vars)
@@ -114,6 +115,7 @@ Show annot => Show (Error annot) where
 
   show (AmbiguousName fc ns) = show fc ++ ":Ambiguous name " ++ show ns
   show (AmbiguousElab fc ts) = show fc ++ ":Ambiguous elaboration " ++ show ts
+  show (AmbiguousSearch fc ts) = show fc ++ ":Ambiguous search " ++ show ts
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
   show (InvalidImplicit fc n tm) 
       = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm

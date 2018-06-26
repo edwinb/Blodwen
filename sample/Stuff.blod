@@ -81,6 +81,16 @@ data Pair : Type -> Type -> Type where
      MkPair : {0 a, b : Type} -> (1 x : a) -> (1 y : b) -> Pair a b
 
 public export
+fst : {0 a, b : Type} -> (a, b) -> a
+fst (x, y) = x
+
+public export
+snd : {0 a, b : Type} -> (a, b) -> b
+snd (x, y) = y
+
+%pair Pair fst snd
+
+public export
 data Unrestricted : Type -> Type where
      Un : (x : a) -> Unrestricted a
 

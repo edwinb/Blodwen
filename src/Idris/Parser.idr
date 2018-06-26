@@ -683,10 +683,16 @@ directive indents
          pure (Logging (cast lvl))
   <|> do exactIdent "lazy"
          ty <- name
-         f <- name
          d <- name
+         f <- name
          atEnd indents
-         pure (LazyNames ty f d)
+         pure (LazyNames ty d f)
+  <|> do exactIdent "pair"
+         ty <- name
+         f <- name
+         s <- name
+         atEnd indents
+         pure (PairNames ty f s)
 
 fix : Rule Fixity
 fix

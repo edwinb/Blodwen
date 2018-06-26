@@ -29,6 +29,8 @@ Eq a => Eq (List a) where
    
    (/=) x y = not (x == y)
 
+(Eq a, Eq b) => Eq (a, b) where
+   (==) (x, y) (x', y') = x == x' && y == y'
 
 [alsoSilly] Eq a => Eq (List a) where
    (==) [] [] = False
@@ -37,12 +39,6 @@ Eq a => Eq (List a) where
    
    (/=) x y = not (x == y)
 
-
-data Compare = LT | EQ | GT
-
--- interface Eq a => Ord a where
---   compare : a -> a -> Compare
-
-test : Eq a => a -> a -> Bool
+test : ((Eq b, Eq b, Eq a), Eq b) => a -> a -> Bool
 test x y = x == y
 

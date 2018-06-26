@@ -48,9 +48,6 @@ namespace List
          There : Elem x xs -> Elem x (Cons y xs);
     }
 
-    %hint Main.List.Here Main.List.Elem
-    %hint Main.List.There Main.List.Elem
-
     public export
     pos : (xs : List a) -> Elem x xs -> a;
     pos (Cons x xs) Here = x;

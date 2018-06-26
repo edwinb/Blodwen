@@ -17,21 +17,51 @@ trivial : {auto c : Ref Ctxt Defs} ->
           annot -> Env Term vars -> Term vars -> Core annot (Term vars)
 trivial loc [] ty = throw (CantSolveGoal loc [] ty)
 trivial {vars = v :: vs} loc (b :: env) ty 
--- If the type of the variable at the top of the environment converts with
--- the goal, use it (converts, not unifying, so no solving metavariables here)
+-- If the type of the variable at the top of the environment (or any of its
+-- fields if it's a tuple) converts with the goal, use it 
+-- (converts, not unifying, so no solving metavariables here)
     = try (do gam <- get Ctxt
               let bty = binderType b
-              if convert gam (b :: env) (weaken bty) ty
-                 then do log 6 $ "Trivial success: " ++ show v ++ " : " ++ show (weaken {n = v} bty)
+              case findPos gam (b :: env) id
+                           (nf gam (b :: env) (weaken bty)) 
+                           (nf gam (b :: env) ty) of
+                   Just res => do log 6 $ "Trivial success: " ++ show v ++ " : " ++ show (weaken {n = v} bty)
                                      ++ " for " ++ show ty
-                         pure (Local Here)
-                 else do log 7 $ "Trivial fail: " ++ show v ++ " : " ++ show (weaken {n = v} bty)
+                                  pure res
+                   Nothing => do log 7 $ "Trivial fail: " ++ show v ++ " : " ++ show (weaken {n = v} bty)
                                      ++ " for " ++ show ty
-                         throw (CantSolveGoal loc (b :: env) ty))
+                                 throw (CantSolveGoal loc (b :: env) ty))
           (case shrinkTerm ty (DropCons SubRefl) of
                 Nothing => throw (CantSolveGoal loc (b :: env) ty)
                 Just ty' => do tm' <- trivial loc env ty'
                                pure (weaken tm'))
+  where
+    findPos : Defs -> Env Term (v :: vs) -> 
+              (Term (v :: vs) -> Term (v :: vs)) ->
+              NF (v :: vs) -> NF (v :: vs) -> 
+              Maybe (Term (v :: vs))
+    findPos gam env f x@(NTCon pn _ _ [xty, yty]) ty
+        = if convert gam env x ty
+             then Just (f (Local Here))
+             else
+               do fname <- fstName gam
+                  sname <- sndName gam
+                  if isPairType pn gam
+                     then maybe
+                      (findPos gam env 
+                               (\r => apply (Ref Bound sname)
+                                            [Erased, Erased, (f r)])
+                               (evalClosure gam yty) ty)
+                      Just 
+                      (findPos gam env 
+                               (\r => apply (Ref Bound fname)
+                                            [Erased, Erased, (f r)])
+                               (evalClosure gam xty) ty)
+                     else Nothing
+    findPos gam env f x ty
+        = if convert gam env x ty
+             then Just (f (Local Here))
+             else Nothing
 
 mkArgs : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
@@ -196,7 +226,7 @@ searchHole loc depth trying defining n gam glob
 -- Declared in Unify.idr (please remember to keep this type up to date!)
 -- search : {auto c : Ref Ctxt Defs} ->
 --          {auto u : Ref UST (UState annot)} ->
---          annot -> Nat -> Name -> Name -> Core annot ClosedTerm
+--          annot -> Nat -> List ClosedTerm -> Name -> Name -> Core annot ClosedTerm
 Core.Unify.search loc depth trying defining n_in
     = do gam <- get Ctxt
          case lookupHoleName n_in (gamma gam) of
