@@ -203,7 +203,7 @@ instantiate loc metavar smvs tm {newvars}
                          Just rhs => 
                             do let soln = newDef ty Public 
                                                (PMDef True [] (STerm rhs))
-                               log 7 $ "Instantiate: " ++ show metavar ++
+                               log 5 $ "Instantiated: " ++ show metavar ++
                                             " = " ++ show rhs
                                addDef metavar soln
                                removeHoleName metavar
@@ -346,6 +346,8 @@ mutual
                            do let soln = newDef defty Public
                                               (PMDef True [] (STerm olddef))
                               addDef oldhole soln
+                              log 5 $ "Resolved hole " ++ show oldhole ++
+                                      "; now " ++ show newhole
                               removeHoleName oldhole
                               pure (apply (Ref Func newhole) sofar)
   -- Default case, leave the hole application as it is
@@ -859,6 +861,7 @@ rerunDelayed hole cname
               Just elab => 
                    do tm <- elab
                       updateDef hole (PMDef True [] (STerm tm))
+                      log 5 $ "Resolved delayed hole " ++ show hole
                       removeHoleName hole
 
 setInvertible : {auto c : Ref Ctxt Defs} ->
@@ -887,6 +890,7 @@ retryHole mode lastChance (loc, hole)
                            -- proper definition and remove it from the
                            -- hole list
                            [] => do updateDef hole (PMDef True [] (STerm tm))
+                                    log 5 $ "Resolved constrained hole " ++ show hole
                                     removeHoleName hole
                            newcs => updateDef hole (Guess tm newcs)
               Just (BySearch depth fn) => 

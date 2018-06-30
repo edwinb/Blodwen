@@ -224,7 +224,8 @@ elabInterface fc vis env nest constraints iname params dets mcon body
                                                   meth_names
                                                   (map fst params)) meth_sigs
              log 5 $ "Top level methods: " ++ show fns
-             processDecls env nest fns
+             traverse (processDecl env nest) fns
+             pure ()
 
     elabConstraintHints : (conName : Name) -> List Name ->
                           Core FC()
@@ -235,5 +236,6 @@ elabInterface fc vis env nest constraints iname params dets mcon body
                                                        meth_names
                                                        (map fst params)) nconstraints
              log 5 $ "Constraint hints from " ++ show constraints ++ ": " ++ show chints
-             processDecls env nest chints
+             traverse (processDecl env nest) chints
+             pure ()
 

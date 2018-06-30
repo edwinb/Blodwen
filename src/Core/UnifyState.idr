@@ -501,8 +501,10 @@ clearSolvedHoles
     clearSolved : Gamma -> Name -> Core annot ()
     clearSolved gam n
         = case lookupDefExact n gam of
-               Just ImpBind => removeHoleName n
-               Just (PMDef _ _ _) => removeHoleName n
+               Just ImpBind => do log 5 $ "Removed bound hole " ++ show n
+                                  removeHoleName n
+               Just (PMDef _ _ _) => do log 5 $ "Removed defined hole " ++ show n
+                                        removeHoleName n
                _ => pure ()
 
 -- Make sure the types of holes have the references to solved holes normalised

@@ -13,6 +13,9 @@ tryMap x y = map (plus x) [y, S y]
 test : List n -> List n
 test xss = map id xss
 
+test2 : Functor f => f a -> f a
+test2 xss = map id xss
+
 mapMaybe : (a -> Maybe b) -> List a -> List b
 mapMaybe f []      = []
 mapMaybe f (x::xs) =
@@ -46,15 +49,15 @@ Functor (Vect n) where
 tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
 tryVMap x y = map (plus x) [y, S y]
 
--- data OVect : Type -> Nat -> Type where
---      ONil : OVect a Z
---      OCons : a -> OVect a k -> OVect a (S k)
--- 
--- Functor (\a => OVect a n) where
---      map f ONil = ONil
---      map f (OCons x xs) = OCons (f x) ?hmm -- (map f xs)
--- 
--- %logging 5
+data OVect : Type -> Nat -> Type where
+     ONil : OVect a Z
+     OCons : a -> OVect a k -> OVect a (S k)
+
+Functor (\a => OVect a n) where
+     map f ONil = ONil
+     map f (OCons x xs) = OCons (f x) ?hmm -- (map f xs)
+
+-- %logging 10
 -- tryOVMap : Nat -> Nat -> OVect Nat (S (S Z))
 -- tryOVMap x y = map (plus x) (OCons y (OCons (S y) ONil))
 -- %logging 0

@@ -163,7 +163,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
          defs <- get Ctxt
          fns <- traverse (topMethType impName (params cdata)) 
                          (methods cdata)
-         processDecls env nest (map mkTopMethDecl fns)
+         traverse (processDecl env nest) (map mkTopMethDecl fns)
 
          -- 3. Build the record for the implementation
          let mtops = map (Basics.fst . snd) fns
@@ -172,7 +172,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
          let irhs = apply (IVar fc con) (map mkMethField (map Basics.snd fns))
          let impFn = IDef fc impName [PatClause fc ilhs irhs]
          log 5 $ "Implementation record: " ++ show impFn
-         processDecls env nest [impFn]
+         traverse (processDecl env nest) [impFn]
 
          -- 4. (TODO: Generate default method bodies)
 
@@ -186,7 +186,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
 
          body' <- traverse (updateBody (map methNameUpdate fns)) body
          log 10 $ "Implementation body: " ++ show body'
-         processDecls env nest body'
+         traverse (processDecl env nest) body'
          -- Reset the open hints (remove the named implementation)
          setOpenHints hs
 

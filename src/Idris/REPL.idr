@@ -156,8 +156,17 @@ processCatch : {auto c : Ref Ctxt Defs} ->
                {auto o : Ref ROpts REPLOpts} ->
                REPLCmd -> Core FC Bool
 processCatch cmd
-    = catch (process cmd) (\err => do coreLift (putStrLn (show err))
-                                      pure True)
+    = do c' <- get Ctxt
+         u' <- get UST
+         s' <- get Syn
+         o' <- get ROpts
+         catch (process cmd) 
+               (\err => do put Ctxt c'
+                           put UST u'
+                           put Syn s'
+                           put ROpts o'
+                           coreLift (putStrLn (show err))
+                           pure True)
 
 export
 repl : {auto c : Ref Ctxt Defs} ->
