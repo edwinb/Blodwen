@@ -141,10 +141,14 @@ data Def : Type where
              (detpos : List Nat) -> -- argument postitions for determining auto search
 						 (datacons : List Name) -> 
 			       Def
-     Hole : (numlocs : Nat) -> (pvar : Bool) -> Def 
-		           -- Unsolved hole, under 'numlocs' locals, and whether it
+     Hole : (numlocs : Nat) -> (pvar : Bool) -> (invertible : Bool) -> Def 
+		           -- Unsolved hole, under 'numlocs' locals; whether it
 						   -- is standing for a pattern variable (and therefore mustn't
-							 -- be solved)
+							 -- be solved); whether we've established it's invertible
+               -- via proof search (i.e. it's a parameter of a thing we're
+               -- searching for, and it's invertible in all the possible hints)
+               -- An application is invertible if you can get the arguments by
+               -- looking at the result. e.g. constructors. trivially.
      BySearch : Nat -> Name -> Def 
                     -- Undefined name, to be defined by proof search. Stores
                     -- the maximum search depth, and the function it's being
@@ -176,9 +180,9 @@ Show Def where
   show (DCon tag arity forced)
       = "DataCon " ++ show tag ++ "; arity " ++ show arity ++ 
         "; forced positions " ++ show forced
-  show (Hole locs False)
+  show (Hole locs False _)
       = "Hole with " ++ show locs ++ " locals"
-  show (Hole locs True)
+  show (Hole locs True _)
       = "Pattern variable with " ++ show locs ++ " locals"
   show (BySearch n _)
       = "Search with depth " ++ show n
@@ -197,8 +201,8 @@ TTC annot Def where
   toBuf b (TCon t arity parampos detpos datacons) 
       = do tag 3; toBuf b t; toBuf b arity; toBuf b parampos; 
            toBuf b detpos; toBuf b datacons
-  toBuf b (Hole numlocs pvar) 
-      = do tag 4; toBuf b numlocs; toBuf b pvar
+  toBuf b (Hole numlocs pvar inv) 
+      = do tag 4; toBuf b numlocs; toBuf b pvar; toBuf b inv
   toBuf b (BySearch k d) 
       = do tag 5; toBuf b k; toBuf b d
   toBuf b ImpBind = tag 6
@@ -216,8 +220,8 @@ TTC annot Def where
                      pure (DCon x y z)
              3 => do v <- fromBuf s b; w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (TCon v w x y z)
-             4 => do x <- fromBuf s b; y <- fromBuf s b
-                     pure (Hole x y)
+             4 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+                     pure (Hole x y z)
              5 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (BySearch x y)
              6 => pure ImpBind
@@ -283,7 +287,7 @@ getRefs (PMDef ishole args sc) = getRefs sc
 getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
 getRefs (TCon tag arity params dets datacons) = []
-getRefs (Hole numlocs _) = []
+getRefs (Hole numlocs _ _) = []
 getRefs (BySearch _ _) = []
 getRefs ImpBind = []
 getRefs (Guess guess constraints) = CSet.toList (getRefs guess)

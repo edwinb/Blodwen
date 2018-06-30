@@ -4,4 +4,5 @@ Processing as Idris
 Welcome to Blodwen. Good luck.
 Main> [(S (S (S Z))), (S (S (S (S Z))))]
 Main> [(S (S (S Z))), (S (S (S (S Z))))]
+Main> [([1, 4]), ([2, 5]), ([3, 6])]
 Main> Bye for now!

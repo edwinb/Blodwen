@@ -156,6 +156,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
                      bindConstraints fc AutoImplicit cons 
                          (apply (IVar fc iname) ps)
          let impTyDecl = IClaim fc vis opts (MkImpTy fc impName impTy)
+         log 5 $ "Implementation type: " ++ show impTy
          processDecl env nest impTyDecl
 
          -- 2. Elaborate top level function types for this interface

@@ -227,7 +227,7 @@ implicitBind : {auto c : Ref Ctxt Defs} ->
 implicitBind n 
     = do gam <- get Ctxt
          case lookupDefExact n (gamma gam) of
-              Just (Hole len _) => updateDef n ImpBind
+              Just (Hole len _ _) => updateDef n ImpBind
               _ => pure ()
 
 -- Check that the references in the term don't refer to the hole name as
@@ -263,24 +263,6 @@ occursCheck gam n tm
              oc fchk a
     oc chk tm = Just chk
        
--- Convert corresponding lists of reversedarguments. Returns the fragment 
--- which don't convert (as long as at least one pair does convert)
-convertAll : Defs -> Env Term vars -> 
-             List (Closure vars) -> List (Closure vars) -> 
-             Maybe (List (Closure vars), List (Closure vars))
-convertAll {vars} defs env xs ys = convertP False xs ys
-  where
-    convertP : (progress : Bool) -> 
-               List (Closure vars) -> List (Closure vars) ->
-               Maybe (List (Closure vars), List (Closure vars))
-    convertP False as [] = Nothing
-    convertP True as [] = Just (reverse as, [])
-    convertP _ (x :: xs) (y :: ys)
-        = if convert defs env x y 
-             then convertP True xs ys
-             else Just (reverse (x :: xs), reverse (y :: ys))
-    convertP _ _ _ = Nothing
-
 mutual
   -- Find holes which are applied to environments which are too big, and
   -- solve them with a new hole applied to only the available arguments.
@@ -310,7 +292,7 @@ mutual
               -- 'h' here, make a new hole 'sh' which only uses the available
               -- arguments, and solve h with it.
               case lookupDefTyExact h (gamma gam) of
-                   Just (Hole _ _, ty) => 
+                   Just (Hole _ _ _, ty) => 
                         do sn <- genName "sh"
                            mkSmallerHole loc [] ty h as sn args
                    _ => pure (apply (Ref Func h) as)
@@ -354,7 +336,7 @@ mutual
              Nothing => ufail loc $ "Can't shrink hole"
              Just defty =>
                 do -- Make smaller hole
-                   let hole = newDef defty Public (Hole (length sofar) False)
+                   let hole = newDef defty Public (Hole (length sofar) False False)
                    addHoleName loc newhole
                    addDef newhole hole
                    -- Solve old hole with it
@@ -399,9 +381,18 @@ mutual
   isHoleNF : Gamma -> Name -> Bool
   isHoleNF gam n
       = case lookupDefExact n gam of
-             Just (Hole _ pvar) => not pvar
+             Just (Hole _ pvar _) => not pvar
              _ => False
   
+  isHoleInv : Gamma -> Name -> Bool
+  isHoleInv gam n
+      = case lookupDefExact n gam of
+             Just (Hole _ pvar inv) => not pvar && inv
+             _ => False
+ 
+  -- Unify a hole application - we have already checked that the hole is
+  -- invertible (i.e. it's a determining argument to a proof search where
+  -- it is a constructor or something else invertible in each case)
   unifyHoleApp : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
                  UnifyMode -> annot -> Env Term vars ->
@@ -409,18 +400,19 @@ mutual
                  Core annot (List Name)
   unifyHoleApp mode loc env nt var args (NTCon n t a args')
       = do gam <- get Ctxt
-           -- Convert arguments right to left, then unify the head with
-           -- the type. Arguments must be convertible (not merely unifiable)
-           -- and there must be at least one consumed
-           case convertAll gam env (reverse args) (reverse args') of
-                Just (fargs, targs) => 
+           -- Unify the rightmost arguments, with the goal of turning the
+           -- hole application into a pattern form
+           case (reverse args, reverse args') of
+                (h :: hargs, f :: fargs) =>
                    do log 10 $ "Continuing with " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) fargs))
+                            show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
                               ++ " =?= " ++
-                            show (quote (noGam gam) env (NTCon n t a targs))
-                      unify mode loc env (NApp (NRef nt var) fargs) 
-                                         (NTCon n t a targs)
-                Nothing =>
+                            show (quote (noGam gam) env (NTCon n t a (reverse fargs)))
+                      unify mode loc env h f
+                      unify mode loc env 
+                            (NApp (NRef nt var) (reverse hargs))
+                            (NTCon n t a (reverse fargs))
+                _ =>
                    do log 10 $ "Postponing hole application " ++
                             show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
                             show (quote (noGam gam) env (NTCon n t a args'))
@@ -429,18 +421,19 @@ mutual
                            (quote (noGam gam) env (NTCon n t a args'))
   unifyHoleApp mode loc env nt var args (NDCon n t a args')
       = do gam <- get Ctxt
-           -- Convert arguments right to left, then unify the head with
-           -- the type. Arguments must be convertible (not merely unifiable)
-           -- and there must be at least one consumed
-           case convertAll gam env (reverse args) (reverse args') of
-                Just (fargs, targs) => 
+           -- Unify the rightmost arguments, with the goal of turning the
+           -- hole application into a pattern form
+           case (reverse args, reverse args') of
+                (h :: hargs, f :: fargs) =>
                    do log 10 $ "Continuing with " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) fargs))
+                            show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
                               ++ " =?= " ++
-                            show (quote (noGam gam) env (NDCon n t a targs))
-                      unify mode loc env (NApp (NRef nt var) fargs) 
-                                         (NDCon n t a targs)
-                Nothing =>
+                            show (quote (noGam gam) env (NDCon n t a (reverse fargs)))
+                      unify mode loc env h f
+                      unify mode loc env 
+                            (NApp (NRef nt var) (reverse hargs))
+                            (NDCon n t a (reverse fargs))
+                _ =>
                    do log 10 $ "Postponing hole application " ++
                             show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
                             show (quote (noGam gam) env (NDCon n t a args'))
@@ -449,13 +442,19 @@ mutual
                            (quote (noGam gam) env (NDCon n t a args'))
   unifyHoleApp mode loc env nt var args (NApp (NLocal lvar) args')
       = do gam <- get Ctxt
-           -- Convert arguments right to left, then unify the head with
-           -- the type. Arguments must be convertible (not merely unifiable)
-           case convertAll gam env (reverse args) (reverse args') of
-                Just (fargs, targs) => 
-                    unify mode loc env (NApp (NRef nt var) fargs) 
-                                       (NApp (NLocal lvar) targs)
-                Nothing =>
+           -- Unify the rightmost arguments, with the goal of turning the
+           -- hole application into a pattern form
+           case (reverse args, reverse args') of
+                (h :: hargs, f :: fargs) =>
+                   do log 10 $ "Continuing with " ++
+                            show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
+                              ++ " =?= " ++
+                            show (quote (noGam gam) env (NApp (NLocal lvar) (reverse fargs)))
+                      unify mode loc env h f
+                      unify mode loc env 
+                            (NApp (NRef nt var) (reverse hargs))
+                            (NApp (NLocal lvar) (reverse fargs))
+                _ =>
                    do log 10 $ "Postponing hole application " ++
                             show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
                             show (quote (noGam gam) env (NApp (NLocal lvar) args'))
@@ -531,10 +530,12 @@ mutual
            -- Not in the pattern fragment
            Nothing => do log 10 $ "Not in pattern fragment"
                          gam <- get Ctxt
---                          postpone loc env
---                              (quote (noGam gam) env (NApp (NRef nt var) args))
---                              (quote (noGam gam) env tm)
-                         unifyHoleApp mode loc env nt var args tm
+                         if isHoleInv (gamma gam) var
+                            then unifyHoleApp mode loc env nt var args tm
+                            else postpone loc env
+                                     (quote (noGam gam) env (NApp (NRef nt var) args))
+                                     (quote (noGam gam) env tm)
+
 
   unifyApp : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -860,6 +861,17 @@ rerunDelayed hole cname
                       updateDef hole (PMDef True [] (STerm tm))
                       removeHoleName hole
 
+setInvertible : {auto c : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot ()
+setInvertible loc n
+    = do gam <- get Ctxt
+         case lookupDefExact n (gamma gam) of
+              Nothing => throw (InternalError "Can't happen, name has mysteriously vanised")
+              Just def =>
+                   case def of
+                        Hole locs False _ => updateDef n (Hole locs False True)
+                        _ => pure ()
+
 retryHole : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
             UnifyMode -> (lastChance : Bool) -> (hole : (annot, Name)) ->
@@ -880,9 +892,15 @@ retryHole mode lastChance (loc, hole)
               Just (BySearch depth fn) => 
                    if lastChance
                       then do search loc depth [] fn hole; pure ()
-                      else try (do search loc depth [] fn hole
-                                   pure ())
-                       (pure ()) -- postpone again
+                      else handleError (do search loc depth [] fn hole
+                                           pure ())
+                           -- if it failed due to a determining argument
+                           -- being missing, we at least now know that the
+                           -- hole is invertible
+                           (\err => case err of
+                                      DeterminingArg _ n _ _ =>
+                                        setInvertible loc n
+                                      _ => pure ()) -- postpone again
               Just _ => pure () -- Nothing we can do
 
 retryDelayed : {auto c : Ref Ctxt Defs} ->

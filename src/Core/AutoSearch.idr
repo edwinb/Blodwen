@@ -82,7 +82,7 @@ nameIsHole loc n
               Nothing => throw (InternalError "Can't happen, name has mysteriously vanised")
               Just def =>
                    case def of
-                        Hole locs False => pure True
+                        Hole locs False _ => pure True
                         _ => pure False
 
 -- Search recursively, but only if the given name wasn't solved by unification
@@ -194,7 +194,8 @@ searchNames loc depth trying env ty defining (n :: ns)
 
 -- Fail with the given error if any of the determining arguments are holes
 concreteDets : {auto c : Ref Ctxt Defs} ->
-               annot -> Nat -> List Nat -> Lazy (Error annot) -> 
+               {auto u : Ref UST (UState annot)} ->
+               annot -> Nat -> List Nat -> (Name -> Error annot) -> 
                List (Closure vars) -> Core annot ()
 concreteDets loc i ds err [] = pure ()
 concreteDets loc i ds err (cl :: cs)
@@ -203,10 +204,13 @@ concreteDets loc i ds err (cl :: cs)
          else do defs <- get Ctxt
                  case evalClosure defs cl of
                       -- if 'hn' is a hole, we can't proceed yet
+                      -- However, we can mark the hole as "invertible" if
+                      -- we know the determining arguments of all the hints
+                      -- are invertible.
                       NApp (NRef _ hn) args =>
                            do hole <- nameIsHole loc hn
                               if hole
-                                 then throw (Force err)
+                                 then throw (err hn)
                                  else concreteDets loc (1 + i) ds err cs
                       _ => concreteDets loc (1 + i) ds err cs
 
@@ -232,7 +236,7 @@ searchType loc depth trying env defining ty@(NTCon n t ar args)
                    let opens = filter (/=defining) allOpens
                    let cons = filter (/=defining) allCons
                    concreteDets loc 0 dets 
-                                (CantSolveGoal loc env (quote gam env ty)) 
+                                (\hn => DeterminingArg loc hn env (quote gam env ty)) 
                                 args
                    log 5 $ "Hints for " ++ show n ++ ": " ++ show cons
                    -- Solutions is either:
@@ -294,7 +298,7 @@ Core.Unify.search loc depth trying defining n_in
                    -- The definition should be 'BySearch' at this stage,
                    -- if it's arising from an auto implicit
                    case definition glob of
-                        Hole locs False => searchHole loc depth trying defining n gam glob
+                        Hole locs False _ => searchHole loc depth trying defining n gam glob
                         BySearch _ _ => searchHole loc depth trying defining n gam glob
                         _ => throw (InternalError $ "Not a hole: " ++ show n ++ " in " ++ show defining)
               _ => throw (UndefinedName loc n_in)

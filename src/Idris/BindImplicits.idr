@@ -8,7 +8,7 @@ lowerFirst "" = False
 lowerFirst str = assert_total (isLower (strHead str))
 
 -- Bind lower case names in argument position
--- Don't go under lambda, case let, or local bindings, or IAlternative
+-- Don't go under case, let, or local bindings, or IAlternative
 export
 findBindableNames : (arg : Bool) -> List Name -> RawImp annot -> List String
 findBindableNames True env (IVar fc (UN n))
@@ -21,6 +21,9 @@ findBindableNames arg env (IPi fc rig p mn aty retty)
                       Just n => n :: env in
           findBindableNames True env' aty ++
           findBindableNames True env' retty
+findBindableNames arg env (ILam fc rig p n aty sc)
+    = findBindableNames True (n :: env) aty ++
+      findBindableNames True (n :: env) sc
 findBindableNames arg env (IApp fc fn av)
     = findBindableNames False env fn ++ findBindableNames True env av
 findBindableNames arg env (IImplicitApp fc fn n av)
@@ -45,6 +48,9 @@ doBind ns (IPi fc rig p mn aty retty)
                      Just (UN n) => ns \\ [n]
                      _ => ns in
           IPi fc rig p mn (doBind ns' aty) (doBind ns' retty)
+doBind ns (ILam fc rig p (UN n) aty sc)
+    = let ns' = ns \\ [n] in
+          ILam fc rig p (UN n) (doBind ns' aty) (doBind ns' sc)
 doBind ns (IApp fc fn av)
     = IApp fc (doBind ns fn) (doBind ns av)
 doBind ns (IImplicitApp fc fn n av)

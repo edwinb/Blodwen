@@ -40,7 +40,7 @@ showInfo (n, d) = coreLift $ putStrLn (show n ++ " ==> " ++ show d)
 isHole : GlobalDef -> Bool
 isHole def
     = case definition def of
-           Hole _ _ => True
+           Hole _ _ _ => True
            _ => False
 
 showHole : {auto c : Ref Ctxt Defs} ->

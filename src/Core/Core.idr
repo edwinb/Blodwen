@@ -38,6 +38,7 @@ data Error annot
     | AllFailed (List (Error annot))
     | InvalidImplicit annot Name (Term vars)
     | CantSolveGoal annot (Env Term vars) (Term vars)
+    | DeterminingArg annot Name (Env Term vars) (Term vars)
     | UnsolvedHoles (List (annot, Name))
     | SolvedNamedHole annot Name
     | VisibilityError annot Visibility Name Visibility Name
@@ -121,6 +122,9 @@ Show annot => Show (Error annot) where
       = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm
   show (CantSolveGoal fc env g) 
       = show fc ++ ":Can't solve goal " ++ assert_total (show g)
+  show (DeterminingArg fc n env g)
+      = show fc ++ ":Can't solve goal " ++ assert_total (show g) ++ 
+                " since argument " ++ show n ++ " can't be inferred"
   show (UnsolvedHoles hs) = "Unsolved holes " ++ show hs
   show (SolvedNamedHole fc h) = show fc ++ ":Named hole " ++ show h ++ " is solved by unification"
   show (VisibilityError fc vx x vy y)

@@ -20,3 +20,26 @@ Functor (Vect n) where
 
 tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
 tryVMap x y = map (plus x) [y, S y]
+
+mapMaybe : (a -> Maybe b) -> List a -> List b
+mapMaybe f []      = []
+mapMaybe f (x::xs) =
+  case f x of
+    Nothing => mapMaybe f xs
+    Just j  => j :: mapMaybe f xs
+
+drop : (n : Nat) -> (xs : List a) -> List a
+drop Z     xs      = xs
+drop (S n) []      = []
+drop (S n) (x::xs) = drop n xs
+
+head' : (l : List a) -> Maybe a
+head' []      = Nothing
+head' (x::xs) = Just x
+
+transpose : List (List el) -> List (List el)
+transpose [] = []
+transpose ([] :: xss) = transpose xss
+transpose {el} ((x::xs) :: xss) 
+   = (x :: (mapMaybe head' xss)) :: (transpose (xs :: (map (drop (S Z)) xss)))
+

@@ -401,7 +401,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
                         Nothing => App (repName new fn) (repName new arg)
                         Just Refl => 
                            let locs = case lookupDefExact fn' (gamma gam) of
-                                           Just (Hole i _) => i
+                                           Just (Hole i _ _) => i
                                            _ => 0
                                         in
                                apply new (drop locs (getArgs (App fn arg)))

@@ -74,5 +74,9 @@ data Pair : Type -> Type -> Type where
      MkPair : {0 a, b : Type} -> a -> b -> Pair a b
 
 public export
-the : (a : Type) -> a -> a
+the : (0 a : Type) -> a -> a
 the _ x = x
+
+public export
+id : a -> a
+id x = x

@@ -843,7 +843,7 @@ mutual
            (scopev, scopet) <- check rigc process {e=e'} elabinfo (Pi rigb plicity pty :: env) 
                                      (weaken nest') scope 
                                      (Just (renameTop n psc))
-           st' <- strengthenedEState (topLevel elabinfo) loc
+           st' <- strengthenedEState False loc
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
@@ -856,7 +856,7 @@ mutual
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} rigc process elabinfo env' (weaken nest') scope Nothing
-           st' <- strengthenedEState (topLevel elabinfo) loc
+           st' <- strengthenedEState False loc
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)

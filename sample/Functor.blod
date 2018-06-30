@@ -10,6 +10,31 @@ Functor List where
 tryMap : Nat -> Nat -> List Nat
 tryMap x y = map (plus x) [y, S y]
 
+test : List n -> List n
+test xss = map id xss
+
+mapMaybe : (a -> Maybe b) -> List a -> List b
+mapMaybe f []      = []
+mapMaybe f (x::xs) =
+  case f x of
+    Nothing => mapMaybe f xs
+    Just j  => j :: mapMaybe f xs
+
+drop : (n : Nat) -> (xs : List a) -> List a
+drop Z     xs      = xs
+drop (S n) []      = []
+drop (S n) (x::xs) = drop n xs
+
+head' : (l : List a) -> Maybe a
+head' []      = Nothing
+head' (x::xs) = Just x
+
+transpose : List (List el) -> List (List el)
+transpose [] = []
+transpose ([] :: xss) = transpose xss
+transpose {el} ((x::xs) :: xss) 
+   = (x :: (mapMaybe head' xss)) :: (transpose (xs :: (map (drop (S Z)) xss)))
+
 data Vect : _ -> Type -> Type where
      Nil : Vect Z a
      (::) : a -> Vect k a -> Vect (S k) a
@@ -20,3 +45,17 @@ Functor (Vect n) where
 
 tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
 tryVMap x y = map (plus x) [y, S y]
+
+-- data OVect : Type -> Nat -> Type where
+--      ONil : OVect a Z
+--      OCons : a -> OVect a k -> OVect a (S k)
+-- 
+-- Functor (\a => OVect a n) where
+--      map f ONil = ONil
+--      map f (OCons x xs) = OCons (f x) ?hmm -- (map f xs)
+-- 
+-- %logging 5
+-- tryOVMap : Nat -> Nat -> OVect Nat (S (S Z))
+-- tryOVMap x y = map (plus x) (OCons y (OCons (S y) ONil))
+-- %logging 0
+

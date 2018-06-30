@@ -95,7 +95,7 @@ mutual
     updateHoleUsage useInHole var (apply (Ref nt fn) args) | ArgsList 
         = do gam <- getCtxt
              case lookupDefTyExact fn gam of
-                  Just (Hole locs pvar, ty)
+                  Just (Hole locs pvar _, ty)
                     => do ty' <- updateHoleType useInHole var locs ty args
                           updateTy fn ty'
                           pure True
@@ -136,7 +136,7 @@ mutual
                 -- Don't count variable usage in holes, so as far as linearity
                 -- checking is concerned, update the type so that the binders
                 -- are in Rig0
-                Just (Hole locs _, ty) => 
+                Just (Hole locs _ _, ty) => 
                      pure (Ref nt fn, embed (unusedHoleArgs locs ty), [])
                 Just (def, ty) => pure (Ref nt fn, embed ty, [])
     where

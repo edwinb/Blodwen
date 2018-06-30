@@ -97,3 +97,7 @@ data Unrestricted : Type -> Type where
 public export
 the : (a : Type) -> a -> a
 the _ x = x
+
+public export
+id : a -> a
+id x = x

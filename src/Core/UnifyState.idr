@@ -329,7 +329,7 @@ addNamedHole : {auto u : Ref UST (UState annot)} ->
                (ty : Term vars) -> Core annot ()
 addNamedHole loc cn patvar env ty
     = do let defty = mkConstantTy env ty
-         let hole = newDef defty Public (Hole (length env) patvar)
+         let hole = newDef defty Public (Hole (length env) patvar False)
          addHoleName loc cn
          addDef cn hole
 
@@ -432,9 +432,10 @@ dumpHole lvl hole
                                             ++ "\n\twhen"
                             traverse (\x => dumpConstraint x) constraints 
                             pure ()
-                    Just (Hole _ _, ty) =>
+                    Just (Hole _ _ inj, ty) =>
                          log lvl $ "?" ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
+                                           ++ if inj then " (Invertible)" else ""
                     Just (BySearch _ _, ty) =>
                          log lvl $ "Search " ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
@@ -528,7 +529,7 @@ normaliseHoleTypes
                   case definition gdef of
                        PMDef h _ _ => if h then updateType ds n gdef
                                            else pure ()
-                       Hole _ _ => updateType ds n gdef
+                       Hole _ _ _ => updateType ds n gdef
                        Guess _ _ => updateType ds n gdef
                        _ => pure ()
                Nothing => pure ()
