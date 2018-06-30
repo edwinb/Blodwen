@@ -10,16 +10,11 @@ Functor List where
 tryMap : Nat -> Nat -> List Nat
 tryMap x y = map (plus x) [y, S y]
 
-data Vect : _ -> Type -> Type where
-     Nil : Vect Z a
-     (::) : a -> Vect k a -> Vect (S k) a
+test : List n -> List n
+test xss = map id xss
 
-Functor (Vect n) where
-  map f [] = []
-  map f (x :: xs) = f x :: map f xs
-
-tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
-tryVMap x y = map (plus x) [y, S y]
+test2 : Functor f => f a -> f a
+test2 xss = map id xss
 
 mapMaybe : (a -> Maybe b) -> List a -> List b
 mapMaybe f []      = []
@@ -42,4 +37,38 @@ transpose [] = []
 transpose ([] :: xss) = transpose xss
 transpose {el} ((x::xs) :: xss) 
    = (x :: (mapMaybe head' xss)) :: (transpose (xs :: (map (drop (S Z)) xss)))
+
+data Vect : _ -> Type -> Type where
+     Nil : Vect Z a
+     (::) : a -> Vect k a -> Vect (S k) a
+
+Functor (Vect n) where
+  map f [] = []
+  map f (x :: xs) = f x :: map f xs
+
+tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
+tryVMap x y = map (plus x) [y, S y]
+
+data Deeper : (f : _) -> Type -> Type where
+     MkD : f a -> Deeper f a
+
+Functor f => Functor (Deeper f) where
+  map f (MkD xs) = MkD (map f xs)
+
+deepAdd : Deeper List Nat -> Deeper List Nat
+deepAdd xs = map (plus (S Z)) xs
+
+data OVect : Type -> Nat -> Type where
+     ONil : OVect a Z
+     OCons : a -> OVect a k -> OVect a (S k)
+
+Functor (\a => OVect a n) where
+     map f ONil = ONil
+     map f (OCons x xs) = OCons (f x) (map f xs)
+
+idOVMap : OVect a n -> OVect a n
+idOVMap xs = map id xs
+
+tryOVMap : Nat -> Nat -> OVect Nat (S (S Z))
+tryOVMap x y = map (plus x) (OCons y (OCons (S y) ONil))
 

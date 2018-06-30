@@ -1001,11 +1001,11 @@ mutual
             (ty : NF vars) -> List (Term vars) ->
             Core annot (NF vars, List (Term vars)) 
   getImps rigc process loc env nest elabinfo (NBind bn (Pi c Implicit ty) sc) imps
-      = do tm <- makeImplicit rigc process loc env nest elabinfo bn ty
+      = do tm <- makeImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            getImps rigc process loc env nest elabinfo 
                    (sc (toClosure False env tm)) (tm :: imps)
   getImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) imps
-      = do tm <- makeAutoImplicit rigc process loc env nest elabinfo bn ty
+      = do tm <- makeAutoImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            getImps rigc process loc env nest elabinfo 
                    (sc (toClosure False env tm)) (tm :: imps)
   getImps rigc process loc env nest elabinfo ty imps = pure (ty, reverse imps)

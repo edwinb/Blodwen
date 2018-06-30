@@ -409,6 +409,30 @@ mutual
              _ => False
   headsConvert defs env _ _ = True
 
+  -- If exactly one of the argument types converts with the expected type,
+  -- return that argument position number
+  findAbsArg : Defs -> Env Term vars ->
+               NF vars -> Maybe (List (NF vars)) -> Maybe Nat
+  findAbsArg {vars} defs env aty cs
+      = do cs' <- cs
+           findMatch 0 Nothing cs'
+    where
+      findMatch : Nat -> Maybe Nat -> List (NF vars) -> Maybe Nat
+      findMatch i Nothing (c :: cs)
+          = if convert defs env aty c
+               then findMatch (1 + i) (Just i) cs
+               else findMatch (1 + i) Nothing cs
+      findMatch i (Just t) (c :: cs)
+          = if convert defs env aty c 
+               then Nothing 
+               else findMatch (1 + i) (Just t) cs
+      findMatch i t [] = t
+
+  replacePos : Nat -> a -> List a -> List a
+  replacePos Z x (y :: xs) = x :: xs
+  replacePos (S k) x (y :: xs) = y :: replacePos k x xs
+  replacePos _ _ xs = xs
+
   unifyInvertible : {auto c : Ref Ctxt Defs} ->
                     {auto u : Ref UST (UState annot)} ->
                     UnifyMode -> annot -> Env Term vars ->
@@ -419,15 +443,14 @@ mutual
                     Core annot (List Name)
   unifyInvertible mode loc env nt var args nty con args'
       = do gam <- get Ctxt
-
            -- Get the types of the arguments to ensure that the rightmost
            -- argument types match up
            let vty = lookupTyExact var (gamma gam)
            let vargTys = maybe Nothing 
-                            (\ty => getArgTypes (nf gam env (embed  ty)) args)
+                            (\ty => getArgTypes (nf gam env (embed ty)) args)
                             vty
            let nargTys = maybe Nothing 
-                           (\ty => getArgTypes (nf gam env (embed  ty)) args')
+                           (\ty => getArgTypes (nf gam env (embed ty)) args')
                            nty
            log 5 $ "Hole arg types: " ++
                     show vty ++ " ; " ++ show (map (\t => quote (noGam gam) env t) (maybe [] id vargTys))
@@ -460,13 +483,33 @@ mutual
               else
                 -- Otherwise, abstract over an argument which *does* have the
                 -- right type and try again.
-                do log 10 $ "Postponing hole application " ++
-                         show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
-                         show (quote (noGam gam) env (con args'))
-                   postpone loc env
-                        (quote (noGam gam) env (NApp (NRef nt var) args)) 
-                        (quote (noGam gam) env (con args'))
-
+                case (map reverse vargTys, reverse args) of
+                     (Just (t :: ts), h :: hargs) =>
+                        do log 10 $ "Abstract argument type " ++
+                                    show (quote (noGam gam) env t)
+                           let arg = findAbsArg gam env t nargTys
+                           case arg of
+                                Nothing =>
+                                  do log 10 $ "Postponing hole application " ++
+                                           show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                                           show (quote (noGam gam) env (con args'))
+                                     postpone loc env
+                                          (quote (noGam gam) env (NApp (NRef nt var) args)) 
+                                          (quote (noGam gam) env (con args'))
+                                Just n =>
+                                  do log 10 $ "Abstract argument " ++ show n
+                                     unifyHole mode loc env 
+                                           nt var (reverse hargs)
+                                           (NBind (MN "uvar" 0) 
+                                                  (Lam RigW Explicit NErased)
+                                                  (\v => con (replacePos n v args')))
+                     _ =>
+                        do log 10 $ "Postponing hole application " ++
+                                 show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                                 show (quote (noGam gam) env (con args'))
+                           postpone loc env
+                                (quote (noGam gam) env (NApp (NRef nt var) args)) 
+                                (quote (noGam gam) env (con args'))
 
   -- Unify a hole application - we have already checked that the hole is
   -- invertible (i.e. it's a determining argument to a proof search where

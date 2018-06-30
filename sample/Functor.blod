@@ -49,16 +49,26 @@ Functor (Vect n) where
 tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
 tryVMap x y = map (plus x) [y, S y]
 
+data Deeper : (f : _) -> Type -> Type where
+     MkD : f a -> Deeper f a
+
+Functor f => Functor (Deeper f) where
+  map f (MkD xs) = MkD (map f xs)
+
+deepAdd : Deeper List Nat -> Deeper List Nat
+deepAdd xs = map (plus (S Z)) xs
+
 data OVect : Type -> Nat -> Type where
      ONil : OVect a Z
      OCons : a -> OVect a k -> OVect a (S k)
 
 Functor (\a => OVect a n) where
      map f ONil = ONil
-     map f (OCons x xs) = OCons (f x) ?hmm -- (map f xs)
+     map {n = S k} f (OCons x xs) = OCons (f x) (map {f = \a => OVect a k} f xs)
 
--- %logging 10
--- tryOVMap : Nat -> Nat -> OVect Nat (S (S Z))
--- tryOVMap x y = map (plus x) (OCons y (OCons (S y) ONil))
--- %logging 0
+idOVMap : OVect a n -> OVect a n
+idOVMap xs = map id xs
+
+tryOVMap : Nat -> Nat -> OVect Nat (S (S Z))
+tryOVMap x y = map (plus x) (OCons y (OCons (S y) ONil))
 
