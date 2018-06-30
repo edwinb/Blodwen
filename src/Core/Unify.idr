@@ -391,7 +391,83 @@ mutual
       = case lookupDefExact n gam of
              Just (Hole _ pvar inv) => not pvar && inv
              _ => False
+
+  getArgTypes : (fnType : NF vars) -> List (Closure vars) -> 
+                Maybe (List (NF vars))
+  getArgTypes (NBind n (Pi _ _ ty) sc) (a :: as)
+     = do scTys <- getArgTypes (sc a) as
+          pure (ty :: scTys)
+  getArgTypes _ [] = Just []
+  getArgTypes _ _ = Nothing
  
+  headsConvert : Defs -> Env Term vars -> 
+                 Maybe (List (NF vars)) -> Maybe (List (NF vars)) ->
+                 Bool
+  headsConvert defs env (Just vs) (Just ns)
+      = case (reverse vs, reverse ns) of
+             (v :: _, n :: _) => convert defs env v n
+             _ => False
+  headsConvert defs env _ _ = True
+
+  unifyInvertible : {auto c : Ref Ctxt Defs} ->
+                    {auto u : Ref UST (UState annot)} ->
+                    UnifyMode -> annot -> Env Term vars ->
+                    NameType -> Name -> List (Closure vars) -> 
+                    Maybe ClosedTerm ->
+                    (List (Closure vars) -> NF vars) ->
+                    List (Closure vars) ->
+                    Core annot (List Name)
+  unifyInvertible mode loc env nt var args nty con args'
+      = do gam <- get Ctxt
+
+           -- Get the types of the arguments to ensure that the rightmost
+           -- argument types match up
+           let vty = lookupTyExact var (gamma gam)
+           let vargTys = maybe Nothing 
+                            (\ty => getArgTypes (nf gam env (embed  ty)) args)
+                            vty
+           let nargTys = maybe Nothing 
+                           (\ty => getArgTypes (nf gam env (embed  ty)) args')
+                           nty
+           log 5 $ "Hole arg types: " ++
+                    show vty ++ " ; " ++ show (map (\t => quote (noGam gam) env t) (maybe [] id vargTys))
+           log 5 $ "Con arg types: " ++
+                    show nty ++ " ; " ++ show (map (\t => quote (noGam gam) env t) (maybe [] id nargTys))
+
+           -- If the rightmost arguments have the same type, or we don't
+           -- know the types of the arguments, we'll get on with it.
+           if headsConvert gam env vargTys nargTys
+              then
+                -- Unify the rightmost arguments, with the goal of turning the
+                -- hole application into a pattern form
+                case (reverse args, reverse args') of
+                     (h :: hargs, f :: fargs) =>
+                        do log 10 $ "Continuing with " ++
+                                 show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
+                                   ++ " =?= " ++
+                                 show (quote (noGam gam) env (con (reverse fargs)))
+                           unify mode loc env h f
+                           unify mode loc env 
+                                 (NApp (NRef nt var) (reverse hargs))
+                                 (con (reverse fargs))
+                     _ =>
+                        do log 10 $ "Postponing hole application " ++
+                                 show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                                 show (quote (noGam gam) env (con args'))
+                           postpone loc env
+                                (quote (noGam gam) env (NApp (NRef nt var) args)) 
+                                (quote (noGam gam) env (con args'))
+              else
+                -- Otherwise, abstract over an argument which *does* have the
+                -- right type and try again.
+                do log 10 $ "Postponing hole application " ++
+                         show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                         show (quote (noGam gam) env (con args'))
+                   postpone loc env
+                        (quote (noGam gam) env (NApp (NRef nt var) args)) 
+                        (quote (noGam gam) env (con args'))
+
+
   -- Unify a hole application - we have already checked that the hole is
   -- invertible (i.e. it's a determining argument to a proof search where
   -- it is a constructor or something else invertible in each case)
@@ -400,69 +476,16 @@ mutual
                  UnifyMode -> annot -> Env Term vars ->
                  NameType -> Name -> List (Closure vars) -> NF vars ->
                  Core annot (List Name)
-  unifyHoleApp mode loc env nt var args (NTCon n t a args')
+  unifyHoleApp {vars} mode loc env nt var args (NTCon n t a args')
       = do gam <- get Ctxt
-           -- Unify the rightmost arguments, with the goal of turning the
-           -- hole application into a pattern form
-           case (reverse args, reverse args') of
-                (h :: hargs, f :: fargs) =>
-                   do log 10 $ "Continuing with " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
-                              ++ " =?= " ++
-                            show (quote (noGam gam) env (NTCon n t a (reverse fargs)))
-                      unify mode loc env h f
-                      unify mode loc env 
-                            (NApp (NRef nt var) (reverse hargs))
-                            (NTCon n t a (reverse fargs))
-                _ =>
-                   do log 10 $ "Postponing hole application " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
-                            show (quote (noGam gam) env (NTCon n t a args'))
-                      postpone loc env
-                           (quote (noGam gam) env (NApp (NRef nt var) args)) 
-                           (quote (noGam gam) env (NTCon n t a args'))
+           let nty = lookupTyExact n (gamma gam)
+           unifyInvertible mode loc env nt var args nty (NTCon n t a) args'
   unifyHoleApp mode loc env nt var args (NDCon n t a args')
       = do gam <- get Ctxt
-           -- Unify the rightmost arguments, with the goal of turning the
-           -- hole application into a pattern form
-           case (reverse args, reverse args') of
-                (h :: hargs, f :: fargs) =>
-                   do log 10 $ "Continuing with " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
-                              ++ " =?= " ++
-                            show (quote (noGam gam) env (NDCon n t a (reverse fargs)))
-                      unify mode loc env h f
-                      unify mode loc env 
-                            (NApp (NRef nt var) (reverse hargs))
-                            (NDCon n t a (reverse fargs))
-                _ =>
-                   do log 10 $ "Postponing hole application " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
-                            show (quote (noGam gam) env (NDCon n t a args'))
-                      postpone loc env
-                           (quote (noGam gam) env (NApp (NRef nt var) args)) 
-                           (quote (noGam gam) env (NDCon n t a args'))
+           let nty = lookupTyExact n (gamma gam)
+           unifyInvertible mode loc env nt var args nty (NDCon n t a) args'
   unifyHoleApp mode loc env nt var args (NApp (NLocal lvar) args')
-      = do gam <- get Ctxt
-           -- Unify the rightmost arguments, with the goal of turning the
-           -- hole application into a pattern form
-           case (reverse args, reverse args') of
-                (h :: hargs, f :: fargs) =>
-                   do log 10 $ "Continuing with " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
-                              ++ " =?= " ++
-                            show (quote (noGam gam) env (NApp (NLocal lvar) (reverse fargs)))
-                      unify mode loc env h f
-                      unify mode loc env 
-                            (NApp (NRef nt var) (reverse hargs))
-                            (NApp (NLocal lvar) (reverse fargs))
-                _ =>
-                   do log 10 $ "Postponing hole application " ++
-                            show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
-                            show (quote (noGam gam) env (NApp (NLocal lvar) args'))
-                      postpone loc env
-                           (quote (noGam gam) env (NApp (NRef nt var) args)) 
-                           (quote (noGam gam) env (NApp (NLocal lvar) args'))
+      = unifyInvertible mode loc env nt var args Nothing (NApp (NLocal lvar)) args'
   unifyHoleApp mode loc env nt var args tm
       = do gam <- get Ctxt
            log 10 $ "Postponing constraint " ++

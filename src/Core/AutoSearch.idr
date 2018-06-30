@@ -68,7 +68,8 @@ mkArgs : {auto c : Ref Ctxt Defs} ->
          annot -> Env Term vars -> Term vars -> 
          Core annot (List (Name, Term vars), Term vars)
 mkArgs loc env (Bind n (Pi c info ty) sc)
-    = do argName <- addHole loc env ty
+    = do argName <- genName "sa"
+         addNamedHole loc argName False env ty
          let arg = mkConstantApp argName env
          (rest, restTy) <- mkArgs loc env (subst arg sc)
          pure ((argName, arg) :: rest, restTy)
@@ -79,7 +80,7 @@ nameIsHole : {auto c : Ref Ctxt Defs} ->
 nameIsHole loc n
     = do gam <- get Ctxt
          case lookupDefExact n (gamma gam) of
-              Nothing => throw (InternalError "Can't happen, name has mysteriously vanised")
+              Nothing => throw (InternalError "Can't happen, name has mysteriously vanished")
               Just def =>
                    case def of
                         Hole locs False _ => pure True
@@ -114,7 +115,7 @@ searchName loc depth trying env ty defining con
                               | _ => throw (CantSolveGoal loc env (quote gam env ty))
                         let candidate = apply (Ref (DataCon tag arity) con)
                                               (map snd args)
-                        -- TODO: Go through the arguments and solve them, if they
+                        -- Go through the arguments and solve them, if they
                         -- haven't been solved by unification
                         traverse (searchIfHole loc depth trying defining) (map fst args)
                         pure candidate
@@ -127,7 +128,7 @@ searchName loc depth trying env ty defining con
                         [] <- unify InTerm loc env ty (nf gam env appTy)
                               | _ => throw (CantSolveGoal loc env (quote gam env ty))
                         let candidate = apply (Ref Func con) (map snd args)
-                        -- TODO: Go through the arguments and solve them, if they
+                        -- Go through the arguments and solve them, if they
                         -- haven't been solved by unification
                         traverse (searchIfHole loc depth trying defining) (map fst args)
                         pure candidate
@@ -192,27 +193,43 @@ searchNames loc depth trying env ty defining (n :: ns)
          exactlyOne loc env ty 
             (map (searchName loc depth trying env ty defining) (n :: ns))
 
--- Fail with the given error if any of the determining arguments are holes
+-- Fail with the given error if any of the determining arguments contain holes
 concreteDets : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
-               annot -> Nat -> List Nat -> (Name -> Error annot) -> 
+               annot -> Env Term vars -> NF vars -> Nat -> List Nat -> 
                List (Closure vars) -> Core annot ()
-concreteDets loc i ds err [] = pure ()
-concreteDets loc i ds err (cl :: cs)
+concreteDets loc env ty i ds [] = pure ()
+concreteDets {vars} loc env ty i ds (cl :: cs)
     = if not (i `elem` ds) 
-         then concreteDets loc (1 + i) ds err cs
-         else do defs <- get Ctxt
-                 case evalClosure defs cl of
-                      -- if 'hn' is a hole, we can't proceed yet
-                      -- However, we can mark the hole as "invertible" if
-                      -- we know the determining arguments of all the hints
-                      -- are invertible.
-                      NApp (NRef _ hn) args =>
-                           do hole <- nameIsHole loc hn
-                              if hole
-                                 then throw (err hn)
-                                 else concreteDets loc (1 + i) ds err cs
-                      _ => concreteDets loc (1 + i) ds err cs
+         then concreteDets loc env ty (1 + i) ds cs
+         else do concrete True cl
+                 concreteDets loc env ty (1 + i) ds cs
+  where
+    mutual
+      concreteNF : Bool -> NF vars -> Core annot ()
+      concreteNF top (NBind x b sc)
+          = concreteNF False (sc (toClosure False env Erased))
+      concreteNF top (NApp (NRef _ hn) args)
+          = do gam <- get Ctxt
+               hole <- nameIsHole loc hn
+               if hole
+                  then if top
+                          then throw (DeterminingArg loc hn env (quote gam env ty)) 
+                          else throw (CantSolveGoal loc env (quote gam env ty)) 
+                  else do traverse (concrete False) args
+                          pure ()
+      concreteNF top (NApp _ args) 
+          = do traverse (concrete False) args; pure ()
+      concreteNF top (NDCon _ _ _ args) 
+          = do traverse (concrete False) args; pure ()
+      concreteNF top (NTCon _ _ _ args) 
+          = do traverse (concrete False) args; pure ()
+      concreteNF _ _ = pure ()
+
+      concrete : Bool -> Closure vars -> Core annot ()
+      concrete top c 
+          = do defs <- get Ctxt
+               concreteNF top (evalClosure defs c)
 
 -- Type directed search - take the first thing of the given type it finds using
 -- the current environment.
@@ -235,9 +252,7 @@ searchType loc depth trying env defining ty@(NTCon n t ar args)
            then do (dets, allOpens, allCons) <- getSearchData loc n
                    let opens = filter (/=defining) allOpens
                    let cons = filter (/=defining) allCons
-                   concreteDets loc 0 dets 
-                                (\hn => DeterminingArg loc hn env (quote gam env ty)) 
-                                args
+                   concreteDets loc env ty 0 dets args
                    log 5 $ "Hints for " ++ show n ++ ": " ++ show cons
                    -- Solutions is either:
                    -- One of the locals
@@ -281,6 +296,7 @@ searchHole loc depth trying defining n gam glob
          let nty = nf gam [] searchty
          log 5 $ "Running search: " ++ show n ++ " in " ++ show defining ++
                  " for " ++ show (quote gam [] nty)
+         dumpConstraints 5 True
          soln <- searchType loc depth (searchty :: trying) [] defining nty
          log 5 $ "Solution: " ++ show n ++ " = " ++ show (normalise gam [] soln)
          addDef n (record { definition = PMDef True [] (STerm soln) } glob)
