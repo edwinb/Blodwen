@@ -844,7 +844,7 @@ mutual
                          (quote (noGam gam) env (NDCon y tagy ay ys))
     unifyD _ _ mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
         = do gam <- get Ctxt
-             if tagx == tagy
+             if x == y
                then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NTCon x tagx ax xs))
                                   ++ " and " ++ show (quote (noGam gam) env (NTCon y tagy ay ys)))
                        unifyArgs mode loc env xs ys

@@ -399,7 +399,7 @@ mutual
   checkImp rigc process elabinfo env nest (Implicit loc) (Just expected) 
       = case elabMode elabinfo of
              InLHS =>
-                do hn <- genName "_"
+                do hn <- genName "imp_"
                    -- Add as a pattern variable, but let it unify with other
                    -- things, hence 'False' as an argument to addBoundName
                    tm <- addBoundName loc hn False env expected

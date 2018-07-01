@@ -42,3 +42,21 @@ Eq a => Eq (List a) where
 test : ((Eq b, Eq b, Eq a), Eq b) => a -> a -> Bool
 test x y = x == y
 
+interface DecEq a where
+  decEq : (x : a) -> (y : a) -> Dec (x = y)
+
+-- %logging 6
+-- eqNat : (x : Nat) -> (y : Nat) -> Dec (x = y)
+-- eqNat (S x) (S y)
+--     = case eqNat x y of
+--            Yes Refl => Yes Refl
+-- eqNat Z Z = Yes Refl
+-- %logging 0
+
+%logging 7
+(DecEq a, {x : a} -> Eq (p x)) => Eq (DPair a p) where
+   (==) (MkDPair x y) (MkDPair x' y') 
+       = case decEq x x' of
+              Yes Refl => y == y'
+              No _ => False
+%logging 0

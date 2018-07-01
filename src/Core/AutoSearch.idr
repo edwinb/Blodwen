@@ -12,68 +12,40 @@ import Data.List
 
 %default covering
 
-trivial : {auto c : Ref Ctxt Defs} ->
-          {auto u : Ref UST (UState annot)} ->
-          annot -> Env Term vars -> Term vars -> Core annot (Term vars)
-trivial loc [] ty = throw (CantSolveGoal loc [] ty)
-trivial {vars = v :: vs} loc (b :: env) ty 
--- If the type of the variable at the top of the environment (or any of its
--- fields if it's a tuple) converts with the goal, use it 
--- (converts, not unifying, so no solving metavariables here)
-    = try (do gam <- get Ctxt
-              let bty = binderType b
-              case findPos gam (b :: env) id
-                           (nf gam (b :: env) (weaken bty)) 
-                           (nf gam (b :: env) ty) of
-                   Just res => do log 6 $ "Trivial success: " ++ show v ++ " : " ++ show (weaken {n = v} bty)
-                                     ++ " for " ++ show ty
-                                  pure res
-                   Nothing => do log 7 $ "Trivial fail: " ++ show v ++ " : " ++ show (weaken {n = v} bty)
-                                     ++ " for " ++ show ty
-                                 throw (CantSolveGoal loc (b :: env) ty))
-          (case shrinkTerm ty (DropCons SubRefl) of
-                Nothing => throw (CantSolveGoal loc (b :: env) ty)
-                Just ty' => do tm' <- trivial loc env ty'
-                               pure (weaken tm'))
-  where
-    findPos : Defs -> Env Term (v :: vs) -> 
-              (Term (v :: vs) -> Term (v :: vs)) ->
-              NF (v :: vs) -> NF (v :: vs) -> 
-              Maybe (Term (v :: vs))
-    findPos gam env f x@(NTCon pn _ _ [xty, yty]) ty
-        = if convert gam env x ty
-             then Just (f (Local Here))
-             else
-               do fname <- fstName gam
-                  sname <- sndName gam
-                  if isPairType pn gam
-                     then maybe
-                      (findPos gam env 
-                               (\r => apply (Ref Bound sname)
-                                            [Erased, Erased, (f r)])
-                               (evalClosure gam yty) ty)
-                      Just 
-                      (findPos gam env 
-                               (\r => apply (Ref Bound fname)
-                                            [Erased, Erased, (f r)])
-                               (evalClosure gam xty) ty)
-                     else Nothing
-    findPos gam env f x ty
-        = if convert gam env x ty
-             then Just (f (Local Here))
-             else Nothing
-
-mkArgs : {auto c : Ref Ctxt Defs} ->
-         {auto u : Ref UST (UState annot)} ->
-         annot -> Env Term vars -> Term vars -> 
-         Core annot (List (Name, Term vars), Term vars)
-mkArgs loc env (Bind n (Pi c info ty) sc)
+mkTmArgs : {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
+           annot -> Env Term vars -> Term vars -> 
+           Core annot (List (Name, Term vars), Term vars)
+mkTmArgs loc env (Bind n (Pi c info ty) sc)
     = do argName <- genName "sa"
          addNamedHole loc argName False env ty
          let arg = mkConstantApp argName env
-         (rest, restTy) <- mkArgs loc env (subst arg sc)
+         (rest, restTy) <- mkTmArgs loc env (subst arg sc)
+         pure ((argName, arg) :: rest, restTy)
+mkTmArgs loc env ty = pure ([], ty)
+
+mkArgs : {auto c : Ref Ctxt Defs} ->
+         {auto u : Ref UST (UState annot)} ->
+         annot -> Env Term vars -> NF vars -> 
+         Core annot (List (Name, Term vars), NF vars)
+mkArgs loc env (NBind n (Pi c info ty) sc)
+    = do gam <- get Ctxt
+         argName <- genName "sa"
+         addNamedHole loc argName False env (quote (noGam gam) env ty)
+         let arg = mkConstantApp argName env
+         (rest, restTy) <- mkArgs loc env (sc (MkClosure False [] env Erased))
          pure ((argName, arg) :: rest, restTy)
 mkArgs loc env ty = pure ([], ty)
+
+getAllEnv : (done : List Name) -> 
+            Env Term vars -> List (Term (done ++ vars), Term (done ++ vars))
+getAllEnv done [] = []
+getAllEnv {vars = v :: vs} done (b :: env) 
+   = let rest = getAllEnv (done ++ [v]) env in
+         (Local (weakenElem {ns = done} Here), 
+           rewrite appendAssociative done [v] vs in 
+              weakenNs (done ++ [v]) (binderType b)) :: 
+                   rewrite appendAssociative done [v] vs in rest
 
 nameIsHole : {auto c : Ref Ctxt Defs} ->
              annot -> Name -> Core annot Bool
@@ -110,7 +82,7 @@ searchName loc depth trying env ty defining con
          case lookupDefTyExact con (gamma gam) of
               Just (DCon tag arity _, cty)
                   => do let nty = normalise gam [] cty
-                        (args, appTy) <- mkArgs loc env (embed nty)
+                        (args, appTy) <- mkTmArgs loc env (embed nty)
                         [] <- unify InTerm loc env ty (nf gam env appTy)
                               | _ => throw (CantSolveGoal loc env (quote gam env ty))
                         let candidate = apply (Ref (DataCon tag arity) con)
@@ -122,9 +94,7 @@ searchName loc depth trying env ty defining con
               Just (_, cty)
                   => do let nty = normalise gam [] cty
                         ctxt <- get Ctxt
-                        let arity = getArity ctxt [] cty
-
-                        (args, appTy) <- mkArgs loc env (embed nty)
+                        (args, appTy) <- mkTmArgs loc env (embed nty)
                         [] <- unify InTerm loc env ty (nf gam env appTy)
                               | _ => throw (CantSolveGoal loc env (quote gam env ty))
                         let candidate = apply (Ref Func con) (map snd args)
@@ -193,6 +163,66 @@ searchNames loc depth trying env ty defining (n :: ns)
          exactlyOne loc env ty 
             (map (searchName loc depth trying env ty defining) (n :: ns))
 
+searchLocalWith : {auto c : Ref Ctxt Defs} ->
+                  {auto u : Ref UST (UState annot)} ->
+                  annot -> Nat -> List ClosedTerm ->
+                  Env Term vars -> List (Term vars, Term vars) ->
+                  Term vars -> Name -> Core annot (Term vars)
+searchLocalWith loc depth trying env [] ty defining
+    = throw (CantSolveGoal loc env ty)
+searchLocalWith {vars} loc depth trying env ((p, pty) :: rest) ty defining
+    = try (do gam <- get Ctxt
+              findPos gam p id (nf gam env pty) (nf gam env ty))
+          (searchLocalWith loc depth trying env rest ty defining)
+  where
+    findDirect : Defs -> Term vars -> 
+                 (Term vars -> Term vars) ->
+                 NF vars -> NF vars -> Core annot (Term vars)
+    findDirect gam prf f nty ty
+        = do (args, appTy) <- mkArgs loc env nty
+             [] <- unify InTerm loc env ty appTy
+                 | throw (CantSolveGoal loc env (quote gam env ty))
+             let candidate = TT.apply (f prf) (map snd args)
+             log 1 $ "Success for " ++ show (quote gam env ty) ++
+                     " with " ++ show candidate ++
+                     " " ++ show (quote gam env appTy)
+             traverse (searchIfHole loc depth trying defining) (map fst args)
+             pure candidate
+             
+    findPos : Defs -> Term vars -> 
+              (Term vars -> Term vars) ->
+              NF vars -> NF vars -> Core annot (Term vars)
+    findPos gam prf f x@(NTCon pn _ _ [xty, yty]) ty
+        = try (findDirect gam prf f x ty)
+              (do fname <- maybe (throw (CantSolveGoal loc env (quote gam env ty)))
+                                 pure
+                                 (fstName gam)
+                  sname <- maybe (throw (CantSolveGoal loc env (quote gam env ty)))
+                                 pure
+                                 (sndName gam)
+                  if isPairType pn gam
+                     then
+                       try (findPos gam prf
+                               (\r => apply (Ref Bound sname)
+                                            [quote gam env xty, 
+                                             quote gam env yty, (f r)])
+                               (evalClosure gam yty) ty)
+                           (findPos gam prf
+                               (\r => apply (Ref Bound fname)
+                                            [quote gam env xty, 
+                                             quote gam env yty, (f r)])
+                               (evalClosure gam xty) ty)
+                     else throw (CantSolveGoal loc env (quote gam env ty)))
+    findPos gam prf f nty ty = findDirect gam prf f nty ty
+
+searchLocal : {auto c : Ref Ctxt Defs} ->
+          {auto u : Ref UST (UState annot)} ->
+          annot -> Nat -> List ClosedTerm ->
+          Env Term vars -> Term vars -> Name -> Core annot (Term vars)
+searchLocal loc depth trying env ty defining 
+    = searchLocalWith loc depth trying env (getAllEnv [] env) ty defining
+
+
 -- Fail with the given error if any of the determining arguments contain holes
 concreteDets : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
@@ -259,7 +289,7 @@ searchType loc depth trying env defining ty@(NTCon n t ar args)
                    -- or *Exactly one* of the open hints
                    -- or, only if there are no open hints,
                    --     *Exactly one* of the other hints
-                   try (trivial loc env (quote (noGam gam) env ty))
+                   try (searchLocal loc depth trying env (quote (noGam gam) env ty) defining)
                        (handleError 
                          (searchNames loc depth trying env ty defining opens)
                          (\err => if ambig err
@@ -274,7 +304,7 @@ searchType loc depth trying env defining (NPrimVal IntType)
     = pure (PrimVal (I 0))
 searchType loc depth trying env defining ty 
     = do gam <- get Ctxt
-         try (trivial loc env (quote (noGam gam) env ty))
+         try (searchLocal loc depth trying env (quote (noGam gam) env ty) defining)
              (throw (CantSolveGoal loc env (quote gam env ty)))
 
 abandonIfCycle : {auto c : Ref Ctxt Defs} ->

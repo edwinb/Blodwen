@@ -1,0 +1,5 @@
+import Stuff
+
+foo : (c, a -> b) -> (a, Nat) -> b
+foo f p = %search
+
