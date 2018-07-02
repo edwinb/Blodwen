@@ -53,10 +53,10 @@ processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
                   checkTerm elab n env nest (PI Rig0) InType ty_imp TType
          wrapError (InType loc n) $ checkUserHoles False
 
-         log 1 $ show n ++ " : " ++ show (abstractEnvType env ty)
+         log 1 $ show n ++ " : " ++ show (abstractFullEnvType env ty)
 
          checkNameVisibility loc n vis ty
-         addDef n (newDef (abstractEnvType env ty) vis None)
+         addDef n (newDef (abstractFullEnvType env ty) vis None)
          traverse (processFnOpt loc n) fnopts
          addToSave n
 

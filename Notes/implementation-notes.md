@@ -16,7 +16,7 @@ proof search.
 
 Elaboration relies on unification (in Core.Unify), which allows postponing
 of unification problems. Essentially works the same way as Agda as described
-in Ulf Norrel's thesis.
+in Ulf Norell's thesis.
 
 General idea is that high level languages will provide a translation to TT.
 In the Idris/ namespace we define the high level syntax for Idris, which

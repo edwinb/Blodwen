@@ -399,7 +399,7 @@ mutual
   checkImp rigc process elabinfo env nest (Implicit loc) (Just expected) 
       = case elabMode elabinfo of
              InLHS =>
-                do hn <- genName "imp_"
+                do hn <- genName "_"
                    -- Add as a pattern variable, but let it unify with other
                    -- things, hence 'False' as an argument to addBoundName
                    tm <- addBoundName loc hn False env expected
@@ -487,7 +487,7 @@ mutual
               RawImp annot -> RawImp annot -> List (ImpClause annot) ->
               Maybe (Term vars) ->
               Core annot (Term vars, Term vars)
-  checkCase {c} {u} {i} rigc process elabinfo loc env nest scr scrty_exp alts expected
+  checkCase {vars} {c} {u} {i} rigc process elabinfo loc env nest scr scrty_exp alts expected
       = do (scrtyv, scrtyt) <- check Rig0 process elabinfo env nest scrty_exp (Just TType)
            -- Try checking at the given multiplicity; if that doesn't work,
            -- try checking at Rig1 (meaning that we're using a linear variable
@@ -522,11 +522,12 @@ mutual
                              Nothing =>
                                 do t <- addHole loc env TType
                                    pure (mkConstantApp t env)
-           let casefnty = abstractEnvType env $
+           let casefnty = abstractFullEnvType env $
                             absSmaller {done = []} env smaller 
                               (Bind scrn (Pi caseRig Explicit scrty) 
                                          (weaken caseretty))
 
+           log 10 $ "Env: " ++ show vars
            log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
            addDef casen (newDef casefnty Private None)
@@ -535,10 +536,10 @@ mutual
            log 5 $ "Generated alts: " ++ show alts'
 
            let nest' = record { names $= ((casen, (casen, 
-                                    (mkConstantApp casen env))) ::) } nest
+                                    (mkConstantAppFull casen env))) ::) } nest
            process c u i env nest' (IDef loc casen alts')
 
-           pure (App (applyToSub (mkConstantApp casen env) env smaller) 
+           pure (App (applyToSubFull (mkConstantAppFull casen env) env smaller) 
                      scrtm, caseretty)
     where
       -- Is every occurence of the given variable name in a parameter
@@ -604,12 +605,16 @@ mutual
 
       addEnv : Env Term vs -> SubVars vs' vs -> List Name -> List (RawImp annot)
       addEnv [] sub used = []
-      addEnv (b :: bs) SubRefl used
-          = Implicit loc :: addEnv bs SubRefl used
+      addEnv {vs = v :: vs} (b :: bs) SubRefl used
+          = case v of
+--                  UN n => IAs loc n (Implicit loc) :: addEnv bs SubRefl used
+                 _ => Implicit loc :: addEnv bs SubRefl used
       addEnv (b :: bs) (DropCons p) used
           = addEnv bs p used
-      addEnv (b :: bs) (KeepCons p) used
-          = Implicit loc :: addEnv bs p used
+      addEnv {vs = v :: vs} (b :: bs) (KeepCons p) used
+          = case v of
+--                  UN n => IAs loc n (Implicit loc) :: addEnv bs p used
+                 _ => Implicit loc :: addEnv bs p used
 
       -- Names used in the pattern we're matching on, so don't bind them
       -- in the generated case block
@@ -659,7 +664,7 @@ mutual
 
       applyEnv : Name -> Name -> (Name, (Name, Term vars))
       applyEnv outer inner = (inner, (GN (Nested outer inner), 
-                                      mkConstantApp (GN (Nested outer inner)) env))
+                                      mkConstantAppFull (GN (Nested outer inner)) env))
 
       -- Update the names in the declarations to the new 'nested' names.
       -- When we encounter the names in elaboration, we'll update to an

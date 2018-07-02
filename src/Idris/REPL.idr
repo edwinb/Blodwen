@@ -115,6 +115,7 @@ process (Eval itm)
             then do ity <- resugar [] (normalise gam [] ty)
                     coreLift (putStrLn (show itm ++ " : " ++ show ity))
             else coreLift (putStrLn (show itm))
+         dumpConstraints 0 True
          pure True
 process (Check (PRef fc fn))
     = do defs <- get Ctxt

@@ -10,4 +10,3 @@ testLet x = let y = prim__mul_Int x 2
                      | Nothing => 99
                 z = prim__mul_Int ans 2
               in z
-

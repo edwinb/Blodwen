@@ -359,12 +359,12 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
                                PV _ =>
                                   -- Need to apply 'n' to the surrounding environment in these cases!
                                   -- otherwise it won't work in nested defs...
-
-                                  (Bind n' (PLet RigW (normalise gam env (applyTo (Ref Func n) env)) ty) 
-                                           (refToLocal tmpN n' repNameTm), 
-                                   Bind n' 
-                                        (PLet RigW (normalise gam env (applyTo (Ref Func n) env)) ty) 
-                                              (refToLocal tmpN n' repNameTy))
+                                  let tm = normalise gam env (applyTo (Ref Func n) env) in
+                                    (Bind n' (PLet RigW tm ty) 
+                                             (refToLocal tmpN n' repNameTm), 
+                                     Bind n' 
+                                          (PLet RigW tm ty) 
+                                                (refToLocal tmpN n' repNameTy))
                                _ => (subst (normalise gam env (applyTo (Ref Func n) env))
                                            (refToLocal tmpN n repNameTm),
                                      subst (normalise gam env (applyTo (Ref Func n) env))

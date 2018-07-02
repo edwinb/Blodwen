@@ -62,7 +62,7 @@ checkCon elab env nest vis tn (MkImpTy loc cn_in ty_raw)
          -- Check 'ty' returns something in the right family
          checkFamily loc cn tn env (nf gam env ty)
 
-         let ty' = abstractEnvType env ty
+         let ty' = abstractFullEnvType env ty
          log 3 $ show cn ++ " : " ++ show ty'
 
          addToSave cn
@@ -96,7 +96,7 @@ processData elab env nest vis (MkImpLater loc n_in ty_raw)
 
          checkIsType loc n env (nf gam env ty)
 
-         let ty' = abstractEnvType env ty
+         let ty' = abstractFullEnvType env ty
          log 3 $ show n ++ " : " ++ show ty'
          let arity = getArity gam [] ty'
 
@@ -114,7 +114,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
          gam <- get Ctxt
          checkIsType loc n env (nf gam env ty)
 
-         let ty' = abstractEnvType env ty
+         let ty' = abstractFullEnvType env ty
          log 3 $ show n ++ " : " ++ show ty'
          let arity = getArity gam [] ty'
 

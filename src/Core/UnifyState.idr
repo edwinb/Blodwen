@@ -258,49 +258,74 @@ mkConstant {vars = x :: _} (b :: env) tm
 mkConstantTy : Env Term vars -> Term vars -> ClosedTerm
 mkConstantTy = abstractEnvType 
 
-mkConstantAppArgs : Env Term vars -> 
+mkConstantAppArgs : Bool -> Env Term vars -> 
                     List (Term done) -> List (Term (vars ++ done))
-mkConstantAppArgs [] xs = xs
-mkConstantAppArgs (Let c val ty :: env) xs
-    = map weaken (mkConstantAppArgs env xs)
-mkConstantAppArgs (b :: env) xs 
-    = let rec = mkConstantAppArgs env xs in
+mkConstantAppArgs lets [] xs = xs
+mkConstantAppArgs lets (Let c val ty :: env) xs
+    = if lets
+         then Local Here :: map weaken (mkConstantAppArgs lets env xs)
+         else map weaken (mkConstantAppArgs lets env xs)
+mkConstantAppArgs lets (b :: env) xs 
+    = let rec = mkConstantAppArgs lets env xs in
           Local Here :: map weaken rec
 
 export
 applyTo : Term vars -> Env Term vars -> Term vars
 applyTo {vars} tm env
-  = let args = reverse (mkConstantAppArgs {done = []} env []) in
+  = let args = reverse (mkConstantAppArgs {done = []} False env []) in
         apply tm (rewrite sym (appendNilRightNeutral vars) in args)
 
-mkConstantAppArgsSub : Env Term vars -> SubVars smaller vars ->
+export
+applyToFull : Term vars -> Env Term vars -> Term vars
+applyToFull {vars} tm env
+  = let args = reverse (mkConstantAppArgs {done = []} True env []) in
+        apply tm (rewrite sym (appendNilRightNeutral vars) in args)
+
+mkConstantAppArgsSub : Bool -> Env Term vars -> SubVars smaller vars ->
                        List (Term done) -> List (Term (vars ++ done))
-mkConstantAppArgsSub [] p xs = xs
-mkConstantAppArgsSub (b :: env) SubRefl xs
-    = let rec = mkConstantAppArgsSub env SubRefl xs in
-          case b of
-               Let _ _ _ => map weaken rec
-               _ => Local Here :: map weaken rec
-mkConstantAppArgsSub (b :: env) (DropCons p) xs
-    = map weaken (mkConstantAppArgsSub env p xs)
-mkConstantAppArgsSub (b :: env) (KeepCons p) xs
-    = let rec = mkConstantAppArgsSub env p xs in
-          case b of
-               Let _ _ _ => map weaken rec
-               _ => Local Here :: map weaken rec
+mkConstantAppArgsSub lets [] p xs = xs
+mkConstantAppArgsSub lets (b :: env) SubRefl xs
+    = let rec = mkConstantAppArgsSub lets env SubRefl xs in
+          if lets 
+             then Local Here :: map weaken rec
+             else case b of
+                     Let _ _ _ => map weaken rec
+                     _ => Local Here :: map weaken rec
+mkConstantAppArgsSub lets (b :: env) (DropCons p) xs
+    = map weaken (mkConstantAppArgsSub lets env p xs)
+mkConstantAppArgsSub lets (b :: env) (KeepCons p) xs
+    = let rec = mkConstantAppArgsSub lets env p xs in
+          if lets 
+             then Local Here :: map weaken rec
+             else case b of
+                     Let _ _ _ => map weaken rec
+                     _ => Local Here :: map weaken rec
 
 export
 applyToSub : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars
 applyToSub {vars} tm env sub
-  = let args = reverse (mkConstantAppArgsSub {done = []} env sub []) in
+  = let args = reverse (mkConstantAppArgsSub {done = []} False env sub []) in
         apply tm (rewrite sym (appendNilRightNeutral vars) in args)
 
--- Apply a named constant to the current environment.
+export
+applyToSubFull : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars
+applyToSubFull {vars} tm env sub
+  = let args = reverse (mkConstantAppArgsSub {done = []} True env sub []) in
+        apply tm (rewrite sym (appendNilRightNeutral vars) in args)
+
+-- Apply a named constant to the current environment, excluding lets.
 export
 mkConstantApp : Name -> Env Term vars -> Term vars
 -- Leftmost argument is the outermost variable, so make a list of local
 -- variables then reverse it
 mkConstantApp cn env = applyTo (Ref Func cn) env
+
+-- Apply a named constant to the current environment, including lets.
+export
+mkConstantAppFull : Name -> Env Term vars -> Term vars
+-- Leftmost argument is the outermost variable, so make a list of local
+-- variables then reverse it
+mkConstantAppFull cn env = applyToFull (Ref Func cn) env
 
 -- Given a term and a type, add a new guarded constant to the global context
 -- by applying the term to the current environment
