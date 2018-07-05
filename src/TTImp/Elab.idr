@@ -20,6 +20,23 @@ getRigNeeded : ElabMode -> RigCount
 getRigNeeded InType = Rig0 -- unrestricted usage in types
 getRigNeeded _ = Rig1
 
+findPLetRenames : Term vars -> List (Name, Name)
+findPLetRenames (Bind n (PLet c (Local {x = x@(MN _ _)} p) ty) sc)
+    = (x, n) :: findPLetRenames sc
+findPLetRenames (Bind n _ sc) = findPLetRenames sc
+findPLetRenames tm = []
+
+doPLetRenames : List (Name, Name) -> List Name -> Term vars -> Term vars
+doPLetRenames ns drops (Bind n b@(PLet _ _ _) sc)
+    = if n `elem` drops
+         then subst Erased (doPLetRenames ns drops sc)
+         else Bind n b (doPLetRenames ns drops sc)
+doPLetRenames ns drops (Bind n b sc)
+    = case lookup n ns of
+           Just n' => Bind n' b (doPLetRenames ns (n' :: drops) (renameTop n' sc))
+           Nothing => Bind n b (doPLetRenames ns drops sc)
+doPLetRenames ns drops sc = sc
+
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
@@ -62,7 +79,9 @@ elabTerm process defining env nest impmode elabmode tm tyin
          gam <- get Ctxt
          log 5 $ "Binding implicits " ++ show fullImps ++
                  " in " ++ show chktm
-         let (restm, resty) = bindImplicits impmode gam env fullImps chktm ty
+         est <- get EST
+         let (restm, resty) = bindImplicits impmode gam env fullImps 
+                                            (asVariables est) chktm ty
          traverse implicitBind (map fst fullImps)
          -- Give implicit bindings their proper names, as UNs not PVs
          gam <- get Ctxt
@@ -73,12 +92,21 @@ elabTerm process defining env nest impmode elabmode tm tyin
          normaliseHoleTypes
          clearSolvedHoles
          dumpConstraints 2 False
-         linearCheck (getAnnot tm) rigc env ptm'
+         case elabmode of
+              InLHS => pure ()
+              _ => linearCheck (getAnnot tm) rigc env ptm'
          -- If there are remaining holes, we need to save them to the ttc
          -- since they haven't been normalised away yet, and they may be
          -- solved later
          traverse addToSave !getHoleNames
-         pure (ptm', pty')
+         -- On the LHS, finish by tidying up the plets (changing things that
+         -- were of the form x@_, where the _ is inferred to be a variable,
+         -- to just x)
+         case elabmode of
+              InLHS => let vs = findPLetRenames ptm' in
+                           pure (doPLetRenames vs [] ptm',
+                                 doPLetRenames vs [] pty')
+              _ => pure (ptm', pty')
 
 export
 inferTerm : {auto c : Ref Ctxt Defs} ->

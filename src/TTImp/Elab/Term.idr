@@ -305,7 +305,7 @@ mutual
     checkImp rigc process elabinfo env nest (IBindVar loc str) exp | InExpr
       = throw (BadImplicit loc str)
     checkImp rigc process elabinfo env nest (IBindVar loc str) Nothing | elabmode
-        = do let n = PV str
+        = do let n = PV (UN str)
              est <- get EST
              case lookup n (boundNames est) of
                   Nothing =>
@@ -326,7 +326,7 @@ mutual
                   Just (tm, ty) =>
                        pure (tm, ty)
     checkImp rigc process elabinfo env nest (IBindVar loc str) (Just expected) | elabmode
-        = do let n = PV str
+        = do let n = PV (UN str)
              est <- get EST
              case lookup n (boundNames est) of
                   Nothing =>
@@ -350,8 +350,10 @@ mutual
            setBound (map fst argImps)
            clearToBind
            gam <- get Ctxt
+           est <- get EST
            let (bv, bt) = bindImplicits (implicitMode elabinfo)
-                                        gam env argImps tmv TType
+                                        gam env argImps (asVariables est)
+                                        tmv TType
            traverse implicitBind (map fst argImps)
            checkExp rigc process loc elabinfo env nest bv bt expected
   checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) with (elabMode elabinfo)
@@ -512,17 +514,30 @@ mutual
            -- Update environment so that linear bindings which aren't in
            -- 'usedNs' have multiplicity 0 in the case type
            let env = updateMults usedNs env
+           -- The 'pre_env' is the environment we apply any local (nested)
+           -- names to. Here *all* the names have multiplicity 0 (we're
+           -- going to abstract over them all again, in case the case block
+           -- does any refining of their types/values)
+           let pre_env = mkLocalEnv env
 
            gam <- getCtxt
-           let (_ ** smallerIn) = findSubEnv env scrty
-           let (_ ** smaller) = dropParams gam env smallerIn scrty
+           -- TODO: Calculate the smallest environment we need to check
+           -- the scrutinee and make sure and types which are refined are
+           -- pushed through. This is just for tidiness, so for now, we'll
+           -- just use the same environment.
+           -- It's not just the names needed to check the scrutinee (which
+           -- is what the commented out code here does), but also any other 
+           -- name which uses a name the scrutinee depends on.
+--            let (_ ** smallerIn) = findSubEnv env scrty
+--            let (_ ** smaller) = dropParams gam env smallerIn scrty
+           let smaller = SubRefl
            
            caseretty <- case expected of
                              Just ty => pure ty
                              Nothing =>
                                 do t <- addHole loc env TType
                                    pure (mkConstantApp t env)
-           let casefnty = abstractFullEnvType env $
+           let casefnty = abstractOver env $
                             absSmaller {done = []} env smaller 
                               (Bind scrn (Pi caseRig Explicit scrty) 
                                          (weaken caseretty))
@@ -536,8 +551,9 @@ mutual
            log 5 $ "Generated alts: " ++ show alts'
 
            let nest' = record { names $= ((casen, (casen, 
-                                    (mkConstantAppFull casen env))) ::) } nest
-           process c u i env nest' (IDef loc casen alts')
+                                    (mkConstantAppFull casen pre_env))) ::) } 
+                              nest
+           process c u i pre_env nest' (IDef loc casen alts')
 
            pure (App (applyToSubFull (mkConstantAppFull casen env) env smaller) 
                      scrtm, caseretty)
@@ -590,10 +606,6 @@ mutual
                   then (_ ** DropCons sub')
                   else (_ ** KeepCons sub')
 
-      asBind : Name -> annot -> RawImp annot -> RawImp annot
-      asBind (UN n) ann tm = IAs ann n tm
-      asBind _ ann tm = tm
-
       updateMults : List Name -> Env Term vs -> Env Term vs
       updateMults ns [] = []
       updateMults ns ((::) {x} b bs)
@@ -603,17 +615,40 @@ mutual
               then setMultiplicity b Rig0 :: updateMults (filter (/=x) ns) bs
               else b :: updateMults (filter (/=x) ns) bs
 
+      mkLocalEnv : Env Term vs -> Env Term vs
+      mkLocalEnv [] = []
+      mkLocalEnv (b :: bs) 
+          = let b' = if multiplicity b == Rig1
+                        then setMultiplicity b Rig0
+                        else b in
+                b' :: mkLocalEnv bs
+
+      export
+      abstractOver : Env Term vs -> (tm : Term vs) -> ClosedTerm
+      abstractOver [] tm = tm
+      abstractOver (b :: env) tm 
+          = let c = case multiplicity b of
+                         Rig1 => Rig0
+                         r => r in
+            abstractOver env (Bind _ 
+                  (Pi c Explicit (binderType b)) tm)
+
+
+      canBindName : Name -> List Name -> Maybe Name
+      canBindName n vs
+         = if n `elem` vs then Nothing else Just n
+
       addEnv : Env Term vs -> SubVars vs' vs -> List Name -> List (RawImp annot)
       addEnv [] sub used = []
       addEnv {vs = v :: vs} (b :: bs) SubRefl used
-          = case v of
---                  UN n => IAs loc n (Implicit loc) :: addEnv bs SubRefl used
+          = case canBindName v (vs ++ used) of
+                 Just n => IAs loc n (Implicit loc) :: addEnv bs SubRefl used
                  _ => Implicit loc :: addEnv bs SubRefl used
       addEnv (b :: bs) (DropCons p) used
           = addEnv bs p used
       addEnv {vs = v :: vs} (b :: bs) (KeepCons p) used
-          = case v of
---                  UN n => IAs loc n (Implicit loc) :: addEnv bs p used
+          = case canBindName v (vs ++ used) of
+                 Just n => IAs loc n (Implicit loc) :: addEnv bs p used
                  _ => Implicit loc :: addEnv bs p used
 
       -- Names used in the pattern we're matching on, so don't bind them
@@ -621,7 +656,7 @@ mutual
       usedIn : RawImp annot -> List Name
       usedIn (IBindVar _ n) = [UN n]
       usedIn (IApp _ f a) = usedIn f ++ usedIn a
-      usedIn (IAs _ n a) = UN n :: usedIn a
+      usedIn (IAs _ n a) = n :: usedIn a
       usedIn _ = []
 
       updateClause : Name -> Env Term vars -> SubVars vs' vars ->
@@ -701,7 +736,7 @@ mutual
             Reflect annot =>
             RigCount -> Elaborator annot ->
             ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
-            String -> (arg : RawImp annot) ->
+            Name -> (arg : RawImp annot) ->
             Term vars ->
             Core annot (Term vars, Term vars) 
   checkAs rigc process elabinfo loc env nest var tm expected
@@ -710,14 +745,14 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Just (tm, ty) =>
-                    throw (GenericMsg loc ("Name " ++ var ++ " already bound"))
+                    throw (GenericMsg loc ("Name " ++ show var ++ " already bound"))
                 Nothing =>
                     do tm <- addBoundName loc n False env expected
                        log 5 $ "Added @ pattern name " ++ show (n, (tm, expected))
                        put EST
                            (record { boundNames $= ((n, (tm, expected)) ::),
                                      toBind $= ((n, (tm, expected)) ::),
-                                     asVariables $= (n ::) } est)
+                                     asVariables $= ((n, rigc) ::) } est)
                        gam <- get Ctxt
                        convert loc InLHS env (nf gam env patTm) (nf gam env tm)
                        pure (patTm, expected)
@@ -742,6 +777,8 @@ mutual
                      let arg' = case (elabMode elabinfo, arg, argRig) of
                                      (_, IBindVar _ _, _) => arg
                                      (_, Implicit _, _) => arg
+                                     (_, IAs _ _ (IBindVar _ _), _) => arg
+                                     (_, IAs _ _ (Implicit _), _) => arg
                                      (InLHS, _, Rig0) => IMustUnify loc arg
                                      _ => arg
                      (argtm, argty) <- check (rigMult rigf rigc)
@@ -817,10 +854,12 @@ mutual
                       gam <- get Ctxt
                       let (scopev', scopet')
                           = bindImplicits impmode gam env'
-                                          scopeImps scopev scopet
+                                          scopeImps 
+                                          (asVariables st') scopev scopet
                       let (binder, bindert)
                           = bindImplicits impmode gam env
                                           argImps
+                                          (asVariables st')
                                           (Bind n (Pi rigf info tyv) scopev')
                                           TType
                       log 5 $ "Result " ++ show binder ++ " : " ++ show bindert

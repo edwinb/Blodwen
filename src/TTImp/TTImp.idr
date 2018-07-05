@@ -68,7 +68,7 @@ mutual
        IType : annot -> RawImp annot
        IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
        IBindHere : annot -> RawImp annot -> RawImp annot -- point where IBindVars get bound
-       IAs : annot -> String -> (pattern : RawImp annot) -> RawImp annot
+       IAs : annot -> Name -> (pattern : RawImp annot) -> RawImp annot
        IMustUnify : annot -> (pattern : RawImp annot) -> RawImp annot
        Implicit : annot -> RawImp annot
 
@@ -162,7 +162,7 @@ mutual
   bindVars (IBindVar _ n) = insert (UN n) empty
   bindVars (IApp _ f a) = union (bindVars f) (bindVars a)
   bindVars (IImplicitApp _ f _ a) = union (bindVars f) (bindVars a)
-  bindVars (IAs _ n p) = insert (UN n) (bindVars p)
+  bindVars (IAs _ n p) = insert n (bindVars p)
   bindVars _ = empty
 
   usedCases : SortedSet -> List (ImpClause annot) -> SortedSet
@@ -300,7 +300,7 @@ mutual
     show (IBindVar _ n) = "$" ++ show n
     show (IBindHere _ t) = "{bindhere} . " ++ show t
     show (IMustUnify _ tm) = "(." ++ show tm ++ ")"
-    show (IAs _ n tm) = n ++ "@(" ++ show tm ++ ")"
+    show (IAs _ n tm) = show n ++ "@(" ++ show tm ++ ")"
     show (Implicit _) = "_"
 
   export

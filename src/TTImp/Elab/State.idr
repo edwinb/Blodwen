@@ -32,7 +32,7 @@ record EState (vars : List Name) where
   boundImplicits : List Name
                   -- names we've already decided will be bound implicits, no
                   -- we don't need to bind again
-  asVariables : List Name -- Names bound in @-patterns
+  asVariables : List (Name, RigCount) -- Names bound in @-patterns
   implicitsUsed : List (Maybe Name)
                             -- explicitly given implicits which have been used
                             -- in the current application (need to keep track, as
@@ -271,15 +271,15 @@ getToBind {vars} env
     = do est <- get EST
          ust <- get UST
          gam <- get Ctxt
-         log 5 $ "Before normImps " ++ show (map (norm gam) (reverse $ toBind est))
+         log 7 $ "To bind: " ++ show (map (norm gam) (reverse $ toBind est))
          log 10 $ "With holes " ++ show (map snd (holes ust))
          -- if we encounter a hole name that we've seen before, and is now 
          -- stored in boundImplicits, we don't want to bind it again
          res <- normImps gam (boundImplicits est) (reverse $ toBind est)
          let hnames = map fst res
-         log 5 $ "Sorting " ++ show res
-         let ret = asLast (asVariables est) (depSort hnames res)
-         log 5 $ "Sorted " ++ show ret
+         log 10 $ "Sorting " ++ show res
+         let ret = asLast (map fst (asVariables est)) (depSort hnames res)
+         log 7 $ "Sorted implicits " ++ show ret
          pure ret
   where
     -- put the @-pattern bound names last (so that we have the thing they're
@@ -333,6 +333,10 @@ getToBind {vars} env
     depSort hnames [] = []
     depSort hnames (h :: hs) = insert h hnames [] (depSort hnames hs)
 
+substPLet : RigCount -> (n : Name) -> (val : Term vars) -> (ty : Term vars) ->
+            Term (n :: vars) -> Term (n :: vars) -> (Term vars, Term vars)
+substPLet rig n tm ty sctm scty
+    = (Bind n (PLet rig tm ty) sctm, Bind n (PLet rig tm ty) scty)
 
 -- Bind implicit arguments, returning the new term and its updated type
 bindImplVars : Int -> 
@@ -340,11 +344,12 @@ bindImplVars : Int ->
                Defs ->
                Env Term vars ->
                List (Name, Term vars) ->
+               List (Name, RigCount) ->
                Term vars -> Term vars -> (Term vars, Term vars)
-bindImplVars i NONE gam env args scope scty = (scope, scty)
-bindImplVars i mode gam env [] scope scty = (scope, scty)
-bindImplVars i mode gam env ((n, ty) :: imps) scope scty
-    = let (scope', ty') = bindImplVars (i + 1) mode gam env imps scope scty
+bindImplVars i NONE gam env args asvs scope scty = (scope, scty)
+bindImplVars i mode gam env [] asvs scope scty = (scope, scty)
+bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
+    = let (scope', ty') = bindImplVars (i + 1) mode gam env imps asvs scope scty
           tmpN = MN "unb" i
           repNameTm = repName (Ref Bound tmpN) scope' 
           repNameTy = repName (Ref Bound tmpN) ty'
@@ -359,12 +364,12 @@ bindImplVars i mode gam env ((n, ty) :: imps) scope scty
                                PV _ =>
                                   -- Need to apply 'n' to the surrounding environment in these cases!
                                   -- otherwise it won't work in nested defs...
-                                  let tm = normalise gam env (applyTo (Ref Func n) env) in
-                                    (Bind n' (PLet RigW tm ty) 
-                                             (refToLocal tmpN n' repNameTm), 
-                                     Bind n' 
-                                          (PLet RigW tm ty) 
-                                                (refToLocal tmpN n' repNameTy))
+                                  let tm = normalise gam env (applyTo (Ref Func n) env) 
+                                      rig = maybe RigW id (lookup n asvs) in
+                                      substPLet rig n' tm ty 
+                                          (refToLocal tmpN n' repNameTm)
+                                          (refToLocal tmpN n' repNameTy)
+
                                _ => (subst (normalise gam env (applyTo (Ref Func n) env))
                                            (refToLocal tmpN n repNameTm),
                                      subst (normalise gam env (applyTo (Ref Func n) env))
@@ -414,9 +419,10 @@ export
 bindImplicits : ImplicitMode ->
                 Defs -> Env Term vars ->
                 List (Name, Term vars) ->
+                List (Name, RigCount) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
-bindImplicits {vars} mode gam env hs tm ty 
-   = bindImplVars 0 mode gam env (map nHoles hs)
+bindImplicits {vars} mode gam env hs asvs tm ty 
+   = bindImplVars 0 mode gam env (map nHoles hs) asvs
                              (normaliseHoles gam env tm)
                              (normaliseHoles gam env ty)
   where
@@ -425,10 +431,12 @@ bindImplicits {vars} mode gam env hs tm ty
 
 export
 bindTopImplicits : ImplicitMode -> Defs -> Env Term vars ->
-                   List (Name, ClosedTerm) -> Term vars -> Term vars ->
+                   List (Name, ClosedTerm) -> 
+                   List (Name, RigCount) ->
+                   Term vars -> Term vars ->
                    (Term vars, Term vars)
-bindTopImplicits {vars} mode gam env hs tm ty
-    = bindImplicits mode gam env (map weakenVars hs) tm ty
+bindTopImplicits {vars} mode gam env hs asvs tm ty
+    = bindImplicits mode gam env (map weakenVars hs) asvs tm ty
   where
     weakenVars : (Name, ClosedTerm) -> (Name, Term vars)
     weakenVars (n, tm) = (n, rewrite sym (appendNilRightNeutral vars) in
@@ -440,8 +448,8 @@ renameImplicits gam (Bind (PV n) b sc)
     = case lookupDefExact (PV n) gam of
            Just (PMDef _ _ def) =>
 --                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
-                    Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
-           _ => Bind (UN n) b (renameImplicits gam (renameTop (UN n) sc))
+                    Bind n b (renameImplicits gam (renameTop n sc))
+           _ => Bind n b (renameImplicits gam (renameTop n sc))
 renameImplicits gam (Bind n b sc) 
     = Bind n b (renameImplicits gam sc)
 renameImplicits gam t = t

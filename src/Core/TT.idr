@@ -675,7 +675,8 @@ subElem Here (KeepCons ds) = Just Here
 subElem (There later) (KeepCons ds) 
        = Just (There !(subElem later ds))
 
-changeVar : (old : Elem x vs) -> (new : Elem x vs) -> Term vs -> Term vs
+export
+changeVar : (old : Elem x vs) -> (new : Elem y vs) -> Term vs -> Term vs
 changeVar old new (Local y) 
     = if sameVar old y
          then Local new
@@ -892,6 +893,12 @@ renameVars prf TType = TType
 export
 renameTop : (m : Name) -> Term (n :: vars) -> Term (m :: vars)
 renameTop m tm = renameVars (CompatExt CompatPre) tm
+
+export
+renameEnv : CompatibleVars xs ys -> Env Term xs -> Env Term ys
+renameEnv CompatPre env = env
+renameEnv (CompatExt p) (b :: bs)
+    = map (renameVars p) b :: renameEnv p bs
 
 export
 apply : Term vars -> List (Term vars) -> Term vars

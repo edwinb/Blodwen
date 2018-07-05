@@ -202,7 +202,7 @@ mutual
            commit
            expr <- simpleExpr fname indents
            end <- location
-           pure (PAs (MkFC fname start end) x expr)
+           pure (PAs (MkFC fname start end) (UN x) expr)
     <|> atom fname
     <|> binder fname indents
     <|> do start <- location

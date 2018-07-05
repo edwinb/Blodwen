@@ -834,6 +834,19 @@ addFnDef loc n tree
     toClosed (MkClause env lhs rhs) 
           = (close 0 False env lhs, close 0 True env rhs)
 
+-- If a name appears more than once in an argument list, only the first is
+-- considered a parameter
+dropReps : List (Maybe (Term vars)) -> List (Maybe (Term vars))
+dropReps [] = []
+dropReps {vars} (Just (Local x) :: xs)
+    = Just (Local x) :: assert_total (dropReps (map toNothing xs))
+  where
+    toNothing : Maybe (Term vars) -> Maybe (Term vars)
+    toNothing tm@(Just (Local v'))
+        = if sameVar x v' then Nothing else tm
+    toNothing tm = tm
+dropReps (x :: xs) = x :: dropReps xs
+
 updateParams : Maybe (List (Maybe (Term vars))) -> 
                   -- arguments to the type constructor which could be
                   -- parameters
@@ -842,12 +855,12 @@ updateParams : Maybe (List (Maybe (Term vars))) ->
                List (Term vars) ->
                   -- arguments to an application 
                List (Maybe (Term vars))
-updateParams Nothing args = map couldBeParam args
+updateParams Nothing args = dropReps $ map couldBeParam args
   where
     couldBeParam : Term vars -> Maybe (Term vars)
     couldBeParam (Local v) = Just (Local v)
     couldBeParam _ = Nothing
-updateParams (Just args) args' = zipWith mergeArg args args'
+updateParams (Just args) args' = dropReps $ zipWith mergeArg args args'
   where
     mergeArg : Maybe (Term vars) -> Term vars -> Maybe (Term vars)
     mergeArg (Just (Local x)) (Local y)

@@ -112,7 +112,7 @@ mutual
        PUnquote : FC -> PTerm -> PTerm
        PHole : FC -> (holename : String) -> PTerm
        PType : FC -> PTerm
-       PAs : FC -> (vname : String) -> (pattern : PTerm) -> PTerm
+       PAs : FC -> Name -> (pattern : PTerm) -> PTerm
        PDotted : FC -> PTerm -> PTerm
        PImplicit : FC -> PTerm
 
@@ -309,7 +309,7 @@ Show PTerm where
   show (PPrimVal _ c) = show c
   show (PHole _ n) = "?" ++ n
   show (PType _) = "Type"
-  show (PAs _ n p) = n ++ "@" ++ show p
+  show (PAs _ n p) = show n ++ "@" ++ show p
   show (PDotted _ p) = "." ++ show p
   show (PImplicit _) = "_"
   show (POp _ op x y) = show x ++ " " ++ op ++ " " ++ show y

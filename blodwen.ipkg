@@ -16,6 +16,7 @@ modules = Idris.BindImplicits,
 
 sourcedir = src
 executable = blodwen
+-- opts = "--warnreach --partial-eval --cg-opt -O2"
 opts = "--warnreach --partial-eval"
 
 main = Idris.Main

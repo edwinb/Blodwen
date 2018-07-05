@@ -98,7 +98,7 @@ mutual
            symbol "@"
            commit
            expr <- simpleExpr indents
-           pure (IAs () x expr)
+           pure (IAs () (UN x) expr)
     <|> atom 
     <|> binder indents
     <|> do symbol ".("

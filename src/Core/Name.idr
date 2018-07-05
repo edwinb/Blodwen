@@ -14,7 +14,7 @@ mutual
             | NS (List String) Name -- a name in a hierarchical namespace 
                   -- namespaces are in reverse order (innermost name first)
             | HN String Int -- machine generated metavariable name
-            | PV String -- implicitly bound pattern variable name
+            | PV Name -- implicitly bound pattern variable name
             | GN GenName -- various kinds of generated names
 
 gnameTag : GenName -> Int
@@ -43,7 +43,7 @@ mutual
   nameRoot (MN x y) = x
   nameRoot (NS xs x) = nameRoot x
   nameRoot (HN x y) = x
-  nameRoot (PV x) = x
+  nameRoot (PV x) = nameRoot x
   nameRoot (GN x) = gnameRoot x
 
   export
@@ -52,7 +52,7 @@ mutual
   userNameRoot (MN x y) = Nothing
   userNameRoot (NS xs x) = userNameRoot x
   userNameRoot (HN x y) = Nothing
-  userNameRoot (PV x) = Nothing
+  userNameRoot (PV x) = userNameRoot x
   userNameRoot (GN x) = Nothing
 
 export
@@ -85,7 +85,7 @@ mutual
     show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
     show (NS ns n) = showSep "." (reverse ns) ++ "." ++ show n
     show (HN str int) = "?" ++ str ++ "_" ++ show int
-    show (PV str) = "{P:" ++ str ++ "}"
+    show (PV n) = "{P:" ++ show n ++ "}"
     show (GN gn) = show gn
 
 mutual
@@ -153,9 +153,9 @@ mutual
       nameEq (HN x t) (HN x t) | (Yes Refl) | (Yes Refl) = Just Refl
       nameEq (HN x t) (HN x t') | (Yes Refl) | (No contra) = Nothing
     nameEq (HN x t) (HN x' t') | (No contra) = Nothing
-  nameEq (PV x) (PV y) with (decEq x y)
-    nameEq (PV y) (PV y) | (Yes Refl) = Just Refl
-    nameEq (PV x) (PV y) | (No contra) = Nothing
+  nameEq (PV x) (PV y) with (nameEq x y)
+    nameEq (PV y) (PV y) | (Just Refl) = Just Refl
+    nameEq (PV x) (PV y) | Nothing = Nothing
   nameEq (GN x) (GN y) with (gnameEq x y)
     nameEq (GN x) (GN y) | Nothing = Nothing
     nameEq (GN x) (GN x) | (Just Refl) = Just Refl
