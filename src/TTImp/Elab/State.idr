@@ -464,11 +464,10 @@ convert loc elabmode env x y
                        InLHS => InLHS
                        _ => InTerm in
           catch (do gam <- get Ctxt
-                    solveConstraints umode False
                     log 10 $ "Unifying " ++ show (quote (noGam gam) env x) ++ " and " 
                                          ++ show (quote (noGam gam) env y)
                     vs <- unify umode loc env x y
-                    solveConstraints umode False
+                    when (isNil vs) $ solveConstraints umode False
                     pure vs)
             (\err => do gam <- get Ctxt 
                         throw (WhenUnifying loc env

@@ -243,11 +243,6 @@ mutual
   checkImp rigc process elabinfo env nest (ISearch loc depth) (Just expected)
       = do est <- get EST
            n <- addSearchable loc env expected depth (defining est)
-           let umode = case elabMode elabinfo of
-                            InLHS => InLHS
-                            _ => InTerm
-           -- try again to solve the holes, including the search we've just added.
-           solveConstraints umode False
            pure (mkConstantApp n env, expected)
   checkImp rigc process elabinfo env nest (IAlternative loc _ [alt]) expected
       = checkImp rigc process elabinfo env nest alt expected
@@ -968,6 +963,7 @@ mutual
                   InExpr => 
                      do gam <- get Ctxt
                         hn <- genName (nameRoot bn)
+                        log 5 $ "Added implicit argument " ++ show hn
                         addNamedHole loc hn False env (quote (noGam gam) env ty)
                         pure (mkConstantApp hn env)
                   _ =>
@@ -1029,7 +1025,6 @@ mutual
                                              (defining est)
                           log 5 $ "Initiate search: " ++ show n ++
                                   " for " ++ show (quote (noGam gam) env ty)
-                          solveConstraints InTerm False
                           pure (mkConstantApp n env)
 
   -- Get the implicit arguments that need to be inserted at this point
@@ -1093,8 +1088,8 @@ mutual
            constr <- convert loc (elabMode elabinfo) env got' expnf
            case constr of
                 [] => pure (apply tm imps, quote (noGam gam) env got')
-                cs => do gam <- getCtxt
+                cs => do gam <- get Ctxt
                          c <- addConstant loc env (apply tm imps) exp cs
                          dumpConstraints 4 False
-                         pure (mkConstantApp c env, got)
+                         pure (mkConstantApp c env, quote (noGam gam) env got')
 

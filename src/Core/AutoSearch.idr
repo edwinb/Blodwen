@@ -324,7 +324,7 @@ searchHole loc depth trying defining n gam glob
     = do let searchty = normaliseHoles gam [] (type glob)
          abandonIfCycle searchty trying
          let nty = nf gam [] searchty
-         log 5 $ "Running search: " ++ show n ++ " in " ++ show defining ++
+         log 2 $ "Running search: " ++ show n ++ " in " ++ show defining ++
                  " for " ++ show (quote gam [] nty)
          dumpConstraints 5 True
          soln <- searchType loc depth (searchty :: trying) [] defining nty
