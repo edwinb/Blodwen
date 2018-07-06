@@ -261,6 +261,16 @@ concreteDets {vars} loc env ty i ds (cl :: cs)
           = do defs <- get Ctxt
                concreteNF top (evalClosure defs c)
 
+checkConcreteDets : {auto c : Ref Ctxt Defs} ->
+                    {auto u : Ref UST (UState annot)} ->
+                    annot -> NF [] -> NF [] -> Core annot ()
+checkConcreteDets loc ty (NTCon n t ar args)
+    = do (dets, _, _) <- getSearchData loc n
+         concreteDets loc [] ty 0 dets args
+checkConcreteDets loc ty (NBind n (Pi _ _ _) scfn)
+    = checkConcreteDets loc ty (scfn (toClosure False [] Erased))
+checkConcreteDets _ _ _ = pure ()
+
 -- Type directed search - take the first thing of the given type it finds using
 -- the current environment.
 searchType : {auto c : Ref Ctxt Defs} ->
@@ -282,7 +292,6 @@ searchType loc depth trying env defining ty@(NTCon n t ar args)
            then do (dets, allOpens, allCons) <- getSearchData loc n
                    let opens = filter (/=defining) allOpens
                    let cons = filter (/=defining) allCons
-                   concreteDets loc env ty 0 dets args
                    log 5 $ "Hints for " ++ show n ++ ": " ++ show cons
                    -- Solutions is either:
                    -- One of the locals
@@ -327,6 +336,7 @@ searchHole loc depth trying defining n gam glob
          log 2 $ "Running search: " ++ show n ++ " in " ++ show defining ++
                  " for " ++ show (quote gam [] nty)
          dumpConstraints 5 True
+         checkConcreteDets loc nty nty
          soln <- searchType loc depth (searchty :: trying) [] defining nty
          log 5 $ "Solution: " ++ show n ++ " = " ++ show (normalise gam [] soln)
          addDef n (record { definition = PMDef True [] (STerm soln) } glob)

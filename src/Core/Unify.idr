@@ -709,7 +709,9 @@ mutual
   -- the other
   unifyBothApps mode loc env (NRef xt hdx) argsx (NRef yt hdy) argsy
       = do gam <- get Ctxt
-           if isHoleNF (gamma gam) hdx && isHoleNF (gamma gam) hdy
+           let holex = isHoleNF (gamma gam) hdx
+           let holey = isHoleNF (gamma gam) hdy
+           if holex && holey
               then
                  (if length argsx > length argsy
                      then unifyApp mode loc env (NRef xt hdx) argsx 
@@ -717,7 +719,7 @@ mutual
                      else unifyApp mode loc env (NRef yt hdy) argsy 
                                            (NApp (NRef xt hdx) argsx))
               else 
-                 (if isHoleNF (gamma gam) hdx
+                 (if holex
                      then unifyApp mode loc env (NRef xt hdx) argsx
                                            (NApp (NRef yt hdy) argsy)
                      else unifyApp mode loc env (NRef yt hdy) argsy 
@@ -901,14 +903,15 @@ retry mode cname
               -- constraint context so we don't do it again
               Just Resolved => pure []
               Just (MkConstraint loc env x y) =>
-                   do log 5 $ "Retrying " ++ show (normalise gam env x)
+                   do chs <- getHoleInfo
+                      log 5 $ "Retrying " ++ show (normalise gam env x)
                                           ++ " and " ++ show (normalise gam env y)
-                      cs <- unify mode loc env x y
-                      case cs of
-                           [] => do log 5 "Success!"
-                                    setConstraint cname Resolved
-                                    pure []
-                           _ => pure cs
+                      do cs <- unify mode loc env x y
+                         case cs of
+                              [] => do log 5 "Success!"
+                                       setConstraint cname Resolved
+                                       pure []
+                              _ => pure cs
               Just (MkSeqConstraint loc env xs ys) =>
                    do cs <- unifyArgs mode loc env xs ys
                       case cs of
@@ -969,8 +972,12 @@ retryHole mode lastChance (loc, hole)
                            -- hole is invertible
                            (\err => case err of
                                       DeterminingArg _ n _ _ =>
-                                        setInvertible loc n
-                                      _ => pure ()) -- postpone again
+                                        do log 5 $ "Failed (det " ++ show n ++ ") "
+                                             ++ show (lookupTyExact hole (gamma gam))
+                                           setInvertible loc n
+                                      _ => do log 5 $ " Failed "
+                                                 ++ show (lookupTyExact hole (gamma gam))
+                                              pure ()) -- postpone again
               Just _ => pure () -- Nothing we can do
 
 retryDelayed : {auto c : Ref Ctxt Defs} ->

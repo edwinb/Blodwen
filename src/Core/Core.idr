@@ -245,10 +245,14 @@ Catchable (Core annot) (Error annot) where
   throw = coreFail
 
 -- Traversable (specialised)
+traverse' : (a -> Core annot b) -> List a -> List b -> Core annot (List b)
+traverse' f [] acc = pure (reverse acc)
+traverse' f (x :: xs) acc 
+    = traverse' f xs (!(f x) :: acc) 
+
 export
-traverse : %static (a -> Core annot b) -> List a -> Core annot (List b)
-traverse f [] = pure []
-traverse f (x :: xs) = pure $ !(f x) :: !(traverse f xs)
+traverse : (a -> Core annot b) -> List a -> Core annot (List b)
+traverse f xs = traverse' f xs []
 
 export
 data Ref : label -> Type -> Type where
