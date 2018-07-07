@@ -37,7 +37,7 @@ Inf t = Delayed Infinite t
 infixl 4 &&
 
 public export
-(&&) : Bool -> Bool -> Bool
+(&&) : Bool -> Lazy Bool -> Bool
 (&&) True x = x
 (&&) False x = False
 

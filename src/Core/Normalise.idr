@@ -272,10 +272,13 @@ mutual
              pure $ apply f' args'
     quoteGen num defs env (NDCon nm tag arity xs) 
         = if isDelay nm defs
-             then do xs' <- quoteArgs num (noGam defs) env xs
+             then do xs' <- quoteArgs num defs env (map toHolesOnly xs)
                      pure $ apply (Ref (DataCon tag arity) nm) xs'
              else do xs' <- quoteArgs num defs env xs
                      pure $ apply (Ref (DataCon tag arity) nm) xs'
+      where
+        toHolesOnly : Closure vs -> Closure vs
+        toHolesOnly (MkClosure _ locs env tm) = MkClosure True locs env tm
     quoteGen num defs env (NTCon nm tag arity xs) 
         = do xs' <- quoteArgs num defs env xs
              pure $ apply (Ref (TyCon tag arity) nm) xs'
