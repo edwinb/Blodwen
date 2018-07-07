@@ -227,7 +227,7 @@ implicitBind : {auto c : Ref Ctxt Defs} ->
 implicitBind n 
     = do gam <- get Ctxt
          case lookupDefExact n (gamma gam) of
-              Just (Hole len _ _) => updateDef n ImpBind
+              Just (Hole len _ _) => updateDef n (const (Just ImpBind))
               _ => pure ()
 
 -- Check that the references in the term don't refer to the hole name as
@@ -929,7 +929,7 @@ rerunDelayed hole cname
               Nothing => throw (InternalError ("No such delayed elaborator" ++ show cname))
               Just elab => 
                    do tm <- elab
-                      updateDef hole (PMDef True [] (STerm tm))
+                      updateDef hole (const (Just (PMDef True [] (STerm tm))))
                       log 5 $ "Resolved delayed hole " ++ show hole
                       removeHoleName hole
 
@@ -937,12 +937,10 @@ setInvertible : {auto c : Ref Ctxt Defs} ->
                 annot -> Name -> Core annot ()
 setInvertible loc n
     = do gam <- get Ctxt
-         case lookupDefExact n (gamma gam) of
-              Nothing => throw (InternalError "Can't happen, name has mysteriously vanised")
-              Just def =>
-                   case def of
-                        Hole locs False _ => updateDef n (Hole locs False True)
-                        _ => pure ()
+         updateDef n 
+             (\old => case old of
+                           Hole locs False _ => Just (Hole locs False True)
+                           _ => Nothing)
 
 retryHole : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
@@ -950,35 +948,42 @@ retryHole : {auto c : Ref Ctxt Defs} ->
             Core annot ()
 retryHole mode lastChance (loc, hole)
     = do gam <- get Ctxt
-         case lookupDefExact hole (gamma gam) of
+         case lookupGlobalExact hole (gamma gam) of
               Nothing => pure ()
-              Just (Guess tm constraints) => 
-                   do cs' <- traverse (\x => retry mode x) constraints
-                      case concat cs' of
-                           -- All constraints resolved, so turn into a
-                           -- proper definition and remove it from the
-                           -- hole list
-                           [] => do updateDef hole (PMDef True [] (STerm tm))
-                                    log 5 $ "Resolved constrained hole " ++ show hole
-                                    removeHoleName hole
-                           newcs => updateDef hole (Guess tm newcs)
-              Just (BySearch depth fn) => 
-                   if lastChance
-                      then do search loc depth [] fn hole; pure ()
-                      else handleError (do search loc depth [] fn hole
-                                           pure ())
-                           -- if it failed due to a determining argument
-                           -- being missing, we at least now know that the
-                           -- hole is invertible
-                           (\err => case err of
-                                      DeterminingArg _ n _ _ =>
-                                        do log 5 $ "Failed (det " ++ show n ++ ") "
-                                             ++ show (lookupTyExact hole (gamma gam))
-                                           setInvertible loc n
-                                      _ => do log 5 $ " Failed "
+              Just def =>
+                  case (definition def) of
+                     Guess tm constraints => 
+                       do cs' <- traverse (\x => retry mode x) constraints
+                          case concat cs' of
+                               -- All constraints resolved, so turn into a
+                               -- proper definition and remove it from the
+                               -- hole list
+                               [] => do let gdef = record { definition = PMDef True [] (STerm tm),
+                                                            refersTo = getRefs (STerm tm) } def
+                                        gam <- get Ctxt
+                                        setCtxt (addCtxt hole gdef (gamma gam))
+                                        log 5 $ "Resolved constrained hole " ++ show hole
+                                        removeHoleName hole
+                               newcs => do let gdef = record { definition = Guess tm newcs } def
+                                           gam <- get Ctxt
+                                           setCtxt (addCtxt hole gdef (gamma gam))
+                     BySearch depth fn => 
+                       if lastChance
+                          then do search loc depth [] fn hole; pure ()
+                          else handleError (do search loc depth [] fn hole
+                                               pure ())
+                               -- if it failed due to a determining argument
+                               -- being missing, we at least now know that the
+                               -- hole is invertible
+                               (\err => case err of
+                                          DeterminingArg _ n _ _ =>
+                                            do log 5 $ "Failed (det " ++ show n ++ ") "
                                                  ++ show (lookupTyExact hole (gamma gam))
-                                              pure ()) -- postpone again
-              Just _ => pure () -- Nothing we can do
+                                               setInvertible loc n
+                                          _ => do log 5 $ " Failed "
+                                                     ++ show (lookupTyExact hole (gamma gam))
+                                                  pure ()) -- postpone again
+                     _ => pure () -- Nothing we can do
 
 retryDelayed : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
@@ -1008,6 +1013,8 @@ solveConstraints mode lastChance
     = do hs <- getHoleInfo
          traverse (retryHole mode lastChance) hs
          -- Question: Another iteration if any holes have been resolved?
+         hs' <- getHoleInfo
+         when (length hs' < length hs) $ solveConstraints mode lastChance
          pure ()
 
 export

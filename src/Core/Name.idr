@@ -99,9 +99,10 @@ mutual
   export
   Eq Name where
     (==) (UN x) (UN y) = x == y
-    (==) (MN x y) (MN x' y') = x == x' && y == y'
-    (==) (NS xs x) (NS xs' x') = xs == xs' && x == x'
-    (==) (HN x y) (HN x' y') = x == x' && y == y'
+    -- Put the arguments which are more likely to differ first
+    (==) (MN x y) (MN x' y') = y == y' && x == x'
+    (==) (NS xs x) (NS xs' x') = x == x' && xs == xs'
+    (==) (HN x y) (HN x' y') = y == y' && x == x'
     (==) (PV x) (PV y) = x == y
     (==) (GN x) (GN y) = x == y
     (==) _ _ = False
@@ -182,21 +183,25 @@ mutual
   Ord Name where
     compare (UN x) (UN y) = compare x y
     compare (MN x y) (MN x' y') 
-        = case compare x x' of
-               EQ => compare y y'
+        = case compare y y' of -- Do cheaper comparison first!
+               EQ => compare x x'
                t => t
     compare (NS x y) (NS x' y') 
-        = case compare x x' of
-               EQ => compare y y'
+        = case compare y y' of -- Compare base name first (more likely to differ)
+               EQ => compare x x'
                t => t
     compare (HN x y) (HN x' y') 
-        = case compare x x' of
-               EQ => compare y y'
+        = case compare y y' of
+               EQ => compare x x'
                t => t
     compare (PV x) (PV y) = compare x y
     compare (GN x) (GN y) = compare x y
 
     compare x y = compare (nameTag x) (nameTag y)
+
+    (<=) x y = case compare x y of
+                    GT => False
+                    _ => True
 
 hashString : String -> Int
 hashString "" = 1

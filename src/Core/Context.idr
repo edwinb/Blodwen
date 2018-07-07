@@ -764,15 +764,18 @@ addBuiltin n ty tot op
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->
-						Name -> Def -> Core annot ()
-updateDef n def 
+						Name -> (Def -> Maybe Def) -> Core annot ()
+updateDef n fdef 
     = do g <- getCtxt
          case lookupCtxtExact n g of
-              Nothing => throw (InternalError ("No such name to update " ++ show n))
+              Nothing => pure ()
               Just odef => 
-                   let gdef = record { definition = def,
-																		   refersTo = getRefs def } odef in
-                       setCtxt (addCtxt n gdef g)
+                   case fdef (definition odef) of
+                        Nothing => pure ()
+                        Just newdef =>
+                            let gdef = record { definition = newdef,
+                                                refersTo = getRefs newdef } odef in
+                                setCtxt (addCtxt n gdef g)
  
 export
 updateTy : {auto x : Ref Ctxt Defs} ->
