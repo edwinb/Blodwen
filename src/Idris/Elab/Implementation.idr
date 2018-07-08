@@ -74,7 +74,8 @@ mutual
   substParamsClause : List Name -> List (Name, RawImp FC) -> 
                       ImpClause FC -> ImpClause FC
   substParamsClause bound ps (PatClause fc lhs rhs)
-      = let bound' = map UN (findBindableNames True bound lhs) ++ bound in
+      = let bound' = map UN (map snd (findBindableNames True bound [] lhs))
+                        ++ bound in
             PatClause fc (substParams [] [] lhs) 
                          (substParams bound' ps rhs)
   substParamsClause bound ps (ImpossibleClause fc lhs)
@@ -226,13 +227,16 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
              -- parameters
              n <- inCurrentNS (methName mn)
 
-             let mty = bindTypeNames vars $
-                       bindConstraints fc AutoImplicit cons $
-                       substParams vars (zip pnames ps) mty_in
+             let mbase = bindConstraints fc AutoImplicit cons $
+                         substParams vars (zip pnames ps) mty_in
+             let ibound = findIBinds mbase
+
+             let mty = bindTypeNamesUsed ibound vars mbase
 
              log 3 $ "Method " ++ show mn ++ " ==> " ++
                      show n ++ " : " ++ show mty
-             log 5 $ "From " ++ show mty_in
+             log 5 $ "From " ++ show mbase 
+             log 10 $ "Used names " ++ show ibound
              pure (mn, n, mty)
              
     mkTopMethDecl : (Name, Name, RawImp FC) -> ImpDecl FC
