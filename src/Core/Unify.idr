@@ -105,10 +105,12 @@ unifyArgs mode loc env _ _ = ufail loc ""
 postpone : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            annot -> Env Term vars ->
-           Term vars -> Term vars ->
+           NF vars -> NF vars ->
            Core annot (List Name)
 postpone loc env x y
-    = do c <- addConstraint (MkConstraint loc env x y)
+    = do gam <- get Ctxt
+         c <- addConstraint (MkConstraint loc env (quote (noGam gam) env x) 
+                                                  (quote (noGam gam) env y))
          pure [c]
 
 -- Get the variables in an application argument list; fail if any arguments 
@@ -478,8 +480,8 @@ mutual
                                  show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
                                  show (quote (noGam gam) env (con args'))
                            postpone loc env
-                                (quote (noGam gam) env (NApp (NRef nt var) args)) 
-                                (quote (noGam gam) env (con args'))
+                                (NApp (NRef nt var) args)
+                                (con args')
               else
                 -- Otherwise, abstract over an argument which *does* have the
                 -- right type and try again.
@@ -494,8 +496,8 @@ mutual
                                            show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
                                            show (quote (noGam gam) env (con args'))
                                      postpone loc env
-                                          (quote (noGam gam) env (NApp (NRef nt var) args)) 
-                                          (quote (noGam gam) env (con args'))
+                                          (NApp (NRef nt var) args)
+                                          (con args')
                                 Just n =>
                                   do log 10 $ "Abstract argument " ++ show n
                                      unifyHole mode loc env 
@@ -508,8 +510,8 @@ mutual
                                  show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
                                  show (quote (noGam gam) env (con args'))
                            postpone loc env
-                                (quote (noGam gam) env (NApp (NRef nt var) args)) 
-                                (quote (noGam gam) env (con args'))
+                                (NApp (NRef nt var) args)
+                                (con args')
 
   -- Unify a hole application - we have already checked that the hole is
   -- invertible (i.e. it's a determining argument to a proof search where
@@ -535,9 +537,7 @@ mutual
                         show (quote (noGam gam) env (NApp (NRef nt var) args))
                          ++ " =?= " ++
                         show (quote (noGam gam) env tm)
-           postpone loc env 
-                 (quote (noGam gam) env (NApp (NRef nt var) args))
-                 (quote (noGam gam) env tm)
+           postpone loc env (NApp (NRef nt var) args) tm
 
   unifyHole : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -568,9 +568,7 @@ mutual
                                       show (quote (noGam gam) env (NApp (NRef nt var) args))
                                        ++ " =?= " ++
                                       show (quote (noGam gam) env tm)
-                           postpone loc env 
-                             (quote (noGam gam) env (NApp (NRef nt var) args))
-                             (quote (noGam gam) env tm)
+                           postpone loc env (NApp (NRef nt var) args) tm
 --                              ufail loc $ "Scope error " ++
 --                                    show (vars, newvars) ++
 --                                    "\nUnifying " ++
@@ -600,10 +598,7 @@ mutual
                          gam <- get Ctxt
                          if isHoleInv (gamma gam) var
                             then unifyHoleApp mode loc env nt var args tm
-                            else postpone loc env
-                                     (quote (noGam gam) env (NApp (NRef nt var) args))
-                                     (quote (noGam gam) env tm)
-
+                            else postpone loc env (NApp (NRef nt var) args) tm
 
   unifyApp : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -634,9 +629,7 @@ mutual
                               show (quote (noGam gam) env (NApp (NLocal x) [])) ++ 
                               " =?= " ++ 
                               show (quote (noGam gam) env (NApp (NLocal y) []))
-                     postpone loc env
-                       (quote (noGam gam) env (NApp (NLocal x) [])) 
-                       (quote (noGam gam) env (NApp (NLocal y) []))
+                     postpone loc env (NApp (NLocal x) []) (NApp (NLocal y) [])
   unifyApp mode loc env hd args (NApp hd' args')
       = do gam <- get Ctxt
            if convert (noGam gam) env (NApp hd args) (NApp hd' args')
@@ -644,9 +637,7 @@ mutual
              else do log 10 $ "Postponing constraint " ++
                               show (quote (noGam gam) env (NApp hd args)) ++ " =?= " ++
                               show (quote (noGam gam) env (NApp hd' args))
-                     postpone loc env
-                              (quote (noGam gam) env (NApp hd args)) 
-                              (quote (noGam gam) env (NApp hd' args'))
+                     postpone loc env (NApp hd args) (NApp hd' args')
   -- A local variable against a constructor is impossible, because the local
   -- should quantify over everything
   unifyApp mode loc env (NLocal x) [] (NDCon n t a args)
@@ -668,8 +659,7 @@ mutual
               else do log 10 $ "Catch all case: Postponing constraint " ++
                             show (quote (noGam gam) env (NApp hd args)) ++ " =?= " ++
                             show (quote (noGam gam) env tm)
-                      postpone loc env
-                           (quote (noGam gam) env (NApp hd args)) (quote (noGam gam) env tm)
+                      postpone loc env (NApp hd args) tm
   
   unifyBothApps
            : {auto c : Ref Ctxt Defs} ->
@@ -695,16 +685,16 @@ mutual
                              show (quote (noGam gam) env (NApp (NLocal xv) argsx))
                              ++ " =?= " ++
                              show (quote (noGam gam) env (NApp (NLocal yv) argsy))
-                    postpone loc env (quote (noGam gam) env (NApp (NLocal xv) argsx))
-                                     (quote (noGam gam) env (NApp (NLocal yv) argsy))
+                    postpone loc env (NApp (NLocal xv) argsx)
+                                     (NApp (NLocal yv) argsy)
   unifyBothApps _ loc env (NLocal xv) argsx (NLocal yv) argsy
       = do gam <- get Ctxt
            log 10 $ "Postponing constraint (locals, LHS) " ++
                      show (quote (noGam gam) env (NApp (NLocal xv) argsx))
                      ++ " =?= " ++
                      show (quote (noGam gam) env (NApp (NLocal yv) argsy))
-           postpone loc env (quote (noGam gam) env (NApp (NLocal xv) argsx))
-                            (quote (noGam gam) env (NApp (NLocal yv) argsy))
+           postpone loc env (NApp (NLocal xv) argsx)
+                            (NApp (NLocal yv) argsy)
   -- If they're both holes, solve the one with the bigger context with
   -- the other
   unifyBothApps mode loc env (NRef xt hdx) argsx (NRef yt hdy) argsy
@@ -812,7 +802,7 @@ mutual
                         then do log 10 $ "Postponing constraint (unifyIfEq) " ++
                                          show (quote (noGam gam) env x) ++ " =?= " ++
                                          show (quote (noGam gam) env y)
-                                postpone loc env (quote (noGam gam) env x) (quote (noGam gam) env y)
+                                postpone loc env x y
                         else convertError loc env 
                                      (quote (noGam gam) env x)
                                      (quote (noGam gam) env y)
