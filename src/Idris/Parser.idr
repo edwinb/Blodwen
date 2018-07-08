@@ -256,7 +256,7 @@ mutual
                    ty <- option 
                             (PImplicit (MkFC fname start start))
                             (do symbol ":"
-                                expr EqOK fname indents)
+                                opExpr EqOK fname indents)
                    pure (rig, n, ty))
 
   pibindList : FileName -> FilePos -> IndentInfo -> 
@@ -340,7 +340,7 @@ mutual
            binders <- bindList fname start indents
            symbol "=>"
            continue indents
-           scope <- typeExpr EqOK fname indents
+           scope <- expr EqOK fname indents
            end <- location
            pure (bindAll (MkFC fname start end) binders scope)
      where
