@@ -232,6 +232,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
 
              log 3 $ "Method " ++ show mn ++ " ==> " ++
                      show n ++ " : " ++ show mty
+             log 5 $ "From " ++ show mty_in
              pure (mn, n, mty)
              
     mkTopMethDecl : (Name, Name, RawImp FC) -> ImpDecl FC

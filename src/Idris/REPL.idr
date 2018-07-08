@@ -37,21 +37,21 @@ data ROpts : Type where
 showInfo : (Name, Def) -> Core annot ()
 showInfo (n, d) = coreLift $ putStrLn (show n ++ " ==> " ++ show d)
 
-isHole : GlobalDef -> Bool
+isHole : GlobalDef -> Maybe Nat
 isHole def
     = case definition def of
-           Hole _ _ _ => True
-           _ => False
+           Hole locs _ _ => Just locs
+           _ => Nothing
 
 showHole : {auto c : Ref Ctxt Defs} ->
            {auto s : Ref Syn SyntaxInfo} ->
-           Defs -> Env Term vars -> Name -> Term vars -> Core FC ()
-showHole gam env fn (Bind x (Pi c inf ty) sc)
+           Defs -> Env Term vars -> Name -> Nat -> Term vars -> Core FC ()
+showHole gam env fn (S args) (Bind x (Pi c inf ty) sc)
     = do ity <- resugar env (normaliseHoles gam env ty)
          when (showName x) $
            coreLift $ putStrLn $
               showCount c ++ impBracket inf (tidy x ++ " : " ++ show ity)
-         showHole gam (Pi c inf ty :: env) fn sc
+         showHole gam (Pi c inf ty :: env) fn args sc
   where
     showCount : RigCount -> String
     showCount Rig0 = " 0 "
@@ -71,7 +71,7 @@ showHole gam env fn (Bind x (Pi c inf ty) sc)
     tidy (MN n _) = n
     tidy n = show n
 
-showHole gam env fn ty
+showHole gam env fn args ty
     = do coreLift $ putStrLn "-------------------------------------"
          ity <- resugar env (normaliseHoles gam env ty)
          coreLift $ putStrLn $ nameRoot fn ++ " : " ++ show ity
@@ -80,10 +80,10 @@ displayType : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->
               Defs -> (Name, GlobalDef) -> Core FC ()
 displayType gam (n, def) 
-    = if isHole def
-         then showHole gam [] n (type def)
-         else do tm <- resugar [] (normaliseHoles gam [] (type def))
-                 coreLift $ putStrLn $ show n ++ " : " ++ show tm
+    = maybe (do tm <- resugar [] (normaliseHoles gam [] (type def))
+                coreLift $ putStrLn $ show n ++ " : " ++ show tm)
+            (\num => showHole gam [] n num (type def))
+            (isHole def)
 
 setOpt : {auto c : Ref Ctxt Defs} ->
          {auto o : Ref ROpts REPLOpts} ->

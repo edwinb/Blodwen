@@ -875,11 +875,11 @@ mutual
              Core annot (Term vars, Term vars) 
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope (Just (Bind bn (Pi c Explicit pty) psc))
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
-           (tyv, tyt) <- check Rig0 process elabinfo env nest ty (Just TType)
+           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
            e' <- weakenedEState
            let rigb = rigMult rigc (min rigl c)
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check rigc process {e=e'} elabinfo (Pi rigb plicity pty :: env) 
+           (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) (Pi rigb plicity pty :: env) 
                                      (weaken nest') scope 
                                      (Just (renameTop n psc))
            st' <- strengthenedEState False loc
@@ -889,12 +889,12 @@ mutual
                         (Just (Bind bn (Pi rigb plicity pty) psc))
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope expected
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
-           (tyv, tyt) <- check Rig0 process elabinfo env nest ty (Just TType)
+           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
            let rigb = rigMult rigl rigc
            let env' : Env Term (n :: _) = Pi rigb Explicit tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} rigc process elabinfo env' (weaken nest') scope Nothing
+           (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' (weaken nest') scope Nothing
            st' <- strengthenedEState False loc
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
@@ -915,7 +915,7 @@ mutual
              Core annot (Term vars, Term vars) 
   checkLet rigc_in process elabinfo loc env nest rigl n ty val scope expected
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
-           (tyv, tyt) <- check Rig0 process elabinfo env nest ty (Just TType)
+           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
            -- Try checking at the given multiplicity; if that doesn't work,
            -- try checking at Rig1 (meaning that we're using a linear variable
            -- so the resulting binding should be linear)
@@ -924,13 +924,13 @@ mutual
                     pure (fst c, snd c, rigMult rigl rigc))
                 (\err => case err of
                               LinearMisuse _ _ Rig1 _
-                                => do c <- check Rig1 process elabinfo env nest val (Just tyv)
+                                => do c <- check Rig1 process (record { topLevel = False } elabinfo) env nest val (Just tyv)
                                       pure (fst c, snd c, Rig1)
                               e => throw e)
            let env' : Env Term (n :: _) = Let rigb valv tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} rigc process elabinfo env' 
+           (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' 
                                      (weaken nest') scope (map weaken expected)
            st' <- strengthenedEState (topLevel elabinfo) loc
            put EST st'
