@@ -638,17 +638,23 @@ mutual
                               show (quote (noGam gam) env (NApp hd args)) ++ " =?= " ++
                               show (quote (noGam gam) env (NApp hd' args))
                      postpone loc env (NApp hd args) (NApp hd' args')
-  -- A local variable against a constructor is impossible, because the local
-  -- should quantify over everything
-  unifyApp mode loc env (NLocal x) [] (NDCon n t a args)
+  -- A local variable against a constructor or binder is impossible, because
+  -- the local should quantify over everything
+  unifyApp mode loc env (NLocal x) xs (NDCon n t a args)
       = do gam <- get Ctxt
            convertError loc env  
-               (quote (noGam gam) env (NApp (NLocal x) []))
+               (quote (noGam gam) env (NApp (NLocal x) xs))
                (quote (noGam gam) env (NDCon n t a args))
-  unifyApp mode loc env (NLocal x) [] (NTCon n t a args)
+  unifyApp mode loc env (NLocal x) xs (NTCon n t a args)
       = do gam <- get Ctxt
-           convertError loc env (quote (noGam gam) env (NApp (NLocal x) []))
-                        (quote (noGam gam) env (NTCon n t a args))
+           convertError loc env 
+               (quote (noGam gam) env (NApp (NLocal x) xs))
+               (quote (noGam gam) env (NTCon n t a args))
+  unifyApp mode loc env (NLocal x) xs (NBind n b sc)
+      = do gam <- get Ctxt
+           convertError loc env 
+               (quote (noGam gam) env (NApp (NLocal x) xs))
+               (quote (noGam gam) env (NBind n b sc))
   -- If they're already convertible without metavariables, we're done,
   -- otherwise postpone
   unifyApp mode loc env hd args tm 
