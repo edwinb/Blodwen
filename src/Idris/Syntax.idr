@@ -350,7 +350,7 @@ record IFaceInfo where
   params : List Name
   methods : List (Name, RawImp FC) 
      -- ^ name and desugared type (without constraint)
-  defaults : List (Name, ImpDecl FC)
+  defaults : List (Name, List (ImpClause FC))
 
 export
 TTC FC IFaceInfo where

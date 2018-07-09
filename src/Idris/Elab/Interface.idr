@@ -15,7 +15,6 @@ import TTImp.Elab
 import TTImp.Elab.Unelab
 import TTImp.TTImp
 
--- TODO: Default method definitions
 -- TODO: Check all the parts of the body are legal
 -- TODO: Deal with default superclass implementations
 
@@ -74,6 +73,16 @@ getMethDecl {vars} env nest params (fc, n, ty)
              then stripParams ps ret
              else IPi fc r p mn arg (stripParams ps ret)
     stripParams ps ty = ty
+    
+-- bind the auto implicit for the interface - put it after all the other
+-- implicits
+bindIFace : FC -> RawImp FC -> RawImp FC -> RawImp FC
+bindIFace _ ity (IPi fc rig Implicit n ty sc)
+       = IPi fc rig Implicit n ty (bindIFace fc ity sc)
+bindIFace _ ity (IPi fc rig AutoImplicit n ty sc)
+       = IPi fc rig AutoImplicit n ty (bindIFace fc ity sc)
+bindIFace fc ity sc = IPi fc RigW AutoImplicit (Just (MN "__con" 0)) ity sc
+
 
 -- Get the top level function for implementing a method 
 getMethToplevel : {auto c : Ref Ctxt Defs} ->
@@ -87,7 +96,7 @@ getMethToplevel : {auto c : Ref Ctxt Defs} ->
                   (FC, Name, RawImp FC) -> List (ImpDecl FC)
 getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, n, ty)
     = let ity = apply (IVar fc iname) (map (IVar fc) params) 
-          ty_imp = bindTypeNames vars (bindIFace ity ty) 
+          ty_imp = bindTypeNames vars (bindIFace fc ity ty) 
           tydecl = IClaim fc vis [Inline] (MkImpTy fc n ty_imp) 
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
@@ -99,15 +108,6 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, n, t
           fndef = IDef fc n [fnclause] in
           [tydecl, fndef]
   where
-    -- bind the auto implicit for the interface - put it after all the other
-    -- implicits
-    bindIFace : RawImp FC -> RawImp FC -> RawImp FC
-    bindIFace ity (IPi fc rig Implicit n ty sc)
-           = IPi fc rig Implicit n ty (bindIFace ity sc)
-    bindIFace ity (IPi fc rig AutoImplicit n ty sc)
-           = IPi fc rig AutoImplicit n ty (bindIFace ity sc)
-    bindIFace ity sc = IPi fc RigW AutoImplicit (Just (MN "__con" 0)) ity sc
-
     bindName : Name -> String
     bindName (UN n) = "__bind_" ++ n
     bindName (NS _ n) = bindName n
@@ -153,13 +153,17 @@ getSig : ImpDecl FC -> Maybe (FC, Name, RawImp FC)
 getSig (IClaim _ _ _ (MkImpTy fc n ty)) = Just (fc, n, ty)
 getSig _ = Nothing
 
+getDefault : ImpDecl FC -> Maybe (FC, Name, List (ImpClause FC))
+getDefault (IDef fc n cs) = Just (fc, n, cs)
+getDefault _ = Nothing
+
 mkCon : Name -> Name
 mkCon (NS ns (UN n)) = NS ns (MN ("__mk" ++ n) 0)
 mkCon n = MN ("__mk" ++ show n) 0
 
 updateIfaceSyn : {auto s : Ref Syn SyntaxInfo} ->
                  Name -> Name -> List Name -> 
-                 List (Name, RawImp FC) -> List (Name, ImpDecl FC) ->
+                 List (Name, RawImp FC) -> List (Name, List (ImpClause FC)) ->
                  Core FC ()
 updateIfaceSyn iname cn ps ms ds
     = do syn <- get Syn
@@ -180,22 +184,24 @@ elabInterface : {auto c : Ref Ctxt Defs} ->
                 (conName : Maybe Name) ->
                 List (ImpDecl FC) ->
                 Core FC ()
-elabInterface fc vis env nest constraints iname params dets mcon body
+elabInterface {vars} fc vis env nest constraints iname params dets mcon body
     = do let conName_in = maybe (mkCon iname) id mcon
          -- Machine generated names need to be qualified when looking them up
          conName <- inCurrentNS conName_in
          let meth_sigs = mapMaybe getSig body -- (FC, Name, RawImp FC)
-         let meth_decls = map snd meth_sigs -- (Name, RawIMp FC)
+         let meth_decls = map snd meth_sigs -- (Name, RawImp FC)
          let meth_names = map fst meth_decls
+         let defaults = mapMaybe getDefault body
 
          elabAsData conName meth_sigs
          elabMethods conName meth_names meth_sigs
+         ds <- traverse (elabDefault meth_decls) defaults
          elabConstraintHints conName meth_names
 
          ns_meths <- traverse (\mt => do n <- inCurrentNS (fst mt)
                                          pure (n, snd mt)) meth_decls
          ns_iname <- inCurrentNS iname
-         updateIfaceSyn ns_iname conName (map fst params) ns_meths []
+         updateIfaceSyn ns_iname conName (map fst params) ns_meths ds
   where
     nameCons : Int -> List (Maybe Name, RawImp FC) -> List (Name, RawImp FC)
     nameCons i [] = []
@@ -226,6 +232,47 @@ elabInterface fc vis env nest constraints iname params dets mcon body
              log 5 $ "Top level methods: " ++ show fns
              traverse (processDecl env nest) fns
              pure ()
+
+    -- Check that a default definition is correct. We just discard it here once
+    -- we know it's okay, since we'll need to re-elaborate it for each
+    -- instance, to specialise it
+    elabDefault : List (Name, RawImp FC) ->
+                  (FC, Name, List (ImpClause FC)) -> Core FC (Name, List (ImpClause FC))
+    elabDefault tydecls (fc, n, cs) 
+        = do orig <- get Ctxt
+             let dn_in = UN ("Default implementation of " ++ show n)
+             dn <- inCurrentNS dn_in
+
+             dty <- case lookup n tydecls of
+                         Just t => pure t
+                         Nothing => throw (GenericMsg fc ("No method named " ++ show n ++ " in interface " ++ show iname))
+             log 5 $ "Default method " ++ show dn ++ " : " ++ show dty
+                  
+             let ity = apply (IVar fc iname) (map (IVar fc) (map fst params))
+             let dty_imp = bindTypeNames vars (bindIFace fc ity dty)
+             let dtydecl = IClaim fc vis [Inline] (MkImpTy fc dn dty_imp) 
+             processDecl env nest dtydecl
+
+             let cs' = map (changeName dn) cs
+             processDecl env nest (IDef fc dn cs')
+             -- Reset the original context, we don't need to keep the definition
+             put Ctxt orig
+             pure (n, cs)
+      where
+        changeNameTerm : Name -> RawImp FC -> RawImp FC
+        changeNameTerm dn (IVar fc n')
+            = if n == n' then IVar fc dn else IVar fc n'
+        changeNameTerm dn (IApp fc f arg)
+            = IApp fc (changeNameTerm dn f) arg
+        changeNameTerm dn (IImplicitApp fc f x arg)
+            = IImplicitApp fc (changeNameTerm dn f) x arg
+        changeNameTerm dn tm = tm
+
+        changeName : Name -> ImpClause FC -> ImpClause FC
+        changeName dn (PatClause fc lhs rhs) 
+            = PatClause fc (changeNameTerm dn lhs) rhs
+        changeName dn (ImpossibleClause fc lhs) 
+            = ImpossibleClause fc (changeNameTerm dn lhs)
 
     elabConstraintHints : (conName : Name) -> List Name ->
                           Core FC()

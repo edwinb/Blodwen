@@ -8,34 +8,29 @@ interface Eq b where
   (==) : b -> b -> Bool
   (/=) : b -> b -> Bool
 
-Eq Nat where
-   (==) Z Z = True
-   (==) (S j) (S k) = j == k
-   (==) _ _ = False
+  (==) x y = not (x /= y)
+  (/=) x y = not (x == y)
 
-   (/=) x y = not (x == y)
+Eq Nat where
+  (==) Z Z = True
+  (==) (S j) (S k) = j == k
+  (==) _ _ = False
 
 [silly] Eq Nat where
-   (==) Z Z = False
-   (==) (S j) (S k) = j == k
-   (==) _ _ = True
-
-   (/=) x y = not (x == y)
+  (==) Z Z = False
+  (==) (S j) (S k) = j == k
+  (==) _ _ = True
 
 Eq a => Eq (List a) where
-   (==) [] [] = True
-   (==) (x :: xs) (y :: ys) = x == y && xs == ys
-   (==) _ _ = False
+  (==) [] [] = True
+  (==) (x :: xs) (y :: ys) = x == y && xs == ys
+  (==) _ _ = False
    
-   (/=) x y = not (x == y)
-
 [alsoSilly] Eq a => Eq (List a) where
-   (==) [] [] = False
-   (==) (x :: xs) (y :: ys) = x == y && xs == ys
-   (==) _ _ = True
+  (==) [] [] = False
+  (==) (x :: xs) (y :: ys) = x == y && xs == ys
+  (==) _ _ = True
    
-   (/=) x y = not (x == y)
-
 data Compare = LT | EQ | GT
 
 test : Eq a => a -> a -> Bool

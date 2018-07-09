@@ -110,6 +110,27 @@ mutual
       = ImplicitNames fc (map (\ (n, t) => (n, substParams bound ps t)) xs)
   substParamsDecl bound ps d = d
 
+addDefaults : FC -> List Name -> List (Name, List (ImpClause FC)) ->
+              List (ImpDecl FC) -> 
+              (List (ImpDecl FC), List Name) -- Updated body, list of missing methods
+addDefaults fc ms defs body
+    = let missing = dropGot ms body in
+          extendBody [] missing body
+  where
+    extendBody : List Name -> List Name -> List (ImpDecl FC) -> 
+                 (List (ImpDecl FC), List Name)
+    extendBody ms [] body = (body, ms)
+    extendBody ms (n :: ns) body
+        = case lookup n defs of
+               Nothing => extendBody (n :: ms) ns body
+               Just cs => extendBody ms ns (IDef fc n cs :: body)
+
+    dropGot : List Name -> List (ImpDecl FC) -> List Name
+    dropGot ms [] = ms
+    dropGot ms (IDef _ n _ :: ds)
+        = dropGot (filter (/= n) ms) ds
+    dropGot ms (_ :: ds) = dropGot ms ds
+
 export
 elabImplementation : {auto c : Ref Ctxt Defs} ->
                      {auto u : Ref UST (UState FC)} ->
@@ -123,7 +144,7 @@ elabImplementation : {auto c : Ref Ctxt Defs} ->
                      (implName : Maybe Name) ->
                      List (ImpDecl FC) ->
                      Core FC ()
-elabImplementation {vars} fc vis env nest cons iname ps impln body
+elabImplementation {vars} fc vis env nest cons iname ps impln body_in
     = do let impName_in = maybe (mkImpl iname ps) id impln
          impName <- inCurrentNS impName_in
          syn <- get Syn
@@ -145,6 +166,14 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
                  ++ " and methods: " ++ show (methods cdata) ++ "\n"
                  ++ "Constructor: " ++ show (iconstructor cdata)
          log 5 $ "Making implementation " ++ show impName
+
+         -- 0. Lookup default definitions and add them to to body
+         let (body, missing)
+               = addDefaults fc (map (dropNS . fst) (methods cdata)) 
+                                (defaults cdata) body_in
+
+         log 5 $ "Added defaults: body is " ++ show body
+         log 5 $ "Missing methods: " ++ show missing
 
          -- 1. Build the type for the implementation
          -- Make the constraints auto implicit arguments, which can be explicitly
@@ -175,7 +204,8 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body
          log 5 $ "Implementation record: " ++ show impFn
          traverse (processDecl env nest) [impFn]
 
-         -- 4. (TODO: Generate default method bodies)
+         -- 4. (TODO: Order method bodies to be in declaration order, in
+         --    case of dependencies)
 
          -- 5. Elaborate the method bodies
 
