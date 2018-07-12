@@ -33,7 +33,7 @@ mutual
 -- so that we know how they should be bound on the right hand side of the
 -- pattern.
 -- 'bound' counts the number of variables locally bound; these are the
--- only ones we're checking linearity of (we may be shadowing names if thos
+-- only ones we're checking linearity of (we may be shadowing names if this
 -- is a local definition, so we need to leave the earlier ones alone)
 findLinear : Defs -> Nat -> RigCount -> Term vars -> List (Name, RigCount)
 findLinear gam bound rig (Bind n b sc) = findLinear gam (S bound) rig sc

@@ -3,6 +3,7 @@ module Core.LinearCheck
 import Core.Context
 import Core.Normalise
 import Core.TT
+import Core.UnifyState -- just for log level
 
 import Data.List
 
@@ -19,6 +20,14 @@ lookup (There p) (b :: bs)
 data Usage : List Name -> Type where
      Nil : Usage vars
      (::) : Elem x vars -> Usage vars -> Usage vars
+
+Show (Usage vars) where
+  show xs = "[" ++ showAll xs ++ "]"
+    where
+      showAll : Usage vs -> String
+      showAll [] = ""
+      showAll {vs = v :: _} [el] = show v
+      showAll {vs = v :: _} (x :: xs) = show v ++ ", " ++ show xs
 
 Weaken Usage where
   weaken [] = []
@@ -52,6 +61,7 @@ count p (q :: xs) = if sameVar p q then 1 + count p xs else count p xs
 -- for the rest of the definition)
 mutual
   updateHoleUsageArgs : {auto c : Ref Ctxt Defs} ->
+                        {auto u : Ref UST (UState annot)} ->
                         (useInHole : Bool) ->
                         Elem x vars -> List (Term vars) -> Core annot Bool 
   updateHoleUsageArgs useInHole var [] = pure False
@@ -61,6 +71,7 @@ mutual
            pure (h || h')
 
   updateHoleType : {auto c : Ref Ctxt Defs} ->
+                   {auto u : Ref UST (UState annot)} ->
                    (useInHole : Bool) ->
                    Elem x vars -> Nat -> Term vs -> List (Term vars) ->
                    Core annot (Term vs)
@@ -83,6 +94,7 @@ mutual
            pure ty
 
   updateHoleUsage : {auto c : Ref Ctxt Defs} ->
+                    {auto u : Ref UST (UState annot)} ->
                     (useInHole : Bool) ->
                     Elem x vars -> Term vars -> Core annot Bool 
   updateHoleUsage useInHole var (Bind n (Let c val ty) sc)
@@ -97,6 +109,7 @@ mutual
              case lookupDefTyExact fn gam of
                   Just (Hole locs pvar _, ty)
                     => do ty' <- updateHoleType useInHole var locs ty args
+                          log 5 $ "Updated hole type " ++ show fn ++ " : " ++ show ty'
                           updateTy fn ty'
                           pure True
                   _ => updateHoleUsageArgs useInHole var args
@@ -110,6 +123,7 @@ mutual
 --  + updating hole types to reflect usage counts correctly
 mutual
   lcheck : {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
            annot -> RigCount -> Env Term vars -> Term vars -> 
            Core annot (Term vars, Term vars, Usage vars)
   lcheck {vars} loc rig env (Local {x} v) 
@@ -149,6 +163,7 @@ mutual
       = do (b', bt, usedb) <- lcheckBinder loc rig env b
            (sc', sct, usedsc) <- lcheck loc rig (b' :: env) sc
            let used = count Here usedsc
+           log 10 (show rig ++ " " ++ show nm ++ ": " ++ show used)
            holeFound <- if multiplicity b == Rig1
                            then updateHoleUsage (used == 0) Here sc'
                            else pure False
@@ -187,9 +202,10 @@ mutual
   lcheck loc rig env TType = pure (TType, TType, [])
 
   lcheckBinder : {auto c : Ref Ctxt Defs} ->
-                  annot -> RigCount -> Env Term vars -> 
-                  Binder (Term vars) -> 
-                  Core annot (Binder (Term vars), Term vars, Usage vars)
+                 {auto u : Ref UST (UState annot)} ->
+                 annot -> RigCount -> Env Term vars -> 
+                 Binder (Term vars) -> 
+                 Core annot (Binder (Term vars), Term vars, Usage vars)
   lcheckBinder loc rig env (Lam c x ty)
       = do (tyv, tyt, _) <- lcheck loc Rig0 env ty
            pure (Lam c x tyv, tyt, [])
@@ -234,9 +250,11 @@ bindEnv (b :: env) tm
 
 export
 linearCheck : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState annot)} ->
               annot -> RigCount -> Env Term vars -> Term vars -> 
               Core annot ()
 linearCheck loc rig env tm
-    = do lcheck loc rig [] (bindEnv env tm)
+    = do log 5 $ "Linearity check on " ++ show (bindEnv env tm)
+         lcheck loc rig [] (bindEnv env tm)
          pure ()
 

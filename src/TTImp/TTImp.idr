@@ -365,6 +365,7 @@ lhsInCurrentNS : {auto c : Ref Ctxt Defs} ->
 lhsInCurrentNS nest (IApp loc f a)
     = do f' <- lhsInCurrentNS nest f
          pure (IApp loc f' a)
+lhsInCurrentNS nest tm@(IVar loc (NS _ _)) = pure tm -- leave explicit NS alone
 lhsInCurrentNS nest (IVar loc n)
     = case lookup n (names nest) of
            Nothing =>

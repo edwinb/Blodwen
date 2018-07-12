@@ -879,7 +879,7 @@ mutual
            e' <- weakenedEState
            let rigb = rigMult rigc (min rigl c)
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) (Pi rigb plicity pty :: env) 
+           (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) (Lam rigb plicity pty :: env) 
                                      (weaken nest') scope 
                                      (Just (renameTop n psc))
            st' <- strengthenedEState False loc
@@ -891,7 +891,7 @@ mutual
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
            let rigb = rigMult rigl rigc
-           let env' : Env Term (n :: _) = Pi rigb Explicit tyv :: env
+           let env' : Env Term (n :: _) = Lam rigb Explicit tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' (weaken nest') scope Nothing
