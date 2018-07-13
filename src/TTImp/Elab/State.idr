@@ -38,6 +38,7 @@ record EState (vars : List Name) where
                             -- in the current application (need to keep track, as
                             -- they may not be given in the same order as they are 
                             -- needed in the type)
+  linearUsed : List (x ** Elem x vars) -- Rig1 bound variables used in the term so far
   defining : Name -- Name of thing we're currently defining
 
 public export
@@ -68,7 +69,7 @@ data EST : Type where
 
 export
 initEState : Name -> EState vars
-initEState n = MkElabState [] [] [] [] [] n
+initEState n = MkElabState [] [] [] [] [] [] n
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -173,9 +174,13 @@ weakenedEState
                                        (boundImplicits est)
                                        (asVariables est)
                                        (implicitsUsed est)
+                                       (map wknLoc (linearUsed est))
                                        (defining est))
          pure e'
   where
+    wknLoc : (x ** Elem x vs) -> (x ** Elem x (n :: vs))
+    wknLoc (_ ** p) = (_ ** There p)
+
     wknTms : (Name, (Term vs, Term vs)) -> 
              (Name, (Term (n :: vs), Term (n :: vs)))
     wknTms (f, (x, y)) = (f, (weaken x, weaken y))
@@ -193,9 +198,11 @@ strengthenedEState False loc
     = do est <- get EST
          bns <- traverse strTms (boundNames est)
          todo <- traverse strTms (toBind est)
+         let lvs = mapMaybe dropTop (linearUsed est)
          pure (MkElabState bns todo (boundImplicits est) 
                                     (asVariables est)
                                     (implicitsUsed est) 
+                                    lvs
                                     (defining est))
   where
     -- Remove any instance of the top level local variable from an
@@ -230,6 +237,10 @@ strengthenedEState False loc
         = case (removeArg x, shrinkTerm y (DropCons SubRefl)) of
                (Just x', Just y') => pure (f, (x', y'))
                _ => throw (GenericMsg loc ("Invalid unbound implicit " ++ show f))
+
+    dropTop : (x ** Elem x (n :: vs)) -> Maybe (x ** Elem x vs)
+    dropTop (_ ** Here) = Nothing
+    dropTop (_ ** There p) = Just (_ ** p)
 
 export
 clearEState : {auto e : Ref EST (EState vs)} ->

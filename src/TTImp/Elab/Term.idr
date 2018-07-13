@@ -428,6 +428,10 @@ mutual
            case defined x env of
              Just (rigb, lv) => 
                  do rigSafe rigb rigc
+                    est <- get EST
+                    when (rigb == Rig1) $
+                         put EST 
+                             (record { linearUsed $= ((_ ** lv) :: ) } est)
                     let varty = binderType (getBinder lv env) 
                     (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                     checkExp rigc process loc elabinfo env nest (apply (Local lv) imps)
@@ -505,13 +509,11 @@ mutual
            scrn <- genName "scr"
            est <- get EST
            casen <- genCaseName (defining est)
-           let usedNs = usedInAlts alts
-
-           log 6 $ "Names used in case block: " ++ show usedNs
+           log 5 $ "Names used elsewhere: " ++ show (map fst (linearUsed est))
 
            -- Update environment so that linear bindings which aren't in
            -- 'usedNs' have multiplicity 0 in the case type
-           let env = updateMults usedNs env
+           let env = updateMults (linearUsed est) env
            -- The 'pre_env' is the environment we apply any local (nested)
            -- names to. Here *all* the names have multiplicity 0 (we're
            -- going to abstract over them all again, in case the case block
@@ -604,14 +606,15 @@ mutual
                   then (_ ** DropCons sub')
                   else (_ ** KeepCons sub')
 
-      updateMults : List Name -> Env Term vs -> Env Term vs
-      updateMults ns [] = []
-      updateMults ns ((::) {x} b bs)
-         -- if it's not used in the case block, it should have 0 multiplicity
-         -- in the case block's type, otherwise leave it alone
-         = if multiplicity b == Rig1 && not (x `elem` ns)
-              then setMultiplicity b Rig0 :: updateMults (filter (/=x) ns) bs
-              else b :: updateMults (filter (/=x) ns) bs
+      toRig0 : Elem x vs -> Env Term vs -> Env Term vs
+      toRig0 Here (b :: bs) = setMultiplicity b Rig0 :: bs
+      toRig0 (There p) (b :: bs) = b :: toRig0 p bs
+
+      -- If the name is used elsewhere, update its multiplicity so it's
+      -- not required to be used in the case block
+      updateMults : List (x ** Elem x vs) -> Env Term vs -> Env Term vs
+      updateMults [] env = env
+      updateMults ((_ ** p) :: us) env = updateMults us (toRig0 p env)
 
       mkLocalEnv : Env Term vs -> Env Term vs
       mkLocalEnv [] = []
