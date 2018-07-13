@@ -604,12 +604,15 @@ mkClosedElab : Env Term vars ->
 mkClosedElab [] elab 
     = do (tm, _) <- elab
          pure tm
+mkClosedElab {vars = x :: vars} (Let c val ty :: env) elab
+    = mkClosedElab env
+          (do (sc', _) <- elab
+              pure (Bind x (Let c val ty) sc', Erased))
 mkClosedElab {vars = x :: vars} (b :: env) elab
     = mkClosedElab env 
           (do (sc', _) <- elab
-              pure (Bind x 
-                      (Lam (multiplicity b) Explicit (binderType b))
-                      sc', Erased))
+              pure (Bind x (Lam (multiplicity b) Explicit (binderType b)) sc', 
+                    Erased))
 
 -- Try the given elaborator; if it fails, and the error matches the
 -- predicate, make a hole and try it again later when more holes might
@@ -634,3 +637,26 @@ delayOnFailure loc env expected pred elab
                                                  (mkClosedElab env (elab True)) } ust)
                              pure (mkConstantApp cn env, expected)
                         else throw err)
+
+export
+delayElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+            {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            annot -> Env Term vars ->
+            (expected : Maybe (Term vars)) ->
+            Lazy (Core annot (Term vars, Term vars)) ->
+            Core annot (Term vars, Term vars)
+delayElab {vars} loc env expected elab
+    = do exp <- mkExpected expected
+         (cn, cref) <- addDelayedElab loc env exp
+         log 5 $ "Postponing elaborator for " ++ show exp
+         ust <- get UST
+         put UST (record { delayedElab $= addCtxt cref
+                             (mkClosedElab env elab) } ust)
+         pure (mkConstantApp cn env, exp)
+  where
+    mkExpected : Maybe (Term vars) -> Core annot (Term vars)
+    mkExpected Nothing
+        = do t <- addHole loc env TType
+             pure (mkConstantApp t env)
+    mkExpected (Just ty) = pure ty
+

@@ -922,11 +922,14 @@ rerunDelayed : {auto c : Ref Ctxt Defs} ->
 rerunDelayed hole cname
     = do ust <- get UST
          case lookupCtxtExact cname (delayedElab ust) of
-              Nothing => throw (InternalError ("No such delayed elaborator" ++ show cname))
+              Nothing => 
+                   do log 5 $ "Missing elaborator " ++ show cname
+                      throw (InternalError ("No such delayed elaborator" ++ show cname))
               Just elab => 
-                   do tm <- elab
+                   do updateDef hole (const (Just (Processing cname)))
+                      tm <- elab
                       updateDef hole (const (Just (PMDef True [] (STerm tm))))
-                      log 5 $ "Resolved delayed hole " ++ show hole
+                      log 5 $ "Resolved delayed hole " ++ show hole ++ " = " ++ show tm
                       removeHoleName hole
 
 setInvertible : {auto c : Ref Ctxt Defs} ->
@@ -995,8 +998,10 @@ retryDelayed lastChance (loc, hole)
                               pure True
                       else try (do rerunDelayed hole c
                                    pure True)
-                               (pure False)
-              Just _ => pure False -- Nothing we can do
+                               (do log 5 $ "Delayed elaborator failed for " ++ show hole
+                                   updateDef hole (const (Just (Context.Delayed c)))
+                                   pure False)
+              Just _ => pure False
 
 -- Attempt to solve any remaining constraints in the unification context.
 -- Do this by working through the list of holes
@@ -1021,7 +1026,10 @@ retryAllDelayed
     = do hs <- getHoleInfo
          case hs of
               [] => pure ()
-              _ => do results <- traverse (retryDelayed False) hs
+              _ => do log 5 $ "Running delayed elaborators " ++ show (map snd hs)
+                      -- Reverse so that we do oldest first
+                      results <- traverse (retryDelayed False) (reverse hs)
+                      log 5 $ "Finished, results: " ++ show results
                    -- if we made any progress, go around again
                    -- Assumption is that this terminates because the set
                    -- of holes 'hs' will be smaller next time around, as

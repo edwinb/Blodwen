@@ -80,15 +80,19 @@ processDecls env nest decls
 export
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState ())} ->
-          String -> Core () ()
+          String -> Core () Bool
 process file
     = do Right res <- coreLift (readFile file)
-               | Left err => coreLift (putStrLn ("File error: " ++ show err))
+               | Left err => do coreLift (putStrLn ("File error: " ++ show err))
+                                pure False
          case runParser res (do p <- prog; eoi; pure p) of
-              Left err => coreLift (putStrLn ("TTImp Parse error: " ++ show err))
+              Left err => do coreLift (putStrLn ("TTImp Parse error: " ++ show err))
+                             pure False
               Right decls => 
-                   catch (processDecls [] (MkNested []) decls)
-                         (\err => coreLift (printLn err))
+                   catch (do processDecls [] (MkNested []) decls
+                             pure True)
+                         (\err => do coreLift (printLn err)
+                                     pure False)
 
 export
 elabTop : (Reflect annot, Reify annot) => Elaborator annot

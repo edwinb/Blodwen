@@ -104,8 +104,9 @@ elabTerm process defining env nest impmode elabmode tm tyin
          -- to just x)
          case elabmode of
               InLHS => let vs = findPLetRenames ptm' in
-                           pure (doPLetRenames vs [] ptm',
-                                 doPLetRenames vs [] pty')
+                           do log 5 $ "Renamed PLets " ++ show (doPLetRenames vs [] ptm')
+                              pure (doPLetRenames vs [] ptm',
+                                    doPLetRenames vs [] pty')
               _ => pure (ptm', pty')
 
 export

@@ -162,6 +162,8 @@ data Def : Type where
      -- A delayed elaboration. Name refers into a context of delayed
      -- elaborators in Core.UnifyState
      Delayed : Name -> Def
+     -- A delayed elaboration, in progress
+     Processing : Name -> Def
 
 export
 Show Def where
@@ -189,6 +191,7 @@ Show Def where
   show ImpBind = "Implicitly bound name"
   show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
   show (Delayed n) = "Delayed " ++ show n
+  show (Processing n) = "Processing " ++ show n
 
 TTC annot Def where
   toBuf b None = tag 0
@@ -210,6 +213,8 @@ TTC annot Def where
       = do tag 7; toBuf b guess; toBuf b constraints
   toBuf b (Delayed n)
       = throw (InternalError "Trying to serialise a Delayed elaborator")
+  toBuf b (Processing n)
+      = throw (InternalError "Trying to serialise a Processing elaborator")
 
   fromBuf s b 
       = case !getTag of
@@ -292,6 +297,7 @@ getRefs (BySearch _ _) = []
 getRefs ImpBind = []
 getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 getRefs (Delayed n) = []
+getRefs (Processing n) = []
 
 export
 newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef

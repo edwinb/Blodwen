@@ -200,7 +200,10 @@ mutual
   checkImp rigc process elabinfo env nest (ILet loc rigl n nTy nVal scope) expected 
       = checkLet (bindRig rigc) process elabinfo loc env nest rigl n nTy nVal scope expected
   checkImp rigc process elabinfo env nest (ICase loc scr scrty alts) expected 
-      = checkCase rigc process elabinfo loc env nest scr scrty alts expected
+        -- Delay, to collect usage information for linear bindings elsewhere,
+        -- which will help build the case type accurately
+      = delayElab loc env expected $
+          checkCase rigc process elabinfo loc env nest scr scrty alts expected
   checkImp rigc process elabinfo env nest (ILocal loc nested scope) expected 
       = checkLocal rigc process elabinfo loc env nest nested scope expected
   checkImp rigc process elabinfo env nest (IApp loc fn arg) expected 

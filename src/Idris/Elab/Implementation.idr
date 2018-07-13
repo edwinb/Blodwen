@@ -144,6 +144,7 @@ elabImplementation : {auto c : Ref Ctxt Defs} ->
                      (implName : Maybe Name) ->
                      List (ImpDecl FC) ->
                      Core FC ()
+-- TODO: Refactor all these steps into separate functions
 elabImplementation {vars} fc vis env nest cons iname ps impln body_in
     = do let impName_in = maybe (mkImpl iname ps) id impln
          impName <- inCurrentNS impName_in
