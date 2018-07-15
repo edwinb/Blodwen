@@ -1,0 +1,6 @@
+tryMap (S Z) (S (S Z))
+tryVMap (S Z) (S (S Z))
+tryOVMap (S Z) (S (S Z))
+transpose [[1,2,3], [4,5,6]]
+deepAdd (MkD [Z, Z, Z, S Z])
+:q
