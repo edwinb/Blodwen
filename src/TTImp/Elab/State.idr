@@ -39,6 +39,7 @@ record EState (vars : List Name) where
                             -- they may not be given in the same order as they are 
                             -- needed in the type)
   linearUsed : List (x ** Elem x vars) -- Rig1 bound variables used in the term so far
+  holesMade : List Name -- Explicit hole names used in the term so far
   defining : Name -- Name of thing we're currently defining
 
 public export
@@ -69,7 +70,7 @@ data EST : Type where
 
 export
 initEState : Name -> EState vars
-initEState n = MkElabState [] [] [] [] [] [] n
+initEState n = MkElabState [] [] [] [] [] [] [] n
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -175,6 +176,7 @@ weakenedEState
                                        (asVariables est)
                                        (implicitsUsed est)
                                        (map wknLoc (linearUsed est))
+                                       (holesMade est)
                                        (defining est))
          pure e'
   where
@@ -203,6 +205,7 @@ strengthenedEState False loc
                                     (asVariables est)
                                     (implicitsUsed est) 
                                     lvs
+                                    (holesMade est)
                                     (defining est))
   where
     -- Remove any instance of the top level local variable from an

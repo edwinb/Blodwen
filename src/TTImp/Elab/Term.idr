@@ -384,12 +384,16 @@ mutual
            let hty = mkConstantApp t env'
            n <- inCurrentNS (UN n_in)
            addNamedHole loc n False env' hty
+           est <- get EST
+           put EST (record { holesMade $= (n ::) } est)
            pure (mkConstantApp n env', hty)
   checkImp rigc process elabinfo env nest (IHole loc n_in) (Just expected) 
       = do n <- inCurrentNS (UN n_in)
            -- Let to lambda as above
            let env' = letToLam env
            addNamedHole loc n False env' expected
+           est <- get EST
+           put EST (record { holesMade $= (n ::) } est)
            pure (mkConstantApp n env', expected)
   checkImp rigc process elabinfo env nest (Implicit loc) Nothing
       = do t <- addHole loc env TType
@@ -514,6 +518,18 @@ mutual
            -- Update environment so that linear bindings which aren't in
            -- 'usedNs' have multiplicity 0 in the case type
            let env = updateMults (linearUsed est) env
+           -- If there's holes, we don't know whether or not locals have been used,
+           -- so set any to multiplicity zero if the name doesn't appear in the
+           -- case block
+           -- FIXME: This isn't quite right, because the usage in the alts might
+           -- be at 0 multiplicity, or could occur in an implicit, but it's a
+           -- sound approximation for the moment (it will at least not lead to
+           -- code typechecking which shouldn't!) It would be better if linearity
+           -- checking was aware of case blocks.
+           let env = case holesMade est of
+                          [] => env
+                          _ => setToZero (usedInAlts alts) env
+
            -- The 'pre_env' is the environment we apply any local (nested)
            -- names to. Here *all* the names have multiplicity 0 (we're
            -- going to abstract over them all again, in case the case block
@@ -615,6 +631,15 @@ mutual
       updateMults : List (x ** Elem x vs) -> Env Term vs -> Env Term vs
       updateMults [] env = env
       updateMults ((_ ** p) :: us) env = updateMults us (toRig0 p env)
+
+      setToZero : List Name -> Env Term vs -> Env Term vs
+      setToZero ns [] = []
+      setToZero ns ((::) {x} b env)
+          = case multiplicity b of
+                 Rig1 => if not (x `elem` ns)
+                            then setMultiplicity b Rig0 :: setToZero ns env
+                            else b :: setToZero ns env
+                 _ => b :: setToZero ns env
 
       mkLocalEnv : Env Term vs -> Env Term vs
       mkLocalEnv [] = []
