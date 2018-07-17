@@ -52,7 +52,7 @@ mutual
   userNameRoot (MN x y) = Nothing
   userNameRoot (NS xs x) = userNameRoot x
   userNameRoot (HN x y) = Nothing
-  userNameRoot (PV x) = userNameRoot x
+  userNameRoot (PV x) = Nothing
   userNameRoot (GN x) = Nothing
 
 export

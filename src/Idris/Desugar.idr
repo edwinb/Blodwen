@@ -301,19 +301,31 @@ mutual
                                           pure (fst ntm, tm')) cons
            params' <- traverse (\ ntm => do tm' <- desugar ps (snd ntm)
                                             pure (fst ntm, tm')) params
+           -- Look for bindable names in all the constraints and parameters
+           let bnames = concatMap (findBindableNames True ps []) (map snd cons') ++
+                        concatMap (findBindableNames True ps []) (map snd params')
+           let paramsb = map (\ (n, tm) => (n, doBind bnames tm)) params'
+           let consb = map (\ (n, tm) => (n, doBind bnames tm)) cons'
+
            body' <- traverse (desugarDecl (ps ++ map fst params)) body
            pure [IPragma (\env, nest => 
-                             elabInterface fc vis env nest cons' 
-                                           tn params' det conname 
+                             elabInterface fc vis env nest consb
+                                           tn paramsb det conname 
                                            (concat body'))]
   desugarDecl ps (PImplementation fc vis cons tn params impname body)
       = do cons' <- traverse (\ ntm => do tm' <- desugar ps (snd ntm)
                                           pure (fst ntm, tm')) cons
            params' <- traverse (desugar ps) params
+           -- Look for bindable names in all the constraints and parameters
+           let bnames = concatMap (findBindableNames True ps []) (map snd cons') ++
+                        concatMap (findBindableNames True ps []) params'
+           let paramsb = map (doBind bnames) params'
+           let consb = map (\ (n, tm) => (n, doBind bnames tm)) cons'
+
            body' <- traverse (desugarDecl ps) body
            pure [IPragma (\env, nest =>
-                             elabImplementation fc vis env nest cons'
-                                                tn params' impname 
+                             elabImplementation fc vis env nest consb
+                                                tn paramsb impname 
                                                 (concat body'))]
   desugarDecl ps (PFixity fc Prefix prec n) 
       = do syn <- get Syn

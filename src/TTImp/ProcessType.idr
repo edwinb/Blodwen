@@ -41,6 +41,7 @@ processType : {auto c : Ref Ctxt Defs} ->
               Core annot ()
 processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
     = do n <- inCurrentNS n_in
+         log 5 $ "Checking type decl " ++ show n ++ " : " ++ show ty_raw
 
          -- Check 'n' is undefined
          gam <- get Ctxt
