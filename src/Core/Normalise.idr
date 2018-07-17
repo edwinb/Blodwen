@@ -338,12 +338,33 @@ mutual
   chkConvHead defs env (NLocal x) (NLocal y) = pure $ sameVar x y
   chkConvHead defs env (NRef x y) (NRef x' y') = pure $ y == y'
   chkConvHead defs env x y = pure False
+  
+  -- Comparing multiplicities when converting pi binders
+  subRig : RigCount -> RigCount -> Bool
+  subRig Rig1 RigW = True -- we can pass a linear function if a general one is expected
+  subRig x y = x == y -- otherwise, the multiplicities need to match up
+
+  convBinders : IORef Int -> Defs -> Env Term vars ->
+                Binder (NF vars) -> Binder (NF vars) -> IO Bool
+  convBinders num defs env (Pi cx ix tx) (Pi cy iy ty)
+      = if ix /= iy || not (subRig cx cy)
+           then pure False
+           else convGen num defs env tx ty
+  convBinders num defs env (Lam cx ix tx) (Lam cy iy ty)
+      = if ix /= iy || cx /= cy
+           then pure False
+           else convGen num defs env tx ty
+  convBinders num defs env bx by
+      = if multiplicity bx /= multiplicity by
+           then pure False
+           else convGen num defs env (binderType bx) (binderType by)
 
   export
   Convert NF where
     convGen num defs env (NBind x b scope) (NBind x' b' scope') 
         = do var <- genName num "convVar"
              let c = MkClosure False [] env (Ref Bound var)
+             convBinders num defs env b b'
              convGen num defs env (scope c) (scope' c)
     convGen num defs env tmx@(NBind x (Lam c ix tx) scx) tmy
         = let etay = nf defs env (Bind x (Lam c ix (quote (noGam defs) env tx))

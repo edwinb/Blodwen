@@ -30,7 +30,7 @@ insertImpLam env tm (Just ty) = bindLam tm ty
     bindLam : RawImp annot -> Term vars -> RawImp annot
     bindLam tm (Bind n (Pi c Implicit ty) sc)
         = let loc = getAnnot tm in
-              ILam loc RigW Implicit n (Implicit loc) (bindLam tm sc)
+              ILam loc c Implicit n (Implicit loc) (bindLam tm sc)
     bindLam tm sc = tm
 
 expandAmbigName : Defs -> Env Term vars -> NestedNames vars ->
@@ -908,7 +908,7 @@ mutual
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
            e' <- weakenedEState
-           let rigb = rigMult rigc (min rigl c)
+           let rigb = min rigl c
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) (Lam rigb plicity pty :: env) 
                                      (weaken nest') scope 
@@ -921,7 +921,7 @@ mutual
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope expected
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
-           let rigb = rigMult rigl rigc
+           let rigb = rigl -- rigMult rigl rigc
            let env' : Env Term (n :: _) = Lam rigb Explicit tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
