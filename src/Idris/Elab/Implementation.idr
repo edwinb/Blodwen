@@ -161,9 +161,12 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
                      Nothing => throw (UndefinedName fc cn)
                      Just t => pure t
 
+         let impsp = nub (concatMap findIBinds ps)
+
          log 3 $ "Found interface " ++ show cn ++ " : "
                  ++ show (normaliseHoles defs [] ity)
                  ++ " with params: " ++ show (params cdata)
+                 ++ " using implicits: " ++ show impsp
                  ++ " and methods: " ++ show (methods cdata) ++ "\n"
                  ++ "Constructor: " ++ show (iconstructor cdata)
          log 5 $ "Making implementation " ++ show impName
@@ -192,15 +195,16 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
 
          -- 2. Elaborate top level function types for this interface
          defs <- get Ctxt
-         fns <- traverse (topMethType impName (params cdata)) 
+         fns <- traverse (topMethType impName impsp (params cdata)) 
                          (methods cdata)
          traverse (processDecl env nest) (map mkTopMethDecl fns)
 
          -- 3. Build the record for the implementation
          let mtops = map (Basics.fst . snd) fns
          let con = iconstructor cdata
-         let ilhs = IVar fc impName
-         let irhs = apply (IVar fc con) (map mkMethField (map Basics.snd fns))
+         let ilhs = impsApply (IVar fc impName) 
+                              (map (\x => (UN x, IBindVar fc x)) impsp)
+         let irhs = apply (IVar fc con) (map (mkMethField impsp) (map Basics.snd fns))
          let impFn = IDef fc impName [PatClause fc ilhs irhs]
          log 5 $ "Implementation record: " ++ show impFn
          traverse (processDecl env nest) [impFn]
@@ -233,6 +237,11 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
     getExplicitArgs i (IPi _ _ _ n _ sc) = getExplicitArgs i sc
     getExplicitArgs i tm = []
 
+    impsApply : RawImp FC -> List (Name, RawImp FC) -> RawImp FC
+    impsApply fn [] = fn
+    impsApply fn ((n, arg) :: ns) 
+        = impsApply (IImplicitApp fc fn (Just n) arg) ns
+
     mkLam : List Name -> RawImp FC -> RawImp FC
     mkLam [] tm = tm
     mkLam (x :: xs) tm = ILam fc RigW Explicit x (Implicit fc) (mkLam xs tm)
@@ -240,10 +249,16 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
     -- When applying the method in the field for the record, eta expand
     -- the explicit arguments so that implicits get inserted in the right 
     -- place
-    mkMethField : (Name, RawImp FC) -> RawImp FC
-    mkMethField (n, ty) 
-        = let argns = getExplicitArgs 0 ty in
-              mkLam argns (apply (IVar fc n) (map (IVar fc) argns))
+    mkMethField : List String -> (Name, RawImp FC) -> RawImp FC
+    mkMethField impsp (n, ty) 
+        = let argns = getExplicitArgs 0 ty 
+              -- Pass through implicit arguments to the function which are also
+              -- implicit arguments to the declaration
+              impargs = filter (\x => elem x impsp) (nub (findIBinds ty)) in
+              mkLam argns 
+                    (impsApply 
+                         (apply (IVar fc n) (map (IVar fc) argns))
+                         (map (\n => (UN n, IVar fc (UN n))) impsp))
 
     methName : Name -> Name
     methName (NS _ n) = methName n
@@ -251,13 +266,17 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
                      maybe "" show impln ++ "_" ++
                      showSep "_" (map show ps)) 0
     
-    topMethType : Name -> List Name -> (Name, RawImp FC) -> 
+    topMethType : Name -> List String -> List Name -> (Name, RawImp FC) -> 
                   Core FC (Name, Name, RawImp FC)
-    topMethType impName pnames (mn, mty_in)
+    topMethType impName impsp pnames (mn, mty_in)
         = do -- Get the specialised type by applying the method to the
              -- parameters
              n <- inCurrentNS (methName mn)
 
+             -- Avoid any name clashes between parameters and method types by
+             -- renaming IBindVars in the method types which appear in the
+             -- paramaters
+             let mty_in = renameIBinds impsp (findIBinds mty_in) mty_in
              let mbase = bindConstraints fc AutoImplicit cons $
                          substParams vars (zip pnames ps) mty_in
              let ibound = findIBinds mbase
@@ -267,6 +286,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
              log 3 $ "Method " ++ show mn ++ " ==> " ++
                      show n ++ " : " ++ show mty
              log 5 $ "From " ++ show mbase 
+             log 3 $ "Param names: " ++ show pnames 
              log 10 $ "Used names " ++ show ibound
              pure (mn, n, mty)
              

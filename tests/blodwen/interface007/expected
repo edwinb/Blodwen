@@ -1,0 +1,13 @@
+Processing as Idris
+1/2: Building Stuff (Stuff.blod)
+2/2: Building Functor (Functor.blod)
+Welcome to Blodwen. Good luck.
+Main>  0 a : Type
+ 0 b : Type
+-------------------------------------
+foo : (a -> b) -> Test c d a -> Test c d b
+Main>  0 a' : Type
+ 0 b' : Type
+-------------------------------------
+bar : (a' -> b') -> Test a b a' -> Test a b b'
+Main> Bye for now!

@@ -21,7 +21,7 @@ blodwenTests
        "reflect001",
        "linear001", "linear002", "linear003", "linear004",
        "interface001", "interface002", "interface003", "interface004",
-       "interface005", "interface006",
+       "interface005", "interface006", "interface007",
        "sugar001",
        "lazy001","lazy002"]
 

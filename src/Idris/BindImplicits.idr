@@ -61,6 +61,30 @@ findIBinds (IBindVar _ n) = [n]
 -- name should be bound, leave it to the programmer
 findIBinds tm = []
 
+-- Rename the IBindVars in a term. Anything which appears in the list 'renames'
+-- should be renamed, to something which is *not* in the list 'used'
+export
+renameIBinds : (renames : List String) -> 
+               (used : List String) -> 
+               RawImp annot -> RawImp annot
+renameIBinds rs us (IPi fc c p n ty sc)
+    = IPi fc c p n (renameIBinds rs us ty) (renameIBinds rs us sc)
+renameIBinds rs us (ILam fc c p n ty sc)
+    = ILam fc c p n (renameIBinds rs us ty) (renameIBinds rs us sc)
+renameIBinds rs us (IApp fc fn arg)
+    = IApp fc (renameIBinds rs us fn) (renameIBinds rs us arg)
+renameIBinds rs us (IImplicitApp fc fn n arg)
+    = IImplicitApp fc (renameIBinds rs us fn) n (renameIBinds rs us arg)
+renameIBinds rs us (IAs fc n pat)
+    = IAs fc n (renameIBinds rs us pat)
+renameIBinds rs us (IAlternative fc u alts)
+    = IAlternative fc u (map (renameIBinds rs us) alts)
+renameIBinds rs us (IBindVar fc n)
+    = if n `elem` rs
+         then IBindVar fc (getUnique (rs ++ us) n)
+         else IBindVar fc n
+renameIBinds rs us tm = tm
+
 export
 doBind : List (String, String) -> RawImp annot -> RawImp annot
 doBind [] tm = tm
