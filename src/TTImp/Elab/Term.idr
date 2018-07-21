@@ -571,7 +571,7 @@ mutual
                               nest
            process c u i pre_env nest' (IDef loc casen alts')
 
-           pure (App (applyToSubFull (mkConstantAppFull casen env) env smaller) 
+           pure (App (applyToSub (mkConstantAppFull casen env) env smaller) 
                      scrtm, caseretty)
     where
       -- Is every occurence of the given variable name in a parameter
@@ -666,6 +666,9 @@ mutual
 
       addEnv : Env Term vs -> SubVars vs' vs -> List Name -> List (RawImp annot)
       addEnv [] sub used = []
+      -- Skip the let bindings, they were let bound in the case function type
+      addEnv (Let _ _ _ :: bs) SubRefl used = addEnv bs SubRefl used
+      addEnv (Let _ _ _ :: bs) (KeepCons p) used = addEnv bs p used
       addEnv {vs = v :: vs} (b :: bs) SubRefl used
           = case canBindName v (vs ++ used) of
                  Just n => IAs loc n (Implicit loc) :: addEnv bs SubRefl used

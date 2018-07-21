@@ -700,14 +700,17 @@ absSmaller [] SubRefl tm = tm
 absSmaller {done} {vs = x :: vars} (b :: env) SubRefl tm 
      -- need to rebind 'b' in tm with a new name. So, weaken 'tm' then 
 		 -- replace 'There Here' with 'Here'.
-	 = let bindervs : Binder (Term (done ++ (x :: vars)))
+  = let bindervs : Binder (Term (done ++ (x :: vars)))
 	                    = rewrite appendAssociative done [x] vars in
-															  map (weakenNs (done ++ [x])) b
-	       btm = Bind x (Pi (multiplicity b) Explicit (binderType bindervs)) 
-				            (changeVar (findLater (x :: done)) Here (weaken tm)) in
-         rewrite appendAssociative done [x] vars in
-				         absSmaller {done = done ++ [x]} env SubRefl 
-                      (rewrite sym (appendAssociative done [x] vars) in btm)
+                                map (weakenNs (done ++ [x])) b
+        b' = case bindervs of
+                  Let c val ty => Let c val ty
+                  _ => Pi (multiplicity b) Explicit (binderType bindervs)
+        btm = Bind x b' 
+                    (changeVar (findLater (x :: done)) Here (weaken tm)) in
+        rewrite appendAssociative done [x] vars in
+                absSmaller {done = done ++ [x]} env SubRefl 
+                       (rewrite sym (appendAssociative done [x] vars) in btm)
 absSmaller {done} {vs = x :: vars} (b :: env) (DropCons sub) tm 
   = rewrite appendAssociative done [x] vars in
             absSmaller {done = done ++ [x]} env sub
@@ -716,7 +719,10 @@ absSmaller {done} {vs = x :: vars} (b :: env) (KeepCons sub) tm
   = let bindervs : Binder (Term (done ++ (x :: vars)))
                       = rewrite appendAssociative done [x] vars in
                                 map (weakenNs (done ++ [x])) b
-        btm = Bind x (Pi (multiplicity b) Explicit (binderType bindervs)) 
+        b' = case bindervs of
+                  Let c val ty => Let c val ty
+                  _ => Pi (multiplicity b) Explicit (binderType bindervs)
+        btm = Bind x b' 
                    (changeVar (findLater (x :: done)) Here (weaken tm)) in
         rewrite appendAssociative done [x] vars in
                 absSmaller {done = done ++ [x]} env sub
