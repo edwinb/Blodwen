@@ -373,11 +373,13 @@ mutual
     toBuf b (CLam x sc) = do tag 2; toBuf b x; toBuf b sc
     toBuf b (CLet x val sc) = do tag 3; toBuf b x; toBuf b val; toBuf b sc
     toBuf b (CApp f as) = assert_total $ do tag 4; toBuf b f; toBuf b as
-    toBuf b (COp {arity} op as) = assert_total $ do tag 5; toBuf b arity; toBuf b op; toBuf b as
-    toBuf b (CExtPrim f as) = assert_total $ do tag 6; toBuf b f; toBuf b as
-    toBuf b (CCase sc alts) = assert_total $ do tag 7; toBuf b sc; toBuf b alts
-    toBuf b (CPrimVal c) = do tag 8; toBuf b c
-    toBuf b CErased = do tag 9
+    toBuf b (CCon t n as) = assert_total $ do tag 5; toBuf b t; toBuf b n; toBuf b as
+    toBuf b (COp {arity} op as) = assert_total $ do tag 6; toBuf b arity; toBuf b op; toBuf b as
+    toBuf b (CExtPrim f as) = assert_total $ do tag 7; toBuf b f; toBuf b as
+    toBuf b (CCase sc alts) = assert_total $ do tag 8; toBuf b sc; toBuf b alts
+    toBuf b (CPrimVal c) = do tag 9; toBuf b c
+    toBuf b CErased = do tag 10
+    toBuf b (CCrash msg) = do tag 11; toBuf b msg
 
     fromBuf s b
         = assert_total $ case !getTag of
@@ -391,15 +393,19 @@ mutual
                        pure (CLet x val sc)
                4 => do f <- fromBuf s b; as <- fromBuf s b
                        pure (CApp f as)
-               5 => do arity <- fromBuf s b; op <- fromBuf s b; args <- fromBuf s b
+               5 => do t <- fromBuf s b; n <- fromBuf s b; as <- fromBuf s b
+                       pure (CCon t n as)
+               6 => do arity <- fromBuf s b; op <- fromBuf s b; args <- fromBuf s b
                        pure (COp {arity} op args)
-               6 => do p <- fromBuf s b; as <- fromBuf s b
+               7 => do p <- fromBuf s b; as <- fromBuf s b
                        pure (CExtPrim p as)
-               7 => do sc <- fromBuf s b; alts <- fromBuf s b
+               8 => do sc <- fromBuf s b; alts <- fromBuf s b
                        pure (CCase sc alts)
-               8 => do c <- fromBuf s b
+               9 => do c <- fromBuf s b
                        pure (CPrimVal c)
-               9 => pure CErased
+               10 => pure CErased
+               11 => do msg <- fromBuf s b
+                        pure (CCrash msg)
                _ => corrupt "CExp"
 
   export
@@ -418,4 +424,17 @@ mutual
                2 => do sc <- fromBuf s b
                        pure (CDefaultCase sc)
                _ => corrupt "CAlt"
+
+export
+  TTC annot CDef where
+    toBuf b (MkFun args cexpr) = do tag 0; toBuf b args; toBuf b cexpr
+    toBuf b (MkError cexpr) = do tag 1; toBuf b cexpr
+
+    fromBuf s b 
+        = case !getTag of
+               0 => do args <- fromBuf s b; cexpr <- fromBuf s b
+                       pure (MkFun args cexpr)
+               1 => do cexpr <- fromBuf s b
+                       pure (MkError cexpr)
+               _ => corrupt "CDef"
 

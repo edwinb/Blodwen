@@ -1,5 +1,7 @@
 module TTImp.ProcessDef
 
+import Compiler.CompileExpr
+
 import Core.TT
 import Core.Unify
 import Core.Context
@@ -218,6 +220,10 @@ processDef elab env nest loc n_in cs_raw
                    checkUserHoles False
                    (_ ** tree) <- getPMDef loc n ty (mapMaybe id cs)
                    addFnDef loc n tree
+                   
+                   -- Add the compiled version of the generated definition
+                   compileDef n
+
                    addToSave n
                    gam <- getCtxt
                    log 3 $

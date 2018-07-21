@@ -1,5 +1,7 @@
 module TTImp.ProcessType
 
+import Compiler.CompileExpr
+
 import Core.TT
 import Core.Unify
 import Core.Context
@@ -58,6 +60,11 @@ processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
 
          checkNameVisibility loc n vis ty
          addDef n (newDef (abstractFullEnvType env ty) vis None)
+
+         -- Add the compiled version (which will just give an error, but it's
+         -- good for it to be there!)
+         compileDef n
+
          traverse (processFnOpt loc n) fnopts
          addToSave n
 

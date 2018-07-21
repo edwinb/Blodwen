@@ -1,8 +1,7 @@
 module TTImp.Elab
 
-import TTImp.TTImp
-import public TTImp.Elab.State
-import public TTImp.Elab.Term
+import Compiler.CompileExpr
+
 import Core.CaseTree
 import Core.Context
 import Core.LinearCheck
@@ -10,6 +9,10 @@ import Core.Normalise
 import Core.Reflect
 import Core.TT
 import Core.Unify
+
+import TTImp.TTImp
+import public TTImp.Elab.State
+import public TTImp.Elab.Term
 
 import Data.List
 import Data.List.Views
@@ -98,7 +101,12 @@ elabTerm process defining env nest impmode elabmode tm tyin
          -- If there are remaining holes, we need to save them to the ttc
          -- since they haven't been normalised away yet, and they may be
          -- solved later
-         traverse addToSave !getHoleNames
+         hs <- getHoleNames
+         traverse addToSave hs
+         -- ...and we need to add their compiled forms, for any that might
+         -- end up being executed
+         traverse compileDef hs
+
          -- On the LHS, finish by tidying up the plets (changing things that
          -- were of the form x@_, where the _ is inferred to be a variable,
          -- to just x)

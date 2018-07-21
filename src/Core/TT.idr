@@ -117,6 +117,26 @@ data PrimFn : Nat -> Type where
 
      Cast : Constant -> Constant -> PrimFn 1
 
+export
+Show (PrimFn arity) where
+  show (Add ty) = "+" ++ show ty
+  show (Sub ty) = "-" ++ show ty
+  show (Mul ty) = "*" ++ show ty
+  show (Div ty) = "/" ++ show ty
+  show (Mod ty) = "%" ++ show ty
+  show (Neg ty) = "neg " ++ show ty
+  show (LT ty) = "<" ++ show ty
+  show (LTE ty) = "<=" ++ show ty
+  show (EQ ty) = "==" ++ show ty
+  show (GTE ty) = ">=" ++ show ty
+  show (GT ty) = ">" ++ show ty
+  show StrLength = "op_strlen"
+  show StrHead = "op_strhead"
+  show StrTail = "op_strtail"
+  show StrAppend = "++"
+  show StrReverse = "op_strrev"
+  show (Cast x y) = "cast-" ++ show x ++ "-" ++ show y
+
 public export
 data PiInfo = Implicit | Explicit | AutoImplicit
 

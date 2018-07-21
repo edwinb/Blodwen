@@ -2,10 +2,13 @@ package ttimp
 
 pkgs = contrib
 
-modules = Core.AutoSearch,
+modules = Compiler.CompileExpr,
+
+          Core.AutoSearch,
           Core.Binary,
           Core.CaseBuilder,
           Core.CaseTree,
+          Core.CompileExpr,
           Core.Context, 
           Core.Core,
           Core.Directory,

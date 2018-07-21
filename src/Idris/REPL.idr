@@ -1,6 +1,7 @@
 module Idris.REPL
 
 import Core.AutoSearch
+import Core.CompileExpr
 import Core.Context
 import Core.Normalise
 import Core.Options
@@ -34,8 +35,12 @@ defaultOpts = MkREPLOpts False NormaliseAll
 export
 data ROpts : Type where
 
-showInfo : (Name, Def) -> Core annot ()
-showInfo (n, d) = coreLift $ putStrLn (show n ++ " ==> " ++ show d)
+showInfo : (Name, GlobalDef) -> Core annot ()
+showInfo (n, d) 
+    = do coreLift $ putStrLn (show n ++ " ==> " ++ show (definition d))
+         case compexpr d of
+              Nothing => pure ()
+              Just expr => coreLift $ putStrLn ("Compiled: " ++ show expr)
 
 isHole : GlobalDef -> Maybe Nat
 isHole def
@@ -142,7 +147,7 @@ process (ProofSearch n)
          pure True
 process (DebugInfo n)
     = do gam <- get Ctxt
-         traverse showInfo (lookupDefName n (gamma gam))
+         traverse showInfo (lookupGlobalName n (gamma gam))
          pure True
 process (SetOpt opt)
     = do setOpt opt

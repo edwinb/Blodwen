@@ -266,7 +266,7 @@ record GlobalDef where
      totality : Totality
      flags : List DefFlag
      definition : Def
-     compexpr : Maybe (CExp [])
+     compexpr : Maybe CDef
      refersTo : List Name
 
 TTC annot GlobalDef where
@@ -788,7 +788,7 @@ updateDef n fdef
  
 export
 updateTy : {auto x : Ref Ctxt Defs} ->
-						Name -> ClosedTerm -> Core annot ()
+					Name -> ClosedTerm -> Core annot ()
 updateTy n ty
     = do g <- getCtxt
          case lookupCtxtExact n g of
@@ -796,7 +796,18 @@ updateTy n ty
               Just odef => 
                    let gdef = record { type = ty } odef in
                        setCtxt (addCtxt n gdef g)
- 
+
+export
+setCompiled : {auto x : Ref Ctxt Defs} ->
+              Name -> CDef -> Core annot ()
+setCompiled n cexp
+    = do g <- getCtxt
+         case lookupCtxtExact n g of
+              Nothing => throw (InternalError ("No such name to compile " ++ show n))
+              Just odef =>
+                   let gdef = record { compexpr = Just cexp } odef in
+                       setCtxt (addCtxt n gdef g)
+
 -- Check that the names used in the term don't conflict with the visibility
 -- of the name. No name in the term, defined in the same namespace,
 -- can have lower visibility than the given name and visibility.
