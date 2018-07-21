@@ -214,6 +214,21 @@ mutual
        PNamespace : FC -> List String -> List PDecl -> PDecl
        PDirective : FC -> Directive -> PDecl
 
+definedInData : PDataDecl -> List Name
+definedInData (MkPData _ n _ _ cons) = n :: map getName cons
+  where
+    getName : PTypeDecl -> Name
+    getName (MkPTy _ n _) = n
+definedInData (MkPLater _ n _) = [n]
+
+export
+definedIn : List PDecl -> List Name
+definedIn [] = []
+definedIn (PClaim _ _ _ (MkPTy _ n _) :: ds) = n :: definedIn ds
+definedIn (PData _ _ d :: ds) = definedInData d ++ definedIn ds
+definedIn (PNamespace _ _ ns :: ds) = definedIn ns ++ definedIn ds
+definedIn (_ :: ds) = definedIn ds
+
 public export
 data REPLEval : Type where
      EvalTC : REPLEval -- Evaluate as if part of the typechecker

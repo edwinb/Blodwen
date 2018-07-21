@@ -107,7 +107,7 @@ mutual
                         !(traverse (desugarClause ps True) xs)
   desugar ps (PLocal fc xs scope) 
       = pure $ ILocal fc (concat !(traverse (desugarDecl ps) xs)) 
-                         !(desugar ps scope)
+                         !(desugar (definedIn xs ++ ps) scope)
   desugar ps (PApp fc x y) 
       = pure $ IApp fc !(desugar ps x) !(desugar ps y)
   desugar ps (PImplicitApp fc x argn y) 
