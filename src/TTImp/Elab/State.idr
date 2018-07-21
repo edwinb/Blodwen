@@ -611,6 +611,10 @@ anyOne loc [] = throw (GenericMsg loc "All elaborators failed")
 anyOne loc [elab] = elab
 anyOne loc (e :: es) = tryElab e (anyOne loc es)
 
+-- We run the elaborator in the given environment, but need to end up with a
+-- closed term. It'll get substituted into the right place at the end of
+-- elaboration, so here we're just lambda binding the names so that the
+-- substitution is successful.
 total
 mkClosedElab : Env Term vars -> 
                (Core annot (Term vars, Term vars)) ->
@@ -618,10 +622,6 @@ mkClosedElab : Env Term vars ->
 mkClosedElab [] elab 
     = do (tm, _) <- elab
          pure tm
-mkClosedElab {vars = x :: vars} (Let c val ty :: env) elab
-    = mkClosedElab env
-          (do (sc', _) <- elab
-              pure (Bind x (Let c val ty) sc', Erased))
 mkClosedElab {vars = x :: vars} (b :: env) elab
     = mkClosedElab env 
           (do (sc', _) <- elab
@@ -644,12 +644,13 @@ delayOnFailure loc env expected pred elab
     = handle (elab False)
         (\err => do if pred err 
                         then 
-                          do (cn, cref) <- addDelayedElab loc env expected
+                          do (cn, cref, dty) <- addDelayedElab loc env expected
                              log 5 $ "Postponing elaborator for " ++ show expected
+                             log 5 $ "New hole type " ++ show cref ++ " : " ++ show dty
                              ust <- get UST
                              put UST (record { delayedElab $= addCtxt cref
                                                  (mkClosedElab env (elab True)) } ust)
-                             pure (mkConstantApp cn env, expected)
+                             pure (mkConstantAppFull cn env, expected)
                         else throw err)
 
 export
@@ -661,12 +662,13 @@ delayElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             Core annot (Term vars, Term vars)
 delayElab {vars} loc env expected elab
     = do exp <- mkExpected expected
-         (cn, cref) <- addDelayedElab loc env exp
+         (cn, cref, dty) <- addDelayedElab loc env exp
          log 5 $ "Postponing elaborator for " ++ show exp
+         log 5 $ "New hole type " ++ show cref ++ " : " ++ show dty
          ust <- get UST
          put UST (record { delayedElab $= addCtxt cref
                              (mkClosedElab env elab) } ust)
-         pure (mkConstantApp cn env, exp)
+         pure (mkConstantAppFull cn env, exp)
   where
     mkExpected : Maybe (Term vars) -> Core annot (Term vars)
     mkExpected Nothing

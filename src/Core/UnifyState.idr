@@ -391,7 +391,7 @@ export
 addDelayedElab : {auto u : Ref UST (UState annot)} ->
                  {auto c : Ref Ctxt Defs} ->       
                  annot -> Env Term vars ->
-                 (ty : Term vars) -> Core annot (Name, Name)
+                 (ty : Term vars) -> Core annot (Name, Name, ClosedTerm)
 addDelayedElab loc env ty
     = do cn <- genName "delayed"
          c_id <- getNextHole
@@ -400,7 +400,7 @@ addDelayedElab loc env ty
          let hole = newDef defty Public (Delayed cref)
          addHoleName loc cn
          addDef cn hole
-         pure (cn, cref)
+         pure (cn, cref, defty)
 
 export
 addBoundName : {auto u : Ref UST (UState annot)} ->

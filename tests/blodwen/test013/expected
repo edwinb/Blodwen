@@ -1,0 +1,18 @@
+Processing as Idris
+1/2: Building Stuff (Stuff.blod)
+2/2: Building letcase (letcase.blod)
+Welcome to Blodwen. Good luck.
+Main>    x : Nat
+   y : Nat
+   res : Nat
+   x : Nat
+-------------------------------------
+foo : IsSuc (S (S x))
+Main>    y : Nat
+   x : Nat
+   res : Nat
+   y : Nat
+   ys : Vect (S Z) Nat
+-------------------------------------
+bar : Nat
+Main> Bye for now!
