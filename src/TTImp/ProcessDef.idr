@@ -194,8 +194,9 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
     extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) with (nameEq n n')
       extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) | Nothing 
             = throw (InternalError "Names don't match in pattern type")
+      -- PLet on the left becomes Let on the right, to give it computational force
       extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n (PLet _ _ _) tysc) | (Just Refl) 
-            = extend (PLet c tmv tmt :: env) (weaken nest) sc tysc
+            = extend (Let c tmv tmt :: env) (weaken nest) sc tysc
     extend env nest tm ty = pure (_ ** (env, nest, tm, ty))
 
 export

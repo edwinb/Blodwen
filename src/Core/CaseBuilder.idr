@@ -743,6 +743,8 @@ getPMDef loc fn ty clauses
     close i plets [] tm = tm
     close i True (PLet c val ty :: bs) tm 
 		    = close (i + 1) True bs (Bind (MN "pat" i) (Let c val ty) (renameTop _ tm))
+    close i True (Let c val ty :: bs) tm 
+		    = close (i + 1) True bs (Bind (MN "pat" i) (Let c val ty) (renameTop _ tm))
     close i plets (b :: bs) tm 
         = close (i + 1) plets bs (subst (Ref Bound (MN "pat" i)) tm)
 

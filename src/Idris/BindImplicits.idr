@@ -34,6 +34,8 @@ findBindableNames arg env used (IApp fc fn av)
     = findBindableNames False env used fn ++ findBindableNames True env used av
 findBindableNames arg env used (IImplicitApp fc fn n av)
     = findBindableNames False env used fn ++ findBindableNames True env used av
+findBindableNames arg env used (IAs fc (UN n) pat)
+    = (n, getUnique used n) :: findBindableNames arg env used pat
 findBindableNames arg env used (IAs fc n pat)
     = findBindableNames arg env used pat
 findBindableNames arg env used (IAlternative fc u alts)
