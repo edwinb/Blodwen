@@ -1,6 +1,7 @@
 module Core.Context
 
 import Core.CaseTree
+import Core.CompileExpr
 import public Core.Core
 import Core.TT
 import Core.TTC
@@ -14,7 +15,6 @@ import Data.CMap
 import Data.StringMap
 import Data.CSet
 import Data.List
-import Data.Vect
 
 %default total
 
@@ -266,6 +266,7 @@ record GlobalDef where
      totality : Totality
      flags : List DefFlag
      definition : Def
+     compexpr : Maybe (CExp [])
      refersTo : List Name
 
 TTC annot GlobalDef where
@@ -275,6 +276,7 @@ TTC annot GlobalDef where
            toBuf b (totality def)
            toBuf b (flags def)
            toBuf b (definition def)
+           toBuf b (compexpr def)
            toBuf b (refersTo def)
 
   fromBuf s b
@@ -283,8 +285,9 @@ TTC annot GlobalDef where
            tot <- fromBuf s b
            flgs <- fromBuf s b
            def <- fromBuf s b
+           exp <- fromBuf s b
            ref <- fromBuf s b
-           pure (MkGlobalDef ty vis tot flgs def ref)
+           pure (MkGlobalDef ty vis tot flgs def exp ref)
 
 getRefs : Def -> List Name
 getRefs None = []
@@ -301,7 +304,7 @@ getRefs (Processing n) = []
 
 export
 newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
-newDef ty vis def = MkGlobalDef ty vis Unchecked [] def (getRefs def)
+newDef ty vis def = MkGlobalDef ty vis Unchecked [] def Nothing (getRefs def)
 
 -- A context of global definitions
 public export
@@ -766,7 +769,7 @@ addBuiltin : {auto x : Ref Ctxt Defs} ->
              Name -> ClosedTerm -> Totality ->
              PrimFn arity -> Core annot ()
 addBuiltin n ty tot op 
-    = addDef n (MkGlobalDef ty Public tot [] (Builtin op) [])
+    = addDef n (MkGlobalDef ty Public tot [] (Builtin op) Nothing [])
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->

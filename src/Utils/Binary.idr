@@ -3,6 +3,7 @@ module Utils.Binary
 import Core.Core
 import Data.Buffer
 import Data.List
+import Data.Vect
 import public Data.StringMap
 
 -- Serialising data as binary. Provides an interface TTC which allows
@@ -364,7 +365,25 @@ TTC annot a => TTC annot (List a) where
           = do val <- fromBuf s b
                readElems (val :: xs) k
 
-count : Elem x xs -> Int
+export
+TTC annot a => TTC annot (Vect n a) where
+  toBuf b xs = writeAll xs
+    where
+      writeAll : Vect n a -> Core annot ()
+      writeAll [] = pure ()
+      writeAll (x :: xs) = do toBuf b x; writeAll xs
+
+  fromBuf {n} s b = rewrite sym (plusZeroRightNeutral n) in readElems [] n
+    where
+      readElems : Vect done a -> (todo : Nat) -> Core annot (Vect (todo + done) a)
+      readElems {done} xs Z 
+          = pure (reverse xs)
+      readElems {done} xs (S k)
+          = do val <- fromBuf s b
+               rewrite (plusSuccRightSucc k done)
+               readElems (val :: xs) k
+
+count : List.Elem x xs -> Int
 count Here = 0
 count (There p) = 1 + count p
 
@@ -372,13 +391,13 @@ count (There p) = 1 + count p
 -- to rebuild proofs is fine.
 -- We're just making up the implicit arguments - this is only fine at run
 -- time because those arguments get erased!
-mkPrf : Int -> Elem x xs
+mkPrf : Int -> List.Elem x xs
 mkPrf i {x} {xs}
     = if i == 0 then believe_me (Here {x} {xs = x :: xs})
                 else believe_me (There {y=x} (mkPrf {x} {xs} (i-1)))
 
 export
-TTC annot (Elem x xs) where
+TTC annot (List.Elem x xs) where
   toBuf b prf = toBuf b (count prf)
   fromBuf s b
     = do val <- fromBuf s b {a = Int}

@@ -1,11 +1,13 @@
 module Core.TTC
 
 import Core.CaseTree
+import Core.CompileExpr
 import Core.Core
 import Core.TT
 import Utils.Binary
 
 import Data.List
+import Data.Vect
 
 %default total
 
@@ -307,3 +309,113 @@ TTC annot Totality where
              2 => pure Covering
              3 => pure Total
              _ => corrupt "Totality"
+
+export
+TTC annot (PrimFn n) where
+  toBuf b (Add ty) = do tag 0; toBuf b ty
+  toBuf b (Sub ty) = do tag 1; toBuf b ty
+  toBuf b (Mul ty) = do tag 2; toBuf b ty
+  toBuf b (Div ty) = do tag 3; toBuf b ty
+  toBuf b (Mod ty) = do tag 4; toBuf b ty
+  toBuf b (Neg ty) = do tag 5; toBuf b ty
+  toBuf b (LT ty) = do tag 6; toBuf b ty
+  toBuf b (LTE ty) = do tag 7; toBuf b ty
+  toBuf b (EQ ty) = do tag 8; toBuf b ty
+  toBuf b (GTE ty) = do tag 9; toBuf b ty
+  toBuf b (GT ty) = do tag 10; toBuf b ty
+  toBuf b StrLength = tag 11
+  toBuf b StrHead = tag 12
+  toBuf b StrTail = tag 13
+  toBuf b StrAppend = tag 14
+  toBuf b StrReverse = tag 15
+  toBuf b (Cast x y) = do tag 16; toBuf b x; toBuf b y
+
+  fromBuf {n} s b
+      = case n of
+             S Z => fromBuf1 s b
+             S (S Z) => fromBuf2 s b
+             _ => corrupt "PrimFn"
+    where
+      fromBuf1 : Ref Share (StringMap String) -> Ref Bin Binary ->
+                 Core annot (PrimFn 1)
+      fromBuf1 s b
+          = case !getTag of
+                 5 => do ty <- fromBuf s b; pure (Neg ty)
+                 11 => pure StrLength
+                 12 => pure StrHead
+                 13 => pure StrTail
+                 15 => pure StrReverse
+                 16 => do x <- fromBuf s b; y <- fromBuf s b; pure (Cast x y)
+                 _ => corrupt "PrimFn 1"
+
+      fromBuf2 : Ref Share (StringMap String) -> Ref Bin Binary ->
+                 Core annot (PrimFn 2)
+      fromBuf2 s b
+          = case !getTag of
+                 0 => do ty <- fromBuf s b; pure (Add ty)
+                 1 => do ty <- fromBuf s b; pure (Sub ty)
+                 2 => do ty <- fromBuf s b; pure (Mul ty)
+                 3 => do ty <- fromBuf s b; pure (Div ty)
+                 4 => do ty <- fromBuf s b; pure (Mod ty)
+                 6 => do ty <- fromBuf s b; pure (LT ty)
+                 7 => do ty <- fromBuf s b; pure (LTE ty)
+                 8 => do ty <- fromBuf s b; pure (EQ ty)
+                 9 => do ty <- fromBuf s b; pure (GTE ty)
+                 10 => do ty <- fromBuf s b; pure (GT ty)
+                 14 => pure StrAppend
+                 _ => corrupt "PrimFn 2"
+             
+mutual
+  export
+  TTC annot (CExp vars) where
+    toBuf b (CLocal {x} h) = do tag 0; toBuf b x; toBuf b h
+    toBuf b (CRef n) = do tag 1; toBuf b n
+    toBuf b (CLam x sc) = do tag 2; toBuf b x; toBuf b sc
+    toBuf b (CLet x val sc) = do tag 3; toBuf b x; toBuf b val; toBuf b sc
+    toBuf b (CApp f as) = assert_total $ do tag 4; toBuf b f; toBuf b as
+    toBuf b (COp {arity} op as) = assert_total $ do tag 5; toBuf b arity; toBuf b op; toBuf b as
+    toBuf b (CExtPrim f as) = assert_total $ do tag 6; toBuf b f; toBuf b as
+    toBuf b (CCase sc alts) = assert_total $ do tag 7; toBuf b sc; toBuf b alts
+    toBuf b (CPrimVal c) = do tag 8; toBuf b c
+    toBuf b CErased = do tag 9
+
+    fromBuf s b
+        = assert_total $ case !getTag of
+               0 => do x <- fromBuf s b; h <- fromBuf s b
+                       pure (CLocal {x} h)
+               1 => do n <- fromBuf s b
+                       pure (CRef n)
+               2 => do x <- fromBuf s b; sc <- fromBuf s b
+                       pure (CLam x sc)
+               3 => do x <- fromBuf s b; val <- fromBuf s b; sc <- fromBuf s b
+                       pure (CLet x val sc)
+               4 => do f <- fromBuf s b; as <- fromBuf s b
+                       pure (CApp f as)
+               5 => do arity <- fromBuf s b; op <- fromBuf s b; args <- fromBuf s b
+                       pure (COp {arity} op args)
+               6 => do p <- fromBuf s b; as <- fromBuf s b
+                       pure (CExtPrim p as)
+               7 => do sc <- fromBuf s b; alts <- fromBuf s b
+                       pure (CCase sc alts)
+               8 => do c <- fromBuf s b
+                       pure (CPrimVal c)
+               9 => pure CErased
+               _ => corrupt "CExp"
+
+  export
+  TTC annot (CAlt vars) where
+    toBuf b (CConCase n t as sc) = do tag 0; toBuf b n; toBuf b t; toBuf b as; toBuf b sc
+    toBuf b (CConstCase c sc) = do tag 1; toBuf b c; toBuf b sc
+    toBuf b (CDefaultCase sc) = do tag 2; toBuf b sc
+
+    fromBuf s b
+        = case !getTag of
+               0 => do n <- fromBuf s b; t <- fromBuf s b
+                       as <- fromBuf s b; sc <- fromBuf s b
+                       pure (CConCase n t as sc)
+               1 => do c <- fromBuf s b; sc <- fromBuf s b
+                       pure (CConstCase c sc)
+               2 => do sc <- fromBuf s b
+                       pure (CDefaultCase sc)
+               _ => corrupt "CAlt"
+

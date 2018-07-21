@@ -4,8 +4,8 @@ import Core.TT
 import Core.CaseTree
 import Parser.Support
 
-import public Data.IORef
 import public Control.Catchable
+import public Data.IORef
 
 public export
 data TTCErrorMsg
