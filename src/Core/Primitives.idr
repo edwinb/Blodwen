@@ -1,7 +1,5 @@
 module Core.Primitives
 
-import Compiler.CompileExpr
-
 import Core.Core
 import Core.Context
 import Core.TT
@@ -10,6 +8,7 @@ import Data.Vect
 
 %default covering
 
+public export
 record Prim where
   constructor MkPrim
   fn : PrimFn arity
@@ -215,6 +214,7 @@ getOp _ = const Nothing
 prim : String -> Name
 prim str = UN $ "prim__" ++ str
 
+export
 opName : PrimFn arity -> Name
 opName (Add ty) = prim $ "add_" ++ show ty
 opName (Sub ty) = prim $ "sub_" ++ show ty
@@ -234,6 +234,7 @@ opName StrAppend = prim "strAppend"
 opName StrReverse = prim "strReverse"
 opName (Cast x y) = prim $ "cast_" ++ show x ++ show y
 
+export
 allPrimitives : List Prim
 allPrimitives =
     map (\t => MkPrim (Add t) (arithTy t) Total) [IntType, IntegerType, CharType, DoubleType] ++
@@ -260,15 +261,3 @@ allPrimitives =
     map (\t => MkPrim (Cast t IntType) (predTy t IntType) Total) [IntegerType, CharType, DoubleType] ++
     map (\t => MkPrim (Cast t DoubleType) (predTy t DoubleType) Total) [IntType, IntegerType] ++
     map (\t => MkPrim (Cast t CharType) (predTy t CharType) Total) [IntType]
-
-addPrim : {auto c : Ref Ctxt Defs} ->
-          Prim -> Core annot ()
-addPrim p 
-    = do addBuiltin (opName (fn p)) (type p) (totality p) (fn p)
-         compileDef (opName (fn p))
-
-export
-addPrimitives : {auto c : Ref Ctxt Defs} -> Core annot ()
-addPrimitives 
-    = do traverse addPrim allPrimitives
-         pure ()

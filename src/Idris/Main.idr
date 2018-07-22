@@ -4,7 +4,7 @@ import Core.Binary
 import Core.Context
 import Core.Core
 import Core.Directory
-import Core.Primitives
+import Core.InitPrimitives
 import Core.Unify
 
 import Idris.Desugar

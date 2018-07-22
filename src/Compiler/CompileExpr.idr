@@ -11,8 +11,21 @@ import Data.Vect
 
 %default covering
 
-toCExp : Defs -> Name -> CaseTree vars -> CExp vars
-toCExp defs n tree = CCrash "Not done yet"
+toCExp : Defs -> Name -> Term vars -> CExp vars
+toCExp defs n tm = CCrash "Not done yet"
+
+mutual
+  toCAlt : Defs -> Name -> CaseAlt vars -> CAlt vars
+  toCAlt defs n (ConCase x tag args sc) = CConCase x tag args (toCExpTree defs n sc)
+  toCAlt defs n (ConstCase x sc) = CConstCase x (toCExpTree defs n sc)
+  toCAlt defs n (DefaultCase sc) = CDefaultCase (toCExpTree defs n sc)
+
+  toCExpTree : Defs -> Name -> CaseTree vars -> CExp vars
+  toCExpTree defs n (Case x scTy alts) 
+      = CCase (CLocal x) (map (toCAlt defs n) alts)
+  toCExpTree defs n (STerm tm) = toCExp defs n tm
+  toCExpTree defs n (Unmatched msg) = CCrash msg 
+  toCExpTree defs n Impossible = CCrash $ "Impossible case encountered in " ++ show n
 
 -- Need this for ensuring that argument list matches up to operator arity for
 -- builtins
@@ -30,7 +43,7 @@ toCDef : {auto c : Ref Ctxt Defs} -> Name -> Def -> Core annot CDef
 toCDef n None 
     = pure $ MkError $ CCrash ("Encountered undefined name " ++ show n)
 toCDef n (PMDef _ args tree)
-    = pure $ MkFun _ (toCExp !(get Ctxt) n tree) 
+    = pure $ MkFun _ (toCExpTree !(get Ctxt) n tree) 
 toCDef n (Builtin {arity} op)
     = let (ns ** args) = mkArgList 0 arity in
           pure $ MkFun _ (COp op (map toArgExp (getVars args)))

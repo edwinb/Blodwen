@@ -5,6 +5,7 @@ import Core.Context
 import Core.Core
 import Core.Directory
 import Core.Primitives
+import Core.InitPrimitives
 import Core.UnifyState
 
 import Idris.Desugar

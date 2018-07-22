@@ -11,7 +11,7 @@ import Core.RawContext
 import Core.Reflect
 import Core.Directory
 import Core.Options
-import Core.Primitives
+import Core.InitPrimitives
 
 import TTImp.Elab
 import TTImp.ProcessTTImp
