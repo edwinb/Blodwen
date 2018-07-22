@@ -112,7 +112,7 @@ process : {auto c : Ref Ctxt Defs} ->
 process (Eval itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar [] itm
-         (tm, ty) <- inferTerm elabTop (UN "[input]") 
+         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
          itm <- resugar [] (normalise gam [] tm)
@@ -131,7 +131,7 @@ process (Check (PRef fc fn))
 process (Check itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar [] itm
-         (tm, ty) <- inferTerm elabTop (UN "[input]") 
+         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
          itm <- resugar [] (normaliseHoles gam [] tm)

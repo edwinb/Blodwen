@@ -50,8 +50,10 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
            ImplicitMode -> ElabMode ->
            (term : RawImp annot) ->
            (tyin : Maybe (Term vars)) ->
-           Core annot (Term vars, Term vars) 
-elabTerm process defining env nest impmode elabmode tm tyin
+           Core annot (Term vars, -- checked term
+                       Term vars, -- checked and erased term
+                       Term vars) -- type
+elabTerm {vars} process defining env nest impmode elabmode tm tyin
     = do resetHoles
          e <- newRef EST (initEState defining)
          let rigc = getRigNeeded elabmode
@@ -95,9 +97,10 @@ elabTerm process defining env nest impmode elabmode tm tyin
          normaliseHoleTypes
          clearSolvedHoles
          dumpConstraints 2 False
-         case elabmode of
-              InLHS => pure ()
-              _ => linearCheck (getAnnot tm) rigc env ptm'
+         ptm' <- the (Core _ (Term vars)) $ case elabmode of
+                    InLHS => pure ptm'
+                    _ => do linearCheck (getAnnot tm) rigc False env ptm'
+                            pure ptm'
          -- If there are remaining holes, we need to save them to the ttc
          -- since they haven't been normalised away yet, and they may be
          -- solved later
@@ -113,9 +116,11 @@ elabTerm process defining env nest impmode elabmode tm tyin
          case elabmode of
               InLHS => let vs = findPLetRenames ptm' in
                            do log 5 $ "Renamed PLets " ++ show (doPLetRenames vs [] ptm')
-                              pure (doPLetRenames vs [] ptm',
+                              let ret = doPLetRenames vs [] ptm'
+                              pure (ret, ret,
                                     doPLetRenames vs [] pty')
-              _ => pure (ptm', pty')
+              _ => do perase <- linearCheck (getAnnot tm) rigc True env ptm'
+                      pure (ptm', perase, pty')
 
 export
 inferTerm : {auto c : Ref Ctxt Defs} ->
@@ -127,7 +132,7 @@ inferTerm : {auto c : Ref Ctxt Defs} ->
             Env Term vars -> NestedNames vars ->
             ImplicitMode -> ElabMode ->
             (term : RawImp annot) ->
-            Core annot (Term vars, Term vars) 
+            Core annot (Term vars, Term vars, Term vars) 
 inferTerm process defining env nest impmode elabmode tm 
     = elabTerm process defining env nest impmode elabmode tm Nothing
 
@@ -141,8 +146,8 @@ checkTerm : {auto c : Ref Ctxt Defs} ->
             Env Term vars -> NestedNames vars ->
             ImplicitMode -> ElabMode ->
             (term : RawImp annot) -> (ty : Term vars) ->
-            Core annot (Term vars) 
+            Core annot (Term vars, Term vars) 
 checkTerm process defining env nest impmode elabmode tm ty 
-    = do (tm_elab, _) <- elabTerm process defining env nest impmode elabmode tm (Just ty)
-         pure tm_elab
+    = do (tm_elab, tm_erase, _) <- elabTerm process defining env nest impmode elabmode tm (Just ty)
+         pure (tm_elab, tm_erase)
 

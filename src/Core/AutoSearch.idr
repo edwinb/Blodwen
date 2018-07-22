@@ -339,7 +339,7 @@ searchHole loc depth trying defining n gam glob
          checkConcreteDets loc nty nty
          soln <- searchType loc depth (searchty :: trying) [] defining nty
          log 5 $ "Solution: " ++ show n ++ " = " ++ show (normalise gam [] soln)
-         addDef n (record { definition = PMDef True [] (STerm soln) } glob)
+         addDef n (record { definition = PMDef True [] (STerm soln) (STerm soln) } glob)
          removeHoleName n
          pure soln
 

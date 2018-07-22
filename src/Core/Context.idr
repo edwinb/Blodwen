@@ -130,7 +130,10 @@ TTC annot a => TTC annot (Context a) where
 public export
 data Def : Type where
      None  : Def -- Not yet defined
-     PMDef : (ishole : Bool) -> (args : List Name) -> CaseTree args -> Def
+     PMDef : (ishole : Bool) -> (args : List Name) -> 
+             (treeCT : CaseTree args) -> -- Compile time case tree
+             (treeRT : CaseTree args) -> -- Run time case tree (0 multiplicities erased)
+             Def
      Builtin : PrimFn arity -> Def
      DCon  : (tag : Int) -> (arity : Nat) -> 
 						 (forcedpos : List Nat) -> -- argument positions whose value is
@@ -168,7 +171,7 @@ data Def : Type where
 export
 Show Def where
   show None = "No definition"
-  show (PMDef hole args tree) 
+  show (PMDef hole args tree _) 
       = showHole hole ++"; " ++ show args ++ ";" ++ show tree
     where
       showHole : Bool -> String
@@ -195,8 +198,8 @@ Show Def where
 
 TTC annot Def where
   toBuf b None = tag 0
-  toBuf b (PMDef ishole args sc) 
-      = do tag 1; toBuf b ishole; toBuf b args; toBuf b sc
+  toBuf b (PMDef ishole args ct rt) 
+      = do tag 1; toBuf b ishole; toBuf b args; toBuf b ct; toBuf b rt
   toBuf b (Builtin _)
       = throw (InternalError "Trying to serialise a Builtin")
   toBuf b (DCon t arity forcedpos) 
@@ -219,8 +222,8 @@ TTC annot Def where
   fromBuf s b 
       = case !getTag of
              0 => pure None
-             1 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
-                     pure (PMDef x y z)
+             1 => do w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+                     pure (PMDef w x y z)
              2 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (DCon x y z)
              3 => do v <- fromBuf s b; w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
@@ -291,7 +294,7 @@ TTC annot GlobalDef where
 
 getRefs : Def -> List Name
 getRefs None = []
-getRefs (PMDef ishole args sc) = getRefs sc
+getRefs (PMDef ishole args sc _) = getRefs sc
 getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
 getRefs (TCon tag arity params dets datacons) = []
@@ -837,12 +840,12 @@ checkNameVisibility loc n vis tm
 -- Add a function definition, as long as the type exists already
 export
 addFnDef : {auto x : Ref Ctxt Defs} ->
-					 annot -> Name -> CaseTree args -> Core annot ()
-addFnDef loc n tree
+					 annot -> Name -> CaseTree args -> CaseTree args -> Core annot ()
+addFnDef loc n treeCT treeRT
     = do ctxt <- get Ctxt
          case lookupGlobalExact n (gamma ctxt) of
               Just def => 
-                 let def' = record { definition = PMDef False _ tree } def in
+                 let def' = record { definition = PMDef False _ treeCT treeRT } def in
                      addDef n def'
               Nothing => throw (NoDeclaration loc n)
   where

@@ -40,9 +40,9 @@ mkArgList i (S k)
           (_ ** ConsArg (MN "arg" i) rec)
 
 toCDef : {auto c : Ref Ctxt Defs} -> Name -> Def -> Core annot CDef
-toCDef n None 
+toCDef n None
     = pure $ MkError $ CCrash ("Encountered undefined name " ++ show n)
-toCDef n (PMDef _ args tree)
+toCDef n (PMDef _ args _ tree)
     = pure $ MkFun _ (toCExpTree !(get Ctxt) n tree) 
 toCDef n (Builtin {arity} op)
     = let (ns ** args) = mkArgList 0 arity in
@@ -69,7 +69,7 @@ toCDef n (Guess _ _)
     = pure $ MkError $ CCrash ("Encountered constrained hole " ++ show n)
 toCDef n (BySearch _ _)
     = pure $ MkError $ CCrash ("Encountered incomplete proof search " ++ show n)
-toCDef n def 
+toCDef n def
     = pure $ MkError $ CCrash ("Encountered uncompilable name " ++ show (n, def))
 
 export

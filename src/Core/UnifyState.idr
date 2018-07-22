@@ -464,7 +464,7 @@ dumpHole lvl hole
                     Just (BySearch _ _, ty) =>
                          log lvl $ "Search " ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
-                    Just (PMDef _ args t, ty) =>
+                    Just (PMDef _ args t _, ty) =>
                          log 4 $ "Solved: " ++ show hole ++ " : " ++ 
                                        show (normalise gam [] ty) ++
                                        " = " ++ show (normalise gam [] (Ref Func hole))
@@ -528,8 +528,8 @@ clearSolvedHoles
         = case lookupDefExact n gam of
                Just ImpBind => do log 5 $ "Removed bound hole " ++ show n
                                   removeHoleName n
-               Just (PMDef _ _ _) => do log 5 $ "Removed defined hole " ++ show n
-                                        removeHoleName n
+               Just (PMDef _ _ _ _) => do log 5 $ "Removed defined hole " ++ show n
+                                          removeHoleName n
                _ => pure ()
 
 -- Make sure the types of holes have the references to solved holes normalised
@@ -554,8 +554,8 @@ normaliseHoleTypes
         = case lookupGlobalExact n (gamma ds) of
                Just gdef =>
                   case definition gdef of
-                       PMDef h _ _ => if h then updateType ds n gdef
-                                           else pure ()
+                       PMDef h _ _ _ => if h then updateType ds n gdef
+                                             else pure ()
                        Hole _ _ _ => updateType ds n gdef
                        Guess _ _ => updateType ds n gdef
                        _ => pure ()

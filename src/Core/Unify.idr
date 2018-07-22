@@ -220,7 +220,7 @@ instantiate loc metavar smvs tm {newvars}
                          Nothing => ufail loc $ "Can't make solution for " ++ show metavar
                          Just rhs => 
                             do let soln = newDef ty Public 
-                                               (PMDef True [] (STerm rhs))
+                                               (PMDef True [] (STerm rhs) (STerm rhs))
                                log 5 $ "Instantiated: " ++ show metavar ++
                                             " = " ++ show rhs
                                addDef metavar soln
@@ -362,7 +362,7 @@ mutual
                         Nothing => ufail loc $ "Can't shrink hole"
                         Just olddef =>
                            do let soln = newDef defty Public
-                                              (PMDef True [] (STerm olddef))
+                                              (PMDef True [] (STerm olddef) (STerm olddef))
                               addDef oldhole soln
                               log 5 $ "Resolved hole " ++ show oldhole ++
                                       "; now " ++ show newhole
@@ -951,7 +951,7 @@ rerunDelayed hole cname
               Just elab => 
                    do updateDef hole (const (Just (Processing cname)))
                       tm <- elab
-                      updateDef hole (const (Just (PMDef True [] (STerm tm))))
+                      updateDef hole (const (Just (PMDef True [] (STerm tm) (STerm tm))))
                       log 5 $ "Resolved delayed hole " ++ show hole ++ " = " ++ show tm
                       removeHoleName hole
 
@@ -980,7 +980,7 @@ retryHole mode lastChance (loc, hole)
                                -- All constraints resolved, so turn into a
                                -- proper definition and remove it from the
                                -- hole list
-                               [] => do let gdef = record { definition = PMDef True [] (STerm tm),
+                               [] => do let gdef = record { definition = PMDef True [] (STerm tm) (STerm tm),
                                                             refersTo = getRefs (STerm tm) } def
                                         gam <- get Ctxt
                                         setCtxt (addCtxt hole gdef (gamma gam))

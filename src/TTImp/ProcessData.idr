@@ -53,8 +53,8 @@ checkCon : {auto c : Ref Ctxt Defs} ->
 checkCon elab env nest vis tn (MkImpTy loc cn_in ty_raw)
     = do cn <- inCurrentNS cn_in
          ty_imp <- mkBindImps env ty_raw
-         ty <- wrapError (InCon loc cn) $
-                  checkTerm elab cn env nest (PI Rig0) InType ty_imp TType
+         (ty, _) <- wrapError (InCon loc cn) $
+                      checkTerm elab cn env nest (PI Rig0) InType ty_imp TType
          wrapError (InCon loc cn) $ checkUserHoles False
          
          checkNameVisibility loc cn vis ty
@@ -83,8 +83,8 @@ processData : {auto c : Ref Ctxt Defs} ->
 processData elab env nest vis (MkImpLater loc n_in ty_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
-         ty <- wrapError (InCon loc n) $
-                  checkTerm elab n env nest (PI Rig0) InType ty_imp TType
+         (ty, _) <- wrapError (InCon loc n) $
+                      checkTerm elab n env nest (PI Rig0) InType ty_imp TType
          wrapError (InCon loc n) $ checkUserHoles False
          checkNameVisibility loc n vis ty
 
@@ -106,8 +106,8 @@ processData elab env nest vis (MkImpLater loc n_in ty_raw)
 processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
-         ty <- wrapError (InCon loc n) $
-                  checkTerm elab n env nest (PI Rig0) InType ty_imp TType
+         (ty, _) <- wrapError (InCon loc n) $
+                        checkTerm elab n env nest (PI Rig0) InType ty_imp TType
          wrapError (InCon loc n) $ checkUserHoles False
          checkNameVisibility loc n vis ty
 

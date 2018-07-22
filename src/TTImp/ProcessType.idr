@@ -52,8 +52,8 @@ processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
               Nothing => pure ()
 
          ty_imp <- mkBindImps env ty_raw
-         ty <- wrapError (InType loc n) $
-                  checkTerm elab n env nest (PI Rig0) InType ty_imp TType
+         (ty, _) <- wrapError (InType loc n) $
+                      checkTerm elab n env nest (PI Rig0) InType ty_imp TType
          wrapError (InType loc n) $ checkUserHoles False
 
          log 1 $ show n ++ " : " ++ show (abstractFullEnvType env ty)

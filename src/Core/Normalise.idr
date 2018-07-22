@@ -75,7 +75,7 @@ parameters (defs : Defs, holesonly : Bool)
                    
     evalDef : Env Term free -> LocalEnv free vars -> Stack free ->
               NameType -> Name -> Def -> NF free
-    evalDef env loc stk nt fn (PMDef h args tree)
+    evalDef env loc stk nt fn (PMDef h args tree _)
         = if h || not holesonly then
              case extendFromStack args loc stk of
                   Nothing => NApp (NRef nt fn) stk

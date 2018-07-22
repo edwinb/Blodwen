@@ -371,7 +371,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
           case mode of
                PATTERN =>
                   case lookupDefExact n (gamma gam) of
-                       Just (PMDef _ _ t) =>
+                       Just (PMDef _ _ _ _) =>
                           -- if n is an accessible pattern variable, bind it,
                           -- otherwise reduce it
                           case n of
@@ -394,7 +394,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
                -- unless explicitly given, unbound implicits are Rig0
                PI rig =>
                   case lookupDefExact n (gamma gam) of
-                     Just (PMDef _ _ t) =>
+                     Just (PMDef _ _ _ _) =>
                         (subst (normalise gam env (applyTo (Ref Func n) env))
                                (refToLocal tmpN n repNameTm),
                          subst (normalise gam env (applyTo (Ref Func n) env))
@@ -460,7 +460,7 @@ export
 renameImplicits : Gamma -> Term vars -> Term vars
 renameImplicits gam (Bind (PV n) b sc) 
     = case lookupDefExact (PV n) gam of
-           Just (PMDef _ _ def) =>
+           Just (PMDef _ _ _ _) =>
 --                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
                     Bind n b (renameImplicits gam (renameTop n sc))
            _ => Bind n b (renameImplicits gam (renameTop n sc))

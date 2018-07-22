@@ -124,9 +124,9 @@ mutual
 mutual
   lcheck : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
-           annot -> RigCount -> Env Term vars -> Term vars -> 
+           annot -> RigCount -> (erase : Bool) -> Env Term vars -> Term vars -> 
            Core annot (Term vars, Term vars, Usage vars)
-  lcheck {vars} loc rig env (Local {x} v) 
+  lcheck {vars} loc rig erase env (Local {x} v) 
       = let (rigb, ty) = lookup v env in
             do rigSafe rigb rig
                pure (Local v, ty, used rig)
@@ -143,7 +143,7 @@ mutual
       used Rig1 = [v]
       used _ = []
 
-  lcheck loc rig env (Ref nt fn)
+  lcheck loc rig erase env (Ref nt fn)
       = do gam <- get Ctxt
            case lookupDefTyExact fn (gamma gam) of
                 Nothing => throw (InternalError ("Linearity checking failed on " ++ show fn))
@@ -159,9 +159,9 @@ mutual
           = Bind n (Pi Rig0 e ty) (unusedHoleArgs k sc)
       unusedHoleArgs _ ty = ty
 
-  lcheck loc rig_in env (Bind nm b sc)
-      = do (b', bt, usedb) <- lcheckBinder loc rig env b
-           (sc', sct, usedsc) <- lcheck loc rig (b' :: env) sc
+  lcheck loc rig_in erase env (Bind nm b sc)
+      = do (b', bt, usedb) <- lcheckBinder loc rig erase env b
+           (sc', sct, usedsc) <- lcheck loc rig erase (b' :: env) sc
            let used = count Here usedsc
            log 10 (show rig ++ " " ++ show nm ++ ": " ++ show used)
            holeFound <- if multiplicity b == Rig1
@@ -186,45 +186,46 @@ mutual
                then pure ()
                else throw (LinearUsed loc used nm)
 
-  lcheck loc rig env (App f a)
-      = do (f', fty, fused) <- lcheck loc rig env f
+  lcheck loc rig erase env (App f a)
+      = do (f', fty, fused) <- lcheck loc rig erase env f
            gam <- get Ctxt
            case nf gam env fty of
                 NBind _ (Pi rigf _ ty) scdone =>
-                   do (a', aty, aused) <- lcheck loc (rigMult rigf rig) env a
+                   do (a', aty, aused) <- lcheck loc (rigMult rigf rig) erase env a
                       let sc' = scdone (toClosure False env a')
-                      pure (App f' a', quote (noGam gam) env sc', fused ++ aused)
+                      let aerased = if erase && rigf == Rig0 then Erased else a'
+                      pure (App f' aerased, quote (noGam gam) env sc', fused ++ aused)
                 _ => throw (InternalError ("Linearity checking failed on " ++ show f' ++ 
                               " (" ++ show fty ++ " not a function type)"))
 
-  lcheck loc rig env (PrimVal x) = pure (PrimVal x, Erased, [])
-  lcheck loc rig env Erased = pure (Erased, Erased, [])
-  lcheck loc rig env TType = pure (TType, TType, [])
+  lcheck loc rig erase env (PrimVal x) = pure (PrimVal x, Erased, [])
+  lcheck loc rig erase env Erased = pure (Erased, Erased, [])
+  lcheck loc rig erase env TType = pure (TType, TType, [])
 
   lcheckBinder : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
-                 annot -> RigCount -> Env Term vars -> 
+                 annot -> RigCount -> (erase : Bool) -> Env Term vars -> 
                  Binder (Term vars) -> 
                  Core annot (Binder (Term vars), Term vars, Usage vars)
-  lcheckBinder loc rig env (Lam c x ty)
-      = do (tyv, tyt, _) <- lcheck loc Rig0 env ty
+  lcheckBinder loc rig erase env (Lam c x ty)
+      = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
            pure (Lam c x tyv, tyt, [])
-  lcheckBinder loc rig env (Let rigc val ty)
-      = do (tyv, tyt, _) <- lcheck loc Rig0 env ty
-           (valv, valt, vs) <- lcheck loc (rigMult rig rigc) env val
+  lcheckBinder loc rig erase env (Let rigc val ty)
+      = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
+           (valv, valt, vs) <- lcheck loc (rigMult rig rigc) erase env val
            pure (Let rigc valv tyv, tyt, vs)
-  lcheckBinder loc rig env (Pi c x ty)
-      = do (tyv, tyt, _) <- lcheck loc Rig0 env ty
+  lcheckBinder loc rig erase env (Pi c x ty)
+      = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
            pure (Pi c x tyv, tyt, [])
-  lcheckBinder loc rig env (PVar c ty)
-      = do (tyv, tyt, _) <- lcheck loc Rig0 env ty
+  lcheckBinder loc rig erase env (PVar c ty)
+      = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
            pure (PVar c tyv, tyt, [])
-  lcheckBinder loc rig env (PLet rigc val ty)
-      = do (tyv, tyt, _) <- lcheck loc Rig0 env ty
-           (valv, valt, vs) <- lcheck loc (rigMult rig rigc) env val
+  lcheckBinder loc rig erase env (PLet rigc val ty)
+      = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
+           (valv, valt, vs) <- lcheck loc (rigMult rig rigc) erase env val
            pure (PLet rigc valv tyv, tyt, vs)
-  lcheckBinder loc rig env (PVTy c ty)
-      = do (tyv, tyt, _) <- lcheck loc Rig0 env ty
+  lcheckBinder loc rig erase env (PVTy c ty)
+      = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
            pure (PVTy c tyv, tyt, [])
   
   discharge : (nm : Name) -> Binder (Term vars) -> Term vars ->
@@ -247,14 +248,45 @@ bindEnv : Env Term vars -> (tm : Term vars) -> ClosedTerm
 bindEnv [] tm = tm
 bindEnv (b :: env) tm 
     = bindEnv env (Bind _ b tm)
+    
+checkEnvUsage : {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState annot)} ->
+                annot -> RigCount -> 
+                Env Term vars -> Usage (done ++ vars) -> Term (done ++ vars) -> Core annot ()
+checkEnvUsage loc rig [] usage tm = pure ()
+checkEnvUsage loc rig {done} {vars = nm :: xs} (b :: env) usage tm
+    = do let pos = localPrf {later = done}
+         let used = count pos usage
+         holeFound <- if multiplicity b == Rig1
+                         then updateHoleUsage (used == 0) pos tm
+                         else pure False
+         checkUsageOK (if holeFound && used == 0 then 1 else used)
+                      (rigMult (multiplicity b) rig)
+         checkEnvUsage {done = done ++ [nm]} loc rig env 
+               (rewrite sym (appendAssociative done [nm] xs) in usage)
+               (rewrite sym (appendAssociative done [nm] xs) in tm)
+  where
+    checkUsageOK : Nat -> RigCount -> Core annot ()
+    checkUsageOK used Rig0 = pure ()
+    checkUsageOK used RigW = pure ()
+    checkUsageOK used Rig1 
+        = if used == 1 
+             then pure ()
+             else throw (LinearUsed loc used nm)
 
+-- Linearity check an elaborated term. If 'erase' is set, erase anything that's in
+-- a Rig0 argument position (we can't do this until typechecking is complete, though,
+-- since it might be used for unification/reasoning elsewhere, so we only do this for
+-- definitions ready for compilation).
 export
 linearCheck : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
-              annot -> RigCount -> Env Term vars -> Term vars -> 
-              Core annot ()
-linearCheck loc rig env tm
+              annot -> RigCount -> (erase : Bool) ->
+              Env Term vars -> Term vars -> 
+              Core annot (Term vars)
+linearCheck loc rig erase env tm
     = do log 5 $ "Linearity check on " ++ show (bindEnv env tm)
-         lcheck loc rig [] (bindEnv env tm)
-         pure ()
+         (tm', _, used) <- lcheck loc rig erase env tm
+         when (not erase) $ checkEnvUsage {done = []} loc rig env used tm'
+         pure tm'
 

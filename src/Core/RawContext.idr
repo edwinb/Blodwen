@@ -64,7 +64,7 @@ addFn loc (MkRawFn n ty cs)
          addDef n (newDef tyc Public None)
          csc <- traverse (\x => checkClause loc x) cs
          (_ ** tree) <- getPMDef loc n tyc csc
-         addFnDef loc n tree
+         addFnDef loc n tree tree
 
 addData : {auto c : Ref Ctxt Defs} ->
           annot -> (def : RawData) -> Core annot ()

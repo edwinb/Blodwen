@@ -475,7 +475,7 @@ mutual
           = do checkVisibleNS n
                let nt : NameType 
                         = case def of
-                             PMDef _ _ _ => Func
+                             PMDef _ _ _ _ => Func
                              DCon tag arity _ => DataCon tag arity
                              TCon tag arity _ _ _ => TyCon tag arity
                              _ => Func

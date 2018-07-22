@@ -126,11 +126,12 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               Elaborator annot ->
               Name ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
-              Core annot (Maybe Clause)
+              Core annot (Maybe (Clause, Clause)) -- Compile time vs run time clauses
+                     -- (the run time version has had 0-multiplicities erased)
 checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
     = handle
          (do lhs_raw <- lhsInCurrentNS nest lhs_raw
-             (lhs_in, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
+             (lhs_in, _, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
              gam <- get Ctxt
              let lhs = normaliseHoles gam env lhs_in
              let lhsty = normaliseHoles gam env lhsty_in
@@ -146,7 +147,7 @@ checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
 checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
     = do lhs_raw <- lhsInCurrentNS nest lhs_raw
          log 5 ("Checking LHS: " ++ show lhs_raw)
-         (lhs_in, lhsty_in) <- wrapError (InLHS loc defining) $
+         (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
               inferTerm elab defining env nest PATTERN InLHS lhs_raw
          gam <- get Ctxt
          -- Check there's no holes or constraints in the left hand side
@@ -166,8 +167,9 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs' lhsty'
          log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
          log 5 ("Checking RHS: " ++ show rhs_raw)
-         rhs <- wrapError (InRHS loc defining) $
+         (rhs, rhs_erased) <- wrapError (InRHS loc defining) $
                 checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
+         log 5 ("Checked and erased RHS: " ++ show rhs_erased)
 
          -- only need to check body for visibility if name is
          -- public
@@ -182,7 +184,7 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          wrapError (InRHS loc defining) $ checkUserHoles False
 
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
-         pure (Just (MkClause env' lhspat rhs))
+         pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
   where
     extend : Env Term vars -> NestedNames vars -> 
              Term vars -> Term vars ->
@@ -201,6 +203,15 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
             = extend (Let c tmv tmt :: env) (weaken nest) sc tysc
     extend env nest tm ty = pure (_ ** (env, nest, tm, ty))
 
+nameListEq : (xs : List Name) -> (ys : List Name) -> Maybe (xs = ys)
+nameListEq [] [] = Just Refl
+nameListEq (x :: xs) (y :: ys) with (nameEq x y)
+  nameListEq (x :: xs) (x :: ys) | (Just Refl) with (nameListEq xs ys)
+    nameListEq (x :: xs) (x :: xs) | (Just Refl) | Just Refl= Just Refl
+    nameListEq (x :: xs) (x :: ys) | (Just Refl) | Nothing = Nothing
+  nameListEq (x :: xs) (y :: ys) | Nothing = Nothing
+nameListEq _ _ = Nothing
+
 export
 processDef : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -218,8 +229,12 @@ processDef elab env nest loc n_in cs_raw
               Just (None, ty) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
                    checkUserHoles False
-                   (_ ** tree) <- getPMDef loc n ty (mapMaybe id cs)
-                   addFnDef loc n tree
+                   (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
+                   (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
+                   
+                   let Just Refl = nameListEq cargs rargs
+                           | Nothing => throw (InternalError "WAT")
+                   addFnDef loc n tree_comp tree_rt
                    
                    -- Add the compiled version of the generated definition
                    compileDef n
@@ -228,8 +243,10 @@ processDef elab env nest loc n_in cs_raw
                    gam <- getCtxt
                    log 3 $
                       case lookupDefExact n gam of
-                           Just (PMDef _ args t) =>
+                           Just (PMDef _ args tc tr) =>
                               "Case tree for " ++ show n ++ "\n\t" ++
-                              show args ++ " " ++ show t
+                              show args ++ " " ++ show tc ++ "\n" ++
+                              "Run time tree\n" ++
+                              show args ++ " " ++ show tr
                            _ => "No case tree for " ++ show n
               Just (_, ty) => throw (AlreadyDefined loc n)
