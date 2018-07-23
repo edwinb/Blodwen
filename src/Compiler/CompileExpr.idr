@@ -11,8 +11,100 @@ import Data.Vect
 
 %default covering
 
-toCExp : Defs -> Name -> Term vars -> CExp vars
-toCExp defs n tm = CCrash "Not done yet"
+numArgs : Defs -> Term vars -> Nat
+numArgs defs (Ref (DataCon tag arity) n) = arity
+numArgs defs (Ref (TyCon tag arity) n) = arity
+numArgs defs (Ref _ n)
+    = case lookupDefExact n (gamma defs) of
+           Just (PMDef _ args _ _) => length args
+           _ => 0
+numArgs _ _ = 0
+
+weakenEl : (x ** List.Elem x ns) -> (x ** List.Elem x (a :: ns))
+weakenEl (x ** p) = (x ** There p)
+
+etaExpand : Int -> Nat -> CExp vars -> List (x ** List.Elem x vars) -> CExp vars
+etaExpand i Z exp args = mkApp exp (map mkLocal (reverse args))
+  where
+    mkLocal : (x ** List.Elem x vars) -> CExp vars
+    mkLocal (_ ** p) = CLocal p
+
+    mkApp : CExp vars -> List (CExp vars) -> CExp vars
+    mkApp tm [] = tm
+    mkApp (CApp f args) args' = CApp f (args ++ args')
+    mkApp (CCon n t args) args' = CCon n t (args ++ args')
+    mkApp tm args = CApp tm args
+    
+etaExpand i (S k) exp args
+    = CLam (MN "x" i) (etaExpand (i + 1) k (weaken exp) 
+                         ((_ ** Here) :: map weakenEl args))
+
+expandToArity : Nat -> CExp vars -> List (CExp vars) -> CExp vars
+-- No point in applying to anything
+expandToArity _ CErased _ = CErased
+-- Overapplied; apply everything as single arguments
+expandToArity Z fn args = applyAll fn args
+  where
+    applyAll : CExp vars -> List (CExp vars) -> CExp vars
+    applyAll fn [] = fn
+    applyAll fn (a :: args) = applyAll (CApp fn [a]) args
+expandToArity (S k) fn (a :: args) = expandToArity k (addArg fn a) args
+  where
+    addArg : CExp vars -> CExp vars -> CExp vars
+    addArg (CApp fn args) a = CApp fn (args ++ [a])
+    addArg (CCon n tag args) a = CCon n tag (args ++ [a])
+    addArg f a = CApp f [a]
+-- Underapplied, saturate with lambdas
+expandToArity num fn [] = etaExpand 0 num fn []
+
+cond : List (Lazy Bool, Lazy a) -> a -> a
+cond [] def = def
+cond ((x, y) :: xs) def = if x then y else cond xs def
+
+-- Compiling external primitives, laziness, etc
+specialApp : Defs -> Term vars -> List (CExp vars) -> Maybe (CExp vars)
+specialApp defs (Ref _ n) args
+    = cond
+        [(isDelay n defs && not (isNil args), 
+              case reverse (filter notErased args) of
+                   [a] => Just (CDelay a)
+                   _ => Nothing),
+         (isForce n defs && not (isNil args),
+              case reverse (filter notErased args) of
+                   [a] => Just (CForce a)
+                   _ => Nothing)]
+        Nothing
+  where
+    notErased : CExp vars -> Bool
+    notErased CErased = False
+    notErased _ = True
+
+specialApp defs f args = Nothing
+
+mutual
+  toCExpTm : Defs -> Name -> Term vars -> CExp vars
+  toCExpTm defs n (Local prf) = CLocal prf
+  toCExpTm defs n (Ref (DataCon tag arity) fn) = CCon fn tag []
+  toCExpTm defs n (Ref (TyCon tag arity) fn) = CErased
+  toCExpTm defs n (Ref _ fn) = CRef fn
+  toCExpTm defs n (Bind x (Lam _ _ _) sc)
+      = CLam x (toCExp defs n sc)
+  toCExpTm defs n (Bind x (Let _ val _) sc)
+      = CLet x (toCExp defs n val) (toCExp defs n sc)
+  toCExpTm defs n (Bind x b tm) = CErased
+  -- We'd expect this to have been dealt with in toCExp, but for completeness...
+  toCExpTm defs n (App tm arg) = CApp (toCExp defs n tm) [toCExp defs n arg]
+  toCExpTm defs n (PrimVal c) = CPrimVal c
+  toCExpTm defs n Erased = CErased
+  toCExpTm defs n TType = CErased
+
+  toCExp : Defs -> Name -> Term vars -> CExp vars
+  toCExp defs n tm with (unapply tm)
+    toCExp defs n (apply f args) | ArgsList 
+        = let args' = map (toCExp defs n) args in
+              maybe (expandToArity (numArgs defs f) (toCExpTm defs n f) args')
+                    id
+                    (specialApp defs f args')
 
 mutual
   toCAlt : Defs -> Name -> CaseAlt vars -> CAlt vars
@@ -50,9 +142,6 @@ toCDef n (Builtin {arity} op)
   where
     toArgExp : (x ** List.Elem x ns) -> CExp ns
     toArgExp (x ** p) = CLocal p
-
-    weakenEl : (x ** List.Elem x ns) -> (x ** List.Elem x (a :: ns))
-    weakenEl (x ** p) = (x ** There p)
 
     getVars : ArgList k ns -> Vect k (x ** List.Elem x ns)
     getVars NoArgs = []

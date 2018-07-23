@@ -448,6 +448,7 @@ defined {vars = x :: xs} n (b :: env) with (nameEq x n)
 
 {- Some ugly mangling to allow us to extend the scope of a term - a
    term is always valid in a bigger scope than it needs. -}
+export
 insertElem : Elem x (outer ++ inner) -> Elem x (outer ++ n :: inner)
 insertElem {outer = []} p = There p
 insertElem {outer = (x :: xs)} Here = Here

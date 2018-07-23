@@ -376,10 +376,12 @@ mutual
     toBuf b (CCon t n as) = assert_total $ do tag 5; toBuf b t; toBuf b n; toBuf b as
     toBuf b (COp {arity} op as) = assert_total $ do tag 6; toBuf b arity; toBuf b op; toBuf b as
     toBuf b (CExtPrim f as) = assert_total $ do tag 7; toBuf b f; toBuf b as
-    toBuf b (CCase sc alts) = assert_total $ do tag 8; toBuf b sc; toBuf b alts
-    toBuf b (CPrimVal c) = do tag 9; toBuf b c
-    toBuf b CErased = do tag 10
-    toBuf b (CCrash msg) = do tag 11; toBuf b msg
+    toBuf b (CForce x) = assert_total $ do tag 8; toBuf b x
+    toBuf b (CDelay x) = assert_total $ do tag 9; toBuf b x
+    toBuf b (CCase sc alts) = assert_total $ do tag 10; toBuf b sc; toBuf b alts
+    toBuf b (CPrimVal c) = do tag 11; toBuf b c
+    toBuf b CErased = do tag 12
+    toBuf b (CCrash msg) = do tag 13; toBuf b msg
 
     fromBuf s b
         = assert_total $ case !getTag of
@@ -399,12 +401,16 @@ mutual
                        pure (COp {arity} op args)
                7 => do p <- fromBuf s b; as <- fromBuf s b
                        pure (CExtPrim p as)
-               8 => do sc <- fromBuf s b; alts <- fromBuf s b
-                       pure (CCase sc alts)
-               9 => do c <- fromBuf s b
-                       pure (CPrimVal c)
-               10 => pure CErased
-               11 => do msg <- fromBuf s b
+               8 => do x <- fromBuf s b
+                       pure (CForce x)
+               9 => do x <- fromBuf s b
+                       pure (CDelay x)
+               10 => do sc <- fromBuf s b; alts <- fromBuf s b
+                        pure (CCase sc alts)
+               11 => do c <- fromBuf s b
+                        pure (CPrimVal c)
+               12 => pure CErased
+               13 => do msg <- fromBuf s b
                         pure (CCrash msg)
                _ => corrupt "CExp"
 
