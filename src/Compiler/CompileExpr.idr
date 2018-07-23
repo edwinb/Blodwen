@@ -17,6 +17,8 @@ numArgs defs (Ref (TyCon tag arity) n) = arity
 numArgs defs (Ref _ n)
     = case lookupDefExact n (gamma defs) of
            Just (PMDef _ args _ _) => length args
+           Just (ExternDef arity) => arity
+           Just (Builtin {arity} f) => arity
            _ => 0
 numArgs _ _ = 0
 
@@ -33,6 +35,7 @@ etaExpand i Z exp args = mkApp exp (map mkLocal (reverse args))
     mkApp tm [] = tm
     mkApp (CApp f args) args' = CApp f (args ++ args')
     mkApp (CCon n t args) args' = CCon n t (args ++ args')
+    mkApp (CExtPrim p args) args' = CExtPrim p (args ++ args')
     mkApp tm args = CApp tm args
     
 etaExpand i (S k) exp args
@@ -53,6 +56,7 @@ expandToArity (S k) fn (a :: args) = expandToArity k (addArg fn a) args
     addArg : CExp vars -> CExp vars -> CExp vars
     addArg (CApp fn args) a = CApp fn (args ++ [a])
     addArg (CCon n tag args) a = CCon n tag (args ++ [a])
+    addArg (CExtPrim p args) a = CExtPrim p (args ++ [a])
     addArg f a = CApp f [a]
 -- Underapplied, saturate with lambdas
 expandToArity num fn [] = etaExpand 0 num fn []
@@ -136,6 +140,16 @@ toCDef n None
     = pure $ MkError $ CCrash ("Encountered undefined name " ++ show n)
 toCDef n (PMDef _ args _ tree)
     = pure $ MkFun _ (toCExpTree !(get Ctxt) n tree) 
+toCDef n (ExternDef arity)
+    = let (ns ** args) = mkArgList 0 arity in
+          pure $ MkFun _ (CExtPrim n (map toArgExp (getVars args)))
+  where
+    toArgExp : (x ** List.Elem x ns) -> CExp ns
+    toArgExp (x ** p) = CLocal p
+
+    getVars : ArgList k ns -> List (x ** List.Elem x ns)
+    getVars NoArgs = []
+    getVars (ConsArg a rest) = (a ** Here) :: map weakenEl (getVars rest)
 toCDef n (Builtin {arity} op)
     = let (ns ** args) = mkArgList 0 arity in
           pure $ MkFun _ (COp op (map toArgExp (getVars args)))

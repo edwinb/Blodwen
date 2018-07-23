@@ -63,7 +63,7 @@ mutual
     show (COp op xs) 
         = assert_total $ "(" ++ show op ++ " " ++ show xs ++ ")"
     show (CExtPrim p xs) 
-        = assert_total $ "(%" ++ show p ++ " " ++ show xs ++ ")"
+        = assert_total $ "(%extern " ++ show p ++ " " ++ show xs ++ ")"
     show (CForce x) = "(%force " ++ show x ++ ")"
     show (CDelay x) = "(%delay " ++ show x ++ ")"
     show (CCase sc xs) 

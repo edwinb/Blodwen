@@ -10,6 +10,8 @@ import Core.Reflect
 
 import TTImp.Elab
 import TTImp.TTImp
+
+%default covering
   
 getRetTy : annot -> Defs -> NF [] -> Core annot Name
 getRetTy loc ctxt (NBind x (Pi _ _ _) sc)
@@ -31,6 +33,8 @@ processFnOpt loc ndef Hint
                             addHintFor loc target ndef
 processFnOpt loc ndef GlobalHint
     = addGlobalHint loc ndef
+processFnOpt loc ndef ExternFn
+    = pure ()
 
 export
 processType : {auto c : Ref Ctxt Defs} ->
@@ -59,10 +63,16 @@ processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
          log 1 $ show n ++ " : " ++ show (abstractFullEnvType env ty)
 
          checkNameVisibility loc n vis ty
-         addDef n (newDef (abstractFullEnvType env ty) vis None)
+         -- If it's declared as externally defined, set the definition to
+         -- ExternFn <arity>, where the arity is assumed to be fixed (i.e.
+         -- not dependent on any of the arguments)
+         let def = if ExternFn `elem` fnopts
+                      then ExternDef (getArity gam env ty)
+                      else None
+         addDef n (newDef (abstractFullEnvType env ty) vis def)
 
-         -- Add the compiled version (which will just give an error, but it's
-         -- good for it to be there!)
+         -- Add the compiled version (which will just give an error if it's
+         -- not externally defined, but it's good for it to be there!)
          compileDef n
 
          traverse (processFnOpt loc n) fnopts

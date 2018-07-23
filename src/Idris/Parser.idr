@@ -724,6 +724,8 @@ fnOpt
          pure GlobalHint
   <|> do exactIdent "inline"
          pure Inline
+  <|> do exactIdent "extern"
+         pure ExternFn
 
 visOpt : Rule (Either Visibility FnOpt)
 visOpt

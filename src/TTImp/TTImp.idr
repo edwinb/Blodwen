@@ -114,6 +114,15 @@ mutual
        Inline : FnOpt
        Hint : FnOpt
        GlobalHint : FnOpt
+       ExternFn : FnOpt
+
+  export
+  Eq FnOpt where
+    Inline == Inline = True
+    Hint == Hint = True
+    GlobalHint == GlobalHint = True
+    ExternFn == ExternFn = True
+    _ == _ = False
 
   public export
   data ImpDecl : Type -> Type where
@@ -671,12 +680,14 @@ mutual
     toBuf b Inline = tag 0
     toBuf b Hint = tag 1
     toBuf b GlobalHint = tag 2
+    toBuf b ExternFn = tag 3
 
     fromBuf s b
         = case !getTag of
                0 => pure Inline
                1 => pure Hint
                2 => pure GlobalHint
+               3 => pure ExternFn
                _ => corrupt "FnOpt"
 
 

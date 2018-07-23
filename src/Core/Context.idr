@@ -134,6 +134,7 @@ data Def : Type where
              (treeCT : CaseTree args) -> -- Compile time case tree
              (treeRT : CaseTree args) -> -- Run time case tree (0 multiplicities erased)
              Def
+     ExternDef : (arity : Nat) -> Def
      Builtin : PrimFn arity -> Def
      DCon  : (tag : Int) -> (arity : Nat) -> 
 						 (forcedpos : List Nat) -> -- argument positions whose value is
@@ -176,6 +177,8 @@ Show Def where
     where
       showHole : Bool -> String
       showHole h = if h then "Solved hole" else "Def"
+  show (ExternDef arity)
+      = "<<external definition with " ++ show arity ++ " arguments>>"
   show (Builtin {arity} f)
       = "<<builtin with " ++ show arity ++ " arguments>>"
   show (TCon tag arity params dets cons)
@@ -200,20 +203,22 @@ TTC annot Def where
   toBuf b None = tag 0
   toBuf b (PMDef ishole args ct rt) 
       = do tag 1; toBuf b ishole; toBuf b args; toBuf b ct; toBuf b rt
+  toBuf b (ExternDef arity)
+      = do tag 2; toBuf b arity;
   toBuf b (Builtin _)
       = throw (InternalError "Trying to serialise a Builtin")
   toBuf b (DCon t arity forcedpos) 
-      = do tag 2; toBuf b t; toBuf b arity; toBuf b forcedpos
+      = do tag 3; toBuf b t; toBuf b arity; toBuf b forcedpos
   toBuf b (TCon t arity parampos detpos datacons) 
-      = do tag 3; toBuf b t; toBuf b arity; toBuf b parampos; 
+      = do tag 4; toBuf b t; toBuf b arity; toBuf b parampos; 
            toBuf b detpos; toBuf b datacons
   toBuf b (Hole numlocs pvar inv) 
-      = do tag 4; toBuf b numlocs; toBuf b pvar; toBuf b inv
+      = do tag 5; toBuf b numlocs; toBuf b pvar; toBuf b inv
   toBuf b (BySearch k d) 
-      = do tag 5; toBuf b k; toBuf b d
-  toBuf b ImpBind = tag 6
+      = do tag 6; toBuf b k; toBuf b d
+  toBuf b ImpBind = tag 7
   toBuf b (Guess guess constraints) 
-      = do tag 7; toBuf b guess; toBuf b constraints
+      = do tag 8; toBuf b guess; toBuf b constraints
   toBuf b (Delayed n)
       = throw (InternalError "Trying to serialise a Delayed elaborator")
   toBuf b (Processing n)
@@ -224,16 +229,18 @@ TTC annot Def where
              0 => pure None
              1 => do w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (PMDef w x y z)
-             2 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+             2 => do a <- fromBuf s b
+                     pure (ExternDef a)
+             3 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (DCon x y z)
-             3 => do v <- fromBuf s b; w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+             4 => do v <- fromBuf s b; w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (TCon v w x y z)
-             4 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+             5 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (Hole x y z)
-             5 => do x <- fromBuf s b; y <- fromBuf s b
+             6 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (BySearch x y)
-             6 => pure ImpBind
-             7 => do x <- fromBuf s b; y <- fromBuf s b
+             7 => pure ImpBind
+             8 => do x <- fromBuf s b; y <- fromBuf s b
                      pure (Guess x y)
              _ => corrupt "Def"
 
@@ -295,6 +302,7 @@ TTC annot GlobalDef where
 getRefs : Def -> List Name
 getRefs None = []
 getRefs (PMDef ishole args sc _) = getRefs sc
+getRefs (ExternDef _) = []
 getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
 getRefs (TCon tag arity params dets datacons) = []

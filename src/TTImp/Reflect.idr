@@ -51,6 +51,8 @@ Reify FnOpt where
       = pure Hint
   reify defs (NDCon (NS ["Reflect"] (UN "GlobalHint")) _ _ [])
       = pure GlobalHint
+  reify defs (NDCon (NS ["Reflect"] (UN "ExternFn")) _ _ [])
+      = pure ExternFn
   reify defs _ = Nothing
 
 export
@@ -58,6 +60,7 @@ Reflect FnOpt where
   reflect defs env Inline = getCon defs (NS ["Reflect"] (UN "Inline"))
   reflect defs env Hint = getCon defs (NS ["Reflect"] (UN "Hint"))
   reflect defs env GlobalHint = getCon defs (NS ["Reflect"] (UN "GlobalHint"))
+  reflect defs env ExternFn = getCon defs (NS ["Reflect"] (UN "ExternFn"))
 
 export
 Reify annot => Reify (ImpTy annot) where
