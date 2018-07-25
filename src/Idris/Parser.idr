@@ -982,5 +982,9 @@ command
   <|> do symbol ":"; exactIdent "unset"
          opt <- setOption False
          pure (SetOpt opt)
+  <|> do symbol ":"; exactIdent "c"
+         n <- unqualifiedName
+         tm <- expr EqOK "(interactive)" init
+         pure (Compile tm n)
   <|> do tm <- expr EqOK "(interactive)" init
          pure (Eval tm)

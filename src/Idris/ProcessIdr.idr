@@ -127,6 +127,7 @@ process file
               Left err => throw (ParseFail err)
               Right mod =>
                     catch (do processMod mod
+                              defs <- get Ctxt
                               makeBuildDirectory (pathToNS file)
                               fn <- getTTCFileName file
                               writeToTTC !(get Syn) fn

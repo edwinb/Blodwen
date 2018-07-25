@@ -2,7 +2,9 @@ package ttimp
 
 pkgs = contrib
 
-modules = Compiler.CompileExpr,
+modules = Compiler.Chez,
+          Compiler.Common,
+          Compiler.CompileExpr,
 
           Core.AutoSearch,
           Core.Binary,

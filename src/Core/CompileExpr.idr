@@ -29,22 +29,27 @@ mutual
        CExtPrim : (p : Name) -> List (CExp vars) -> CExp vars
        CForce : CExp vars -> CExp vars
        CDelay : CExp vars -> CExp vars
-       CCase : (sc : CExp vars) -> List (CAlt vars) -> CExp vars
+       CConCase : (sc : CExp vars) -> List (CConAlt vars) -> Maybe (CExp vars) -> CExp vars
+       CConstCase : (sc : CExp vars) -> List (CConstAlt vars) -> Maybe (CExp vars) -> CExp vars
        CPrimVal : Constant -> CExp vars
        CErased : CExp vars
        CCrash : String -> CExp vars
 
   public export
-  data CAlt : List Name -> Type where
-       CConCase : Name -> (tag : Int) -> (args : List Name) ->
-                  CExp (args ++ vars) -> CAlt vars
-       CConstCase : Constant -> CExp vars -> CAlt vars
-       CDefaultCase : CExp vars -> CAlt vars
+  data CConAlt : List Name -> Type where
+       MkConAlt : Name -> (tag : Int) -> (args : List Name) ->
+                  CExp (args ++ vars) -> CConAlt vars
+
+  public export
+  data CConstAlt : List Name -> Type where
+       MkConstAlt : Constant -> CExp vars -> CConstAlt vars
 
 public export
 data CDef : Type where
      -- Normal function definition
      MkFun : (args : List Name) -> CExp args -> CDef
+     -- Constructor
+     MkCon : (tag : Int) -> (arity : Nat) -> CDef
      -- A function which will fail at runtime (usually due to being a hole) so needs
      -- to run, discarding arguments, no matter how many arguments are passed
      MkError : CExp [] -> CDef
@@ -66,25 +71,29 @@ mutual
         = assert_total $ "(%extern " ++ show p ++ " " ++ show xs ++ ")"
     show (CForce x) = "(%force " ++ show x ++ ")"
     show (CDelay x) = "(%delay " ++ show x ++ ")"
-    show (CCase sc xs) 
-        = assert_total $ "(%case " ++ show sc ++ " " ++ show xs ++ ")"
+    show (CConCase sc xs def) 
+        = assert_total $ "(%case " ++ show sc ++ " " ++ show xs ++ " " ++ show def ++ ")"
+    show (CConstCase sc xs def) 
+        = assert_total $ "(%case " ++ show sc ++ " " ++ show xs ++ " " ++ show def ++ ")"
     show (CPrimVal x) = show x
     show CErased = "___"
     show (CCrash x) = "(CRASH " ++ show x ++ ")"
 
   export 
-  Show (CAlt vars) where
-    show (CConCase x tag args exp)
+  Show (CConAlt vars) where
+    show (MkConAlt x tag args exp)
          = "(%concase " ++ show x ++ " " ++ show tag ++ " " ++
              show args ++ " " ++ show exp ++ ")"
-    show (CConstCase x exp) 
+
+  export 
+  Show (CConstAlt vars) where
+    show (MkConstAlt x exp) 
          = "(%constcase " ++ show x ++ " " ++ show exp ++ ")"
-    show (CDefaultCase exp) 
-         = "(%defaultcase " ++ show exp ++ ")"
 
 export
 Show CDef where
   show (MkFun args exp) = show args ++ ": " ++ show exp
+  show (MkCon tag arity) = "Constructor tag " ++ show tag ++ " arity " ++ show arity
   show (MkError exp) = "Error: " ++ show exp
 
 mutual
@@ -107,20 +116,26 @@ mutual
       = CExtPrim p (assert_total (map (thin n) xs))
   thin n (CForce x) = CForce (thin n x)
   thin n (CDelay x) = CDelay (thin n x)
-  thin n (CCase sc xs) = CCase (thin n sc) (assert_total (map (thinAlt n) xs))
+  thin n (CConCase sc xs def)
+      = CConCase (thin n sc) (assert_total (map (thinConAlt n) xs))
+                 (assert_total (map (thin n) def))
+  thin n (CConstCase sc xs def)
+      = CConstCase (thin n sc) (assert_total (map (thinConstAlt n) xs))
+                   (assert_total (map (thin n) def))
   thin n (CPrimVal x) = CPrimVal x
   thin n CErased = CErased
   thin n (CCrash x) = CCrash x
 
-  thinAlt : (n : Name) -> CAlt (outer ++ inner) -> CAlt (outer ++ n :: inner)
-  thinAlt {outer} {inner} n (CConCase x tag args sc) 
+  thinConAlt : (n : Name) -> CConAlt (outer ++ inner) -> CConAlt (outer ++ n :: inner)
+  thinConAlt {outer} {inner} n (MkConAlt x tag args sc) 
         = let sc' : CExp ((args ++ outer) ++ inner) 
                   = rewrite sym (appendAssociative args outer inner) in sc in
-              CConCase x tag args 
+              MkConAlt x tag args 
                (rewrite appendAssociative args outer (n :: inner) in
                         thin n sc')
-  thinAlt n (CConstCase x sc) = CConstCase x (thin n sc)
-  thinAlt n (CDefaultCase sc) = CDefaultCase (thin n sc)
+
+  thinConstAlt : (n : Name) -> CConstAlt (outer ++ inner) -> CConstAlt (outer ++ n :: inner)
+  thinConstAlt n (MkConstAlt x sc) = MkConstAlt x (thin n sc)
 
 mutual
   export

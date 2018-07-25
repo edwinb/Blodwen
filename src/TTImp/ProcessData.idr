@@ -11,7 +11,8 @@ import TTImp.TTImp
 
 import Control.Catchable
   
-  
+%default covering
+
 processDataOpt : {auto c : Ref Ctxt Defs} ->
                  annot -> Name -> DataOpt -> Core annot ()
 processDataOpt loc n NoHints 
@@ -36,11 +37,12 @@ checkFamily : annot -> Name -> Name -> Env Term vars -> NF vars -> Core annot ()
 checkFamily loc cn tn env nf
     = checkRetType env nf 
          (\nf => case nf of 
-                      NType => pure ()
+                      NType => throw (BadDataConType loc cn tn)
                       NTCon n' _ _ _ => 
                             if tn == n'
                                then pure ()
-                               else throw (BadDataConType loc cn tn))
+                               else throw (BadDataConType loc cn tn)
+                      _ => throw (BadDataConType loc cn tn))
 
 checkCon : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
@@ -102,6 +104,7 @@ processData elab env nest vis (MkImpLater loc n_in ty_raw)
 
          -- Add the type constructor as a placeholder
          addDef n (newDef ty' Public (TCon 0 arity [] [] []))
+         addToSave n
 
 processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
     = do n <- inCurrentNS n_in

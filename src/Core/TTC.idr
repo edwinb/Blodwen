@@ -378,10 +378,11 @@ mutual
     toBuf b (CExtPrim f as) = assert_total $ do tag 7; toBuf b f; toBuf b as
     toBuf b (CForce x) = assert_total $ do tag 8; toBuf b x
     toBuf b (CDelay x) = assert_total $ do tag 9; toBuf b x
-    toBuf b (CCase sc alts) = assert_total $ do tag 10; toBuf b sc; toBuf b alts
-    toBuf b (CPrimVal c) = do tag 11; toBuf b c
-    toBuf b CErased = do tag 12
-    toBuf b (CCrash msg) = do tag 13; toBuf b msg
+    toBuf b (CConCase sc alts def) = assert_total $ do tag 10; toBuf b sc; toBuf b alts; toBuf b def
+    toBuf b (CConstCase sc alts def) = assert_total $ do tag 11; toBuf b sc; toBuf b alts; toBuf b def
+    toBuf b (CPrimVal c) = do tag 12; toBuf b c
+    toBuf b CErased = do tag 13
+    toBuf b (CCrash msg) = do tag 14; toBuf b msg
 
     fromBuf s b
         = assert_total $ case !getTag of
@@ -405,42 +406,47 @@ mutual
                        pure (CForce x)
                9 => do x <- fromBuf s b
                        pure (CDelay x)
-               10 => do sc <- fromBuf s b; alts <- fromBuf s b
-                        pure (CCase sc alts)
-               11 => do c <- fromBuf s b
+               10 => do sc <- fromBuf s b; alts <- fromBuf s b; def <- fromBuf s b
+                        pure (CConCase sc alts def)
+               11 => do sc <- fromBuf s b; alts <- fromBuf s b; def <- fromBuf s b
+                        pure (CConstCase sc alts def)
+               12 => do c <- fromBuf s b
                         pure (CPrimVal c)
-               12 => pure CErased
-               13 => do msg <- fromBuf s b
+               13 => pure CErased
+               14 => do msg <- fromBuf s b
                         pure (CCrash msg)
                _ => corrupt "CExp"
 
   export
-  TTC annot (CAlt vars) where
-    toBuf b (CConCase n t as sc) = do tag 0; toBuf b n; toBuf b t; toBuf b as; toBuf b sc
-    toBuf b (CConstCase c sc) = do tag 1; toBuf b c; toBuf b sc
-    toBuf b (CDefaultCase sc) = do tag 2; toBuf b sc
+  TTC annot (CConAlt vars) where
+    toBuf b (MkConAlt n t as sc) = do toBuf b n; toBuf b t; toBuf b as; toBuf b sc
 
     fromBuf s b
-        = case !getTag of
-               0 => do n <- fromBuf s b; t <- fromBuf s b
-                       as <- fromBuf s b; sc <- fromBuf s b
-                       pure (CConCase n t as sc)
-               1 => do c <- fromBuf s b; sc <- fromBuf s b
-                       pure (CConstCase c sc)
-               2 => do sc <- fromBuf s b
-                       pure (CDefaultCase sc)
-               _ => corrupt "CAlt"
+        = do n <- fromBuf s b; t <- fromBuf s b
+             as <- fromBuf s b; sc <- fromBuf s b
+             pure (MkConAlt n t as sc)
+
+  export
+  TTC annot (CConstAlt vars) where
+    toBuf b (MkConstAlt c sc) = do toBuf b c; toBuf b sc
+
+    fromBuf s b
+        = do c <- fromBuf s b; sc <- fromBuf s b
+             pure (MkConstAlt c sc)
 
 export
   TTC annot CDef where
     toBuf b (MkFun args cexpr) = do tag 0; toBuf b args; toBuf b cexpr
-    toBuf b (MkError cexpr) = do tag 1; toBuf b cexpr
+    toBuf b (MkCon t arity) = do tag 1; toBuf b t; toBuf b arity
+    toBuf b (MkError cexpr) = do tag 2; toBuf b cexpr
 
     fromBuf s b 
         = case !getTag of
                0 => do args <- fromBuf s b; cexpr <- fromBuf s b
                        pure (MkFun args cexpr)
-               1 => do cexpr <- fromBuf s b
+               1 => do t <- fromBuf s b; arity <- fromBuf s b
+                       pure (MkCon t arity)
+               2 => do cexpr <- fromBuf s b
                        pure (MkError cexpr)
                _ => corrupt "CDef"
 

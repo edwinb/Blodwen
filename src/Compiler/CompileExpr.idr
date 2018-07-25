@@ -1,7 +1,7 @@
 module Compiler.CompileExpr
 
 import Core.CaseTree
-import Core.CompileExpr
+import public Core.CompileExpr
 import Core.Context
 import Core.Name
 import Core.TT
@@ -20,7 +20,7 @@ numArgs defs (Ref _ n)
            Just (ExternDef arity) => arity
            Just (Builtin {arity} f) => arity
            _ => 0
-numArgs _ _ = 0
+numArgs _ tm = 0
 
 weakenEl : (x ** List.Elem x ns) -> (x ** List.Elem x (a :: ns))
 weakenEl (x ** p) = (x ** There p)
@@ -61,6 +61,7 @@ expandToArity (S k) fn (a :: args) = expandToArity k (addArg fn a) args
 -- Underapplied, saturate with lambdas
 expandToArity num fn [] = etaExpand 0 num fn []
 
+export
 cond : List (Lazy Bool, Lazy a) -> a -> a
 cond [] def = def
 cond ((x, y) :: xs) def = if x then y else cond xs def
@@ -90,7 +91,7 @@ mutual
   toCExpTm defs n (Local prf) = CLocal prf
   toCExpTm defs n (Ref (DataCon tag arity) fn) = CCon fn tag []
   toCExpTm defs n (Ref (TyCon tag arity) fn) = CErased
-  toCExpTm defs n (Ref _ fn) = CRef fn
+  toCExpTm defs n (Ref _ fn) = CApp (CRef fn) []
   toCExpTm defs n (Bind x (Lam _ _ _) sc)
       = CLam x (toCExp defs n sc)
   toCExpTm defs n (Bind x (Let _ val _) sc)
@@ -107,18 +108,35 @@ mutual
     toCExp defs n (apply f args) | ArgsList 
         = let args' = map (toCExp defs n) args in
               maybe (expandToArity (numArgs defs f) (toCExpTm defs n f) args')
-                    id
-                    (specialApp defs f args')
+              id
+              (specialApp defs f args')
 
 mutual
-  toCAlt : Defs -> Name -> CaseAlt vars -> CAlt vars
-  toCAlt defs n (ConCase x tag args sc) = CConCase x tag args (toCExpTree defs n sc)
-  toCAlt defs n (ConstCase x sc) = CConstCase x (toCExpTree defs n sc)
-  toCAlt defs n (DefaultCase sc) = CDefaultCase (toCExpTree defs n sc)
+  conCases : Defs -> Name -> List (CaseAlt vars) -> List (CConAlt vars)
+  conCases defs n [] = []
+  conCases defs n (ConCase x tag args sc :: ns)
+      = MkConAlt x tag args (toCExpTree defs n sc) :: conCases defs n ns
+  conCases defs n (_ :: ns) = conCases defs n ns
+
+  constCases : Defs -> Name -> List (CaseAlt vars) -> List (CConstAlt vars)
+  constCases defs n [] = []
+  constCases defs n (ConstCase x sc :: ns)
+      = MkConstAlt x (toCExpTree defs n sc) :: constCases defs n ns
+  constCases defs n (_ :: ns) = constCases defs n ns
+
+  getDef : Defs -> Name -> List (CaseAlt vars) -> Maybe (CExp vars)
+  getDef defs n [] = Nothing
+  getDef defs n (DefaultCase sc :: ns) = Just (toCExpTree defs n sc)
+  getDef defs n (_ :: ns) = getDef defs n ns
 
   toCExpTree : Defs -> Name -> CaseTree vars -> CExp vars
-  toCExpTree defs n (Case x scTy alts) 
-      = CCase (CLocal x) (map (toCAlt defs n) alts)
+  toCExpTree defs n (Case x scTy alts@(ConCase _ _ _ _ :: _)) 
+      = CConCase (CLocal x) (conCases defs n alts) (getDef defs n alts)
+  toCExpTree defs n (Case x scTy alts@(ConstCase _ _ :: _)) 
+      = CConstCase (CLocal x) (constCases defs n alts) (getDef defs n alts)
+  toCExpTree defs n (Case x scTy alts@(DefaultCase sc :: _)) 
+      = toCExpTree defs n sc
+  toCExpTree defs n (Case x scTy []) = CCrash $ "Missing case tree in " ++ show n
   toCExpTree defs n (STerm tm) = toCExp defs n tm
   toCExpTree defs n (Unmatched msg) = CCrash msg 
   toCExpTree defs n Impossible = CCrash $ "Impossible case encountered in " ++ show n
@@ -160,10 +178,10 @@ toCDef n (Builtin {arity} op)
     getVars : ArgList k ns -> Vect k (x ** List.Elem x ns)
     getVars NoArgs = []
     getVars (ConsArg a rest) = (a ** Here) :: map weakenEl (getVars rest)
-toCDef n (DCon _ _ _)
-    = throw (InternalError ("Can't compile constructors directly " ++ show n))
-toCDef n (TCon _ _ _ _ _)
-    = throw (InternalError ("Can't compile constructors directly " ++ show n))
+toCDef n (DCon tag arity _)
+    = pure $ MkCon tag arity
+toCDef n (TCon tag arity _ _ _)
+    = pure $ MkCon tag arity
 -- We do want to be able to compile these, but also report an error at run time
 -- (and, TODO: warn at compile time)
 toCDef n (Hole _ _ _)
@@ -174,6 +192,12 @@ toCDef n (BySearch _ _)
     = pure $ MkError $ CCrash ("Encountered incomplete proof search " ++ show n)
 toCDef n def
     = pure $ MkError $ CCrash ("Encountered uncompilable name " ++ show (n, def))
+
+export
+compileExp : {auto c : Ref Ctxt Defs} -> ClosedTerm -> Core annot (CExp [])
+compileExp tm
+    = do defs <- get Ctxt
+         pure (toCExp defs (UN "main") tm)
 
 export
 compileDef : {auto c : Ref Ctxt Defs} -> Name -> Core annot ()

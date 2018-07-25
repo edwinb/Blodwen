@@ -1,7 +1,5 @@
 module TTImp.ProcessDef
 
-import Compiler.CompileExpr
-
 import Core.TT
 import Core.Unify
 import Core.Context
@@ -236,9 +234,6 @@ processDef elab env nest loc n_in cs_raw
                            | Nothing => throw (InternalError "WAT")
                    addFnDef loc n tree_comp tree_rt
                    
-                   -- Add the compiled version of the generated definition
-                   compileDef n
-
                    addToSave n
                    gam <- getCtxt
                    log 3 $

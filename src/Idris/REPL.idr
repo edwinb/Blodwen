@@ -1,5 +1,7 @@
 module Idris.REPL
 
+import Compiler.Chez
+
 import Core.AutoSearch
 import Core.CompileExpr
 import Core.Context
@@ -41,6 +43,7 @@ showInfo (n, d)
          case compexpr d of
               Nothing => pure ()
               Just expr => coreLift $ putStrLn ("Compiled: " ++ show expr)
+         coreLift $ putStrLn ("Refers to: " ++ show (refersTo d))
 
 isHole : GlobalDef -> Maybe Nat
 isHole def
@@ -137,6 +140,14 @@ process (Check itm)
          itm <- resugar [] (normaliseHoles gam [] tm)
          ity <- resugar [] (normaliseHoles gam [] ty)
          coreLift (putStrLn (show itm ++ " : " ++ show ity))
+         pure True
+process (Compile ctm outfile)
+    = do i <- newRef ImpST (initImpState {annot = FC})
+         ttimp <- desugar [] ctm
+         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+                               [] (MkNested []) NONE InExpr ttimp 
+         compileExpr tm (outfile ++ ".ss")
+         coreLift $ putStrLn (outfile ++ ".ss written")
          pure True
 process (ProofSearch n)
     = do tm <- search (MkFC "(interactive)" (0, 0) (0, 0)) 1000 [] n (UN "(interactive)")

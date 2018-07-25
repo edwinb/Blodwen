@@ -108,4 +108,9 @@ getTTCFileName inp
          let bdir = build_dir d
          pure $ bdir ++ cast sep ++ dropExtension inp ++ ".ttc"
 
--- findFile : String -> Dirs -> Core annot 
+-- Given a root executable name, return the name in the build directory
+export
+getExecFileName : {auto c : Ref Ctxt Defs} -> String -> Core annot String
+getExecFileName efile
+    = do d <- getDirs
+         pure $ build_dir d ++ cast sep ++ efile

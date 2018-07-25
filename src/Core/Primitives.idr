@@ -192,7 +192,7 @@ getOp (Add ty) = binOp add
 getOp (Sub ty) = binOp sub
 getOp (Mul ty) = binOp mul
 getOp (Div ty) = binOp div
-getOp (Mod ty) = binOp div
+getOp (Mod ty) = binOp mod
 getOp (Neg ty) = unaryOp neg
 
 getOp (LT ty) = binOp lt

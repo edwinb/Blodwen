@@ -763,7 +763,7 @@ getDescendents n g
       = if contains n ns
            then getAllDesc rest ns g
            else case lookupGlobalExact n g of
-                     Nothing => ns
+                     Nothing => getAllDesc rest ns g
                      Just def => assert_total $
 											 let refs = refersTo def in
 												 getAllDesc (rest ++ refs)
@@ -853,7 +853,8 @@ addFnDef loc n treeCT treeRT
     = do ctxt <- get Ctxt
          case lookupGlobalExact n (gamma ctxt) of
               Just def => 
-                 let def' = record { definition = PMDef False _ treeCT treeRT } def in
+                 let def' = record { definition = PMDef False _ treeCT treeRT,
+                                     refersTo = getRefs treeCT } def in
                      addDef n def'
               Nothing => throw (NoDeclaration loc n)
   where

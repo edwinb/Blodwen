@@ -22,7 +22,7 @@ import Data.Buffer
 -- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 ttcVersion : Int
-ttcVersion = 6
+ttcVersion = 7
 
 checkTTCVersion : Int -> Int -> Core annot ()
 checkTTCVersion ver exp
