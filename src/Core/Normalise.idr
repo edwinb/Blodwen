@@ -98,9 +98,14 @@ parameters (defs : Defs, holesonly : Bool)
                Just def => 
                     if reducibleIn (currentNS defs) fn (visibility def)
                        then evalDef env loc stk nt fn (definition def)
-                       else NApp (NRef nt fn) stk
+                       else toRef (definition def) stk
                _ => NApp (NRef nt fn) stk
-    
+      where
+        toRef : Def -> Stack free -> NF free
+        toRef (DCon t a _) stk = NDCon fn t a stk
+        toRef (TCon t a _ _ _) stk = NTCon fn t a stk
+        toRef _ stk = NApp (NRef nt fn) stk
+
     -- Take arguments from the stack, as long as there's enough.
     -- Returns the arguments, and the rest of the stack
     takeFromStack : (arity : Nat) -> Stack free ->
