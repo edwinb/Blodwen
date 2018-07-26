@@ -362,6 +362,7 @@ mutual
            n <- addHole loc env expected
            gam <- getCtxt
            let tm = mkConstantApp n env
+           log 10 $ "Added hole for MustUnify " ++ show tm
            addDot loc env n wantedTm tm
            checkExp rigc process loc (record { elabMode= InExpr } elabinfo) 
                     env nest tm wantedTy (Just expected)
@@ -399,6 +400,7 @@ mutual
       = do t <- addHole loc env TType
            let hty = mkConstantApp t env
            n <- addHole loc env hty
+           log 10 $ "Added hole for implicit type " ++ show n
            pure (mkConstantApp n env, hty)
   checkImp rigc process elabinfo env nest (Implicit loc) (Just expected) 
       = case elabMode elabinfo of
@@ -413,6 +415,7 @@ mutual
                    pure (tm, expected)
              _ =>
                 do n <- addHole loc env expected
+                   log 10 $ "Added hole for implicit " ++ show (n, expected)
                    pure (mkConstantApp n env, expected)
 
   addGivenImps : ElabInfo annot -> List (Maybe Name, RawImp annot) -> ElabInfo annot
@@ -497,6 +500,7 @@ mutual
               Core annot (Term vars, Term vars)
   checkCase {vars} {c} {u} {i} rigc process elabinfo loc env nest scr scrty_exp alts expected
       = do (scrtyv, scrtyt) <- check Rig0 process elabinfo env nest scrty_exp (Just TType)
+           log 10 $ "Expected scrutinee type: " ++ show scrtyv
            -- Try checking at the given multiplicity; if that doesn't work,
            -- try checking at Rig1 (meaning that we're using a linear variable
            -- so the scrutinee should be linear)
@@ -505,7 +509,7 @@ mutual
                   pure (fst c, snd c, RigW))
               (\err => case err of
                             LinearMisuse _ _ Rig1 _
-                              => do c <- check Rig1 process elabinfo env nest scr Nothing
+                              => do c <- check Rig1 process elabinfo env nest scr (Just scrtyv)
                                     pure (fst c, snd c, Rig1)
                             e => throw e)
 
@@ -552,6 +556,7 @@ mutual
                              Just ty => pure ty
                              Nothing =>
                                 do t <- addHole loc env TType
+                                   log 10 $ "Invented hole for case type " ++ show t
                                    pure (mkConstantApp t env)
            let casefnty = abstractOver env $
                             absSmaller {done = []} env smaller 
