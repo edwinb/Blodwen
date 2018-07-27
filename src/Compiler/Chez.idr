@@ -110,25 +110,18 @@ schOp (Cast IntegerType StringType) [x] = op "number->string" [x]
 schOp (Cast DoubleType StringType) [x] = op "number->string" [x]
 schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show to ++ ")"
 
-data ExtPrim = PutStr | GetStr | BoolOp | Unknown Name
+data ExtPrim = SchemeCall | PutStr | GetStr | Unknown Name
 
 toPrim : Name -> ExtPrim
 toPrim pn@(NS _ n) 
-    = cond [(n == UN "prim__putStr", PutStr),
-            (n == UN "prim__getStr", GetStr),
-            (n == UN "boolOp", BoolOp)]
+    = cond [(n == UN "prim__schemeCall", SchemeCall),
+            (n == UN "prim__putStr", PutStr),
+            (n == UN "prim__getStr", GetStr)]
            (Unknown pn)
 toPrim pn = Unknown pn
 
 mkWorld : String -> String
 mkWorld res = schConstructor 0 ["#f", res, "#f"] -- MkIORes
-
-schExtPrim : ExtPrim -> List String -> String
-schExtPrim PutStr [arg, world] = "(display " ++ arg ++ ") " ++ mkWorld "0" -- 0 is the code for MkUnit
-schExtPrim GetStr [world] = mkWorld "(get-line (current-input-port))"
-schExtPrim BoolOp [res] = res
-schExtPrim (Unknown n) args = "(error \"Unknown external primitive " ++ show n ++ ")"
-schExtPrim _ args = "(error \"Badly formed external primitive\")"
 
 schConstant : Constant -> String
 schConstant (I x) = show x
@@ -147,8 +140,27 @@ schConstant WorldType = "#t"
 schCaseDef : Maybe String -> String
 schCaseDef Nothing = ""
 schCaseDef (Just tm) = "(else " ++ tm ++ ")"
-
+  
 mutual
+  -- Need to convert the argument (a list of scheme arguments that may
+  -- have been constructed at run time) to a scheme list to be passed to apply
+  readArgs : SVars vars -> CExp vars -> String
+  readArgs vs tm = "(blodwen-read-args " ++ schExp vs tm ++ ")"
+
+  schExtPrim : SVars vars -> ExtPrim -> List (CExp vars) -> String
+  schExtPrim vs SchemeCall [ret, CPrimVal (Str fn), args, world]
+     = mkWorld ("(apply " ++ fn ++") "
+                  ++ readArgs vs args ++ ")")
+  schExtPrim vs SchemeCall [ret, fn, args, world]
+     = mkWorld ("(apply (eval (string->symbol " ++ schExp vs fn ++")) "
+                  ++ readArgs vs args ++ ")")
+  schExtPrim vs PutStr [arg, world] 
+      = "(display " ++ schExp vs arg ++ ") " ++ mkWorld "0" -- 0 is the code for MkUnit
+  schExtPrim vs GetStr [world] 
+      = mkWorld "(get-line (current-input-port))"
+  schExtPrim vs (Unknown n) args = "(error \"Unknown external primitive " ++ show n ++ ")"
+  schExtPrim vs _ args = "(error \"Badly formed external primitive\")"
+
   schConAlt : SVars vars -> String -> CConAlt vars -> String
   schConAlt {vars} vs target (MkConAlt n tag args sc)
       = let vs' = extendSVars args vs in
@@ -183,7 +195,7 @@ mutual
       = "(" ++ schExp vs x ++ " " ++ showSep " " (map (schExp vs) args) ++ ")"
   schExp vs (CCon x tag args) = schConstructor tag (map (schExp vs) args)
   schExp vs (COp op args) = schOp op (map (schExp vs) args)
-  schExp vs (CExtPrim p args) = schExtPrim (toPrim p) (map (schExp vs) args)
+  schExp vs (CExtPrim p args) = schExtPrim vs (toPrim p) args
   schExp vs (CForce t) = "(force " ++ schExp vs t ++ ")"
   schExp vs (CDelay t) = "(delay " ++ schExp vs t ++ ")"
   schExp vs (CConCase sc alts def) 

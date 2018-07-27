@@ -780,7 +780,7 @@ addBuiltin : {auto x : Ref Ctxt Defs} ->
              Name -> ClosedTerm -> Totality ->
              PrimFn arity -> Core annot ()
 addBuiltin n ty tot op 
-    = addDef n (MkGlobalDef ty Public tot [] (Builtin op) Nothing [])
+    = addDef n (MkGlobalDef ty Public tot [Inline] (Builtin op) Nothing [])
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->
