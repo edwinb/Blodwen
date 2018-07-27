@@ -17,12 +17,15 @@ import Idris.ProcessIdr
 import Idris.REPL
 
 import Data.Vect
+import System
+
+import BlodwenPaths
 
 %default covering
 
-findInput : List CLOpt -> String
-findInput [] = "Prelude.blod"
-findInput (InputFile f :: fs) = f
+findInput : List CLOpt -> Maybe String
+findInput [] = Nothing
+findInput (InputFile f :: fs) = Just f
 findInput (_ :: fs) = findInput fs
 
 -- Options to be processed before type checking
@@ -31,6 +34,9 @@ preOptions : {auto c : Ref Ctxt Defs} ->
 preOptions [] = pure ()
 preOptions (Quiet :: opts)
     = do setSession (record { quiet = True } !getSession)
+         preOptions opts
+preOptions (NoPrelude :: opts)
+    = do setSession (record { noprelude = True } !getSession)
          preOptions opts
 preOptions (_ :: opts) = preOptions opts
 
@@ -50,11 +56,30 @@ postOptions (CheckOnly :: rest)
          pure False
 postOptions (_ :: rest) = postOptions rest
 
+-- Add extra library directories from the "BLODWEN_PATH"
+-- environment variable
+updatePaths : {auto c : Ref Ctxt Defs} ->
+              Core annot ()
+updatePaths
+    = do setPrefix bprefix
+         defs <- get Ctxt
+         bpath <- coreLift $ getEnv "BLODWEN_PATH"
+         case bpath of
+              Just path => do traverse addExtraDir (map trim (split (==':') path))
+                              pure ()
+              Nothing => pure ()
+         -- BLODWEN_PATH goes first so that it overrides this if there's
+         -- any conflicts. In particular, that means that setting BLODWEN_PATH
+         -- for the tests means they test the local version not the installed
+         -- version
+         addExtraDir (dir_prefix (dirs (options defs)) ++ "/blodwen/prelude")
+
 stMain : List CLOpt -> Core FC ()
 stMain opts
     = do c <- newRef Ctxt initCtxt
          addPrimitives
          preOptions opts
+         updatePaths
 
          let fname = findInput opts
 
@@ -62,14 +87,9 @@ stMain opts
          s <- newRef Syn initSyntax
          o <- newRef ROpts defaultOpts
 
-         case span (/= '.') fname of
-              -- This is temporary, until we get module chasing and
-              -- need for rebuild checking...
-              (_, ".ttc") => do putStrLnQ "Processing as TTC"
-                                readAsMain fname
-                                dumpConstraints 0 True
-              _ => do putStrLnQ "Processing as Idris"
-                      buildAll fname
+         case fname of
+              Nothing => readPrelude
+              Just f => buildAll f
          putStrLnQ "Welcome to Blodwen. Good luck."
 
          doRepl <- postOptions opts

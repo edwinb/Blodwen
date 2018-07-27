@@ -1,3 +1,3 @@
-echo ':q' | $1 noinfer.blod
+echo ':q' | $1 --no-prelude noinfer.blod
 
 rm -rf build

@@ -1,4 +1,3 @@
-Processing as Idris
 1/1: Building interp (interp.blod)
 Welcome to Blodwen. Good luck.
 interp> \var => var

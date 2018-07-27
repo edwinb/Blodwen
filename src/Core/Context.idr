@@ -636,6 +636,24 @@ getDirs
     = do defs <- get Ctxt
          pure (dirs (options defs))
 
+export
+addExtraDir : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
+addExtraDir dir
+    = do defs <- get Ctxt
+         put Ctxt (record { options->dirs->extra_dirs $= (++ [dir]) } defs)
+
+export
+setBuildDir : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
+setBuildDir dir
+    = do defs <- get Ctxt
+         put Ctxt (record { options->dirs->build_dir = dir } defs)
+
+export
+setPrefix : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
+setPrefix dir
+    = do defs <- get Ctxt
+         put Ctxt (record { options->dirs->dir_prefix = dir } defs)
+
 -- Set the default namespace for new definitions
 export
 setNS : {auto c : Ref Ctxt Defs} ->

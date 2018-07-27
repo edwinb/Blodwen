@@ -1,11 +1,9 @@
-Processing as Idris
 1/2: Building Stuff (Stuff.blod)
 2/2: Building IFace (IFace.blod)
 Welcome to Blodwen. Good luck.
 IFace> True
 IFace> False
 IFace> Bye for now!
-Processing as Idris
 2/2: Building IFace1 (IFace1.blod)
 Welcome to Blodwen. Good luck.
 IFace1>  0 a : Type

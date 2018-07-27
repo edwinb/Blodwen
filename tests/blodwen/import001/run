@@ -1,6 +1,6 @@
-$1 Test.blod < input
+$1 --no-prelude Test.blod < input
 sleep 1
 touch Mult.blod
-$1 Test.blod < input
+$1 --no-prelude Test.blod < input
 
 rm -rf build

@@ -1,3 +1,3 @@
-$1 if.blod < input
+$1 --no-prelude if.blod < input
 
 rm -rf build

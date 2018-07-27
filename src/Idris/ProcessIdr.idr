@@ -3,6 +3,7 @@ module Idris.ProcessIdr
 import Core.Binary
 import Core.Context
 import Core.Directory
+import Core.Options
 import Core.UnifyState
 
 import TTImp.ProcessTTImp
@@ -49,8 +50,6 @@ readModule : {auto c : Ref Ctxt Defs} ->
              Core FC ()
 readModule loc vis reexp imp as
     = do fname <- nsToPath loc imp
---          coreLift $ putStrLn ("Importing " ++ fname ++ " as " ++ show as ++ 
---                               if reexp then " public" else "")
          Just (syn, more) <- readFromTTC {extra = SyntaxInfo} loc fname imp as
               | Nothing => pure () -- already loaded
          addImported (imp, reexp, as)
@@ -64,13 +63,24 @@ readModule loc vis reexp imp as
                           readModule loc (vis && reexp) reexp m as) more
          setNS modNS
 
-
 readImport : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
              {auto s : Ref Syn SyntaxInfo} ->
              Import -> Core FC ()
 readImport imp
     = readModule (loc imp) True (reexport imp) (path imp) (nameAs imp)
+
+prelude : Import
+prelude = MkImport (MkFC "(implicit)" (0, 0) (0, 0)) False
+                     ["Prelude"] ["Prelude"]
+
+export
+readPrelude : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState FC)} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              Core FC ()
+readPrelude = do readImport prelude 
+                 setNS ["Main"]
 
 -- Import a TTC for use as the main file (e.g. at the REPL)
 export
@@ -91,6 +101,12 @@ readAsMain fname
                           readModule emptyFC True False m as) more
          setNS replNS
 
+addPrelude : List Import -> List Import
+addPrelude imps 
+  = if not (["Prelude"] `elem` map path imps)
+       then prelude :: imps
+       else imps
+
 -- Process everything in the module; return the syntax information which
 -- needs to be written to the TTC (e.g. exported infix operators)
 processMod : {auto c : Ref Ctxt Defs} ->
@@ -106,12 +122,17 @@ processMod mod
                    throw (GenericMsg (headerloc mod) 
                             ("Module name " ++ showSep "." (reverse ns) ++
                              " does not match file name " ++ fname))
+         -- Add an implicit prelude import
+         let imps =
+              if (noprelude !getSession || moduleNS mod == ["Prelude"])
+                 then imports mod
+                 else addPrelude (imports mod)
          -- read imports here
          -- Note: We should only import .ttc - assumption is that there's
          -- a phase before this which builds the dependency graph
          -- (also that we only build child dependencies if rebuilding
          -- changes the interface - will need to store a hash in .ttc!)
-         traverse readImport (imports mod)
+         traverse readImport imps
          setNS ns
          processDecls (decls mod)
 

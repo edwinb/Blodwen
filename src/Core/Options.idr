@@ -47,6 +47,7 @@ public export
 record Dirs where
   constructor MkDirs
   build_dir : String -- build directory, relative to working directory
+  dir_prefix : String -- installation prefix, for finding data files (e.g. run time support)
   extra_dirs : List String -- places to look for import files
 
 public export
@@ -73,7 +74,7 @@ record Options where
   pairnames : Maybe PairNames
 
 defaultDirs : Dirs
-defaultDirs = MkDirs "build" ["."]
+defaultDirs = MkDirs "build" "/usr/local" ["."]
 
 defaultPPrint : PPrinter
 defaultPPrint = MkPPOpts False

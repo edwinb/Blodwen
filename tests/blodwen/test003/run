@@ -1,3 +1,3 @@
-$1 do.blod < input
+$1 --no-prelude do.blod < input
 
 rm -rf build

@@ -1,5 +1,5 @@
-$1 Stuff.blod < input
+$1 --no-prelude Stuff.blod < input
 sleep 1
-$1 Stuff.blod < input
+$1 --no-prelude Stuff.blod < input
 
 rm -rf build

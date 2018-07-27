@@ -1,5 +1,5 @@
-$1 lazy.blod < input
+$1 --no-prelude lazy.blod < input
 sleep 1
-$1 lazy.blod < input
+$1 --no-prelude lazy.blod < input
 
 rm -rf build

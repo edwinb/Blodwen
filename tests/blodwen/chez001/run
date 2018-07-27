@@ -1,2 +1,2 @@
-$1 IOtest.blod < input
+$1 --no-prelude IOtest.blod < input
 rm -rf build

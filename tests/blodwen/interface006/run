@@ -1,4 +1,4 @@
-$1 IFace.blod < input
-$1 IFace1.blod < input1
+$1 --no-prelude IFace.blod < input
+$1 --no-prelude IFace1.blod < input1
 
 rm -rf build

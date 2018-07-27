@@ -1,4 +1,3 @@
-Processing as Idris
 1/1: Building do (do.blod)
 Welcome to Blodwen. Good luck.
 Main> Just (S (S (S Z)))

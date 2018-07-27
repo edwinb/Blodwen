@@ -1,4 +1,3 @@
-Processing as Idris
 1/1: Building vect (vect.blod)
 Welcome to Blodwen. Good luck.
 Main> Main> Cons (S Z) (Cons (S (S Z)) []) : Vect (S (S Z)) Nat

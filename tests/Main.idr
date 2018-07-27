@@ -24,7 +24,8 @@ blodwenTests
        "interface001", "interface002", "interface003", "interface004",
        "interface005", "interface006", "interface007",
        "sugar001",
-       "lazy001","lazy002"]
+       "lazy001","lazy002",
+       "prelude001"]
 
 chdir : String -> IO Bool
 chdir dir 

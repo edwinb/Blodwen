@@ -33,17 +33,13 @@ record ModTree where
 public export
 record BuildMod where
   constructor MkBuildMod
-  buildFile : Maybe String
+  buildFile : String
   buildNS : List String
   imports : List (List String)
 
 export
 Show BuildMod where
-  show t = case buildFile t of
-                Nothing => ""
-                Just fname => fname ++ " [" ++ 
-                                  showSep ", " (map showNS (imports t))
-                                     ++ "]"
+  show t = buildFile t ++ " [" ++ showSep ", " (map showNS (imports t)) ++ "]"
     where
       showNS : List String -> String
       showNS ns = showSep "." (reverse ns)
@@ -92,10 +88,12 @@ mkModTree loc done mod
 mkBuildMods : List BuildMod -> ModTree -> List BuildMod
 mkBuildMods acc mod
     = let req = buildDeps acc (reverse (deps mod)) in
-          if sourceFile mod `elem` map buildFile req
-             then req
-             else MkBuildMod (sourceFile mod) (nspace mod) 
-                             (map nspace (deps mod)) :: req
+          maybe req -- only build ones where we can find the source code
+             (\sf => if sf `elem` map buildFile req
+                        then req
+                        else MkBuildMod sf (nspace mod) 
+                                        (map nspace (deps mod)) :: req)
+             (sourceFile mod)
   where
     buildDeps : List BuildMod -> List ModTree -> List BuildMod
     buildDeps acc [] = acc
@@ -140,8 +138,7 @@ buildMod : {auto c : Ref Ctxt Defs} ->
 -- file
 buildMod loc num len mod
    = do clearCtxt; addPrimitives
-        let Just src = buildFile mod
-            | Nothing => pure True -- No source file, nothing to build
+        let src = buildFile mod
         mttc <- getTTCFileName src
         depFiles <- traverse (nsToPath loc) (imports mod)
         ttcTime <- catch (do t <- fnameModified mttc

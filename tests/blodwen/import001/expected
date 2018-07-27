@@ -1,11 +1,9 @@
-Processing as Idris
 1/3: Building Nat (Nat.blod)
 2/3: Building Mult (Mult.blod)
 3/3: Building Test (Test.blod)
 Welcome to Blodwen. Good luck.
 Test> S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S (S Z)))))))))))))))))
 Test> Bye for now!
-Processing as Idris
 2/3: Building Mult (Mult.blod)
 3/3: Building Test (Test.blod)
 Welcome to Blodwen. Good luck.

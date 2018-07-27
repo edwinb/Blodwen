@@ -2,3 +2,8 @@ module Prelude
 
 public export
 data Bool = True | False
+
+public export
+not : Bool -> Bool
+not True = False
+not False = True
