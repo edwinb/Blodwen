@@ -17,6 +17,15 @@ schHeader : String
 schHeader 
   = "#!/usr/bin/scheme --script\n\n" ++
     "(let ()\n" ++
+    "(define blodwen-read-args (lambda (desc)\n" ++
+    "  (case (vector-ref desc 0)\n" ++
+    "    ((0) '())\n" ++
+    "    ((1) (cons (vector-ref desc 2)\n" ++
+    "               (blodwen-read-args (vector-ref desc 3)))))))\n" ++
+    "(define b+ (lambda (x y bits) (remainder (+ x y) (expt 2 bits))))\n" ++
+    "(define b- (lambda (x y bits) (remainder (- x y) (expt 2 bits))))\n" ++
+    "(define b* (lambda (x y bits) (remainder (* x y) (expt 2 bits))))\n" ++
+    "(define b/ (lambda (x y bits) (remainder (/ x y) (expt 2 bits))))\n" ++
     "(define get-tag (lambda (x) (vector-ref x 0)))\n\n"
 
 schFooter : String
@@ -26,7 +35,7 @@ schString : String -> String
 schString s = concatMap okchar (unpack s)
   where
     okchar : Char -> String
-    okchar c = if isAlphaNum c
+    okchar c = if isAlphaNum c || c =='_'
                   then cast c
                   else "C-" ++ show (cast {to=Int} c)
 
@@ -73,9 +82,13 @@ op : String -> List String -> String
 op o args = "(" ++ o ++ " " ++ showSep " " args ++ ")"
 
 boolop : String -> List String -> String
-boolop o args = "(or (and " ++ op o args ++ " (vector 0)) (vector 1))"
+boolop o args = "(or (and " ++ op o args ++ " 1) 0)"
 
 schOp : PrimFn arity -> Vect arity String -> String
+schOp (Add IntType) [x, y] = op "b+" [x, y, "63"]
+schOp (Sub IntType) [x, y] = op "b-" [x, y, "63"]
+schOp (Mul IntType) [x, y] = op "b*" [x, y, "63"]
+schOp (Div IntType) [x, y] = op "b/" [x, y, "63"]
 schOp (Add ty) [x, y] = op "+" [x, y]
 schOp (Sub ty) [x, y] = op "-" [x, y]
 schOp (Mul ty) [x, y] = op "*" [x, y]
