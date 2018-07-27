@@ -610,6 +610,20 @@ setPPrint ppopts
          put Ctxt (record { options->printing = ppopts } defs)
 
 export
+getSession : {auto c : Ref Ctxt Defs} ->
+             Core annot Session
+getSession
+    = do defs <- get Ctxt
+         pure (session (options defs))
+
+export
+setSession : {auto c : Ref Ctxt Defs} ->
+             Session -> Core annot ()
+setSession sopts
+    = do defs <- get Ctxt
+         put Ctxt (record { options->session = sopts } defs)
+
+export
 getPPrint : {auto c : Ref Ctxt Defs} ->
             Core annot PPrinter
 getPPrint

@@ -54,6 +54,13 @@ record PPrinter where
   constructor MkPPOpts
   showImplicits : Bool
 
+-- Other options relevant to the current session (so not to be saved in a TTC)
+public export
+record Session where
+  constructor MkSessionOpts
+  quiet : Bool
+  noprelude : Bool
+
 -- NOTE: If adding options, remember to save any relevant ones in the TTC
 -- implementation for Defs in Context.idr
 public export
@@ -61,6 +68,7 @@ record Options where
   constructor MkOptions
   dirs : Dirs
   printing : PPrinter
+  session : Session
   laziness : Maybe LazyNames
   pairnames : Maybe PairNames
 
@@ -70,9 +78,12 @@ defaultDirs = MkDirs "build" ["."]
 defaultPPrint : PPrinter
 defaultPPrint = MkPPOpts False
 
+defaultSession : Session
+defaultSession = MkSessionOpts False False
+
 export
 defaults : Options
-defaults = MkOptions defaultDirs defaultPPrint Nothing Nothing
+defaults = MkOptions defaultDirs defaultPPrint defaultSession Nothing Nothing
 
 -- Some relevant options get stored in TTC; merge in the options from
 -- a TTC file

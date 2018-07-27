@@ -109,6 +109,18 @@ setOpt (EvalMode m)
     = do opts <- get ROpts
          put ROpts (record { evalMode = m } opts)
 
+export
+execExp : {auto c : Ref Ctxt Defs} ->
+          {auto u : Ref UST (UState FC)} ->
+          {auto s : Ref Syn SyntaxInfo} ->
+          PTerm -> Core FC ()
+execExp ctm
+    = do i <- newRef ImpST (initImpState {annot = FC})
+         ttimp <- desugar [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
+         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+                               [] (MkNested []) NONE InExpr ttimp 
+         executeExpr tm
+          
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
@@ -153,11 +165,7 @@ process (Compile ctm outfile)
          coreLift $ putStrLn (outfile ++ ".ss written")
          pure True
 process (Exec ctm)
-    = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
-         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
-                               [] (MkNested []) NONE InExpr ttimp 
-         executeExpr tm
+    = do execExp ctm
          pure True
 process (ProofSearch n)
     = do tm <- search replFC 1000 [] n (UN "(interactive)")

@@ -121,11 +121,12 @@ schOp (Cast IntegerType StringType) [x] = op "number->string" [x]
 schOp (Cast DoubleType StringType) [x] = op "number->string" [x]
 schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show to ++ ")"
 
-data ExtPrim = SchemeCall | PutStr | GetStr | Unknown Name
+data ExtPrim = CCall | SchemeCall | PutStr | GetStr | Unknown Name
 
 toPrim : Name -> ExtPrim
 toPrim pn@(NS _ n) 
     = cond [(n == UN "prim__schemeCall", SchemeCall),
+            (n == UN "prim__cCall", CCall),
             (n == UN "prim__putStr", PutStr),
             (n == UN "prim__getStr", GetStr)]
            (Unknown pn)

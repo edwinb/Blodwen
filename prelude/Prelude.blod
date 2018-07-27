@@ -1,0 +1,4 @@
+module Prelude
+
+public export
+data Bool = True | False

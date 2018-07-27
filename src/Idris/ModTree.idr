@@ -4,6 +4,7 @@ import Core.Binary
 import Core.Context
 import Core.Core
 import Core.Directory
+import Core.Options
 import Core.Primitives
 import Core.InitPrimitives
 import Core.UnifyState
@@ -119,6 +120,19 @@ fnameModified fname
          coreLift $ closeFile f
          pure t
 
+-- Print, but only when not in quiet mode
+export
+putStrQ : {auto c : Ref Ctxt Defs} ->
+          String -> Core annot ()
+putStrQ str
+    = when (not (quiet !getSession)) $
+         coreLift $ putStr str
+
+export
+putStrLnQ : {auto c : Ref Ctxt Defs} ->
+            String -> Core annot ()
+putStrLnQ str = putStrQ (str ++ "\n")
+
 buildMod : {auto c : Ref Ctxt Defs} ->
            FC -> Nat -> Nat -> BuildMod -> Core FC Bool
 -- Build from source if any of the dependencies, or the associated source
@@ -146,7 +160,7 @@ buildMod loc num len mod
         let showMod = showSep "." (reverse (buildNS mod))
 
         if needsBuilding
-           then do coreLift $ putStrLn $ show num ++ "/" ++ show len ++
+           then do putStrLnQ $ show num ++ "/" ++ show len ++
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
                    process {u} {s} src
