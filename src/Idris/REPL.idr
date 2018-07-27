@@ -37,6 +37,9 @@ defaultOpts = MkREPLOpts False NormaliseAll
 export
 data ROpts : Type where
 
+replFC : FC
+replFC = MkFC "(interactive)" (0, 0) (0, 0)
+
 showInfo : (Name, GlobalDef) -> Core annot ()
 showInfo (n, d) 
     = do coreLift $ putStrLn (show n ++ " ==> " ++ show (definition d))
@@ -143,14 +146,21 @@ process (Check itm)
          pure True
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar [] ctm
+         ttimp <- desugar [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          compileExpr tm (outfile ++ ".ss")
          coreLift $ putStrLn (outfile ++ ".ss written")
          pure True
+process (Exec ctm)
+    = do i <- newRef ImpST (initImpState {annot = FC})
+         ttimp <- desugar [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
+         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+                               [] (MkNested []) NONE InExpr ttimp 
+         executeExpr tm
+         pure True
 process (ProofSearch n)
-    = do tm <- search (MkFC "(interactive)" (0, 0) (0, 0)) 1000 [] n (UN "(interactive)")
+    = do tm <- search replFC 1000 [] n (UN "(interactive)")
          gam <- get Ctxt
          itm <- resugar [] (normaliseHoles gam [] tm)
          coreLift (putStrLn (show itm))

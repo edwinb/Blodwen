@@ -32,6 +32,7 @@ firstAvailable loc ns [] = throw (ModuleNotFound loc ns)
 firstAvailable loc ns (f :: fs)
     = do Right ok <- coreLift $ openFile f Read
                | Left err => firstAvailable loc ns fs
+         coreLift $ closeFile ok
          pure f
 
 -- Given a namespace, return the full path to the checked module, 

@@ -1,0 +1,41 @@
+module IOtest
+
+import Stuff
+import PrimIO
+
+hworld : IO ()
+hworld = putStrLn "Hello world!"
+
+interface Functor (f : Type -> Type) where
+    map : (a -> b) -> f a -> f b
+
+Functor List where
+  map f [] = []
+  map f (x :: xs) = f x :: map f xs
+
+hello : IO ()
+hello
+    = do putStr "What is your name? "
+         n <- getStr
+         putStrLn ("Hello " ++ n ++ "!")
+         putStrLn (toString (map (prim__mul_Int 2) [1,2,3,4]))
+
+mkList : Int -> Int -> List Int
+mkList seed 0 = []
+mkList seed n 
+  = let seed' = prim__add_Int (prim__mul_Int seed 1664525) 1013904223 in
+                prim__mod_Int seed 1000 :: mkList seed' (prim__sub_Int n 1)
+
+insert : Int -> List Int -> List Int
+insert x [] = [x]
+insert x (y :: ys)
+    = if (intToBool (prim__lt_Int x y))
+         then x :: y :: ys
+         else y :: insert x ys
+
+sort : List Int -> List Int
+sort [] = []
+sort (x :: xs) = insert x (sort xs)
+
+doSort : IO ()
+doSort = putStrLn (toString (sort (mkList 1234567890 10000)))

@@ -246,6 +246,7 @@ data REPLCmd : Type where
      Eval : PTerm -> REPLCmd
      Check : PTerm -> REPLCmd
      Compile : PTerm -> String -> REPLCmd
+     Exec : PTerm -> REPLCmd
      ProofSearch : Name -> REPLCmd
      DebugInfo : Name -> REPLCmd
      SetOpt : REPLOpt -> REPLCmd

@@ -986,5 +986,8 @@ command
          n <- unqualifiedName
          tm <- expr EqOK "(interactive)" init
          pure (Compile tm n)
+  <|> do symbol ":"; exactIdent "exec"
+         tm <- expr EqOK "(interactive)" init
+         pure (Exec tm)
   <|> do tm <- expr EqOK "(interactive)" init
          pure (Eval tm)

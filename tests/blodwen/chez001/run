@@ -1,0 +1,2 @@
+$1 IOtest.blod < input
+rm -rf build

@@ -1,7 +1,6 @@
 module Compiler.Chez
 
 import Compiler.Common
-
 import Compiler.CompileExpr
 
 import Core.Context
@@ -10,12 +9,24 @@ import Core.TT
 
 import Data.List
 import Data.Vect
+import System
+import System.Info
 
 %default covering
 
-schHeader : String
-schHeader 
-  = "#!/usr/bin/scheme --script\n\n" ++
+firstExists : List String -> IO (Maybe String)
+firstExists [] = pure Nothing
+firstExists (x :: xs) = if !(exists x) then pure (Just x) else firstExists xs
+
+findChez : IO String
+findChez 
+    = do e <- firstExists [p ++ x | p <- ["/usr/bin/", "/usr/local/bin/"],
+                                    x <- ["scheme", "chez"]]
+         maybe (pure "/usr/bin/scheme") pure e
+
+schHeader : String -> String
+schHeader chez
+  = "#!" ++ chez ++ " --script\n\n" ++
     "(let ()\n" ++
     "(define blodwen-read-args (lambda (desc)\n" ++
     "  (case (vector-ref desc 0)\n" ++
@@ -252,9 +263,20 @@ compileExpr {annot} tm outfile
          let Right code = getSchemes {annot} defs ns
             | Left err => throw err
          let main = schExp [] !(compileExp tm)
-         let scm = schHeader ++ code ++ main ++ schFooter
+         chez <- coreLift findChez
+         let scm = schHeader chez ++ code ++ main ++ schFooter
          Right () <- coreLift $ writeFile outfile scm
             | Left err => throw (FileErr outfile err)
+         coreLift $ chmod outfile 0o755
          pure ()
 
--- executeExpr : {auto c : Ref Ctxt Defs} -> Term vars -> Core annot ()
+export
+executeExpr : {auto c : Ref Ctxt Defs} -> ClosedTerm -> Core annot ()
+executeExpr tm
+    = do tmp <- coreLift $ tmpName
+         let outn = tmp ++ ".ss"
+         compileExpr tm outn
+         chez <- coreLift findChez
+         coreLift $ system (chez ++ " --script " ++ outn)
+         pure ()
+

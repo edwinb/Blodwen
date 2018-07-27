@@ -6,6 +6,8 @@ import Core.Context
 import Core.TT
 
 import Data.CSet
+
+%include C "sys/stat.h"
     
 getAllDesc : List Name -> SortedSet -> Gamma -> SortedSet
 getAllDesc [] ns g = ns
@@ -36,4 +38,22 @@ findUsedNames tm
          let cns = toList (fromList allNs)
          traverse compileDef cns
          pure cns
+
+-- Some things missing from Prelude.File
+
+export
+exists : String -> IO Bool
+exists f 
+    = do Right ok <- openFile f Read
+             | Left err => pure False
+         closeFile ok
+         pure True
+
+export
+tmpName : IO String
+tmpName = foreign FFI_C "tmpnam" (Ptr -> IO String) null
+
+export
+chmod : String -> Int -> IO ()
+chmod f m = foreign FFI_C "chmod" (String -> Int -> IO ()) f m
 
