@@ -35,7 +35,7 @@ Reify () where
 
 export
 Reflect () where
-  reflect defs env _ = getCon defs (NS ["Stuff"] (UN "MkUnit"))
+  reflect defs env _ = getCon defs (NS ["Prelude"] (UN "MkUnit"))
 
 export
 Reify String where
@@ -83,6 +83,17 @@ Reflect Double where
   reflect defs env x = pure (PrimVal (Db x))
 
 export
+Reify Bool where
+  reify defs (NDCon (NS _ (UN "True")) _ _ _) = pure True
+  reify defs (NDCon (NS _ (UN "False")) _ _ _) = pure True
+  reify defs _ = Nothing
+
+export
+Reflect Bool where
+  reflect defs env True = getCon defs (NS ["Prelude"] (UN "True"))
+  reflect defs env False = getCon defs (NS ["Prelude"] (UN "False"))
+
+export
 Reify a => Reify (List a) where
   reify defs (NDCon (NS _ (UN "Nil")) _ _ _)
       = pure []
@@ -94,11 +105,11 @@ Reify a => Reify (List a) where
 
 export
 Reflect a => Reflect (List a) where
-  reflect defs env [] = getCon defs (NS ["Stuff"] (UN "Nil"))
+  reflect defs env [] = getCon defs (NS ["Prelude"] (UN "Nil"))
   reflect defs env (x :: xs)
       = do x' <- reflect defs env x
            xs' <- reflect defs env xs
-           appCon defs (NS ["Stuff"] (UN "::")) [x', xs']
+           appCon defs (NS ["Prelude"] (UN "::")) [x', xs']
 
 export
 (Reify a, Reify b) => Reify (a, b) where
@@ -113,7 +124,7 @@ export
   reflect defs env (x, y)
       = do x' <- reflect defs env x
            y' <- reflect defs env y
-           appCon defs (NS ["Stuff"] (UN "MkPair")) [Erased, Erased, x', y']
+           appCon defs (NS ["Prelude"] (UN "MkPair")) [Erased, Erased, x', y']
 
 export
 Reify Name where

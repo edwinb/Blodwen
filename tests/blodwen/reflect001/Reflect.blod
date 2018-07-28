@@ -1,6 +1,6 @@
 module Reflect
 
-import Stuff
+import Prelude
 
 FilePos : Type
 FilePos = (Int, Int)

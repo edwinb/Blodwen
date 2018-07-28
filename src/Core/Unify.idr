@@ -58,7 +58,8 @@ convertErrorS s loc env x y
 export
 search : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
-         annot -> Nat -> List ClosedTerm -> Name -> Name -> Core annot ClosedTerm
+         annot -> (lastChance : Bool) -> 
+         Nat -> List ClosedTerm -> Name -> Name -> Core annot ClosedTerm
 
 -- try one elaborator; if it fails, try another
 export
@@ -993,8 +994,8 @@ retryHole mode lastChance (loc, hole)
                                            setCtxt (addCtxt hole gdef (gamma gam))
                      BySearch depth fn => 
                        if lastChance
-                          then do search loc depth [] fn hole; pure ()
-                          else handleError (do search loc depth [] fn hole
+                          then do search loc lastChance depth [] fn hole; pure ()
+                          else handleError (do search loc lastChance depth [] fn hole
                                                pure ())
                                -- if it failed due to a determining argument
                                -- being missing, we at least now know that the

@@ -57,7 +57,7 @@ processDecl env nest (IReflect loc tm)
 processDecl env nest (ImplicitNames loc ns) 
     = do traverse (\ x => addImp (fst x) (snd x)) ns
          pure ()
-processDecl env nest (IHint loc n Nothing) = addGlobalHint loc n
+processDecl env nest (IHint loc n Nothing) = addGlobalHint loc True n
 processDecl env nest (IHint loc n (Just ty)) = addHintFor loc ty n
 processDecl env nest (IPragma p) = p env nest
 processDecl env nest (ILog lvl) = setLogLevel lvl

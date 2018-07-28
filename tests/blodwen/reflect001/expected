@@ -1,8 +1,8 @@
-1/2: Building Stuff (Stuff.blod)
+1/2: Building Prelude (Prelude.blod)
 2/2: Building Reflect (Reflect.blod)
 LOG 0: Doing things
-LOG 0: Elab script ended with (Stuff.S (Stuff.S (Stuff.S Stuff.Z)))
-LOG 0: Elab script ended with (Reflect.NS (Stuff.:: "Reflect" Stuff.Nil) (Reflect.MN "whatever" 66))
-LOG 0: Elab script ended with Stuff.MkUnit
+LOG 0: Elab script ended with (Prelude.S (Prelude.S (Prelude.S Prelude.Z)))
+LOG 0: Elab script ended with (Reflect.NS (Prelude.:: "Reflect" Prelude.Nil) (Reflect.MN "whatever" 66))
+LOG 0: Elab script ended with Prelude.MkUnit
 Welcome to Blodwen. Good luck.
 Reflect> Bye for now!

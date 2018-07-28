@@ -40,7 +40,7 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
                Just res => pure (nf defs env res)
 
     retUnit : Core annot (NF vars)
-    retUnit = pure (NDCon (NS ["Stuff"] (UN "MkUnit")) 0 0 [])
+    retUnit = pure (NDCon (NS ["Prelude"] (UN "MkUnit")) 0 0 [])
 
     elabCon : Defs -> String -> List (Closure vars) -> Core annot (NF vars)
     elabCon defs "Pure" [_, arg]

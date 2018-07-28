@@ -140,6 +140,14 @@ Num Integer where
     (*) = prim__mul_Integer
     fromInteger = id
 
+-- This allows us to pick integer as a default at the end of elaboration if
+-- all other possibilities fail. I don't plan to provide a nicer syntax for
+-- this...
+%defaulthint
+public export
+defaultInteger : Num Integer
+defaultInteger = %search
+
 public export
 Num Int where
     (+) = prim__add_Int
@@ -217,10 +225,10 @@ all : Foldable t => (a -> Bool) -> t a -> Bool
 all p = foldl (\x,y => x && p y)  True
 
 sum : (Foldable t, Num a) => t a -> a
-sum {a} = foldr (+) 0
+sum = foldr (+) (fromInteger 0)
 
 product : (Foldable t, Num a) => t a -> a
-product = foldr (*) 1
+product = foldr (*) (fromInteger 1)
 
 -----------
 -- NATS ---

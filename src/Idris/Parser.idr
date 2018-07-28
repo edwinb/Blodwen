@@ -721,7 +721,9 @@ fnOpt
     = do exactIdent "hint"
          pure Hint
   <|> do exactIdent "globalhint"
-         pure GlobalHint
+         pure (GlobalHint True)
+  <|> do exactIdent "defaulthint"
+         pure (GlobalHint False)
   <|> do exactIdent "inline"
          pure Inline
   <|> do exactIdent "extern"

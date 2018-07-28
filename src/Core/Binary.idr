@@ -22,7 +22,7 @@ import Data.Buffer
 -- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 ttcVersion : Int
-ttcVersion = 7
+ttcVersion = 8
 
 checkTTCVersion : Int -> Int -> Core annot ()
 checkTTCVersion ver exp
@@ -65,8 +65,8 @@ record TTCFile annot extra where
 -- Update the various fields in Defs affected by the name's flags
 processFlags : Name -> List DefFlag -> Defs -> Defs
 processFlags n [] defs = defs
-processFlags n (GlobalHint :: fs) defs
-  = processFlags n fs (record { autoHints $= (n ::) } defs)
+processFlags n (GlobalHint t :: fs) defs
+  = processFlags n fs (record { autoHints $= ((t, n) ::) } defs)
 processFlags n (TypeHint ty :: fs) defs
   = processFlags n fs (addToTypeHints ty n defs)
 processFlags n (Inline :: fs) defs = processFlags n fs defs

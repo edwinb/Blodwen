@@ -69,7 +69,8 @@ elabTerm {vars} process defining env nest impmode elabmode tm tyin
                                 _ => InTerm) False
          retryAllDelayed
          -- True flag means "last chance" i.e report error rather than
-         -- postponing again (this pass is primarily about error reporting)
+         -- postponing again (this pass is primarily about error reporting,
+         -- but might also resolve default hints)
          solveConstraints (case elabmode of
                                 InLHS => InLHS
                                 _ => InTerm) True

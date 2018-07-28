@@ -29,8 +29,8 @@ processFnOpt loc ndef Hint
               Nothing => throw (UndefinedName loc ndef)
               Just ty => do target <- getRetTy loc ctxt (nf ctxt [] ty)
                             addHintFor loc target ndef
-processFnOpt loc ndef GlobalHint
-    = addGlobalHint loc ndef
+processFnOpt loc ndef (GlobalHint a)
+    = addGlobalHint loc a ndef
 processFnOpt loc ndef ExternFn
     = pure ()
 

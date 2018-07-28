@@ -1,4 +1,6 @@
 Welcome to Blodwen. Good luck.
 Main> Prelude.Bool : Type
 Main> False
+Main> Main> 4 : Integer
+Main> 4.4 : Double
 Main> Bye for now!

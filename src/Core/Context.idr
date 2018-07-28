@@ -245,24 +245,24 @@ TTC annot Def where
              _ => corrupt "Def"
 
 public export
-data DefFlag = TypeHint Name | GlobalHint | Inline
+data DefFlag = TypeHint Name | GlobalHint Bool | Inline
 
 export
 Eq DefFlag where
     (==) (TypeHint ty) (TypeHint ty') = ty == ty'
-    (==) GlobalHint GlobalHint = True
+    (==) (GlobalHint x) (GlobalHint y) = x == y
     (==) Inline Inline = True
     (==) _ _ = False
 
 TTC annot DefFlag where
   toBuf b (TypeHint x) = do tag 0; toBuf b x
-  toBuf b GlobalHint = tag 1
+  toBuf b (GlobalHint t) = do tag 1; toBuf b t
   toBuf b Inline = tag 2
 
   fromBuf s b 
       = case !getTag of
              0 => do x <- fromBuf s b; pure (TypeHint x)
-             1 => pure GlobalHint
+             1 => do t <- fromBuf s b; pure (GlobalHint t)
              2 => pure Inline
              _ => corrupt "DefFlag"
 
@@ -336,7 +336,9 @@ record Defs where
           -- all imported filenames/namespaces, just to avoid loading something
           -- twice unnecessarily (this is a record of all the things we've
           -- called 'readFromTTC' with, in practice)
-      autoHints : List Name -- global auto hints
+      autoHints : List (Bool, Name) -- global auto hints.
+                  -- boolean flag means whether to always run 'True' or just
+                  -- at the end to resolve defaults 'False'
       typeHints : Context (List Name) -- type name hints
       openHints : List Name -- global hints just for this module; prioritised
       nextTag : Int -- next tag for type constructors
@@ -1028,16 +1030,29 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
 -- of the given type (constructors, local hints, global hints, in that order)
 export
 getSearchData : {auto x : Ref Ctxt Defs} ->
-                annot -> Name -> Core annot (List Nat, List Name, List Name)
-getSearchData loc target
+                annot -> Bool -> Name -> Core annot (List Nat, List Name, List Name)
+getSearchData loc False target
+    = do defs <- get Ctxt
+         pure ([], openHints defs, finalAutoHints defs)
+  where
+    finalAutoHints : Defs -> List Name
+    finalAutoHints defs
+        = let hs = autoHints defs in
+              map snd (filter (\t => fst t == False) hs)
+getSearchData loc True target
     = do defs <- get Ctxt
          case lookupDefExact target (gamma defs) of
               Just (TCon _ _ _ dets cons) => 
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
-                      pure (dets, openHints defs, hs ++ autoHints defs)
+                      pure (dets, openHints defs, hs ++ openAutoHints defs)
               _ => throw (UndefinedName loc target)
+  where
+    openAutoHints : Defs -> List Name
+    openAutoHints defs
+        = let hs = autoHints defs in
+              map snd (filter (\t => fst t == True) hs)
 
 export
 setDetermining : {auto x : Ref Ctxt Defs} ->
@@ -1189,11 +1204,11 @@ addHintFor loc ty hint
 
 export
 addGlobalHint : {auto x : Ref Ctxt Defs} ->
-					      annot -> Name -> Core annot ()
-addGlobalHint loc hint
+					      annot -> Bool -> Name -> Core annot ()
+addGlobalHint loc a hint
     = do d <- get Ctxt
-         put Ctxt (record { autoHints $= (hint ::) } d)
-         setFlag loc hint GlobalHint
+         put Ctxt (record { autoHints $= ((a, hint) ::) } d)
+         setFlag loc hint (GlobalHint a)
 
 export
 addOpenHint : {auto x : Ref Ctxt Defs} -> Name -> Core annot ()
@@ -1216,8 +1231,8 @@ processFlags loc (n, def)
     processFlag : DefFlag -> Core annot ()
     processFlag (TypeHint ty)
         = addHintFor loc ty n
-    processFlag GlobalHint
-        = addGlobalHint loc n
+    processFlag (GlobalHint t)
+        = addGlobalHint loc t n
     processFlag _ = pure () 
 
 -- Extend the context with the definitions/options given in the second

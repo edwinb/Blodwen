@@ -3,6 +3,9 @@ infixl 9 *, /
 
 infixr 5 ::
 
+fromInteger : Integer -> Int
+fromInteger x = prim__cast_IntegerInt x
+
 prefix 10 -: -- TMP HACK :)
 
 (+) : Int -> Int -> Int

@@ -3,6 +3,7 @@ module Idris.Desugar
 import Core.Binary
 import Core.Context
 import Core.Core
+import Core.Options
 import Core.TT
 import Core.Unify
 
@@ -141,8 +142,13 @@ mutual
                  (POp fc op arg (PRef fc (MN "arg" 0))))
   desugar side ps (PSearch fc depth) = pure $ ISearch fc depth
   desugar AnyExpr ps (PPrimVal fc (BI x))
-      = pure $ IApp fc (IVar fc (UN "fromInteger")) 
-                       (IPrimVal fc (BI x))
+      = -- only do this if we have a prelude (TMP HACK for the tests...) 
+        if noprelude !getSession
+           then pure $ IAlternative fc (UniqueDefault (IPrimVal fc (BI x)))
+                               [IPrimVal fc (BI x),
+                                IPrimVal fc (I (fromInteger x))]
+           else pure $ IApp fc (IVar fc (UN "fromInteger")) 
+                               (IPrimVal fc (BI x))
   desugar LHS ps (PPrimVal fc (BI x))
       = pure $ IAlternative fc Unique
                                [IPrimVal fc (BI x),
