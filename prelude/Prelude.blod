@@ -16,23 +16,32 @@ As such, it should contain:
 - Interfaces for arithmetic and implementations for the primitives and
   basic types
 - Show, Eq, Ord, and implementations for all types in the prelude
+- Interfaces and functions for basic proof (cong, Uninhabited, etc)
 - [Possibly Enum for range syntax?]
+- Semigroup, Monoid
 - Functor, Applicative, Monad and related functions
+- Foldable, Traversable
 - Basic interaction (Console and File IO)
 
 Everything else should be in the base libraries, and imported as required.
+In particular, proofs of Nat/List properties that almost never get used in
+practice would probably be better in base libraries.
+
 (These guidelines will probably get revised a few times.)
 -}
 
--- Numerical Operator Precedence
+-- Numerical operators
 infix 6 ==, /=, <, <=, >, >=
 infixl 7 <<, >> -- unused
 infixl 8 +, -
 infixl 9 *, /
 
--- Boolean Operator Precedence
+-- Boolean operators
 infixr 4 &&
 infixr 5 ||
+
+-- List and String operators
+infixr 7 ::, ++
 
 -- Applicative/Monad operators
 infixl 1 >>=
@@ -50,7 +59,7 @@ infixr 0 $
 -----------------------
 
 public export
-the : (a : Type) -> a -> a
+the : (0 a : Type) -> a -> a
 the _ x = x
 
 public export
@@ -62,20 +71,36 @@ const : a -> b -> a
 const x = \value => x
 
 public export
-(.) : (b -> c) -> (a -> b) -> a -> c
+(.) : forall a,b,c . (b -> c) -> (a -> b) -> a -> c
 (.) f g = \x => f (g x)
 
 public export
-flip : (f : a -> b -> c) -> b -> a -> c
+flip : forall a,b,c . (f : a -> b -> c) -> b -> a -> c
 flip f x y = f y x
 
 public export
 apply : (a -> b) -> a -> b
 apply f a = f a
 
+-------------------
+-- PROOF HELPERS --
+-------------------
+
 public export
 cong : {0 f : t -> u} -> a = b -> f a = f b
 cong Refl = Refl
+
+public export
+interface Uninhabited t where
+  uninhabited : t -> Void
+
+%extern
+public export
+void : Void -> a
+
+public export
+absurd : Uninhabited t => (h : t) -> a
+absurd h = void (uninhabited h)
 
 --------------
 -- BOOLEANS --
@@ -99,13 +124,8 @@ public export
 (||) True x = True
 (||) False x = x
 
-public export
-intToBool : Int -> Bool
-intToBool 0 = False
-intToBool x = True
-
 ------------------------
--- Numeric interfaces --
+-- NUMERIC INTERFACES --
 ------------------------
 
 public export
@@ -132,6 +152,76 @@ Num Double where
     (*) = prim__mul_Double
     fromInteger = prim__cast_IntegerDouble
 
+public export
+intToBool : Int -> Bool
+intToBool 0 = False
+intToBool x = True
+
+-------------
+-- ALGEBRA --
+-------------
+
+interface Semigroup ty where
+    (<+>) : ty -> ty -> ty
+
+interface Semigroup ty => Monoid ty where
+    neutral : ty
+
+---------------------------------
+-- FUNCTOR, APPLICATIVE, MONAD --
+---------------------------------
+
+interface Functor f where
+    map : (a -> b) -> f a -> f b
+
+(<$>) : Functor f => (func : a -> b) -> f a -> f b
+(<$>) func x = map func x
+
+interface Functor f => Applicative f where
+    pure : a -> f a
+    (<*>) : f (a -> b) -> f a -> f b
+
+interface Applicative m => Monad m where
+    (>>=) : m a -> (a -> m b) -> m b
+    join : m (m a) -> m a
+
+    -- default implementations
+    (>>=) x f = join (f <$> x)
+    join x = x >>= id
+
+---------------------------
+-- FOLDABLE, TRAVERSABLE --
+---------------------------
+
+interface Foldable (t : Type -> Type) where
+  foldr : (func : elem -> acc -> acc) -> (init : acc) -> (input : t elem) -> acc
+  foldl : (func : acc -> elem -> acc) -> (init : acc) -> (input : t elem) -> acc
+  foldl f z t = foldr (flip (.) . flip f) id t z
+
+concat : (Foldable t, Monoid a) => t a -> a
+concat = foldr (<+>) neutral
+
+concatMap : (Foldable t, Monoid m) => (a -> m) -> t a -> m
+concatMap f = foldr ((<+>) . f) neutral
+
+and : Foldable t => t (Lazy Bool) -> Bool
+and = foldl (&&) True
+
+or : Foldable t => t (Lazy Bool) -> Bool
+or = foldl (||) False
+
+any : Foldable t => (a -> Bool) -> t a -> Bool
+any p = foldl (\x,y => x || p y) False
+
+all : Foldable t => (a -> Bool) -> t a -> Bool
+all p = foldl (\x,y => x && p y)  True
+
+sum : (Foldable t, Num a) => t a -> a
+sum {a} = foldr (+) 0
+
+product : (Foldable t, Num a) => t a -> a
+product = foldr (*) 1
+
 -----------
 -- NATS ---
 -----------
@@ -155,9 +245,10 @@ Num Nat where
 -- STRINGS --
 -------------
 
-public export
-(++) : String -> String -> String
-(++) x y = prim__strAppend x y
+namespace Strings
+    public export
+    (++) : String -> String -> String
+    (++) x y = prim__strAppend x y
 
 public export
 length : String -> Nat
@@ -167,24 +258,20 @@ public export
 reverse : String -> String
 reverse = prim__strReverse
 
----------------------------------
--- FUNCTOR, APPLICATIVE, MONAD --
----------------------------------
+-----------
+-- LISTS --
+-----------
 
-interface Functor f where
-    map : (a -> b) -> f a -> f b
+public export
+data List a = Nil | (::) a (List a)
 
-(<$>) : Functor f => (func : a -> b) -> f a -> f b
-(<$>) func x = map func x
+namespace List
+    public export
+    (++) : List a -> List a -> List a
+    (++) [] ys = ys
+    (++) (x :: xs) ys = x :: xs ++ ys
 
-interface Functor f => Applicative f where
-    pure : a -> f a
-    (<*>) : f (a -> b) -> f a -> f b
+Functor List where
+  map f [] = []
+  map f (x :: xs) = f x :: map f xs
 
-interface Applicative m => Monad m where
-    (>>=) : m a -> (a -> m b) -> m b
-    join : m (m a) -> m a
-
-    -- default implementations
-    (>>=) x f = join (f <$> x)
-    join x = x >>= id

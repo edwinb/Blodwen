@@ -152,7 +152,9 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          -- we've just checked - they must be resolved now (that's what
          -- True means)
          wrapError (InLHS loc defining) $ checkUserHoles True
-         let lhs = normaliseHoles gam env lhs_in
+         -- Normalise the LHS to get any functions or let bindings evaluated
+         -- (this might be allowed, e.g. for 'fromInteger')
+         let lhs = normalise gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          let linvars_in = findLinear gam 0 Rig1 lhs
          log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 

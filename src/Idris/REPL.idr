@@ -116,7 +116,7 @@ execExp : {auto c : Ref Ctxt Defs} ->
           PTerm -> Core FC ()
 execExp ctm
     = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
+         ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          executeExpr tm
@@ -129,7 +129,7 @@ process : {auto c : Ref Ctxt Defs} ->
           REPLCmd -> Core FC Bool
 process (Eval itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar [] itm
+         ttimp <- desugar AnyExpr [] itm
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
@@ -148,7 +148,7 @@ process (Check (PRef fc fn))
                        pure True
 process (Check itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar [] itm
+         ttimp <- desugar AnyExpr [] itm
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
@@ -158,7 +158,7 @@ process (Check itm)
          pure True
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
+         ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          compileExpr tm (outfile ++ ".ss")
