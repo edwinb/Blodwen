@@ -560,7 +560,7 @@ mutual
               UnifyMode -> annot -> Env Term vars ->
               NameType -> Name -> List (Closure vars) -> NF vars ->
               Core annot (List Name)
-  unifyHole mode loc env nt var args tm
+  unifyHole {vars} mode loc env nt var args tm
    = do gam <- get Ctxt
         log 10 $ "Unifying: " ++ show var ++ " " ++
                                  show (map (\t => quote (noGam gam) env (evalClosure (noGam gam) t)) args) ++
@@ -583,7 +583,9 @@ mutual
                            log 10 $ "Postponing constraint " ++
                                       show (quote (noGam gam) env (NApp (NRef nt var) args))
                                        ++ " =?= " ++
-                                      show (quote (noGam gam) env tm)
+                                      show (quote (noGam gam) env tm) ++
+                                    "\n(couldn't shrink " ++ show (normaliseHoles gam env (quote (noGam gam) env tm)) ++ 
+                                    " with " ++ show vars ++ ")"
                            postpone loc env (NApp (NRef nt var) args) tm
 --                              ufail loc $ "Scope error " ++
 --                                    show (vars, newvars) ++

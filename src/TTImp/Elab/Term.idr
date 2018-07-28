@@ -30,7 +30,9 @@ insertImpLam env tm (Just ty) = bindLam tm ty
     bindLam : RawImp annot -> Term vars -> RawImp annot
     bindLam tm (Bind n (Pi c Implicit ty) sc)
         = let loc = getAnnot tm in
-              ILam loc c Implicit n (Implicit loc) (bindLam tm sc)
+              -- Can't use the same name, there may be a clash, so set
+              -- it to 'Nothing' and let the machine invent one
+              ILam loc c Implicit Nothing (Implicit loc) (bindLam tm sc)
     bindLam tm sc = tm
 
 expandAmbigName : Defs -> Env Term vars -> NestedNames vars ->
@@ -195,7 +197,10 @@ mutual
            checkPi rigc process elabinfo loc env nest rigp plicity (dropNS n) ty retTy expected
   checkImp rigc process elabinfo env nest (IPi loc rigp plicity (Just n) ty retTy) expected 
       = checkPi rigc process elabinfo loc env nest rigp plicity n ty retTy expected
-  checkImp rigc process elabinfo env nest (ILam loc rigl plicity n ty scope) expected
+  checkImp rigc process elabinfo env nest (ILam loc rigl plicity Nothing ty scope) expected
+      = do n <- genName "lam"
+           checkLam (bindRig rigc) process elabinfo loc env nest rigl plicity n ty scope expected
+  checkImp rigc process elabinfo env nest (ILam loc rigl plicity (Just n) ty scope) expected
       = checkLam (bindRig rigc) process elabinfo loc env nest rigl plicity n ty scope expected
   checkImp rigc process elabinfo env nest (ILet loc rigl n nTy nVal scope) expected 
       = checkLet (bindRig rigc) process elabinfo loc env nest rigl n nTy nVal scope expected
@@ -345,10 +350,10 @@ mutual
   checkImp rigc process elabinfo env nest (IBindHere loc tm) expected
       = do (tmv, tmt) <- check rigc process elabinfo env nest tm expected
            argImps <- getToBind env
-           setBound (map fst argImps)
            clearToBind
            gam <- get Ctxt
            est <- get EST
+           put EST (record { boundNames = [] } est)
            let (bv, bt) = bindImplicits (implicitMode elabinfo)
                                         gam env argImps (asVariables est)
                                         tmv TType
@@ -415,7 +420,7 @@ mutual
                    pure (tm, expected)
              _ =>
                 do n <- addHole loc env expected
-                   log 10 $ "Added hole for implicit " ++ show (n, expected)
+                   log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
                    pure (mkConstantApp n env, expected)
 
   addGivenImps : ElabInfo annot -> List (Maybe Name, RawImp annot) -> ElabInfo annot

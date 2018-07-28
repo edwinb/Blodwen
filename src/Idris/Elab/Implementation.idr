@@ -37,10 +37,10 @@ mutual
       = let bound' = maybe bound (\n => n :: bound) mn in
             IPi fc r p mn (substParams bound ps argTy) 
                           (substParams bound' ps retTy)
-  substParams bound ps (ILam fc r p n argTy scope)
-      = let bound' = n :: bound in
-            ILam fc r p n (substParams bound ps argTy) 
-                          (substParams bound' ps scope)
+  substParams bound ps (ILam fc r p mn argTy scope)
+      = let bound' = maybe bound (\n => n :: bound) mn in
+            ILam fc r p mn (substParams bound ps argTy) 
+                           (substParams bound' ps scope)
   substParams bound ps (ILet fc r n nTy nVal scope)
       = let bound' = n :: bound in
             ILet fc r n (substParams bound ps nTy) 
@@ -244,7 +244,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
 
     mkLam : List Name -> RawImp FC -> RawImp FC
     mkLam [] tm = tm
-    mkLam (x :: xs) tm = ILam fc RigW Explicit x (Implicit fc) (mkLam xs tm)
+    mkLam (x :: xs) tm = ILam fc RigW Explicit (Just x) (Implicit fc) (mkLam xs tm)
 
     -- When applying the method in the field for the record, eta expand
     -- the explicit arguments so that implicits get inserted in the right 

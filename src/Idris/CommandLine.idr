@@ -26,7 +26,7 @@ record OptDesc where
   help : Maybe String
 
 options : List OptDesc
-options = [MkOpt ["--check", "-c"] [] [CheckOnly, Quiet]
+options = [MkOpt ["--check", "-c"] [] [CheckOnly]
               (Just "Exit after checking source file"),
            MkOpt ["--exec", "-x"] ["name"] (\f => [ExecFn f, Quiet])
               (Just "Execute function after checking source file"),

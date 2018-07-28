@@ -62,7 +62,7 @@ mutual
                  Core annot (RawImp annot, Term vars)
   unelabBinder loc env x (Lam rig p ty) sctm sc scty
       = do (ty', _) <- unelabTy loc env ty
-           pure (ILam loc rig p x ty' sc, Bind x (Pi rig p ty) scty)
+           pure (ILam loc rig p (Just x) ty' sc, Bind x (Pi rig p ty) scty)
   unelabBinder loc env x (Let rig val ty) sctm sc scty
       = do (val', vty) <- unelabTy loc env val
            (ty', _) <- unelabTy loc env ty

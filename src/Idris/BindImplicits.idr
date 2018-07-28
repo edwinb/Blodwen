@@ -27,9 +27,12 @@ findBindableNames arg env used (IPi fc rig p mn aty retty)
                       Just n => n :: env in
           findBindableNames True env' used aty ++
           findBindableNames True env' used retty
-findBindableNames arg env used (ILam fc rig p n aty sc)
-    = findBindableNames True (n :: env) used aty ++
-      findBindableNames True (n :: env) used sc
+findBindableNames arg env used (ILam fc rig p mn aty sc)
+    = let env' = case mn of
+                      Nothing => env
+                      Just n => n :: env in
+      findBindableNames True env' used aty ++
+      findBindableNames True env' used sc
 findBindableNames arg env used (IApp fc fn av)
     = findBindableNames False env used fn ++ findBindableNames True env used av
 findBindableNames arg env used (IImplicitApp fc fn n av)
@@ -99,9 +102,11 @@ doBind ns (IPi fc rig p mn aty retty)
                      Just (UN n) => filter (\x => fst x /= n) ns
                      _ => ns in
           IPi fc rig p mn (doBind ns' aty) (doBind ns' retty)
-doBind ns (ILam fc rig p (UN n) aty sc)
-    = let ns' = filter (\x => fst x /= n) ns in
-          ILam fc rig p (UN n) (doBind ns' aty) (doBind ns' sc)
+doBind ns (ILam fc rig p mn aty sc)
+    = let ns' = case mn of
+                     Just (UN n) => filter (\x => fst x /= n) ns
+                     _ => ns in
+          ILam fc rig p mn (doBind ns' aty) (doBind ns' sc)
 doBind ns (IApp fc fn av)
     = IApp fc (doBind ns fn) (doBind ns av)
 doBind ns (IImplicitApp fc fn n av)

@@ -416,14 +416,13 @@ bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
     repName new (App fn arg) 
         = case getFn fn of
                Ref nt fn' =>
-                   case nameEq n fn' of
-                        Nothing => App (repName new fn) (repName new arg)
-                        Just Refl => 
-                           let locs = case lookupDefExact fn' (gamma gam) of
+                   if n == fn'
+                      then let locs = case lookupDefExact fn' (gamma gam) of
                                            Just (Hole i _ _) => i
                                            _ => 0
                                         in
-                               apply new (drop locs (getArgs (App fn arg)))
+                               apply new (map (repName new) (drop locs (getArgs (App fn arg))))
+                      else App (repName new fn) (repName new arg)
                _ => App (repName new fn) (repName new arg)
     repName new (PrimVal y) = PrimVal y
     repName new Erased = Erased
@@ -462,10 +461,12 @@ renameImplicits gam (Bind (PV n) b sc)
     = case lookupDefExact (PV n) gam of
            Just (PMDef _ _ _ _) =>
 --                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
-                    Bind n b (renameImplicits gam (renameTop n sc))
-           _ => Bind n b (renameImplicits gam (renameTop n sc))
+                    Bind n (map (renameImplicits gam) b)
+                           (renameImplicits gam (renameTop n sc))
+           _ => Bind n (map (renameImplicits gam) b)
+                       (renameImplicits gam (renameTop n sc))
 renameImplicits gam (Bind n b sc) 
-    = Bind n b (renameImplicits gam sc)
+    = Bind n (map (renameImplicits gam) b) (renameImplicits gam sc)
 renameImplicits gam t = t
 
 export

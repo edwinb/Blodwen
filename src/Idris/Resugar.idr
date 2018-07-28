@@ -93,8 +93,11 @@ mutual
       = do arg' <- toPTerm tyPrec arg
            ret' <- toPTerm p ret
            bracket p startPrec (PPi emptyFC rig pt n arg' ret')
-  toPTerm p (ILam _ rig pt n arg sc)
-      = do imp <- showImplicits
+  toPTerm p (ILam _ rig pt mn arg sc)
+      = do let n = case mn of
+                        Nothing => UN "_"
+                        Just n' => n'
+           imp <- showImplicits
            arg' <- if imp then toPTerm tyPrec arg
                           else pure (PImplicit emptyFC)
            sc' <- toPTerm p sc

@@ -179,7 +179,7 @@ mutual
            symbol "=>"
            continue indents
            scope <- typeExpr indents
-           pure (ILam () rig Explicit n ty scope)
+           pure (ILam () rig Explicit (Just n) ty scope)
 
   let_ : IndentInfo -> Rule (RawImp ())
   let_ indents

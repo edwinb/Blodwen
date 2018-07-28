@@ -101,13 +101,27 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, n, t
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
                        map (IBindVar fc) (map bindName allmeths))
+          argns = getExplicitArgs 0 ty
+          -- eta expand the RHS so that we put implicits in the right place
           fnclause = PatClause fc (IImplicitApp fc (IVar fc n) 
                                                    (Just (MN "__con" 0))
                                                    conapp)
-                                  (IVar fc (methName n)) 
+                                  (mkLam argns 
+                                    (apply (IVar fc (methName n))
+                                           (map (IVar fc) argns)))
           fndef = IDef fc n [fnclause] in
           [tydecl, fndef]
   where
+    getExplicitArgs : Int -> RawImp FC -> List Name
+    getExplicitArgs i (IPi _ _ Explicit n _ sc)
+        = MN "arg" i :: getExplicitArgs (i + 1) sc
+    getExplicitArgs i (IPi _ _ _ n _ sc) = getExplicitArgs i sc
+    getExplicitArgs i tm = []
+
+    mkLam : List Name -> RawImp FC -> RawImp FC
+    mkLam [] tm = tm
+    mkLam (x :: xs) tm = ILam fc RigW Explicit (Just x) (Implicit fc) (mkLam xs tm)
+
     bindName : Name -> String
     bindName (UN n) = "__bind_" ++ n
     bindName (NS _ n) = bindName n

@@ -42,7 +42,7 @@ mutual
        IVar : annot -> Name -> RawImp annot
        IPi : annot -> RigCount -> PiInfo -> Maybe Name -> 
              (argTy : RawImp annot) -> (retTy : RawImp annot) -> RawImp annot
-       ILam : annot -> RigCount -> PiInfo -> Name -> 
+       ILam : annot -> RigCount -> PiInfo -> Maybe Name -> 
               (argTy : RawImp annot) -> (scope : RawImp annot) -> RawImp annot
        ILet : annot -> RigCount -> Name -> 
               (nTy : RawImp annot) -> (nVal : RawImp annot) -> 
@@ -418,7 +418,7 @@ addBindImps is used (IPi x c y n argTy retTy)
           (IPi x c y n arg' ret', used2)
 addBindImps is used (ILam x c y n argTy scope) 
     = let (arg', used1) = addBindImps is used argTy
-          (scope', used2) = addBindImps (remove (Just n) is) used1 scope in
+          (scope', used2) = addBindImps (remove n is) used1 scope in
           (ILam x c y n arg' scope', used2)
 addBindImps is used (ILet x c n nTy nVal scope) 
     = let (ty', used1) = addBindImps is used nTy

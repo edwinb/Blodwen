@@ -1,5 +1,60 @@
 module Prelude
 
+import public Builtin
+import public PrimIO
+
+{-
+The Prelude is minimal (since it is effectively part of the language 
+specification, this seems to be desirable - we should, nevertheless, aim to
+provide a good selection of base libraries).
+
+As such, it should contain:
+
+- Anything the elaborator can desugar to (e.g. pairs, unit, =)
+- Basic types Bool, Nat, List, Dec, Maybe, Either
+- The most important utility functions: id, the, composition
+- Interfaces for arithmetic and implementations for the primitives and
+  basic types
+- Functor, Applicative, Monad
+- Basic interaction (Console and File IO)
+
+Everything else should be in the base libraries, and imported as required.
+(These guidelines will probably get revised a few times.)
+-}
+
+-- Numerical Operator Precedence
+infix 6 ==, /=, <, <=, >, >=
+infixl 7 <<, >> -- unused
+infixl 8 +, -
+infixl 9 *, /
+
+-- Boolean Operator Precedence
+infixr 4 &&
+infixr 5 ||
+
+-- Applicative/Monad operators
+infixl 1 >>=
+infixl 3 <*>
+infixr 4 <$>
+
+-- Can't do this syntax yet: infixl 9 `div`, `mod`
+
+-----------------------
+-- UTILITY FUNCTIONS --
+-----------------------
+
+public export
+the : (a : Type) -> a -> a
+the _ x = x
+
+public export
+id : a -> a
+id x = x
+
+--------------
+-- BOOLEANS --
+--------------
+
 public export
 data Bool = True | False
 
@@ -7,3 +62,105 @@ public export
 not : Bool -> Bool
 not True = False
 not False = True
+
+
+public export
+(&&) : Bool -> Lazy Bool -> Bool
+(&&) True x = x
+(&&) False x = False
+
+public export
+(||) : Bool -> Lazy Bool -> Bool
+(||) True x = True
+(||) False x = x
+
+public export
+intToBool : Int -> Bool
+intToBool 0 = False
+intToBool x = True
+
+------------------------
+-- Numeric interfaces --
+------------------------
+
+public export
+interface Num ty where
+    (+) : ty -> ty -> ty
+    (*) : ty -> ty -> ty
+    fromInteger : Integer -> ty
+
+public export
+Num Integer where
+    (+) = prim__add_Integer
+    (*) = prim__mul_Integer
+    fromInteger = id
+
+public export
+Num Int where
+    (+) = prim__add_Int
+    (*) = prim__mul_Int
+    fromInteger = prim__cast_IntegerInt
+
+public export
+Num Double where
+    (+) = prim__add_Double
+    (*) = prim__mul_Double
+    fromInteger = prim__cast_IntegerDouble
+
+-----------
+-- NATS ---
+-----------
+
+public export
+data Nat = Z | S Nat
+
+public export
+Num Nat where
+  (+) Z y = y
+  (+) (S k) y = S (k + y)
+
+  (*) Z y = Z
+  (*) (S k) y = y + k * y
+
+  fromInteger x = if intToBool (prim__eq_Integer x 0)
+                     then Z else
+                          S (fromInteger (prim__sub_Integer x 1))
+
+-------------
+-- STRINGS --
+-------------
+
+public export
+(++) : String -> String -> String
+(++) x y = prim__strAppend x y
+
+public export
+length : String -> Nat
+length str = fromInteger (prim__cast_IntInteger (prim__strLength str))
+
+public export
+reverse : String -> String
+reverse = prim__strReverse
+
+---------------------------------
+-- FUNCTOR, APPLICATIVE, MONAD --
+---------------------------------
+
+interface Functor f where
+    map : (a -> b) -> f a -> f b
+
+(<$>) : Functor f => (func : a -> b) -> f a -> f b
+(<$>) func x = map func x
+
+-- TODO: solve problems with inference for constraints and defaults...
+interface Applicative f where
+    pure : a -> f a
+    (<*>) : f (a -> b) -> f a -> f b
+
+interface Monad m where
+    (>>=) : m a -> (a -> m b) -> m b
+    join : m (m a) -> m a
+
+    -- default implementations
+--     (>>=) x f = join (f <$> x)
+    join x = x >>= id

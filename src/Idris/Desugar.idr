@@ -92,8 +92,8 @@ mutual
             pure $ IPi fc rig p mn !(desugar ps argTy) 
                                    !(desugar ps' retTy)
   desugar ps (PLam fc rig p n argTy scope) 
-      = pure $ ILam fc rig p n !(desugar ps argTy) 
-                               !(desugar (n :: ps) scope)
+      = pure $ ILam fc rig p (Just n) !(desugar ps argTy) 
+                                      !(desugar (n :: ps) scope)
   desugar ps (PLet fc rig (PRef _ n) nTy nVal scope [])
       = pure $ ILet fc rig n !(desugar ps nTy) !(desugar ps nVal) 
                              !(desugar (n :: ps) scope)
@@ -139,7 +139,9 @@ mutual
   desugar ps (PPrimVal fc (BI x))
       = pure $ IAlternative fc (UniqueDefault (IPrimVal fc (BI x)))
                                [IPrimVal fc (BI x), 
-                                IPrimVal fc (I (fromInteger x))]
+                                IPrimVal fc (I (fromInteger x)),
+                                IApp fc (IVar fc (UN "fromInteger")) 
+                                        (IPrimVal fc (BI x))]
   desugar ps (PPrimVal fc x) = pure $ IPrimVal fc x
   desugar ps (PQuote fc x) = pure $ IQuote fc !(desugar ps x)
   desugar ps (PUnquote fc x) = pure $ IUnquote fc !(desugar ps x)
@@ -192,12 +194,12 @@ mutual
       = do tm' <- desugar ps tm
            rest' <- expandDo ps topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
-                     (ILam fc RigW Explicit (UN "_") (Implicit fc) rest')
+                     (ILam fc RigW Explicit (Just (UN "_")) (Implicit fc) rest')
   expandDo ps topfc (DoBind fc n tm :: rest)
       = do tm' <- desugar ps tm
            rest' <- expandDo ps topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
-                     (ILam fc RigW Explicit n (Implicit fc) rest')
+                     (ILam fc RigW Explicit (Just n) (Implicit fc) rest')
   expandDo ps topfc (DoBindPat fc pat exp alts :: rest)
       = do pat' <- desugar ps pat
            let (newps, bpat) = bindNames False pat'
@@ -206,7 +208,7 @@ mutual
            let ps' = newps ++ ps
            rest' <- expandDo ps' topfc rest
            pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) exp')
-                    (ILam fc RigW Explicit (MN "_" 0) (Implicit fc)
+                    (ILam fc RigW Explicit (Just (MN "_" 0)) (Implicit fc)
                           (ICase fc (IVar fc (MN "_" 0))
                                (Implicit fc)
                                (PatClause fc bpat rest' 
