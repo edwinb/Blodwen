@@ -33,7 +33,7 @@ mkIfaceData {vars} fc vis env constraints n conName ps dets meths
                     else [NoHints, SearchBy dets] 
           retty = apply (IVar fc n) (map (IVar fc) (map fst ps))
           conty = mkTy Implicit Rig0 (map jname ps) $
-                  mkTy Explicit RigW (constraints ++ map bname meths) retty
+                  mkTy Explicit RigW (map bhere constraints ++ map bname meths) retty
           con = MkImpTy fc conName (bindTypeNames (map fst ps ++ vars) conty) in
           IData fc vis (MkImpData fc n 
                                   (bindTypeNames (map fst ps ++ vars)
@@ -46,20 +46,23 @@ mkIfaceData {vars} fc vis env constraints n conName ps dets meths
     bname : (Name, RawImp FC) -> (Maybe Name, RawImp FC)
     bname (n, t) = (Just n, IBindHere (getAnnot t) t)
 
+    bhere : (Maybe Name, RawImp FC) -> (Maybe Name, RawImp FC)
+    bhere (n, t) = (n, IBindHere (getAnnot t) t)
+
     mkTy : PiInfo -> RigCount ->
            List (Maybe Name, RawImp FC) -> RawImp FC -> RawImp FC
     mkTy imp c [] ret = ret
     mkTy imp c ((n, argty) :: args) ret
         = IPi fc c imp n argty (mkTy imp c args ret)
 
--- Get the implicit arguments for a method declaration, to allow us to build
--- the data declaration
+-- Get the implicit arguments for a method declaration or constraint hint
+-- to allow us to build the data declaration
 getMethDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto i : Ref ImpST (ImpState FC)} ->
               Env Term vars -> NestedNames vars ->
               (params : List (Name, RawImp FC)) ->
-              (FC, Name, RawImp FC) -> (Name, RawImp FC)
+              (FC, n, RawImp FC) -> (n, RawImp FC)
 getMethDecl {vars} env nest params (fc, n, ty)
     = let ty_imp = bindTypeNames (map fst params ++ vars) ty in
           (n, stripParams (map fst params) ty_imp)
@@ -209,8 +212,8 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
 
          elabAsData conName meth_sigs
          elabMethods conName meth_names meth_sigs
-         ds <- traverse (elabDefault meth_decls) defaults
          elabConstraintHints conName meth_names
+         ds <- traverse (elabDefault meth_decls) defaults
 
          ns_meths <- traverse (\mt => do n <- inCurrentNS (fst mt)
                                          pure (n, snd mt)) meth_decls
@@ -227,8 +230,12 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                  List (FC, Name, RawImp FC) ->
                  Core FC ()
     elabAsData conName meth_sigs
-        = do let meths = map (getMethDecl env nest params) meth_sigs
-             let dt = mkIfaceData fc vis env constraints iname conName params 
+        = do -- set up the implicit arguments correctly in the method
+             -- signatures and constraint hints
+             let meths = map (getMethDecl env nest params) meth_sigs
+             let consts = map (getMethDecl env nest params) 
+                              (map (\c => (fc, c)) constraints)
+             let dt = mkIfaceData fc vis env consts iname conName params 
                                   dets meths
              log 10 $ "Methods: " ++ show meths
              processDecls env nest [dt]

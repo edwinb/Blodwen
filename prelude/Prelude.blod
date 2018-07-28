@@ -10,12 +10,14 @@ provide a good selection of base libraries).
 
 As such, it should contain:
 
-- Anything the elaborator can desugar to (e.g. pairs, unit, =)
+- Anything the elaborator can desugar to (e.g. pairs, unit, =, laziness)
 - Basic types Bool, Nat, List, Dec, Maybe, Either
-- The most important utility functions: id, the, composition
+- The most important utility functions: id, the, composition, etc
 - Interfaces for arithmetic and implementations for the primitives and
   basic types
-- Functor, Applicative, Monad
+- Show, Eq, Ord, and implementations for all types in the prelude
+- [Possibly Enum for range syntax?]
+- Functor, Applicative, Monad and related functions
 - Basic interaction (Console and File IO)
 
 Everything else should be in the base libraries, and imported as required.
@@ -37,6 +39,10 @@ infixl 1 >>=
 infixl 3 <*>
 infixr 4 <$>
 
+-- Utility operators
+infixr 9 .
+infixr 0 $
+
 -- Can't do this syntax yet: infixl 9 `div`, `mod`
 
 -----------------------
@@ -51,6 +57,26 @@ public export
 id : a -> a
 id x = x
 
+public export
+const : a -> b -> a
+const x = \value => x
+
+public export
+(.) : (b -> c) -> (a -> b) -> a -> c
+(.) f g = \x => f (g x)
+
+public export
+flip : (f : a -> b -> c) -> b -> a -> c
+flip f x y = f y x
+
+public export
+apply : (a -> b) -> a -> b
+apply f a = f a
+
+public export
+cong : {0 f : t -> u} -> a = b -> f a = f b
+cong Refl = Refl
+
 --------------
 -- BOOLEANS --
 --------------
@@ -62,7 +88,6 @@ public export
 not : Bool -> Bool
 not True = False
 not False = True
-
 
 public export
 (&&) : Bool -> Lazy Bool -> Bool
@@ -152,15 +177,14 @@ interface Functor f where
 (<$>) : Functor f => (func : a -> b) -> f a -> f b
 (<$>) func x = map func x
 
--- TODO: solve problems with inference for constraints and defaults...
-interface Applicative f where
+interface Functor f => Applicative f where
     pure : a -> f a
     (<*>) : f (a -> b) -> f a -> f b
 
-interface Monad m where
+interface Applicative m => Monad m where
     (>>=) : m a -> (a -> m b) -> m b
     join : m (m a) -> m a
 
     -- default implementations
---     (>>=) x f = join (f <$> x)
+    (>>=) x f = join (f <$> x)
     join x = x >>= id

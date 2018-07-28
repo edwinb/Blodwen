@@ -299,7 +299,8 @@ mutual
   desugarDecl ps (PReflect fc tm)
       = pure [IReflect fc !(desugar ps tm)]
   desugarDecl ps (PInterface fc vis cons tn params det conname body)
-      = do cons' <- traverse (\ ntm => do tm' <- desugar ps (snd ntm)
+      = do cons' <- traverse (\ ntm => do tm' <- desugar (ps ++ map fst params)
+                                                         (snd ntm)
                                           pure (fst ntm, tm')) cons
            params' <- traverse (\ ntm => do tm' <- desugar ps (snd ntm)
                                             pure (fst ntm, tm')) params
