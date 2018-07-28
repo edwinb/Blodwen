@@ -1,5 +1,5 @@
 Welcome to TTImp. Good luck.
 Loading cases.tti
 Processing as TTImp
-Blodwen> (Main.Cons Integer 1 (Main.S (Main.S (Main.S Main.Z))) (Main.Cons Integer 2 (Main.S (Main.S Main.Z)) (Main.Cons Integer 3 (Main.S Main.Z) (Main.Cons Integer 4 Main.Z (Main.Nil Integer))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
+Blodwen> (Main.Cons Integer (Main.S (Main.S (Main.S Main.Z))) 1 (Main.Cons Integer (Main.S (Main.S Main.Z)) 2 (Main.Cons Integer (Main.S Main.Z) 3 (Main.Cons Integer Main.Z 4 (Main.Nil Integer))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
 Blodwen> Bye for now!

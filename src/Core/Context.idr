@@ -1031,28 +1031,21 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
 export
 getSearchData : {auto x : Ref Ctxt Defs} ->
                 annot -> Bool -> Name -> Core annot (List Nat, List Name, List Name)
-getSearchData loc False target
-    = do defs <- get Ctxt
-         pure ([], openHints defs, finalAutoHints defs)
-  where
-    finalAutoHints : Defs -> List Name
-    finalAutoHints defs
-        = let hs = autoHints defs in
-              map snd (filter (\t => fst t == False) hs)
-getSearchData loc True target
+getSearchData loc a target
     = do defs <- get Ctxt
          case lookupDefExact target (gamma defs) of
               Just (TCon _ _ _ dets cons) => 
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
-                      pure (dets, openHints defs, hs ++ openAutoHints defs)
+                      pure (if a then dets else [], -- no determining args for defaults
+                            openHints defs, hs ++ openAutoHints defs)
               _ => throw (UndefinedName loc target)
   where
     openAutoHints : Defs -> List Name
     openAutoHints defs
         = let hs = autoHints defs in
-              map snd (filter (\t => fst t == True) hs)
+              map snd (filter (\t => fst t == a) hs)
 
 export
 setDetermining : {auto x : Ref Ctxt Defs} ->

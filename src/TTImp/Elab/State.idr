@@ -428,6 +428,57 @@ bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
     repName new Erased = Erased
     repName new TType = TType
 
+swapElemH : Elem p (x :: y :: ys) -> Elem p (y :: x :: ys)
+swapElemH Here = There Here
+swapElemH (There Here) = Here
+swapElemH (There (There p)) = There (There p)
+
+swapElem : {xs : List a} ->
+           Elem p (xs ++ x :: y :: ys) -> Elem p (xs ++ y :: x :: ys)
+swapElem {xs = []} prf = swapElemH prf
+swapElem {xs = n :: ns} Here = Here
+swapElem {xs = n :: ns} (There prf) = There (swapElem prf)
+
+-- We've swapped two binders (in 'push' below) so we'd better swap the
+-- corresponding references
+swapVars : Term (vs ++ x :: y :: ys) -> Term (vs ++ y :: x :: ys)
+swapVars (Local prf) = Local (swapElem prf)
+swapVars (Ref nt n) = Ref nt n
+swapVars {vs} (Bind x b sc) 
+    = Bind x (map swapVars b) (swapVars {vs = x :: vs} sc)
+swapVars (App fn arg) = App (swapVars fn) (swapVars arg)
+swapVars (PrimVal t) = PrimVal t
+swapVars Erased = Erased
+swapVars TType = TType
+
+-- Push an explicit pi binder as far into a term as it'll go. That is,
+-- move it under implicit binders that don't depend on it, and stop
+-- when hitting any non-implicit binder
+push : (n : Name) -> Binder (Term vs) -> Term (n :: vs) -> Term vs
+push n b tm@(Bind (PV x) (Pi c Implicit ty) sc) -- only push past 'PV's
+    = case shrinkTerm ty (DropCons SubRefl) of
+           Nothing => -- needs explicit pi, do nothing
+                      Bind n b tm
+           Just ty' => Bind (PV x) (Pi c Implicit ty') 
+                            (push n (map weaken b) (swapVars {vs = []} sc))
+push n b tm = Bind n b tm
+
+-- Move any implicit arguments as far to the left as possible - this helps
+-- with curried applications
+-- We only do this for variables named 'PV', since they are the unbound
+-- implicits, and we don't want to move any given by the programmer
+liftImps : ImplicitMode -> (Term vars, Term vars) -> (Term vars, Term vars)
+liftImps (PI _) (tm, TType) = (liftImps' tm, TType)
+  where
+    liftImps' : Term vars -> Term vars
+    liftImps' (Bind (PV n) (Pi c Implicit ty) sc) 
+        = Bind (PV n) (Pi c Implicit ty) (liftImps' sc)
+    liftImps' (Bind n (Pi c p ty) sc)
+        = push n (Pi c p ty) (liftImps' sc)
+    liftImps' tm = tm
+liftImps _ x = x
+
+
 export
 bindImplicits : ImplicitMode ->
                 Defs -> Env Term vars ->
@@ -435,13 +486,13 @@ bindImplicits : ImplicitMode ->
                 List (Name, RigCount) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
 bindImplicits {vars} mode gam env hs asvs tm ty 
-   = bindImplVars 0 mode gam env (map nHoles hs) asvs
+   = liftImps mode $ bindImplVars 0 mode gam env (map nHoles hs) asvs
                              (normaliseHoles gam env tm)
                              (normaliseHoles gam env ty)
   where
     nHoles : (Name, Term vars) -> (Name, Term vars)
     nHoles (n, ty) = (n, normaliseHoles gam env ty)
-
+   
 export
 bindTopImplicits : ImplicitMode -> Defs -> Env Term vars ->
                    List (Name, ClosedTerm) -> 

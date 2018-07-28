@@ -71,11 +71,11 @@ const : a -> b -> a
 const x = \value => x
 
 public export
-(.) : forall a,b,c . (b -> c) -> (a -> b) -> a -> c
+(.) : (b -> c) -> (a -> b) -> a -> c
 (.) f g = \x => f (g x)
 
 public export
-flip : forall a,b,c . (f : a -> b -> c) -> b -> a -> c
+flip : (f : a -> b -> c) -> b -> a -> c
 flip f x y = f y x
 
 public export

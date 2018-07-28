@@ -13,6 +13,10 @@ what exists of it so far:
 
 You'll need to set your `PATH` to `$PREFIX/bin`
 
+Note: If you edit `blodwen.ipkg` to use the `opts` with optimisation set
+(`--cg-opt -O2`) you'll find it runs about twice as fast, at the cost of
+taking a couple of minutes to generate code.
+
 I make no promises how well this works yet, or even if it'll work at all. 
 Good luck :).
 

@@ -72,6 +72,10 @@ namespace List
     test n = posi (S n) (Cons n (Cons (S n) (Cons n Nil))) %search;
 
     public export
+    testa : Nat -> Nat;
+    testa n = posa (S n) (Cons n (Cons (S n) (Cons n Nil)));
+
+    public export
     test2 : Int -> (inp : Nat) -> Int -> Nat;
     test2 = %search; -- ?help2;
 
@@ -82,3 +86,9 @@ namespace List
     public export
     test3 : (a : Type) -> mkTy a;
     test3 = %search; -- ?help3;
+   
+    the : (a : Type) -> a -> a
+    the _ x = x
+
+    foo : Nat
+    foo = posa (S Z) (Cons Z (Cons (S Z) (Cons (S (S Z)) Nil)))
