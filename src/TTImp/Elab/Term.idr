@@ -193,12 +193,12 @@ mutual
            = Bind n (Let c a ty) (useVars (map weaken as) sc)
       useVars _ sc = sc -- Can't happen?
   checkImp rigc process elabinfo env nest (IPi loc rigp plicity Nothing ty retTy) expected 
-      = do n <- genName "pi"
+      = do n <- genVarName "pi"
            checkPi rigc process elabinfo loc env nest rigp plicity (dropNS n) ty retTy expected
   checkImp rigc process elabinfo env nest (IPi loc rigp plicity (Just n) ty retTy) expected 
       = checkPi rigc process elabinfo loc env nest rigp plicity n ty retTy expected
   checkImp rigc process elabinfo env nest (ILam loc rigl plicity Nothing ty scope) expected
-      = do n <- genName "lam"
+      = do n <- genVarName "lam"
            checkLam (bindRig rigc) process elabinfo loc env nest rigl plicity n ty scope expected
   checkImp rigc process elabinfo env nest (ILam loc rigl plicity (Just n) ty scope) expected
       = checkLam (bindRig rigc) process elabinfo loc env nest rigl plicity n ty scope expected
@@ -247,7 +247,14 @@ mutual
                 _ => checkExp rigc process loc elabinfo env nest (apply restm imps) 
                               (quote (noGam gam) env ty) expected
   checkImp rigc process elabinfo env nest (ISearch loc depth) Nothing
-      = throw (InternalError "Trying to search for a term with an unknown type")
+      = do est <- get EST
+           -- We won't be able to search for this until we know the type,
+           -- but make a hole for it anyway and we'll come back to it
+           t <- addHole loc env TType
+           let expected = mkConstantApp t env
+           n <- addSearchable loc env expected depth (defining est)
+           log 5 $ "Added search (invented type) for " ++ show expected
+           pure (mkConstantApp n env, expected)
   checkImp rigc process elabinfo env nest (ISearch loc depth) (Just expected)
       = do est <- get EST
            n <- addSearchable loc env expected depth (defining est)

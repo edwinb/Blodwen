@@ -26,5 +26,8 @@ Things still missing
 --------------------
 
 + Writing error messages as Blodwen expressions, not TT
++ Some high level syntax, notably 'with', 'rewrite', dependent pairs,
+  numeric ranges, comprehensions
++ Cumulativity and totality checking
 + Any kind of interactive editing/IDE mode
 + The rest of this "Things still missing" list

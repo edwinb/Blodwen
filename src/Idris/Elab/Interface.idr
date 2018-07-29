@@ -179,12 +179,12 @@ mkCon (NS ns (UN n)) = NS ns (MN ("__mk" ++ n) 0)
 mkCon n = MN ("__mk" ++ show n) 0
 
 updateIfaceSyn : {auto s : Ref Syn SyntaxInfo} ->
-                 Name -> Name -> List Name -> 
+                 Name -> Name -> List Name -> List (RawImp FC) ->
                  List (Name, RawImp FC) -> List (Name, List (ImpClause FC)) ->
                  Core FC ()
-updateIfaceSyn iname cn ps ms ds
+updateIfaceSyn iname cn ps cs ms ds
     = do syn <- get Syn
-         let info = MkIFaceInfo cn ps ms ds
+         let info = MkIFaceInfo cn ps cs ms ds
          put Syn (record { ifaces $= addCtxt iname info } syn)
 
 export
@@ -218,7 +218,9 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
          ns_meths <- traverse (\mt => do n <- inCurrentNS (fst mt)
                                          pure (n, snd mt)) meth_decls
          ns_iname <- inCurrentNS iname
-         updateIfaceSyn ns_iname conName (map fst params) ns_meths ds
+         updateIfaceSyn ns_iname conName 
+                        (map fst params) (map snd constraints)
+                        ns_meths ds
   where
     nameCons : Int -> List (Maybe Name, RawImp FC) -> List (Name, RawImp FC)
     nameCons i [] = []

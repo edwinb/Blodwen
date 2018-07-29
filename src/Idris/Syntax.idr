@@ -365,24 +365,27 @@ record IFaceInfo where
   constructor MkIFaceInfo
   iconstructor : Name
   params : List Name
+  parents : List (RawImp FC)
   methods : List (Name, RawImp FC) 
      -- ^ name and desugared type (without constraint)
   defaults : List (Name, List (ImpClause FC))
 
 export
 TTC FC IFaceInfo where
-  toBuf b (MkIFaceInfo ic ps ms ds)
+  toBuf b (MkIFaceInfo ic ps cs ms ds)
       = do toBuf b ic
            toBuf b ps
+           toBuf b cs
            toBuf b ms
            toBuf b ds
 
   fromBuf s b
       = do ic <- fromBuf s b
            ps <- fromBuf s b
+           cs <- fromBuf s b
            ms <- fromBuf s b
            ds <- fromBuf s b
-           pure (MkIFaceInfo ic ps ms ds)
+           pure (MkIFaceInfo ic ps cs ms ds)
 
 public export
 record SyntaxInfo where

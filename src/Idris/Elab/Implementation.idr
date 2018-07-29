@@ -166,6 +166,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
          log 3 $ "Found interface " ++ show cn ++ " : "
                  ++ show (normaliseHoles defs [] ity)
                  ++ " with params: " ++ show (params cdata)
+                 ++ " and parents: " ++ show (parents cdata)
                  ++ " using implicits: " ++ show impsp
                  ++ " and methods: " ++ show (methods cdata) ++ "\n"
                  ++ "Constructor: " ++ show (iconstructor cdata)
@@ -204,7 +205,11 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
          let con = iconstructor cdata
          let ilhs = impsApply (IVar fc impName) 
                               (map (\x => (UN x, IBindVar fc x)) impsp)
-         let irhs = apply (IVar fc con) (map (mkMethField impsp) (map Basics.snd fns))
+         -- RHS is the constructor applied to a search for the necessary
+         -- parent constraints, then the method implementations
+         let irhs = apply (IVar fc con)
+                          (map (const (ISearch fc 500)) (parents cdata)
+                           ++ map (mkMethField impsp) (map Basics.snd fns))
          let impFn = IDef fc impName [PatClause fc ilhs irhs]
          log 5 $ "Implementation record: " ++ show impFn
          traverse (processDecl env nest) [impFn]

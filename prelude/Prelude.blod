@@ -169,26 +169,78 @@ intToBool x = True
 -- ALGEBRA --
 -------------
 
+public export
 interface Semigroup ty where
     (<+>) : ty -> ty -> ty
 
+public export
 interface Semigroup ty => Monoid ty where
     neutral : ty
+
+------------------------
+-- EQUALITY, ORDERING --
+------------------------
+
+public export
+interface Eq ty where
+  (==) : ty -> ty -> Bool
+  (/=) : ty -> ty -> Bool
+
+  x == y = not (x /= y)
+  x /= y = not (x == y)
+
+public export
+data Ordering = LT | EQ | GT
+
+public export
+Eq Ordering where
+    LT == LT = True
+    EQ == EQ = True
+    GT == GT = True
+    _  == _  = False
+
+public export
+interface Eq ty => Ord ty where
+    constructor MkOrd
+
+    compare : ty -> ty -> Ordering
+
+    (<) : ty -> ty -> Bool
+    (<) x y = compare x y == LT
+    
+    (>) : ty -> ty -> Bool
+    (>) x y = compare x y == GT
+
+    (<=) : ty -> ty -> Bool
+    (<=) x y = compare x y /= GT
+
+    (>=) : ty -> ty -> Bool
+    (>=) x y = compare x y /= LT
+
+    max : ty -> ty -> ty
+    max x y = if x > y then x else y
+
+    min : ty -> ty -> ty
+    min x y = if (x < y) then x else y
 
 ---------------------------------
 -- FUNCTOR, APPLICATIVE, MONAD --
 ---------------------------------
 
+public export
 interface Functor f where
     map : (a -> b) -> f a -> f b
 
+public export
 (<$>) : Functor f => (func : a -> b) -> f a -> f b
 (<$>) func x = map func x
 
+public export
 interface Functor f => Applicative f where
     pure : a -> f a
     (<*>) : f (a -> b) -> f a -> f b
 
+public export
 interface Applicative m => Monad m where
     (>>=) : m a -> (a -> m b) -> m b
     join : m (m a) -> m a
@@ -201,32 +253,41 @@ interface Applicative m => Monad m where
 -- FOLDABLE, TRAVERSABLE --
 ---------------------------
 
+public export
 interface Foldable (t : Type -> Type) where
   foldr : (func : elem -> acc -> acc) -> (init : acc) -> (input : t elem) -> acc
   foldl : (func : acc -> elem -> acc) -> (init : acc) -> (input : t elem) -> acc
   foldl f z t = foldr (flip (.) . flip f) id t z
 
+public export
 concat : (Foldable t, Monoid a) => t a -> a
 concat = foldr (<+>) neutral
 
+public export
 concatMap : (Foldable t, Monoid m) => (a -> m) -> t a -> m
 concatMap f = foldr ((<+>) . f) neutral
 
+public export
 and : Foldable t => t (Lazy Bool) -> Bool
 and = foldl (&&) True
 
+public export
 or : Foldable t => t (Lazy Bool) -> Bool
 or = foldl (||) False
 
+public export
 any : Foldable t => (a -> Bool) -> t a -> Bool
 any p = foldl (\x,y => x || p y) False
 
+public export
 all : Foldable t => (a -> Bool) -> t a -> Bool
 all p = foldl (\x,y => x && p y)  True
 
+public export
 sum : (Foldable t, Num a) => t a -> a
 sum = foldr (+) (fromInteger 0)
 
+public export
 product : (Foldable t, Num a) => t a -> a
 product = foldr (*) (fromInteger 1)
 
@@ -248,6 +309,19 @@ Num Nat where
   fromInteger x = if intToBool (prim__eq_Integer x 0)
                      then Z else
                           S (fromInteger (prim__sub_Integer x 1))
+
+public export
+Eq Nat where
+  Z == Z = True
+  S j == S k = j == k
+  _ == _ = False
+
+public export
+Ord Nat where
+  compare Z Z = EQ
+  compare Z (S k) = LT
+  compare (S k) Z = GT
+  compare (S j) (S k) = compare j k
 
 -------------
 -- STRINGS --
@@ -279,7 +353,32 @@ namespace List
     [] ++ ys = ys
     (x :: xs) ++ ys = x :: xs ++ ys
 
+public export
 Functor List where
   map f [] = []
   map f (x :: xs) = f x :: map f xs
+
+----------
+-- SHOW --
+----------
+
+public export
+data Prec = Open | Equal | Dollar | Backtick | User Nat | PrefixMinus | App
+
+public export
+precCon : Prec -> Integer
+precCon Open        = 0
+precCon Equal       = 1
+precCon Dollar      = 2
+precCon Backtick    = 3
+precCon (User n)    = 4
+precCon PrefixMinus = 5
+precCon App         = 6
+
+interface Show ty where
+  show : (x : ty) -> String
+  show x = showPrec Open x
+
+  showPrec : (d : Prec) -> (x : ty) -> String
+  showPrec _ x = show x
 
