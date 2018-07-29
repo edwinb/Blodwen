@@ -23,12 +23,12 @@ processFnOpt : {auto c : Ref Ctxt Defs} ->
                annot -> Name -> FnOpt -> Core annot ()
 processFnOpt loc ndef Inline 
     = setFlag loc ndef Inline
-processFnOpt loc ndef Hint 
+processFnOpt loc ndef (Hint d)
     = do ctxt <- get Ctxt
          case lookupTyExact ndef (gamma ctxt) of
               Nothing => throw (UndefinedName loc ndef)
               Just ty => do target <- getRetTy loc ctxt (nf ctxt [] ty)
-                            addHintFor loc target ndef
+                            addHintFor loc target ndef d
 processFnOpt loc ndef (GlobalHint a)
     = addGlobalHint loc a ndef
 processFnOpt loc ndef ExternFn

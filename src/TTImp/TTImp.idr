@@ -112,8 +112,10 @@ mutual
   public export
   data FnOpt : Type where
        Inline : FnOpt
-       Hint : FnOpt
-       -- 'always' means always use this in search. If not set, it is only
+       -- Flag means the hint is a direct hint, not a function which might
+       -- find the result (e.g. chasing parent interface dictionaries)
+       Hint : Bool -> FnOpt
+       -- flag means always use this in search. If not set, it is only
        -- used as a hint if all else fails (i.e. a default)
        GlobalHint : Bool -> FnOpt
        ExternFn : FnOpt
@@ -121,7 +123,7 @@ mutual
   export
   Eq FnOpt where
     Inline == Inline = True
-    Hint == Hint = True
+    (Hint x) == (Hint y) = x == y
     (GlobalHint x) == (GlobalHint y) = x == y
     ExternFn == ExternFn = True
     _ == _ = False
@@ -680,14 +682,14 @@ mutual
   export
   TTC annot FnOpt where
     toBuf b Inline = tag 0
-    toBuf b Hint = tag 1
+    toBuf b (Hint t) = do tag 1; toBuf b t
     toBuf b (GlobalHint t) = do tag 2; toBuf b t
     toBuf b ExternFn = tag 3
 
     fromBuf s b
         = case !getTag of
                0 => pure Inline
-               1 => pure Hint
+               1 => do t <- fromBuf s b; pure (Hint t)
                2 => do t <- fromBuf s b; pure (GlobalHint t)
                3 => pure ExternFn
                _ => corrupt "FnOpt"

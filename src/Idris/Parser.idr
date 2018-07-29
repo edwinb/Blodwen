@@ -710,7 +710,7 @@ namespaceDecl fname indents
 fnOpt : Rule FnOpt
 fnOpt
     = do exactIdent "hint"
-         pure Hint
+         pure (Hint True)
   <|> do exactIdent "globalhint"
          pure (GlobalHint True)
   <|> do exactIdent "defaulthint"

@@ -264,9 +264,17 @@ concreteDets {vars} loc env ty i ds (cl :: cs)
 checkConcreteDets : {auto c : Ref Ctxt Defs} ->
                     {auto u : Ref UST (UState annot)} ->
                     annot -> Bool -> NF [] -> NF [] -> Core annot ()
+-- Look inside pairs first
+checkConcreteDets loc defaults ty (NTCon pn t ar [xty, yty])
+    = do defs <- get Ctxt
+         if isPairType pn defs
+            then do checkConcreteDets loc defaults ty (evalClosure defs xty)
+                    checkConcreteDets loc defaults ty (evalClosure defs yty)
+            else do sd <- getSearchData loc (not defaults) pn
+                    concreteDets loc [] ty 0 (detArgs sd) [xty, yty]
 checkConcreteDets loc defaults ty (NTCon n t ar args)
-    = do (dets, _, _) <- getSearchData loc (not defaults) n
-         concreteDets loc [] ty 0 dets args
+    = do sd <- getSearchData loc (not defaults) n
+         concreteDets loc [] ty 0 (detArgs sd) args
 checkConcreteDets loc defaults ty (NBind n (Pi _ _ _) scfn)
     = checkConcreteDets loc defaults ty (scfn (toClosure False [] Erased))
 checkConcreteDets _ _ _ _ = pure ()
@@ -289,7 +297,9 @@ searchType loc defaults depth trying env defining (NBind n (Pi c info ty) scfn)
 searchType loc defaults depth trying env defining ty@(NTCon n t ar args)
     = do gam <- get Ctxt
          if length args == ar
-           then do (dets, allOpens, allCons) <- getSearchData loc (not defaults) n
+           then do sd <- getSearchData loc (not defaults) n
+                   let (dets, allOpens, allCons, chasers) =
+                          (detArgs sd, globalHints sd, directHints sd, indirectHints sd)
                    let opens = filter (/=defining) allOpens
                    let cons = filter (/=defining) allCons
                    log 5 $ "Hints for " ++ show n ++ " " ++ show defaults ++ " : " ++ show cons
@@ -298,12 +308,17 @@ searchType loc defaults depth trying env defining ty@(NTCon n t ar args)
                    -- or *Exactly one* of the open hints
                    -- or, only if there are no open hints,
                    --     *Exactly one* of the other hints
+                   -- or, finally, try chasing indirect hints
                    try (searchLocal loc defaults depth trying env (quote (noGam gam) env ty) defining)
                        (handleError 
-                         (searchNames loc defaults depth trying env ty defining opens)
-                         (\err => if ambig err
-                                     then throw err
-                                     else searchNames loc defaults depth trying env ty defining cons))
+                         (handleError 
+                           (searchNames loc defaults depth trying env ty defining opens)
+                           (\err => if ambig err
+                                       then throw err
+                                       else searchNames loc defaults depth trying env ty defining cons))
+                           (\err => if ambig err
+                                       then throw err
+                                       else searchNames loc defaults depth trying env ty defining chasers))
            else throw (CantSolveGoal loc env (quote gam env ty))
   where
     ambig : Error annot -> Bool

@@ -47,8 +47,9 @@ export
 Reify FnOpt where
   reify defs (NDCon (NS ["Reflect"] (UN "Inline")) _ _ [])
       = pure Inline
-  reify defs (NDCon (NS ["Reflect"] (UN "Hint")) _ _ [])
-      = pure Hint
+  reify defs (NDCon (NS ["Reflect"] (UN "Hint")) _ _ [t])
+      = do t' <- reify defs (evalClosure defs t)
+           pure (Hint t')
   reify defs (NDCon (NS ["Reflect"] (UN "GlobalHint")) _ _ [t])
       = do t' <- reify defs (evalClosure defs t)
            pure (GlobalHint t')
@@ -59,7 +60,9 @@ Reify FnOpt where
 export
 Reflect FnOpt where
   reflect defs env Inline = getCon defs (NS ["Reflect"] (UN "Inline"))
-  reflect defs env Hint = getCon defs (NS ["Reflect"] (UN "Hint"))
+  reflect defs env (Hint t) 
+      = do t' <- reflect defs env t
+           appCon defs (NS ["Reflect"] (UN "Hint")) [t']
   reflect defs env (GlobalHint t) 
       = do t' <- reflect defs env t
            appCon defs (NS ["Reflect"] (UN "GlobalHint")) [t']

@@ -149,7 +149,7 @@ getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, co
           fty = IPi fc RigW Explicit Nothing ity con
           ty_imp = bindTypeNames vars fty 
           hintname = MN ("__" ++ show iname ++ "_" ++ show con) 0
-          tydecl = IClaim fc vis [Inline, Hint] (MkImpTy fc hintname ty_imp)
+          tydecl = IClaim fc vis [Inline, Hint False] (MkImpTy fc hintname ty_imp)
           conapp = apply (IVar fc cname)
                       (map (IBindVar fc) (map bindName constraints) ++
                        map (const (Implicit fc)) meths) 

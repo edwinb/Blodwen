@@ -154,7 +154,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
         
          traverse (processDataOpt loc n) dopts
          when (not (NoHints `elem` dopts)) $
-              do traverse (addHintFor loc n) (map conName cons)
+              do traverse (\x => addHintFor loc n x True) (map conName cons)
                  pure ()
          addToSave n
 

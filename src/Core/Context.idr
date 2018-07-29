@@ -245,23 +245,26 @@ TTC annot Def where
              _ => corrupt "Def"
 
 public export
-data DefFlag = TypeHint Name | GlobalHint Bool | Inline
+data DefFlag 
+    = TypeHint Name Bool -- True == direct hint
+    | GlobalHint Bool -- True == always search (not a default hint)
+    | Inline
 
 export
 Eq DefFlag where
-    (==) (TypeHint ty) (TypeHint ty') = ty == ty'
+    (==) (TypeHint ty x) (TypeHint ty' y) = ty == ty' && x == y
     (==) (GlobalHint x) (GlobalHint y) = x == y
     (==) Inline Inline = True
     (==) _ _ = False
 
 TTC annot DefFlag where
-  toBuf b (TypeHint x) = do tag 0; toBuf b x
+  toBuf b (TypeHint x y) = do tag 0; toBuf b x; toBuf b y
   toBuf b (GlobalHint t) = do tag 1; toBuf b t
   toBuf b Inline = tag 2
 
   fromBuf s b 
       = case !getTag of
-             0 => do x <- fromBuf s b; pure (TypeHint x)
+             0 => do x <- fromBuf s b; y <- fromBuf s b; pure (TypeHint x y)
              1 => do t <- fromBuf s b; pure (GlobalHint t)
              2 => pure Inline
              _ => corrupt "DefFlag"
@@ -339,7 +342,7 @@ record Defs where
       autoHints : List (Bool, Name) -- global auto hints.
                   -- boolean flag means whether to always run 'True' or just
                   -- at the end to resolve defaults 'False'
-      typeHints : Context (List Name) -- type name hints
+      typeHints : Context (List (Name, Bool)) -- type name hints
       openHints : List Name -- global hints just for this module; prioritised
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
@@ -1024,13 +1027,22 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
              let gam' = addCtxt n condef gam
              addDataConstructors (tag + 1) cs gam'
 
+public export
+record SearchData where
+  constructor MkSearchData
+  detArgs : List Nat -- determining argument positions
+  globalHints : List Name -- global (non type specific) hints
+  directHints : List Name -- type name hints
+  indirectHints : List Name -- hints for a type 'b', with a type of the form 'a -> b'
+
 -- Get the auto search data for a name. That's: determining arguments
 -- (the first element), the open hints (the second element) 
 -- and all the other names that might solve a goal
 -- of the given type (constructors, local hints, global hints, in that order)
 export
 getSearchData : {auto x : Ref Ctxt Defs} ->
-                annot -> Bool -> Name -> Core annot (List Nat, List Name, List Name)
+                annot -> Bool -> Name -> 
+                Core annot SearchData
 getSearchData loc a target
     = do defs <- get Ctxt
          case lookupDefExact target (gamma defs) of
@@ -1038,11 +1050,16 @@ getSearchData loc a target
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
-                      pure (if a then (dets, openHints defs, hs)
+                      pure (if a then MkSearchData dets (openHints defs) 
+                                      (map fst (filter direct hs))
+                                      (map fst (filter (not . direct) hs))
                                  -- no determining args for defaults
-                                 else ([], [], openAutoHints defs))
+                                 else MkSearchData [] [] (openAutoHints defs) [])
               _ => throw (UndefinedName loc target)
   where
+    direct : (Name, Bool) -> Bool
+    direct = snd
+
     openAutoHints : Defs -> List Name
     openAutoHints defs
         = let hs = autoHints defs in
@@ -1176,25 +1193,21 @@ isTotal loc n
 
 
 export
-addToTypeHints : Name -> Name -> Defs -> Defs
-addToTypeHints ty hint defs
-    = let hs : List Name
+addToTypeHints : Name -> Name -> Bool -> Defs -> Defs
+addToTypeHints ty hint direct defs
+    = let hs : List (Name, Bool)
              = case lookupCtxtExact ty (typeHints defs) of
                     Nothing => []
                     Just ns => ns in
-          record { typeHints $= addCtxt ty (hint :: hs) } defs
+          record { typeHints $= addCtxt ty ((hint, direct) :: hs) } defs
 
 export
 addHintFor : {auto x : Ref Ctxt Defs} ->
-					   annot -> Name -> Name -> Core annot ()
-addHintFor loc ty hint
+					   annot -> Name -> Name -> Bool -> Core annot ()
+addHintFor loc ty hint direct
     = do defs <- get Ctxt
-         let hs : List Name
-                = case lookupCtxtExact ty (typeHints defs) of
-                       Nothing => []
-                       Just ns => ns
-         put Ctxt (addToTypeHints ty hint defs)
-         setFlag loc hint (TypeHint ty)
+         put Ctxt (addToTypeHints ty hint direct defs)
+         setFlag loc hint (TypeHint ty direct)
 
 export
 addGlobalHint : {auto x : Ref Ctxt Defs} ->
@@ -1223,8 +1236,8 @@ processFlags loc (n, def)
          pure ()
   where
     processFlag : DefFlag -> Core annot ()
-    processFlag (TypeHint ty)
-        = addHintFor loc ty n
+    processFlag (TypeHint ty d)
+        = addHintFor loc ty n d
     processFlag (GlobalHint t)
         = addGlobalHint loc t n
     processFlag _ = pure () 

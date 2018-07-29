@@ -90,10 +90,11 @@ stMain opts
          case fname of
               Nothing => readPrelude
               Just f => buildAll f
-         putStrLnQ "Welcome to Blodwen. Good luck."
 
          doRepl <- postOptions opts
-         when doRepl $ repl {c} {u}
+         when doRepl $ 
+              do putStrLnQ "Welcome to Blodwen. Good luck."
+                 repl {c} {u}
 
 -- Run any options (such as --version or --help) which imply printing a
 -- message then exiting. Returns wheter the program should continue

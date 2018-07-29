@@ -67,8 +67,8 @@ processFlags : Name -> List DefFlag -> Defs -> Defs
 processFlags n [] defs = defs
 processFlags n (GlobalHint t :: fs) defs
   = processFlags n fs (record { autoHints $= ((t, n) ::) } defs)
-processFlags n (TypeHint ty :: fs) defs
-  = processFlags n fs (addToTypeHints ty n defs)
+processFlags n (TypeHint ty d :: fs) defs
+  = processFlags n fs (addToTypeHints ty n d defs)
 processFlags n (Inline :: fs) defs = processFlags n fs defs
 
 -- For every name (from 'toSave' in defs), add its definition and any

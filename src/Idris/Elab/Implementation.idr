@@ -185,7 +185,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
          -- given when using named implementations
          --    (cs : Constraints) -> Impl params
          -- Don't make it a hint if it's a named implementation
-         let opts = maybe [Inline, Hint] (const [Inline]) impln
+         let opts = maybe [Inline, Hint True] (const [Inline]) impln
 
          let impTy = bindTypeNames vars $
                      bindConstraints fc AutoImplicit cons 

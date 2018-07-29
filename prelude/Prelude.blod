@@ -358,6 +358,27 @@ Functor List where
   map f [] = []
   map f (x :: xs) = f x :: map f xs
 
+public export
+Semigroup (List a) where
+  (<+>) = (++)
+
+public export
+Monoid (List a) where
+  neutral = []
+
+public export
+Foldable List where
+  foldr c n [] = n
+  foldr c n (x::xs) = c x (foldr c n xs)
+
+  foldl f q [] = q
+  foldl f q (x::xs) = foldl f (f q x) xs
+
+public export
+Applicative List where
+  pure x = [x]
+  fs <*> vs = concatMap (\f => map f vs) fs
+
 ----------
 -- SHOW --
 ----------
