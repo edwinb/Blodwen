@@ -43,10 +43,11 @@ infixr 5 ||
 -- List and String operators
 infixr 7 ::, ++
 
--- Applicative/Monad operators
+-- Functor/Applicative/Monad/Algebra operators
 infixl 1 >>=
 infixl 3 <*>
 infixr 4 <$>
+infixl 6 <+>
 
 -- Utility operators
 infixr 9 .
@@ -190,6 +191,39 @@ interface Eq ty where
   x /= y = not (x == y)
 
 public export
+Eq () where
+  _ == _ = True
+
+public export
+Eq Bool where
+  True == True = True
+  False == False = False
+
+public export
+Eq Int where
+  x == y = intToBool (prim__eq_Int x y)
+
+public export
+Eq Integer where
+  x == y = intToBool (prim__eq_Integer x y)
+
+public export
+Eq Double where
+  x == y = intToBool (prim__eq_Double x y)
+
+public export
+Eq Char where
+  x == y = intToBool (prim__eq_Char x y)
+
+public export
+Eq String where
+  x == y = intToBool (prim__eq_String x y)
+
+public export
+Eq a => Eq b => Eq (a, b) where
+  (x1, y1) == (x2, y2) = x1 == x2 && y1 == y2
+
+public export
 data Ordering = LT | EQ | GT
 
 public export
@@ -222,6 +256,68 @@ interface Eq ty => Ord ty where
 
     min : ty -> ty -> ty
     min x y = if (x < y) then x else y
+
+public export
+Ord () where
+  compare _ _ = EQ
+
+public export
+Ord Bool where
+  compare False False = EQ
+  compare False True = LT
+  compare True False = GT
+  compare True True = EQ
+
+public export
+Ord Int where
+  compare x y = if x < y then LT else if x == y then EQ else GT
+
+  (<) x y = intToBool (prim__lt_Int x y)
+  (<=) x y = intToBool (prim__lte_Int x y)
+  (>) x y = intToBool (prim__gt_Int x y)
+  (>=) x y = intToBool (prim__gte_Int x y)
+
+public export
+Ord Integer where
+  compare x y = if x < y then LT else if x == y then EQ else GT
+
+  (<) x y = intToBool (prim__lt_Integer x y)
+  (<=) x y = intToBool (prim__lte_Integer x y)
+  (>) x y = intToBool (prim__gt_Integer x y)
+  (>=) x y = intToBool (prim__gte_Integer x y)
+
+public export
+Ord Double where
+  compare x y = if x < y then LT else if x == y then EQ else GT
+
+  (<) x y = intToBool (prim__lt_Double x y)
+  (<=) x y = intToBool (prim__lte_Double x y)
+  (>) x y = intToBool (prim__gt_Double x y)
+  (>=) x y = intToBool (prim__gte_Double x y)
+
+public export
+Ord String where
+  compare x y = if x < y then LT else if x == y then EQ else GT
+
+  (<) x y = intToBool (prim__lt_String x y)
+  (<=) x y = intToBool (prim__lte_String x y)
+  (>) x y = intToBool (prim__gt_String x y)
+  (>=) x y = intToBool (prim__gte_String x y)
+
+public export
+Ord Char where
+  compare x y = if x < y then LT else if x == y then EQ else GT
+
+  (<) x y = intToBool (prim__lt_Char x y)
+  (<=) x y = intToBool (prim__lte_Char x y)
+  (>) x y = intToBool (prim__gt_Char x y)
+  (>=) x y = intToBool (prim__gte_Char x y)
+
+public export
+Ord a => Ord b => Ord (a, b) where
+  compare (x1, y1) (x2, y2)
+      = if x1 /= x2 then compare x1 x2
+                    else compare y1 y2
 
 ---------------------------------
 -- FUNCTOR, APPLICATIVE, MONAD --
@@ -341,11 +437,84 @@ reverse : String -> String
 reverse = prim__strReverse
 
 -----------
+-- MAYBE --
+-----------
+
+public export
+data Maybe : (ty : Type) -> Type where
+    Nothing : Maybe ty
+    Just : (1 x : ty) -> Maybe ty
+
+public export
+maybe : Lazy b -> Lazy (a -> b) -> Maybe a -> b
+maybe n j Nothing  = n
+maybe {a} {b} n j (Just x) = j x
+
+public export
+Eq a => Eq (Maybe a) where
+  Nothing  == Nothing  = True
+  Nothing  == (Just _) = False
+  (Just _) == Nothing  = False
+  (Just a) == (Just b) = a == b
+
+public export
+Ord a => Ord (Maybe a) where
+  compare Nothing  Nothing  = EQ
+  compare Nothing  (Just _) = LT
+  compare (Just _) Nothing  = GT
+  compare (Just a) (Just b) = compare a b
+
+public export
+Semigroup (Maybe a) where
+  Nothing   <+> m = m
+  (Just x)  <+> _ = Just x
+
+public export
+Monoid (Maybe a) where
+  neutral = Nothing
+
+public export
+Functor Maybe where
+    map f (Just x) = Just (f x)
+    map f Nothing  = Nothing
+
+public export
+Applicative Maybe where
+    pure = Just
+
+    (Just f) <*> (Just a) = Just (f a)
+    _        <*> _        = Nothing
+
+public export
+Monad Maybe where
+    Nothing  >>= k = Nothing
+    (Just x) >>= k = k x
+
+public export
+Foldable Maybe where
+  foldr _ z Nothing  = z
+  foldr f z (Just x) = f x z
+
+-----------
 -- LISTS --
 -----------
 
 public export
 data List a = Nil | (::) a (List a)
+
+public export
+Eq a => Eq (List a) where
+  [] == [] = True
+  x :: xs == y :: ys = x == y && xs == ys
+
+public export
+Ord a => Ord (List a) where
+  compare [] (x :: xs) = LT
+  compare (x :: xs) [] = GT
+  compare (x :: xs) (y ::ys) 
+     = case compare x y of
+            EQ => compare xs ys
+            c => c
 
 namespace List
     public export
@@ -379,6 +548,10 @@ Applicative List where
   pure x = [x]
   fs <*> vs = concatMap (\f => map f vs) fs
 
+public export
+Monad List where
+  m >>= f = concatMap f m
+
 ----------
 -- SHOW --
 ----------
@@ -396,10 +569,39 @@ precCon (User n)    = 4
 precCon PrefixMinus = 5
 precCon App         = 6
 
+public export
 interface Show ty where
   show : (x : ty) -> String
   show x = showPrec Open x
 
   showPrec : (d : Prec) -> (x : ty) -> String
   showPrec _ x = show x
+
+--------
+-- IO --
+--------
+
+public export
+Functor IO where
+  map f io = io_bind io (\b => io_pure (f b))
+
+public export
+Applicative IO where
+    pure x = io_pure x
+    f <*> a = io_bind f (\f' =>
+                io_bind a (\a' =>
+                  io_pure (f' a')))
+
+public export
+Monad IO where
+    b >>= k = io_bind b k
+
+export
+print : Show a => a -> IO ()
+print x = putStr (show x)
+
+export
+printLn : Show a => a -> IO ()
+printLn x = putStrLn (show x)
+
 

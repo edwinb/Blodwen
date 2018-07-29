@@ -116,6 +116,44 @@ mutual
                                         (checkImp rigc process elabinfo env nest tm' exp)
                                         (checkImp rigc process elabinfo env nest forcetm exp)
 
+  -- As check, but all we know about the expected type is that it
+  -- cannot be Delayed, so insert a Force if necessary
+  checkForce : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+               {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+               Reflect annot =>
+               RigCount ->
+               Elaborator annot -> -- the elaborator for top level declarations
+                                   -- used for nested definitions
+               ElabInfo annot -> -- elaboration parameters
+               Env Term vars -> -- bound names (lambda, pi, let)
+               NestedNames vars -> -- locally defined names (arising from nested top level
+                                   -- declarations)
+               (term : RawImp annot) -> -- Term to elaborate
+               Core annot (Term vars, Term vars) 
+  checkForce rigc process elabinfo env nest tm_in
+      = do defs <- get Ctxt
+           handleError
+             (do (ctm, cty) <- check rigc process elabinfo env nest tm_in Nothing
+                 case nf defs env cty of
+                      NTCon n _ _ _ =>
+                          if isDelayType n defs
+                             then throw (InternalError "Need force!")
+                             else pure (ctm, cty)
+                      _ => pure (ctm, cty))
+             (\err =>
+                  case err of
+                       InternalError _ =>
+                           case forceName defs of
+                                Nothing => check rigc process elabinfo env nest tm_in Nothing
+                                Just fn =>
+                                   let loc = getAnnot tm_in in
+                                       check rigc process elabinfo env nest 
+                                         (IApp loc (IVar loc fn)
+                                               (ICoerced loc tm_in))
+                                         Nothing
+                       _ => throw err)
+  
+
   delayError : Defs -> Error annot -> Bool
   delayError defs (CantConvert _ env x y) 
       = headDelay (nf defs env x) || headDelay (nf defs env y)
@@ -813,7 +851,7 @@ mutual
              Maybe (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkApp {vars} rigc process elabinfo loc env nest fn arg expected
-      = do (fntm, fnty) <- check rigc process elabinfo env nest fn Nothing
+      = do (fntm, fnty) <- checkForce rigc process elabinfo env nest fn
            gam <- get Ctxt
            case nf gam env fnty of
                 NBind _ (Pi rigf _ ty) scdone =>

@@ -11,6 +11,10 @@ data IO : Type -> Type where
      MkIO : (1 fn : (1 x : %World) -> IORes a) -> IO a
 
 export
+io_pure : a -> IO a
+io_pure x = MkIO (\w => MkIORes x w)
+
+export
 io_bind : IO a -> (a -> IO b) -> IO b
 io_bind (MkIO fn)
     = \k => MkIO (\w => let MkIORes x' w' = fn w 
