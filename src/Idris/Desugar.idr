@@ -250,6 +250,10 @@ mutual
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
                 Side -> List Name -> Tree FC PTerm -> Core FC (RawImp FC)
+  desugarTree side ps (Inf loc "=" l r) -- special case since '=' is special syntax
+      = do l' <- desugarTree side ps l
+           r' <- desugarTree side ps r
+           pure (IApp loc (IApp loc (IVar loc (UN "Equal")) l') r')
   desugarTree side ps (Inf loc op l r)
       = do l' <- desugarTree side ps l
            r' <- desugarTree side ps r

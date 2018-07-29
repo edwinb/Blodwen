@@ -138,7 +138,7 @@ mutual
                              symbol "=" 
                              r <- opExpr EqOK fname indents
                              end <- location
-                             pure (PEq (MkFC fname start end) l r)
+                             pure (POp (MkFC fname start end) "=" l r)
                      else fail "= not allowed")
                <|> pure l
 
