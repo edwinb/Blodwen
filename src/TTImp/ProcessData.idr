@@ -54,6 +54,13 @@ checkCon : {auto c : Ref Ctxt Defs} ->
            Core annot Constructor
 checkCon elab env nest vis tn (MkImpTy loc cn_in ty_raw)
     = do cn <- inCurrentNS cn_in
+
+         -- Check 'cn' is undefined
+         gam <- get Ctxt
+         case lookupDefTyExact cn (gamma gam) of
+              Just (_, _) => throw (AlreadyDefined loc cn)
+              Nothing => pure ()
+
          ty_imp <- mkBindImps env ty_raw
          (ty, _) <- wrapError (InCon loc cn) $
                       checkTerm elab cn env nest (PI Rig0) InType ty_imp TType

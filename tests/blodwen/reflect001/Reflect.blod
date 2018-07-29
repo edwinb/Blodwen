@@ -23,7 +23,7 @@ data Name = UN String
 
 data Count = M0 | M1 | MW
 
-data PiInfo = Implicit | Explicit | AutoImplicit
+data PiInfo = ImplicitArg | ExplicitArg | AutoImplicit
 
 data TTImp : Type where
      Var : FC -> Name -> TTImp
