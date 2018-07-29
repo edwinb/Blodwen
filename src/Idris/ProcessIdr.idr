@@ -51,7 +51,7 @@ readModule : {auto c : Ref Ctxt Defs} ->
 readModule loc vis reexp imp as
     = do fname <- nsToPath loc imp
          Just (syn, more) <- readFromTTC {extra = SyntaxInfo} loc fname imp as
-              | Nothing => pure () -- already loaded
+              | Nothing => when vis (setVisible imp) -- already loaded, just set visibility
          addImported (imp, reexp, as)
          extendAs imp as syn
          modNS <- getNS
