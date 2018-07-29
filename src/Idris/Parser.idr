@@ -558,30 +558,21 @@ tyDecl fname indents
          atEnd indents
          pure (MkPTy (MkFC fname start end) n ty)
 
-parseRHS : FileName -> FilePos -> IndentInfo -> (lhs : PTerm) -> Rule (Name, PClause)
+parseRHS : FileName -> FilePos -> IndentInfo -> (lhs : PTerm) -> Rule PClause
 parseRHS fname start indents lhs
      = do symbol "="
           commit
           rhs <- expr EqOK fname indents
           ws <- option [] (whereBlock fname)
           atEnd indents
-          fn <- getFn lhs
           end <- location
-          pure (fn, MkPatClause (MkFC fname start end) lhs rhs ws)
+          pure (MkPatClause (MkFC fname start end) lhs rhs ws)
    <|> do keyword "impossible"
           atEnd indents
-          fn <- getFn lhs
           end <- location
-          pure (fn, MkImpossible (MkFC fname start end) lhs)
-  where
-    getFn : PTerm -> EmptyRule Name
-    getFn (PRef _ n) = pure n
-    getFn (PApp _ f a) = getFn f
-    getFn (PImplicitApp _ f _ a) = getFn f
-    getFn _ = fail "Not a function application" 
+          pure (MkImpossible (MkFC fname start end) lhs)
 
-
-clause : FileName -> IndentInfo -> Rule (Name, PClause)
+clause : FileName -> IndentInfo -> Rule PClause
 clause fname indents
     = do start <- location
          lhs <- expr NoEq fname indents
@@ -832,7 +823,7 @@ definition fname indents
     = do start <- location
          nd <- clause fname indents
          end <- location
-         pure (PDef (MkFC fname start end) (fst nd) [snd nd])
+         pure (PDef (MkFC fname start end) [nd])
 
 fixDecl : FileName -> IndentInfo -> Rule (List PDecl)
 fixDecl fname indents
@@ -878,13 +869,16 @@ topDecl fname indents
          pure [d]
 
 -- All the clauses get parsed as one-clause definitions. Collect any
--- neighbouring clauses with the same function name into one definition.
+-- neighbouring clauses into one definition. This might mean merging two
+-- functions which are different, if there are forward declarations,
+-- but we'll split them in Desugar.idr. We can't do this now, because we
+-- haven't resolved operator precedences yet.
 -- Declared at the top.
 -- collectDefs : List PDecl -> List PDecl
 collectDefs [] = []
-collectDefs (PDef annot fn cs :: ds)
-    = let (cs', rest) = spanMap (isClause fn) ds in
-          PDef annot fn (cs ++ cs') :: assert_total (collectDefs rest)
+collectDefs (PDef annot cs :: ds)
+    = let (cs', rest) = spanMap isClause ds in
+          PDef annot (cs ++ cs') :: assert_total (collectDefs rest)
   where
     spanMap : (a -> Maybe (List b)) -> List a -> (List b, List a)
     spanMap f [] = ([], [])
@@ -893,10 +887,10 @@ collectDefs (PDef annot fn cs :: ds)
                                Just y => case spanMap f xs of
                                               (ys, zs) => (y ++ ys, zs)
 
-    isClause : Name -> PDecl -> Maybe (List PClause)
-    isClause n (PDef annot n' cs) 
-        = if n == n' then Just cs else Nothing
-    isClause n _ = Nothing
+    isClause : PDecl -> Maybe (List PClause)
+    isClause (PDef annot cs) 
+        = Just cs 
+    isClause _ = Nothing
 collectDefs (PNamespace annot ns nds :: ds)
     = PNamespace annot ns (collectDefs nds) :: collectDefs ds
 collectDefs (d :: ds)

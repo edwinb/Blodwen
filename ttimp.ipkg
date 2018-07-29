@@ -60,7 +60,7 @@ modules = Compiler.Chez,
 
 sourcedir = src
 executable = ttimp
-opts = "--warnreach --partial-eval"
+opts = "--partial-eval"
 
 main = TTImp.Main
 

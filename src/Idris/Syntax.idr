@@ -186,7 +186,7 @@ mutual
   public export
   data PDecl : Type where
        PClaim : FC -> Visibility -> List FnOpt -> PTypeDecl -> PDecl
-       PDef : FC -> Name -> List PClause -> PDecl
+       PDef : FC -> List PClause -> PDecl
        PData : FC -> Visibility -> PDataDecl -> PDecl
        PReflect : FC -> PTerm -> PDecl
        PInterface : FC -> 

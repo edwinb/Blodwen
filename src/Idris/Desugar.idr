@@ -9,15 +9,16 @@ import Core.Unify
 
 import Data.StringMap
 
-import Utils.Shunting
-
 import Idris.BindImplicits
 import Idris.Syntax
 
 import Idris.Elab.Implementation
 import Idris.Elab.Interface
 
+import Parser.RawImp
 import TTImp.TTImp
+
+import Utils.Shunting
 
 -- Convert high level Idris declarations (PDecl from Idris.Syntax) into
 -- TTImp, recording any high level syntax info on the way (e.g. infix
@@ -304,8 +305,25 @@ mutual
                 List Name -> PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl ps (PClaim fc vis opts ty) 
       = pure [IClaim fc vis opts !(desugarType ps ty)]
-  desugarDecl ps (PDef fc n clauses) 
-      = pure [IDef fc n !(traverse (desugarClause ps False) clauses)]
+  desugarDecl ps (PDef fc clauses) 
+  -- The clauses won't necessarily all be from the same function, so split
+  -- after desugaring, by function name, using collectDefs from RawImp
+      = do cs <- traverse (desugarClause ps False) clauses
+           defs <- traverse toIDef cs
+           pure (collectDefs defs) 
+    where
+      getFn : RawImp FC -> Core FC Name
+      getFn (IVar _ n) = pure n
+      getFn (IApp _ f a) = getFn f
+      getFn (IImplicitApp _ f _ a) = getFn f
+      getFn tm = throw (InternalError (show tm ++ " is not a function application"))
+
+      toIDef : ImpClause FC -> Core FC (ImpDecl FC)
+      toIDef (PatClause fc lhs rhs) 
+          = pure $ IDef fc !(getFn lhs) [PatClause fc lhs rhs]
+      toIDef (ImpossibleClause fc lhs) 
+          = pure $ IDef fc !(getFn lhs) [ImpossibleClause fc lhs]
+
   desugarDecl ps (PData fc vis ddecl) 
       = pure [IData fc vis !(desugarData ps ddecl)]
   desugarDecl ps (PReflect fc tm)

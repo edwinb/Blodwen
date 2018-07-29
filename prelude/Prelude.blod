@@ -239,11 +239,11 @@ data Nat = Z | S Nat
 
 public export
 Num Nat where
-  (+) Z y = y
-  (+) (S k) y = S (k + y)
+  Z + y = y
+  S k + y = S (k + y)
 
-  (*) Z y = Z
-  (*) (S k) y = y + k * y
+  Z * y = Z
+  S k * y = y + k * y
 
   fromInteger x = if intToBool (prim__eq_Integer x 0)
                      then Z else
@@ -256,7 +256,7 @@ Num Nat where
 namespace Strings
     public export
     (++) : String -> String -> String
-    (++) x y = prim__strAppend x y
+    x ++ y = prim__strAppend x y
 
 public export
 length : String -> Nat
@@ -276,8 +276,8 @@ data List a = Nil | (::) a (List a)
 namespace List
     public export
     (++) : List a -> List a -> List a
-    (++) [] ys = ys
-    (++) (x :: xs) ys = x :: xs ++ ys
+    [] ++ ys = ys
+    (x :: xs) ++ ys = x :: xs ++ ys
 
 Functor List where
   map f [] = []

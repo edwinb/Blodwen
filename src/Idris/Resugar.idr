@@ -176,7 +176,7 @@ mutual
   toPDecl (IClaim _ vis opts ty) 
       = pure (Just (PClaim emptyFC vis opts !(toPTypeDecl ty)))
   toPDecl (IDef _ n cs)
-      = pure (Just (PDef emptyFC n !(traverse toPClause cs)))
+      = pure (Just (PDef emptyFC !(traverse toPClause cs)))
   toPDecl (IData _ vis d)
       = pure (Just (PData emptyFC vis !(toPData d)))
   toPDecl (IReflect _ tm)

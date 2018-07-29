@@ -16,7 +16,8 @@ import Debug.Trace
 
 -- Forward declare since they're used in the parser
 topDecl : IndentInfo -> Rule (ImpDecl ())
-collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
+export
+collectDefs : List (ImpDecl annot) -> List (ImpDecl annot)
 
 expandInt : RawImp () -> RawImp ()
 expandInt (IPrimVal () (BI x)) 
@@ -365,9 +366,9 @@ topDecl indents
 -- Declared at the top.
 -- collectDefs : List (ImpDecl ()) -> List (ImpDecl ())
 collectDefs [] = []
-collectDefs (IDef annot fn cs :: ds)
+collectDefs (IDef loc fn cs :: ds)
     = let (cs', rest) = spanMap (isClause fn) ds in
-          IDef annot fn (cs ++ cs') :: assert_total (collectDefs rest)
+          IDef loc fn (cs ++ cs') :: assert_total (collectDefs rest)
   where
     spanMap : (a -> Maybe (List b)) -> List a -> (List b, List a)
     spanMap f [] = ([], [])
@@ -376,8 +377,8 @@ collectDefs (IDef annot fn cs :: ds)
                                Just y => case spanMap f xs of
                                               (ys, zs) => (y ++ ys, zs)
 
-    isClause : Name -> ImpDecl () -> Maybe (List (ImpClause ()))
-    isClause n (IDef annot n' cs) 
+    isClause : Name -> ImpDecl annot -> Maybe (List (ImpClause annot))
+    isClause n (IDef _ n' cs) 
         = if n == n' then Just cs else Nothing
     isClause n _ = Nothing
 collectDefs (INamespace annot ns nds :: ds)
