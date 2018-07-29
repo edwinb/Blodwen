@@ -1038,8 +1038,9 @@ getSearchData loc a target
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
-                      pure (if a then dets else [], -- no determining args for defaults
-                            openHints defs, hs ++ openAutoHints defs)
+                      pure (if a then (dets, openHints defs, hs)
+                                 -- no determining args for defaults
+                                 else ([], [], openAutoHints defs))
               _ => throw (UndefinedName loc target)
   where
     openAutoHints : Defs -> List Name

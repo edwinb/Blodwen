@@ -62,18 +62,22 @@ elabTerm {vars} process defining env nest impmode elabmode tm tyin
 
          -- Final retry of constraints and delayed elaborations
          -- - Solve any constraints, then retry any delayed elaborations
-         -- - Finally, one last attempt at solving constraints, but this
+         -- - Finally, last attempts at solving constraints, but this
          --   is most likely just to be able to display helpful errors
          solveConstraints (case elabmode of
                                 InLHS => InLHS
-                                _ => InTerm) False
+                                _ => InTerm) Normal
          retryAllDelayed
-         -- True flag means "last chance" i.e report error rather than
-         -- postponing again (this pass is primarily about error reporting,
-         -- but might also resolve default hints)
+         -- resolve any default hints
          solveConstraints (case elabmode of
                                 InLHS => InLHS
-                                _ => InTerm) True
+                                _ => InTerm) Defaults
+         -- perhaps resolving defaults helps...
+         -- otherwise, this last go is most likely just to give us more
+         -- helpful errors.
+         solveConstraints (case elabmode of
+                                InLHS => InLHS
+                                _ => InTerm) LastChance
 
          dumpDots
          checkDots

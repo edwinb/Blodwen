@@ -58,7 +58,7 @@ convertErrorS s loc env x y
 export
 search : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
-         annot -> (lastChance : Bool) -> 
+         annot -> (defaults : Bool) -> 
          Nat -> List ClosedTerm -> Name -> Name -> Core annot ClosedTerm
 
 -- try one elaborator; if it fails, try another
@@ -967,11 +967,22 @@ setInvertible loc n
                            Hole locs False _ => Just (Hole locs False True)
                            _ => Nothing)
 
+public export
+data SolveMode = Normal -- during elaboration: unifies and searches
+               | Defaults -- unifies and searches for default hints only
+               | LastChance -- as normal, but any failure throws rather than delays
+
+Eq SolveMode where
+  Normal == Normal = True
+  Defaults == Defaults = True
+  LastChance == LastChance = True
+  _ == _ = False
+
 retryHole : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
-            UnifyMode -> (lastChance : Bool) -> (hole : (annot, Name)) ->
+            UnifyMode -> (smode : SolveMode) -> (hole : (annot, Name)) ->
             Core annot ()
-retryHole mode lastChance (loc, hole)
+retryHole mode smode (loc, hole)
     = do gam <- get Ctxt
          case lookupGlobalExact hole (gamma gam) of
               Nothing => pure ()
@@ -993,9 +1004,11 @@ retryHole mode lastChance (loc, hole)
                                            gam <- get Ctxt
                                            setCtxt (addCtxt hole gdef (gamma gam))
                      BySearch depth fn => 
-                       if lastChance
-                          then do search loc lastChance depth [] fn hole; pure ()
-                          else handleError (do search loc lastChance depth [] fn hole
+                       case smode of
+                            LastChance =>
+                                do search loc False depth [] fn hole; pure ()
+                            _ =>       
+                               handleError (do search loc (smode == Defaults) depth [] fn hole
                                                pure ())
                                -- if it failed due to a determining argument
                                -- being missing, we at least now know that the
@@ -1012,17 +1025,19 @@ retryHole mode lastChance (loc, hole)
 
 retryDelayed : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
-               (lastChance : Bool) -> (hole : (annot, Name)) ->
+               (smode : SolveMode) -> (hole : (annot, Name)) ->
                Core annot Bool
-retryDelayed lastChance (loc, hole)
+retryDelayed smode (loc, hole)
     = do gam <- get Ctxt
          case lookupDefExact hole (gamma gam) of
               Nothing => pure False
               Just (Delayed c) =>
-                   if lastChance
-                      then do rerunDelayed hole c
+                   case smode of
+                        LastChance =>
+                           do rerunDelayed hole c
                               pure True
-                      else try (do rerunDelayed hole c
+                        _ =>
+                           try (do rerunDelayed hole c
                                    pure True)
                                (do log 5 $ "Delayed elaborator failed for " ++ show hole
                                    updateDef hole (const (Just (Context.Delayed c)))
@@ -1035,13 +1050,13 @@ retryDelayed lastChance (loc, hole)
 export
 solveConstraints : {auto c : Ref Ctxt Defs} ->
                    {auto u : Ref UST (UState annot)} ->
-                   UnifyMode -> (lastChance : Bool) -> Core annot ()
-solveConstraints mode lastChance
+                   UnifyMode -> (smode : SolveMode) -> Core annot ()
+solveConstraints mode smode
     = do hs <- getHoleInfo
-         traverse (retryHole mode lastChance) hs
-         -- Question: Another iteration if any holes have been resolved?
+         traverse (retryHole mode smode) hs
+         -- One more iteration if any holes have been resolved
          hs' <- getHoleInfo
-         when (length hs' < length hs) $ solveConstraints mode lastChance
+         when (length hs' < length hs) $ solveConstraints mode smode
          pure ()
 
 export
@@ -1054,7 +1069,7 @@ retryAllDelayed
               [] => pure ()
               _ => do log 5 $ "Running delayed elaborators " ++ show (map snd hs)
                       -- Reverse so that we do oldest first
-                      results <- traverse (retryDelayed False) (reverse hs)
+                      results <- traverse (retryDelayed Normal) (reverse hs)
                       log 5 $ "Finished, results: " ++ show results
                    -- if we made any progress, go around again
                    -- Assumption is that this terminates because the set
@@ -1064,7 +1079,7 @@ retryAllDelayed
                          then retryAllDelayed
                          -- Otherwise one more go just to get the error
                          -- message
-                         else do traverse (retryDelayed True) hs
+                         else do traverse (retryDelayed LastChance) hs
                                  pure ()
 
 export

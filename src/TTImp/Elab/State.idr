@@ -536,7 +536,7 @@ convert loc elabmode env x y
                     vs <- unify umode loc env x y
                     hs' <- getHoleNames
                     when (isNil vs && (length hs' < length hs)) $ 
-                       solveConstraints umode False
+                       solveConstraints umode Normal
                     pure vs)
             (\err => do gam <- get Ctxt 
                         throw (WhenUnifying loc env

@@ -63,10 +63,10 @@ searchIfHole : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
                annot -> Bool -> Nat -> List ClosedTerm ->
                Name -> Name -> Core annot ()
-searchIfHole loc lastChance Z trying defining n = throw (InternalError "Search depth limit reached")
-searchIfHole loc lastChance (S depth) trying defining n
+searchIfHole loc defaults Z trying defining n = throw (InternalError "Search depth limit reached")
+searchIfHole loc defaults (S depth) trying defining n
     = if !(nameIsHole loc n) 
-         then do search loc lastChance depth trying defining n
+         then do search loc defaults depth trying defining n
                  pure ()
          else pure ()
 
@@ -77,7 +77,7 @@ searchName : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Bool -> Nat -> List ClosedTerm ->
              Env Term vars -> NF vars -> Name -> Name -> Core annot (Term vars)
-searchName loc lastChance depth trying env ty defining con
+searchName loc defaults depth trying env ty defining con
     = do gam <- get Ctxt
          case lookupDefTyExact con (gamma gam) of
               Just (DCon tag arity _, cty)
@@ -89,7 +89,7 @@ searchName loc lastChance depth trying env ty defining con
                                               (map snd args)
                         -- Go through the arguments and solve them, if they
                         -- haven't been solved by unification
-                        traverse (searchIfHole loc lastChance depth trying defining) (map fst args)
+                        traverse (searchIfHole loc defaults depth trying defining) (map fst args)
                         pure candidate
               Just (_, cty)
                   => do let nty = normalise gam [] cty
@@ -100,7 +100,7 @@ searchName loc lastChance depth trying env ty defining con
                         let candidate = apply (Ref Func con) (map snd args)
                         -- Go through the arguments and solve them, if they
                         -- haven't been solved by unification
-                        traverse (searchIfHole loc lastChance depth trying defining) (map fst args)
+                        traverse (searchIfHole loc defaults depth trying defining) (map fst args)
                         pure candidate
               _ => throw (CantSolveGoal loc env (quote gam env ty))
 
@@ -154,26 +154,26 @@ searchNames : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               annot -> Bool -> Nat -> List ClosedTerm -> Env Term vars -> NF vars -> 
               Name -> List Name -> Core annot (Term vars)
-searchNames loc lastChance depth trying env ty defining []
+searchNames loc defaults depth trying env ty defining []
     = do gam <- get Ctxt
          throw (CantSolveGoal loc env (quote gam env ty))
-searchNames loc lastChance depth trying env ty defining (n :: ns)
+searchNames loc defaults depth trying env ty defining (n :: ns)
     = do gam <- get Ctxt
          log 5 $ "Searching " ++ show (n :: ns) ++ " for " ++ show (quote gam env ty)
          exactlyOne loc env ty 
-            (map (searchName loc lastChance depth trying env ty defining) (n :: ns))
+            (map (searchName loc defaults depth trying env ty defining) (n :: ns))
 
 searchLocalWith : {auto c : Ref Ctxt Defs} ->
                   {auto u : Ref UST (UState annot)} ->
                   annot -> Bool -> Nat -> List ClosedTerm ->
                   Env Term vars -> List (Term vars, Term vars) ->
                   Term vars -> Name -> Core annot (Term vars)
-searchLocalWith loc lastChance depth trying env [] ty defining
+searchLocalWith loc defaults depth trying env [] ty defining
     = throw (CantSolveGoal loc env ty)
-searchLocalWith {vars} loc lastChance depth trying env ((p, pty) :: rest) ty defining
+searchLocalWith {vars} loc defaults depth trying env ((p, pty) :: rest) ty defining
     = try (do gam <- get Ctxt
               findPos gam p id (nf gam env pty) (nf gam env ty))
-          (searchLocalWith loc lastChance depth trying env rest ty defining)
+          (searchLocalWith loc defaults depth trying env rest ty defining)
   where
     findDirect : Defs -> Term vars -> 
                  (Term vars -> Term vars) ->
@@ -186,7 +186,7 @@ searchLocalWith {vars} loc lastChance depth trying env ((p, pty) :: rest) ty def
              log 1 $ "Success for " ++ show (quote gam env ty) ++
                      " with " ++ show candidate ++
                      " " ++ show (quote gam env appTy)
-             traverse (searchIfHole loc lastChance depth trying defining) (map fst args)
+             traverse (searchIfHole loc defaults depth trying defining) (map fst args)
              pure candidate
              
     findPos : Defs -> Term vars -> 
@@ -219,8 +219,8 @@ searchLocal : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState annot)} ->
           annot -> Bool -> Nat -> List ClosedTerm ->
           Env Term vars -> Term vars -> Name -> Core annot (Term vars)
-searchLocal loc lastChance depth trying env ty defining 
-    = searchLocalWith loc lastChance depth trying env (getAllEnv [] env) ty defining
+searchLocal loc defaults depth trying env ty defining 
+    = searchLocalWith loc defaults depth trying env (getAllEnv [] env) ty defining
 
 
 -- Fail with the given error if any of the determining arguments contain holes
@@ -264,11 +264,11 @@ concreteDets {vars} loc env ty i ds (cl :: cs)
 checkConcreteDets : {auto c : Ref Ctxt Defs} ->
                     {auto u : Ref UST (UState annot)} ->
                     annot -> Bool -> NF [] -> NF [] -> Core annot ()
-checkConcreteDets loc lastChance ty (NTCon n t ar args)
-    = do (dets, _, _) <- getSearchData loc (not lastChance) n
+checkConcreteDets loc defaults ty (NTCon n t ar args)
+    = do (dets, _, _) <- getSearchData loc (not defaults) n
          concreteDets loc [] ty 0 dets args
-checkConcreteDets loc lastChance ty (NBind n (Pi _ _ _) scfn)
-    = checkConcreteDets loc lastChance ty (scfn (toClosure False [] Erased))
+checkConcreteDets loc defaults ty (NBind n (Pi _ _ _) scfn)
+    = checkConcreteDets loc defaults ty (scfn (toClosure False [] Erased))
 checkConcreteDets _ _ _ _ = pure ()
 
 -- Type directed search - take the first thing of the given type it finds using
@@ -277,43 +277,43 @@ searchType : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Bool -> Nat -> List ClosedTerm -> Env Term vars -> Name ->
              NF vars -> Core annot (Term vars)
-searchType loc lastChance depth trying env defining (NBind n (Pi c info ty) scfn)
+searchType loc defaults depth trying env defining (NBind n (Pi c info ty) scfn)
     = do xn <- genName "x"
          gam <- get Ctxt
          let env' : Env Term (n :: _) = Pi c info (quote (noGam gam) env ty) :: env
          let sc = scfn (toClosure False env (Ref Bound xn))
          let tmsc = refToLocal xn n (quote (noGam gam) env sc)
          log 6 $ "Introduced lambda, search for " ++ show (normalise gam env' tmsc)
-         scVal <- searchType loc lastChance depth trying env' defining (nf gam env' tmsc)
+         scVal <- searchType loc defaults depth trying env' defining (nf gam env' tmsc)
          pure (Bind n (Lam c info (quote (noGam gam) env ty)) scVal)
-searchType loc lastChance depth trying env defining ty@(NTCon n t ar args)
+searchType loc defaults depth trying env defining ty@(NTCon n t ar args)
     = do gam <- get Ctxt
          if length args == ar
-           then do (dets, allOpens, allCons) <- getSearchData loc (not lastChance) n
+           then do (dets, allOpens, allCons) <- getSearchData loc (not defaults) n
                    let opens = filter (/=defining) allOpens
                    let cons = filter (/=defining) allCons
-                   log 5 $ "Hints for " ++ show n ++ ": " ++ show cons
+                   log 5 $ "Hints for " ++ show n ++ " " ++ show defaults ++ " : " ++ show cons
                    -- Solutions is either:
                    -- One of the locals
                    -- or *Exactly one* of the open hints
                    -- or, only if there are no open hints,
                    --     *Exactly one* of the other hints
-                   try (searchLocal loc lastChance depth trying env (quote (noGam gam) env ty) defining)
+                   try (searchLocal loc defaults depth trying env (quote (noGam gam) env ty) defining)
                        (handleError 
-                         (searchNames loc lastChance depth trying env ty defining opens)
+                         (searchNames loc defaults depth trying env ty defining opens)
                          (\err => if ambig err
                                      then throw err
-                                     else searchNames loc lastChance depth trying env ty defining cons))
+                                     else searchNames loc defaults depth trying env ty defining cons))
            else throw (CantSolveGoal loc env (quote gam env ty))
   where
     ambig : Error annot -> Bool
     ambig (AmbiguousSearch _ _) = True
     ambig _ = False
-searchType loc lastChance depth trying env defining (NPrimVal IntType)
+searchType loc defaults depth trying env defining (NPrimVal IntType)
     = pure (PrimVal (I 0))
-searchType loc lastChance depth trying env defining ty 
+searchType loc defaults depth trying env defining ty 
     = do gam <- get Ctxt
-         try (searchLocal loc lastChance depth trying env (quote (noGam gam) env ty) defining)
+         try (searchLocal loc defaults depth trying env (quote (noGam gam) env ty) defining)
              (throw (CantSolveGoal loc env (quote gam env ty)))
 
 abandonIfCycle : {auto c : Ref Ctxt Defs} ->
@@ -329,15 +329,15 @@ searchHole : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Bool -> Nat -> List ClosedTerm ->
              Name -> Name -> Defs -> GlobalDef -> Core annot ClosedTerm
-searchHole loc lastChance depth trying defining n gam glob
+searchHole loc defaults depth trying defining n gam glob
     = do let searchty = normaliseHoles gam [] (type glob)
          abandonIfCycle searchty trying
          let nty = nf gam [] searchty
          log 2 $ "Running search: " ++ show n ++ " in " ++ show defining ++
                  " for " ++ show (quote gam [] nty)
          dumpConstraints 5 True
-         checkConcreteDets loc lastChance nty nty
-         soln <- searchType loc lastChance depth (searchty :: trying) [] defining nty
+         checkConcreteDets loc defaults nty nty
+         soln <- searchType loc defaults depth (searchty :: trying) [] defining nty
          log 5 $ "Solution: " ++ show n ++ " = " ++ show (normalise gam [] soln)
          addDef n (record { definition = PMDef True [] (STerm soln) (STerm soln) } glob)
          removeHoleName n
@@ -346,17 +346,17 @@ searchHole loc lastChance depth trying defining n gam glob
 -- Declared in Unify.idr (please remember to keep this type up to date!)
 -- search : {auto c : Ref Ctxt Defs} ->
 --          {auto u : Ref UST (UState annot)} ->
---          annot -> (lastChance : Bool) ->
+--          annot -> (defaults : Bool) ->
 --          Nat -> List ClosedTerm -> Name -> Name -> Core annot ClosedTerm
-Core.Unify.search loc lastChance depth trying defining n_in
+Core.Unify.search loc defaults depth trying defining n_in
     = do gam <- get Ctxt
          case lookupHoleName n_in (gamma gam) of
               Just (n, glob) =>
                    -- The definition should be 'BySearch' at this stage,
                    -- if it's arising from an auto implicit
                    case definition glob of
-                        Hole locs False _ => searchHole loc lastChance depth trying defining n gam glob
-                        BySearch _ _ => searchHole loc lastChance depth trying defining n gam glob
+                        Hole locs False _ => searchHole loc defaults depth trying defining n gam glob
+                        BySearch _ _ => searchHole loc defaults depth trying defining n gam glob
                         _ => throw (InternalError $ "Not a hole: " ++ show n ++ " in " ++ show defining)
               _ => throw (UndefinedName loc n_in)
   where
