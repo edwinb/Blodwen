@@ -252,22 +252,22 @@ mutual
   bindList fname start indents
       = sepBy1 (symbol ",")
                (do rig <- multiplicity
-                   n <- name
+                   n <- unqualifiedName
                    ty <- option 
                             (PImplicit (MkFC fname start start))
                             (do symbol ":"
                                 opExpr EqOK fname indents)
-                   pure (rig, n, ty))
+                   pure (rig, UN n, ty))
 
   pibindList : FileName -> FilePos -> IndentInfo -> 
                Rule (List (RigCount, Maybe Name, PTerm))
   pibindList fname start indents
        = do rig <- multiplicity
-            ns <- sepBy1 (symbol ",") name
+            ns <- sepBy1 (symbol ",") unqualifiedName
             symbol ":"
             ty <- expr EqOK fname indents
             atEnd indents
-            pure (map (\n => (rig, Just n, ty)) ns)
+            pure (map (\n => (rig, Just (UN n), ty)) ns)
      <|> sepBy1 (symbol ",")
                 (do rig <- multiplicity
                     n <- name
@@ -313,10 +313,10 @@ mutual
            keyword "forall"
            commit
            nstart <- location
-           ns <- sepBy1 (symbol ",") name
+           ns <- sepBy1 (symbol ",") unqualifiedName
            nend <- location
            let nfc = MkFC fname nstart nend
-           let binders = map (\n => (Rig0, Just n, PImplicit nfc)) ns
+           let binders = map (\n => (Rig0, Just (UN n), PImplicit nfc)) ns
            symbol "."
            scope <- typeExpr EqOK fname indents
            end <- location
