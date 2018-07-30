@@ -48,7 +48,7 @@ data Error annot
     | AlreadyDefined annot Name
     | NotFunctionType annot (Term vars)
     | CaseCompile annot Name CaseError 
-    | BadDotPattern annot (Term vars) (Term vars)
+    | BadDotPattern annot String (Term vars) (Term vars)
     | BadImplicit annot String
     | BadRunElab annot (Term vars)
     | GenericMsg annot String
@@ -141,8 +141,9 @@ Show annot => Show (Error annot) where
       = show fc ++ ":Patterns for " ++ show n ++ " require matching on different types"
   show (CaseCompile fc n UnknownType) 
       = show fc ++ ":Can't infer type to match in " ++ show n
-  show (BadDotPattern fc x y)
-      = show fc ++ ":Can't match on " ++ show x
+  show (BadDotPattern fc reason x y)
+      = show fc ++ ":Can't match on " ++ show x ++ 
+           if reason /= "" then " (" ++ reason ++ ")" else ""
   show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"
   show (BadRunElab fc script) = show fc ++ ":Bad elaborator script " ++ show script
   show (GenericMsg fc str) = show fc ++ ":" ++ str

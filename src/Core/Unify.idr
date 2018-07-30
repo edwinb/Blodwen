@@ -1094,11 +1094,11 @@ checkDots
          put UST (record { dotConstraints = [] } ust)
          pure ()
   where
-    checkConstraint : Defs -> (Name, Constraint annot) -> Core annot ()
-    checkConstraint gam (n, MkConstraint loc env x y)
+    checkConstraint : Defs -> (Name, String, Constraint annot) -> Core annot ()
+    checkConstraint gam (n, reason, MkConstraint loc env x y)
         = do cs <- unify InLHS loc env x y
              if isNil cs && not (isHoleNF (gamma gam) n)
                 then pure ()
-                else throw (BadDotPattern loc x y)
+                else throw (BadDotPattern loc reason x y)
     checkConstraint gam _ = pure ()
 

@@ -404,8 +404,8 @@ mutual
                                         tmv TType
            traverse implicitBind (map fst argImps)
            checkExp rigc process loc elabinfo env nest bv bt expected
-  checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) with (elabMode elabinfo)
-    checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) | InLHS
+  checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) with (elabMode elabinfo)
+    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) | InLHS
       = do (wantedTm, wantedTy) <- checkImp rigc process 
                                             (record { dotted = True } elabinfo)
                                             env nest tm (Just expected)
@@ -413,12 +413,12 @@ mutual
            gam <- getCtxt
            let tm = mkConstantApp n env
            log 10 $ "Added hole for MustUnify " ++ show tm
-           addDot loc env n wantedTm tm
+           addDot loc env n wantedTm r tm
            checkExp rigc process loc (record { elabMode= InExpr } elabinfo) 
                     env nest tm wantedTy (Just expected)
-    checkImp rigc process elabinfo env nest (IMustUnify loc tm) (Just expected) | elabmode
+    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) | elabmode
         = throw (GenericMsg loc "Dot pattern not valid here")
-  checkImp rigc process elabinfo env nest (IMustUnify loc tm) expected
+  checkImp rigc process elabinfo env nest (IMustUnify loc r tm) expected
       = throw (GenericMsg loc "Dot pattern not valid here")
   checkImp rigc process elabinfo env nest (IAs loc var tm) expected with (elabMode elabinfo)
     checkImp rigc process elabinfo env nest (IAs loc var tm) (Just expected) | InLHS
@@ -863,7 +863,7 @@ mutual
                                      (_, Implicit _, _) => arg
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
-                                     (InLHS, _, Rig0) => IMustUnify loc arg
+                                     (InLHS, _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      (argtm, argty) <- check (rigMult rigf rigc)
                                              process (record { implicitsGiven = [] } elabinfo)

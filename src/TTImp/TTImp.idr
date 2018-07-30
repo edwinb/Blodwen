@@ -69,7 +69,7 @@ mutual
        IBindVar : annot -> String -> RawImp annot -- a name to be implicitly bound
        IBindHere : annot -> RawImp annot -> RawImp annot -- point where IBindVars get bound
        IAs : annot -> Name -> (pattern : RawImp annot) -> RawImp annot
-       IMustUnify : annot -> (pattern : RawImp annot) -> RawImp annot
+       IMustUnify : annot -> (reason : String) -> (pattern : RawImp annot) -> RawImp annot
        Implicit : annot -> RawImp annot
 
   public export
@@ -252,7 +252,7 @@ getAnnot (IHole x _) = x
 getAnnot (IType x) = x
 getAnnot (IBindVar x _) = x
 getAnnot (IBindHere x _) = x
-getAnnot (IMustUnify x _) = x
+getAnnot (IMustUnify x _ _) = x
 getAnnot (IAs x _ _) = x
 getAnnot (Implicit x) = x
 
@@ -311,7 +311,7 @@ mutual
     show (IType _) = "Type"
     show (IBindVar _ n) = "$" ++ show n
     show (IBindHere _ t) = "{bindhere} . " ++ show t
-    show (IMustUnify _ tm) = "(." ++ show tm ++ ")"
+    show (IMustUnify _ r tm) = ".(" ++ show tm ++ ")"
     show (IAs _ n tm) = show n ++ "@(" ++ show tm ++ ")"
     show (Implicit _) = "_"
 
@@ -492,8 +492,8 @@ mkLCPatVars tm = mkPatVars True tm
         = IApp loc (mkPatVars True f) (mkPatVars False arg)
     mkPatVars notfn (IImplicitApp loc f n arg) 
         = IImplicitApp loc (mkPatVars True f) n (mkPatVars False arg)
-    mkPatVars notfn (IMustUnify loc tm) 
-        = IMustUnify loc (mkPatVars notfn tm)
+    mkPatVars notfn (IMustUnify loc r tm) 
+        = IMustUnify loc r (mkPatVars notfn tm)
     mkPatVars notfn (IAs loc n tm) 
         = IAs loc n (mkPatVars notfn tm)
     mkPatVars notfn tm = tm
@@ -543,7 +543,8 @@ mutual
         = do tag 17; toBuf b fc; toBuf b y
     toBuf b (IAs fc y pattern)
         = do tag 18; toBuf b fc; toBuf b y; toBuf b pattern
-    toBuf b (IMustUnify fc pattern)
+    toBuf b (IMustUnify fc r pattern)
+        -- No need to record 'r', it's for type errors only
         = do tag 19; toBuf b fc; toBuf b pattern
     toBuf b (Implicit fc)
         = do tag 20; toBuf b fc
@@ -604,7 +605,7 @@ mutual
                         pure (IAs fc y pattern)
                19 => do fc <- fromBuf s b
                         pattern <- fromBuf s b
-                        pure (IMustUnify fc pattern)
+                        pure (IMustUnify fc "" pattern)
                20 => do fc <- fromBuf s b
                         pure (Implicit fc)
                _ => corrupt "RawImp"

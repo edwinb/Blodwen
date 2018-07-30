@@ -67,8 +67,8 @@ mutual
       = IUnquote fc (substParams bound ps y)
   substParams bound ps (IAs fc y pattern)
       = IAs fc y (substParams bound ps pattern)
-  substParams bound ps (IMustUnify fc pattern)
-      = IMustUnify fc (substParams bound ps pattern)
+  substParams bound ps (IMustUnify fc r pattern)
+      = IMustUnify fc r (substParams bound ps pattern)
   substParams bound ps tm = tm
 
   substParamsClause : List Name -> List (Name, RawImp FC) -> 

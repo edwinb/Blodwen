@@ -162,7 +162,7 @@ mutual
   desugar side ps (PAs fc vname pattern) 
       = pure $ IAs fc vname !(desugar side ps pattern)
   desugar side ps (PDotted fc x) 
-      = pure $ IMustUnify fc !(desugar side ps x)
+      = pure $ IMustUnify fc "User dotted" !(desugar side ps x)
   desugar side ps (PImplicit fc) = pure $ Implicit fc
   desugar side ps (PDoBlock fc block)
       = expandDo side ps fc block

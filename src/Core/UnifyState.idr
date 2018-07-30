@@ -70,7 +70,7 @@ record UnifyState annot where
                               -- the current session (any time later in the
                               -- source file is okay)
      constraints : Context (Constraint annot) -- metavariable constraints 
-     dotConstraints : List (Name, Constraint annot) -- dot pattern constraints
+     dotConstraints : List (Name, String, Constraint annot) -- dot pattern constraints
                           -- after elaboration, we check that the equations
                           -- are already solved, which shows that the term
                           -- in the pattern is valid by unification. The Name
@@ -431,11 +431,11 @@ addConstraint constr
 
 export
 addDot : {auto u : Ref UST (UState annot)} ->
-         annot -> Env Term vars -> Name -> Term vars -> Term vars ->
+         annot -> Env Term vars -> Name -> Term vars -> String -> Term vars ->
          Core annot ()
-addDot loc env dotarg x y
+addDot loc env dotarg x reason y
     = do ust <- get UST
-         put UST (record { dotConstraints $= ((dotarg, MkConstraint loc env x y) ::) }
+         put UST (record { dotConstraints $= ((dotarg, reason, MkConstraint loc env x y) ::) }
                          ust)
 
 export
@@ -574,9 +574,9 @@ dumpDots
          traverse (dumpConstraint gam) (dotConstraints ust)
          pure ()
   where
-    dumpConstraint : Defs -> (Name, Constraint annot) -> Core annot ()
-    dumpConstraint gam (n, MkConstraint _ env x y)
-        = do log 2 $ "\t (" ++ show n ++ ") " ++ show (normalise gam env x) 
+    dumpConstraint : Defs -> (Name, String, Constraint annot) -> Core annot ()
+    dumpConstraint gam (n, reason, MkConstraint _ env x y)
+        = do log 2 $ "\t (" ++ show n ++ ", " ++ reason ++ ") " ++ show (normalise gam env x) 
                             ++ " =?= " ++ show (normalise gam env y)
              log 5 $ "\t    from " ++ show x 
                             ++ " =?= " ++ show y

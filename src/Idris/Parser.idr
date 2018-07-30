@@ -785,7 +785,7 @@ ifaceDecl fname indents
          dc <- option Nothing (do exactIdent "constructor"
                                   n <- name
                                   pure (Just n))
-         body <- assert_total (nonEmptyBlock (topDecl fname))
+         body <- assert_total (block (topDecl fname))
          end <- location
          pure (PInterface (MkFC fname start end) 
                       vis cons n params det dc (collectDefs (concat body)))
@@ -803,7 +803,7 @@ implDecl fname indents
          n <- name
          params <- many (simpleExpr fname indents)
          keyword "where"
-         body <- assert_total (nonEmptyBlock (topDecl fname))
+         body <- assert_total (block (topDecl fname))
          end <- location
          pure (PImplementation (MkFC fname start end)
                          vis cons n params iname (collectDefs (concat body)))

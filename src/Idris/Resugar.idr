@@ -142,7 +142,7 @@ mutual
   toPTerm p (IBindVar _ v) = pure (PRef emptyFC (UN v))
   toPTerm p (IBindHere _ tm) = toPTerm p tm
   toPTerm p (IAs _ n pat) = pure (PAs emptyFC n !(toPTerm argPrec pat))
-  toPTerm p (IMustUnify _ pat) = pure (PDotted emptyFC !(toPTerm argPrec pat))
+  toPTerm p (IMustUnify _ r pat) = pure (PDotted emptyFC !(toPTerm argPrec pat))
   toPTerm p (Implicit _) = pure (PImplicit emptyFC)
 
   toPClause : {auto c : Ref Ctxt Defs} ->

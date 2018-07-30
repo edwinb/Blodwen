@@ -41,6 +41,8 @@ findBindableNames arg env used (IAs fc (UN n) pat)
     = (n, getUnique used n) :: findBindableNames arg env used pat
 findBindableNames arg env used (IAs fc n pat)
     = findBindableNames arg env used pat
+findBindableNames arg env used (IMustUnify fc r pat)
+    = findBindableNames arg env used pat
 findBindableNames arg env used (IAlternative fc u alts)
     = concatMap (findBindableNames arg env used) alts
 -- We've skipped case, let and local - rather than guess where the
@@ -58,6 +60,8 @@ findIBinds (IApp fc fn av)
 findIBinds (IImplicitApp fc fn n av)
     = findIBinds fn ++ findIBinds av
 findIBinds (IAs fc n pat)
+    = findIBinds pat
+findIBinds (IMustUnify fc r pat)
     = findIBinds pat
 findIBinds (IAlternative fc u alts)
     = concatMap findIBinds alts
@@ -82,6 +86,8 @@ renameIBinds rs us (IImplicitApp fc fn n arg)
     = IImplicitApp fc (renameIBinds rs us fn) n (renameIBinds rs us arg)
 renameIBinds rs us (IAs fc n pat)
     = IAs fc n (renameIBinds rs us pat)
+renameIBinds rs us (IMustUnify fc r pat)
+    = IMustUnify fc r (renameIBinds rs us pat)
 renameIBinds rs us (IAlternative fc u alts)
     = IAlternative fc u (map (renameIBinds rs us) alts)
 renameIBinds rs us (IBindVar fc n)
@@ -113,6 +119,8 @@ doBind ns (IImplicitApp fc fn n av)
     = IImplicitApp fc (doBind ns fn) n (doBind ns av)
 doBind ns (IAs fc n pat)
     = IAs fc n (doBind ns pat)
+doBind ns (IMustUnify fc r pat)
+    = IMustUnify fc r (doBind ns pat)
 doBind ns (IAlternative fc u alts)
     = IAlternative fc u (map (doBind ns) alts)
 doBind ns tm = tm

@@ -106,7 +106,7 @@ mutual
            commit
            e <- expr indents
            symbol ")"
-           pure (IMustUnify () e)
+           pure (IMustUnify () "User dotted" e)
     <|> do symbol "(|"
            commit
            alts <- sepBy1 (symbol ",") (expr indents)
