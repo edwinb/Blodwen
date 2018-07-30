@@ -1062,7 +1062,7 @@ mutual
                         -- things, hence 'False' as an argument to addBoundName
                         let expected = quote (noGam gam) env ty
                         tm <- addBoundName loc hn False env expected
-                        log 5 $ "Added Bound implicit " ++ show (hn, (tm, expected))
+                        log 5 $ "Added Bound implicit (makeImplicit) " ++ show (hn, (tm, expected))
                         est <- get EST
                         put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
                                           toBind $= ((hn, (tm, expected)) :: ) } est)
@@ -1102,7 +1102,7 @@ mutual
                           -- things, hence 'False' as an argument to addBoundName
                           let expected = quote (noGam gam) env ty
                           tm <- addBoundName loc hn False env expected
-                          log 5 $ "Added Bound implicit " ++ show (hn, (tm, expected))
+                          log 5 $ "Added Bound implicit (makeAutoImplicit) " ++ show (hn, (tm, expected))
                           est <- get EST
                           put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
                                             toBind $= ((hn, (tm, expected)) :: ) } est)

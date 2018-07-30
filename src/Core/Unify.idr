@@ -628,6 +628,7 @@ mutual
              Core annot (List Name)
   unifyApp swap mode loc env (NRef nt var) args tm 
       = do gam <- get Ctxt
+           log 10 $ show var ++ ": " ++ show (lookupDefExact var (gamma gam))
            if convert (noGam gam) env (NApp (NRef nt var) args) tm
               then pure []
               else
@@ -733,13 +734,13 @@ mutual
                  (if length argsx > length argsy
                      then unifyApp False mode loc env (NRef xt hdx) argsx 
                                            (NApp (NRef yt hdy) argsy)
-                     else unifyApp False mode loc env (NRef yt hdy) argsy 
+                     else unifyApp True mode loc env (NRef yt hdy) argsy 
                                            (NApp (NRef xt hdx) argsx))
               else 
                  (if holex
                      then unifyApp False mode loc env (NRef xt hdx) argsx
                                            (NApp (NRef yt hdy) argsy)
-                     else unifyApp False mode loc env (NRef yt hdy) argsy 
+                     else unifyApp True mode loc env (NRef yt hdy) argsy 
                                            (NApp (NRef xt hdx) argsx))
   unifyBothApps mode loc env fx ax fy ay
         = unifyApp False mode loc env fx ax (NApp fy ay)
