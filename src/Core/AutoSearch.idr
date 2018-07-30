@@ -180,14 +180,15 @@ searchLocalWith {vars} loc defaults depth trying env ((p, pty) :: rest) ty defin
                  NF vars -> NF vars -> Core annot (Term vars)
     findDirect gam prf f nty ty
         = do (args, appTy) <- mkArgs loc env nty
-             [] <- unify InTerm loc env ty appTy
-                 | throw (CantSolveGoal loc env (quote gam env ty))
-             let candidate = TT.apply (f prf) (map snd args)
-             log 1 $ "Success for " ++ show (quote gam env ty) ++
-                     " with " ++ show candidate ++
-                     " " ++ show (quote gam env appTy)
-             traverse (searchIfHole loc defaults depth trying defining) (map fst args)
-             pure candidate
+             if not (convert gam env ty appTy)
+                then throw (CantSolveGoal loc env (quote gam env ty))
+                else do
+                   let candidate = TT.apply (f prf) (map snd args)
+                   log 1 $ "Success for " ++ show (quote gam env ty) ++
+                           " with " ++ show (normalise gam env candidate) ++
+                           " " ++ show (quote gam env appTy)
+                   traverse (searchIfHole loc defaults depth trying defining) (map fst args)
+                   pure candidate
              
     findPos : Defs -> Term vars -> 
               (Term vars -> Term vars) ->
