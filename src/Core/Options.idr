@@ -19,6 +19,13 @@ record PairNames where
   fstName : Name
   sndName : Name
 
+public export
+record PrimNames where
+  constructor MkPrimNs
+  fromIntegerName : Maybe Name
+  fromStringName : Maybe Name
+  fromCharName : Maybe Name
+
 export
 TTC annot LazyNames where
   toBuf b l
@@ -42,6 +49,18 @@ TTC annot PairNames where
            d <- fromBuf s b
            f <- fromBuf s b
            pure (MkPairNs ty d f)
+
+export
+TTC annot PrimNames where
+  toBuf b l
+      = do toBuf b (fromIntegerName l)
+           toBuf b (fromStringName l)
+           toBuf b (fromCharName l)
+  fromBuf s b
+      = do i <- fromBuf s b
+           str <- fromBuf s b
+           c <- fromBuf s b
+           pure (MkPrimNs i str c)
 
 public export
 record Dirs where
@@ -72,6 +91,7 @@ record Options where
   session : Session
   laziness : Maybe LazyNames
   pairnames : Maybe PairNames
+  primnames : PrimNames
 
 defaultDirs : Dirs
 defaultDirs = MkDirs "build" "/usr/local" ["."]
@@ -84,7 +104,8 @@ defaultSession = MkSessionOpts False False
 
 export
 defaults : Options
-defaults = MkOptions defaultDirs defaultPPrint defaultSession Nothing Nothing
+defaults = MkOptions defaultDirs defaultPPrint defaultSession 
+                     Nothing Nothing (MkPrimNs Nothing Nothing Nothing)
 
 -- Some relevant options get stored in TTC; merge in the options from
 -- a TTC file
@@ -92,7 +113,13 @@ export
 mergeOptions : (ttcopts : Options) -> Options -> Options
 mergeOptions ttcopts opts
   = record { laziness = laziness ttcopts <+> laziness opts,
-             pairnames = pairnames ttcopts <+> pairnames opts } opts
+             pairnames = pairnames ttcopts <+> pairnames opts,
+             primnames = mergePrims (primnames ttcopts) (primnames opts)
+           } opts
+  where
+    mergePrims : PrimNames -> PrimNames -> PrimNames
+    mergePrims (MkPrimNs i s c) (MkPrimNs i' s' c')
+        = MkPrimNs (i <+> i') (s <+> s') (c <+> c')
 
 export
 setLazy : (delayType : Name) -> (delay : Name) -> (force : Name) ->
@@ -103,3 +130,15 @@ export
 setPair : (pairType : Name) -> (fstn : Name) -> (sndn : Name) ->
           Options -> Options
 setPair ty f s = record { pairnames = Just (MkPairNs ty f s) }
+
+export
+setFromInteger : Name -> Options -> Options
+setFromInteger n = record { primnames->fromIntegerName = Just n }
+
+export
+setFromString : Name -> Options -> Options
+setFromString n = record { primnames->fromStringName = Just n }
+
+export
+setFromChar : Name -> Options -> Options
+setFromChar n = record { primnames->fromCharName = Just n }

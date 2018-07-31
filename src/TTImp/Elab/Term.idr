@@ -252,7 +252,13 @@ mutual
   checkImp rigc process elabinfo env nest (IApp loc fn arg) expected 
       = do -- Collect the implicits from the top level application first
            let (fn', args) = collectGivenImps fn
-           let elabinfo' = addGivenImps elabinfo args
+           gam <- get Ctxt
+           let elabinfoG = addGivenImps elabinfo args
+           -- If we're elaborating a literal, we need to resolve interfaces
+           -- evn on the LHS, so elaborate in InExpr mode
+           let elabinfo' = if isPrimApp gam
+                              then (record { elabMode = InExpr } elabinfoG)
+                              else elabinfoG
            log 10 $ "Implicits: " ++ show (implicitsGiven elabinfo')
            (restm, resty) <- checkApp rigc process elabinfo' loc env nest fn' arg expected
            -- Add any remaining implicits greedily
@@ -267,6 +273,21 @@ mutual
                 [] => pure (restm, resty)
                 _ => checkExp rigc process loc elabinfo env nest (apply restm imps) 
                               (quote (noGam gam) env ty) expected
+    where
+      isPrimAppF : (Defs -> Maybe Name) ->
+                   Defs -> RawImp annot -> RawImp annot -> Bool
+      isPrimAppF pname defs (IVar _ n) (IPrimVal _ _)
+          = case pname defs of
+                 Nothing => False
+                 Just n' => dropNS n == n'
+      isPrimAppF pname defs _ _ = False
+
+      isPrimApp : Defs -> Bool
+      isPrimApp defs 
+          = isPrimAppF fromIntegerName defs fn arg
+          || isPrimAppF fromStringName defs fn arg
+          || isPrimAppF fromCharName defs fn arg
+
   checkImp rigc process elabinfo env nest (IImplicitApp loc fn nm arg) expected 
       = do let (fn', args) = collectGivenImps fn
            let elabinfo' = addGivenImps elabinfo ((nm, arg) :: args)

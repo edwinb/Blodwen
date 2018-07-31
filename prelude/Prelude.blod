@@ -125,9 +125,16 @@ public export
 (||) True x = True
 (||) False x = x
 
+public export
+intToBool : Int -> Bool
+intToBool 0 = False
+intToBool x = True
+
 ------------------------
 -- NUMERIC INTERFACES --
 ------------------------
+
+%integerLit fromInteger
 
 public export
 interface Num ty where
@@ -160,11 +167,6 @@ Num Double where
     (+) = prim__add_Double
     (*) = prim__mul_Double
     fromInteger = prim__cast_IntegerDouble
-
-public export
-intToBool : Int -> Bool
-intToBool 0 = False
-intToBool x = True
 
 -------------
 -- ALGEBRA --
@@ -381,11 +383,11 @@ all p = foldl (\x,y => x && p y)  True
 
 public export
 sum : (Foldable t, Num a) => t a -> a
-sum = foldr (+) (fromInteger 0)
+sum = foldr (+) 0
 
 public export
 product : (Foldable t, Num a) => t a -> a
-product = foldr (*) (fromInteger 1)
+product = foldr (*) 1
 
 -----------
 -- NATS ---

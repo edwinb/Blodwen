@@ -182,6 +182,9 @@ mutual
        Logging : Nat -> Directive
        LazyNames : Name -> Name -> Name -> Directive
        PairNames : Name -> Name -> Name -> Directive
+       PrimInteger : Name -> Directive
+       PrimString : Name -> Directive
+       PrimChar : Name -> Directive
 
   public export
   data PDecl : Type where

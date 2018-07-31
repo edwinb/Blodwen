@@ -684,6 +684,15 @@ directive indents
          s <- name
          atEnd indents
          pure (PairNames ty f s)
+  <|> do exactIdent "integerLit"
+         n <- name
+         pure (PrimInteger n)
+  <|> do exactIdent "stringLit"
+         n <- name
+         pure (PrimString n)
+  <|> do exactIdent "charLit"
+         n <- name
+         pure (PrimChar n)
 
 fix : Rule Fixity
 fix

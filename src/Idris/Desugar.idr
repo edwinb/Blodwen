@@ -17,8 +17,9 @@ import Idris.Elab.Interface
 
 import Parser.RawImp
 import TTImp.TTImp
-
 import Utils.Shunting
+
+import Control.Monad.State
 
 -- Convert high level Idris declarations (PDecl from Idris.Syntax) into
 -- TTImp, recording any high level syntax info on the way (e.g. infix
@@ -53,10 +54,10 @@ extendAs old as newsyn
                            ifaces $= mergeContextAs old as (ifaces newsyn) } 
                   syn)
 
--- TODO: Add 'IMustUnify' for any duplicated names, and any function application
+-- Add 'IMustUnify' for any duplicated names, and any function application
 -- other than 'fromInteger <literal>'
-addDots : RawImp annot -> RawImp annot
-addDots tm = tm
+addDots : Defs -> RawImp annot -> State (List Name) (RawImp annot)
+addDots defs tm = pure tm
 
 mkPrec : Fixity -> Nat -> OpPrec
 mkPrec InfixL p = AssocL p
@@ -142,18 +143,29 @@ mutual
       = desugar side ps (PLam fc RigW Explicit (MN "arg" 0) (PImplicit fc)
                  (POp fc op arg (PRef fc (MN "arg" 0))))
   desugar side ps (PSearch fc depth) = pure $ ISearch fc depth
-  desugar AnyExpr ps (PPrimVal fc (BI x))
-      = -- only do this if we have a prelude (TMP HACK for the tests...) 
-        if noprelude !getSession
-           then pure $ IAlternative fc (UniqueDefault (IPrimVal fc (BI x)))
-                               [IPrimVal fc (BI x),
-                                IPrimVal fc (I (fromInteger x))]
-           else pure $ IApp fc (IVar fc (UN "fromInteger")) 
-                               (IPrimVal fc (BI x))
-  desugar LHS ps (PPrimVal fc (BI x))
-      = pure $ IAlternative fc Unique
-                               [IPrimVal fc (BI x),
-                                IPrimVal fc (I (fromInteger x))]
+  desugar side ps (PPrimVal fc (BI x))
+      = do defs <- get Ctxt
+           case fromIntegerName defs of
+                Nothing =>
+                   pure $ IAlternative fc (UniqueDefault (IPrimVal fc (BI x)))
+                                   [IPrimVal fc (BI x),
+                                    IPrimVal fc (I (fromInteger x))]
+                Just fi => pure $ IApp fc (IVar fc fi) 
+                                          (IPrimVal fc (BI x))
+  desugar side ps (PPrimVal fc (Str x))
+      = do defs <- get Ctxt
+           case fromStringName defs of
+                Nothing =>
+                   pure $ IPrimVal fc (Str x)
+                Just f => pure $ IApp fc (IVar fc f) 
+                                         (IPrimVal fc (Str x))
+  desugar side ps (PPrimVal fc (Ch x))
+      = do defs <- get Ctxt
+           case fromCharName defs of
+                Nothing =>
+                   pure $ IPrimVal fc (Ch x)
+                Just f => pure $ IApp fc (IVar fc f) 
+                                         (IPrimVal fc (Ch x))
   desugar side ps (PPrimVal fc x) = pure $ IPrimVal fc x
   desugar side ps (PQuote fc x) = pure $ IQuote fc !(desugar side ps x)
   desugar side ps (PUnquote fc x) = pure $ IUnquote fc !(desugar side ps x)
@@ -379,4 +391,7 @@ mutual
              Logging i => pure [ILog i]
              LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]
              PairNames ty f s => pure [IPragma (\env, nest => setPair fc ty f s)]
+             PrimInteger n => pure [IPragma (\env, next => setFromInteger fc n)]
+             PrimString n => pure [IPragma (\env, next => setFromString fc n)]
+             PrimChar n => pure [IPragma (\env, next => setFromChar fc n)]
 

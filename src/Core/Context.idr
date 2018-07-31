@@ -364,15 +364,19 @@ TTC annot Defs where
            toBuf b (imported val)
            toBuf b (laziness (options val))
            toBuf b (pairnames (options val))
+           toBuf b (primnames (options val))
   fromBuf s b 
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
            modNS <- fromBuf s b
            imported <- fromBuf s b
            lazy <- fromBuf s b
            pair <- fromBuf s b
+           prim <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) modNS 
                             (record { laziness = lazy,
-                                      pairnames = pair } defaults)
+                                      pairnames = pair,
+                                      primnames = prim
+                                    } defaults)
                             empty imported [] [] empty [] 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
@@ -551,6 +555,21 @@ sndName defs
          pure (sndName l)
 
 export
+fromIntegerName : Defs -> Maybe Name
+fromIntegerName defs
+    = fromIntegerName (primnames (options defs))
+
+export
+fromStringName : Defs -> Maybe Name
+fromStringName defs
+    = fromStringName (primnames (options defs))
+
+export
+fromCharName : Defs -> Maybe Name
+fromCharName defs
+    = fromCharName (primnames (options defs))
+
+export
 setVisible : {auto c : Ref Ctxt Defs} -> 
              (nspace : List String) -> Core annot ()
 setVisible nspace
@@ -606,6 +625,28 @@ setPair loc ty f s
          f' <- checkUnambig loc f
          s' <- checkUnambig loc s
          put Ctxt (record { options $= setPair ty' f' s' } defs)
+
+-- Don't check for ambiguity here; they're all meant to be overloadable
+export
+setFromInteger : {auto c : Ref Ctxt Defs} ->
+                 annot -> Name -> Core annot ()
+setFromInteger loc n
+    = do defs <- get Ctxt
+         put Ctxt (record { options $= setFromInteger n } defs)
+
+export
+setFromString : {auto c : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot ()
+setFromString loc n
+    = do defs <- get Ctxt
+         put Ctxt (record { options $= setFromString n } defs)
+
+export
+setFromChar : {auto c : Ref Ctxt Defs} ->
+              annot -> Name -> Core annot ()
+setFromChar loc n
+    = do defs <- get Ctxt
+         put Ctxt (record { options $= setFromChar n } defs)
 
 export
 setPPrint : {auto c : Ref Ctxt Defs} ->
