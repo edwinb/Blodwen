@@ -1,0 +1,10 @@
+
+data IsSuc : Nat -> Type where
+     Yes : IsSuc (S k)
+
+isSuc : Nat -> Bool
+isSuc Z = False
+isSuc (S k) = True
+
+bigsuc : IsSuc (1000000000 + 100000000 * 100000000)
+bigsuc = Yes

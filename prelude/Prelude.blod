@@ -448,7 +448,7 @@ data Maybe : (ty : Type) -> Type where
 public export
 maybe : Lazy b -> Lazy (a -> b) -> Maybe a -> b
 maybe n j Nothing  = n
-maybe {a} {b} n j (Just x) = j x
+maybe n j (Just x) = j x
 
 public export
 Eq a => Eq (Maybe a) where

@@ -1,0 +1,2 @@
+$1 perf.blod < input
+rm -rf build
