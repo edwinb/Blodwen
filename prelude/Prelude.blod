@@ -389,6 +389,8 @@ public export
 product : (Foldable t, Num a) => t a -> a
 product = foldr (*) 1
 
+-- TODO: Traversable
+
 -----------
 -- NATS ---
 -----------
@@ -579,6 +581,8 @@ interface Show ty where
   showPrec : (d : Prec) -> (x : ty) -> String
   showPrec _ x = show x
 
+-- TODO: Instances
+
 --------
 -- IO --
 --------
@@ -605,4 +609,6 @@ print x = putStr (show x)
 export
 printLn : Show a => a -> IO ()
 printLn x = putStrLn (show x)
+
+-- TODO: Files
 

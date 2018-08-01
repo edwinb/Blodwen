@@ -32,6 +32,10 @@ record EState (vars : List Name) where
   boundImplicits : List Name
                   -- names we've already decided will be bound implicits, no
                   -- we don't need to bind again
+  lhsPatVars : List String
+                  -- names which we've bound in elab mode InLHS (i.e. not
+                  -- in a dot pattern). We keep track of this because every
+                  -- occurrence other than the first needs to be dotted
   asVariables : List (Name, RigCount) -- Names bound in @-patterns
   implicitsUsed : List (Maybe Name)
                             -- explicitly given implicits which have been used
@@ -70,7 +74,7 @@ data EST : Type where
 
 export
 initEState : Name -> EState vars
-initEState n = MkElabState [] [] [] [] [] [] [] n
+initEState n = MkElabState [] [] [] [] [] [] [] [] n
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -173,6 +177,7 @@ weakenedEState
          e' <- newRef EST (MkElabState (map wknTms (boundNames est))
                                        (map wknTms (toBind est))
                                        (boundImplicits est)
+                                       (lhsPatVars est)
                                        (asVariables est)
                                        (implicitsUsed est)
                                        (map wknLoc (linearUsed est))
@@ -202,6 +207,7 @@ strengthenedEState False loc
          todo <- traverse strTms (toBind est)
          let lvs = mapMaybe dropTop (linearUsed est)
          pure (MkElabState bns todo (boundImplicits est) 
+                                    (lhsPatVars est)
                                     (asVariables est)
                                     (implicitsUsed est) 
                                     lvs

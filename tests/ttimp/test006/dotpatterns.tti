@@ -14,10 +14,10 @@ data Eq : a -> a -> Type where {
 }
 
 foo : (n : Nat) -> (m : Nat) -> Eq n m -> Nat;
-foo (S m) (S .(m)) (Refl (S .(m))) = m;
+foo (S m) (S m) (Refl (S m)) = m;
 
 -- should fail
 silly : Nat -> Nat;
-silly .(plus n m) = plus n m;
+silly (plus n m) = plus n m;
 
 

@@ -35,30 +35,75 @@ insertImpLam env tm (Just ty) = bindLam tm ty
               ILam loc c Implicit Nothing (Implicit loc) (bindLam tm sc)
     bindLam tm sc = tm
 
-expandAmbigName : Defs -> Env Term vars -> NestedNames vars ->
+expandAmbigName : ElabMode -> EState vars -> 
+                  Defs -> Env Term vars -> NestedNames vars ->
                   RawImp annot -> 
                   List (annot, RawImp annot) -> RawImp annot -> 
                   Maybe (Term vars) -> RawImp annot
-expandAmbigName defs env nest orig args (IVar loc x) exp
+-- Insert implicit dots here, for things we can't match on directly
+-- (Only when mode is InLHS and it's not the name of the function we're 
+-- defining)
+expandAmbigName InLHS estate defs env nest orig args (IPrimVal fc c) exp
+    = if isType c
+         then IMustUnify fc "Primitive type constructor" orig
+         else orig
+  where
+    isType : Constant -> Bool
+    isType IntType = True
+    isType IntegerType = True
+    isType StringType = True
+    isType CharType = True
+    isType DoubleType = True
+    isType WorldType = True
+    isType _ = False
+expandAmbigName InLHS estate defs env nest orig args (IBindVar fc n) exp
+   = if n `elem` lhsPatVars estate
+        then IMustUnify fc "Non linear pattern variable" orig
+        else orig
+expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
    = case lookup x (names nest) of
           Just _ => orig
           Nothing => 
             case defined x env of
-                 Just _ => orig
-                 Nothing => case lookupDefTyNameIn (currentNS defs) x 
-                                                   (gamma defs) of
-                                 [] => orig
-                                 [(n, _)] => buildAlt (IVar loc n) args
-                                 ns => IAlternative loc Unique
-                                         (map (\n => buildAlt (IVar loc n) args) 
-                                              (map fst ns))
+                 Just _ => if isNil args || notLHS mode 
+                              then orig
+                              else IMustUnify fc "Name applied to arguments" orig
+                 Nothing => 
+                    case lookupDefTyNameIn (currentNS defs) x 
+                                           (gamma defs) of
+                       [] => orig
+                       [(n, def, _)] => wrapDot mode n def (buildAlt (IVar fc n) args)
+                       ns => IAlternative fc Unique
+                               (map (\n => wrapDot mode (fst n) (fst (snd n)) 
+                                              (buildAlt (IVar fc (fst n)) args)) 
+                                    ns)
   where
+    notLHS : ElabMode -> Bool
+    notLHS InLHS = False
+    notLHS _ = True
+
+    -- If it's not a constructor application, dot it
+    wrapDot : ElabMode -> Name -> Def -> RawImp annot -> RawImp annot
+    wrapDot _ _ (DCon _ _ _) tm = tm
+    wrapDot InLHS n' _ tm 
+       = if n' == defining estate
+            then tm
+            else IMustUnify fc "Not a constructor application or primitive" tm
+    wrapDot _ _ _ tm = tm
+
     buildAlt : RawImp annot -> List (annot, RawImp annot) -> RawImp annot
     buildAlt f [] = f
     buildAlt f ((loc', a) :: as) = buildAlt (IApp loc' f a) as
-expandAmbigName defs env nest orig args (IApp loc f a) exp
-   = expandAmbigName defs env nest orig ((loc, a) :: args) f exp
-expandAmbigName defs env nest orig args _ _ = orig
+expandAmbigName mode estate defs env nest orig args (IApp fc f a) exp
+   = expandAmbigName mode estate defs env nest orig ((fc, a) :: args) f exp
+expandAmbigName mode estate defs env nest orig args _ _ = orig
+
+notePatVar : {auto e : Ref EST (EState vars)} ->
+             ElabMode -> String -> Core annot ()
+notePatVar InLHS n
+    = do est <- get EST
+         put EST (record { lhsPatVars $= (n ::) } est)
+notePatVar _ _ = pure ()
 
 bindRig : RigCount -> RigCount
 bindRig Rig0 = Rig0
@@ -100,7 +145,9 @@ mutual
       = checkImp rigc process elabinfo env nest tm expected
   check rigc process elabinfo env nest tm_in exp 
       = do gam <- get Ctxt
-           let tm = expandAmbigName gam env nest tm_in [] tm_in exp
+           est <- get EST
+           let tm = expandAmbigName (elabMode elabinfo) est
+                                    gam env nest tm_in [] tm_in exp
            let lazyTm = insertLazy gam tm (map (nf gam env) exp)
            case elabMode elabinfo of
                -- don't expand implicit lambda on LHS
@@ -249,13 +296,13 @@ mutual
           checkCase rigc process elabinfo loc env nest scr scrty alts expected
   checkImp rigc process elabinfo env nest (ILocal loc nested scope) expected 
       = checkLocal rigc process elabinfo loc env nest nested scope expected
-  checkImp rigc process elabinfo env nest (IApp loc fn arg) expected 
+  checkImp {vars} rigc process elabinfo env nest (IApp loc fn arg) expected 
       = do -- Collect the implicits from the top level application first
            let (fn', args) = collectGivenImps fn
            gam <- get Ctxt
            let elabinfoG = addGivenImps elabinfo args
            -- If we're elaborating a literal, we need to resolve interfaces
-           -- evn on the LHS, so elaborate in InExpr mode
+           -- even on the LHS, so elaborate in InExpr mode
            let elabinfo' = if isPrimApp gam
                               then (record { elabMode = InExpr } elabinfoG)
                               else elabinfoG
@@ -269,10 +316,13 @@ mutual
            est <- get EST
            log 10 $ "Used: " ++ show (implicitsUsed est, map fst args)
            checkUsedImplicits loc (implicitsUsed est) (map fst args) (apply restm imps)
+           est <- get EST
            case imps of
                 [] => pure (restm, resty)
-                _ => checkExp rigc process loc elabinfo env nest (apply restm imps) 
-                              (quote (noGam gam) env ty) expected
+                _ => do let wantedTm = apply restm imps
+                        let wantedTy = quote (noGam gam) env ty
+                        checkExp rigc process loc elabinfo env nest wantedTm 
+                                   wantedTy expected
     where
       isPrimAppF : (Defs -> Maybe Name) ->
                    Defs -> RawImp annot -> RawImp annot -> Bool
@@ -370,49 +420,44 @@ mutual
       = throw (InternalError "Escape should have been resolved before here")
   checkImp rigc process elabinfo env nest (IType loc) exp
       = checkExp rigc process loc elabinfo env nest TType TType exp
-  checkImp rigc process elabinfo env nest (IBindVar loc str) exp with (elabMode elabinfo)
-    checkImp rigc process elabinfo env nest (IBindVar loc str) exp | InExpr
-      = throw (BadImplicit loc str)
-    checkImp rigc process elabinfo env nest (IBindVar loc str) Nothing | elabmode
-        = do let n = PV (UN str)
-             est <- get EST
-             case lookup n (boundNames est) of
-                  Nothing =>
-                    do t <- addHole loc [] TType
-                       -- Use an empty environment, because if we can't
-                       -- resolve the hole type in the current scope, there'll
-                       -- be some names out of scope in the hole type and
-                       -- we'll never be able to resolve it.
-                       let hty_in = mkConstantApp t []
-                       tm_in <- addBoundName loc n True [] hty_in
-                       let hty = embed hty_in
-                       let tm = embed tm_in
-                       log 5 $ "Added Bound implicit (invented type) " ++ show (n, (tm, hty))
-                       put EST 
-                           (record { boundNames $= ((n, (tm, hty)) ::),
-                                     toBind $= ((n, (tm, hty)) ::) } est)
-                       pure (tm, hty)
-                  Just (tm, ty) =>
-                       pure (tm, ty)
-    checkImp rigc process elabinfo env nest (IBindVar loc str) (Just expected) | elabmode
-        = do let n = PV (UN str)
-             est <- get EST
-             case lookup n (boundNames est) of
-                  Nothing =>
-                    do tm <- addBoundName loc n True env expected
-                       log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
-                       put EST 
-                           (record { boundNames $= ((n, (tm, expected)) ::),
-                                     toBind $= ((n, (tm, expected)) :: ) } est)
-                       pure (tm, expected)
-                  Just (tm, ty) =>
-                       if repeatBindOK (dotted elabinfo) (elabMode elabinfo)
-                          then checkExp rigc process loc elabinfo env nest tm ty (Just expected)
-                          else throw (NonLinearPattern loc n)
-      where
-        repeatBindOK : Bool -> ElabMode -> Bool
-        repeatBindOK False InLHS = False
-        repeatBindOK _ _ = True
+  checkImp rigc process elabinfo env nest (IBindVar loc str) Nothing
+      = do let elabmode = elabMode elabinfo
+           let n = PV (UN str)
+           notePatVar elabmode str
+           est <- get EST
+           case lookup n (boundNames est) of
+                Nothing =>
+                  do t <- addHole loc [] TType
+                     -- Use an empty environment, because if we can't
+                     -- resolve the hole type in the current scope, there'll
+                     -- be some names out of scope in the hole type and
+                     -- we'll never be able to resolve it.
+                     let hty_in = mkConstantApp t []
+                     tm_in <- addBoundName loc n True [] hty_in
+                     let hty = embed hty_in
+                     let tm = embed tm_in
+                     log 5 $ "Added Bound implicit (invented type) " ++ show (n, (tm, hty))
+                     put EST 
+                         (record { boundNames $= ((n, (tm, hty)) ::),
+                                   toBind $= ((n, (tm, hty)) ::) } est)
+                     pure (tm, hty)
+                Just (tm, ty) =>
+                     pure (tm, ty)
+  checkImp rigc process elabinfo env nest (IBindVar loc str) (Just expected)
+      = do let n = PV (UN str)
+           let elabmode = elabMode elabinfo
+           notePatVar elabmode str
+           est <- get EST
+           case lookup n (boundNames est) of
+                Nothing =>
+                  do tm <- addBoundName loc n True env expected
+                     log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
+                     put EST 
+                         (record { boundNames $= ((n, (tm, expected)) ::),
+                                   toBind $= ((n, (tm, expected)) :: ) } est)
+                     pure (tm, expected)
+                Just (tm, ty) =>
+                     checkExp rigc process loc elabinfo env nest tm ty (Just expected)
   checkImp rigc process elabinfo env nest (IBindHere loc tm) expected
       = do (tmv, tmt) <- check rigc process elabinfo env nest tm expected
            argImps <- getToBind env
@@ -428,19 +473,20 @@ mutual
   checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) with (elabMode elabinfo)
     checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) | InLHS
       = do (wantedTm, wantedTy) <- checkImp rigc process 
-                                            (record { dotted = True } elabinfo)
+                                            (record { dotted = True,
+                                                      elabMode = InExpr } elabinfo)
                                             env nest tm (Just expected)
            n <- addHole loc env expected
            gam <- getCtxt
            let tm = mkConstantApp n env
-           log 10 $ "Added hole for MustUnify " ++ show tm
+           log 10 $ "Added hole for MustUnify " ++ show (tm, wantedTm, wantedTy)
            addDot loc env n wantedTm r tm
-           checkExp rigc process loc (record { elabMode= InExpr } elabinfo) 
+           checkExp rigc process loc (record { elabMode = InExpr } elabinfo) 
                     env nest tm wantedTy (Just expected)
     checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) | elabmode
-        = throw (GenericMsg loc "Dot pattern not valid here")
+        = throw (GenericMsg loc ("Dot pattern not valid here (not LHS)" ++ show tm))
   checkImp rigc process elabinfo env nest (IMustUnify loc r tm) expected
-      = throw (GenericMsg loc "Dot pattern not valid here")
+      = throw (GenericMsg loc ("Dot pattern not valid here (unknown type) " ++ show tm))
   checkImp rigc process elabinfo env nest (IAs loc var tm) expected with (elabMode elabinfo)
     checkImp rigc process elabinfo env nest (IAs loc var tm) (Just expected) | InLHS
       = checkAs rigc process elabinfo loc env nest var tm expected
@@ -884,6 +930,7 @@ mutual
                                      (_, Implicit _, _) => arg
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
+                                     (_, IMustUnify _ _ _, _) => arg
                                      (InLHS, _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      (argtm, argty) <- check (rigMult rigf rigc)

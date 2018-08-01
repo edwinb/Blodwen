@@ -15,6 +15,13 @@ import Data.CSet
 public export
 data UnifyMode = InLHS
                | InTerm
+               | InDot
+
+Eq UnifyMode where
+   InLHS == InLHS = True
+   InTerm == InTerm = True
+   InDot == InDot = True
+   _ == _ = False
 
 public export
 interface Unify (tm : List Name -> Type) where
@@ -729,19 +736,31 @@ mutual
       = do gam <- get Ctxt
            let holex = isHoleNF (gamma gam) hdx
            let holey = isHoleNF (gamma gam) hdy
-           if holex && holey
+           if mode == InDot && not (holex || holey) -- you know, sometimes I wish we had guards...
               then
-                 (if length argsx > length argsy
-                     then unifyApp False mode loc env (NRef xt hdx) argsx 
-                                           (NApp (NRef yt hdy) argsy)
-                     else unifyApp True mode loc env (NRef yt hdy) argsy 
-                                           (NApp (NRef xt hdx) argsx))
-              else 
-                 (if holex
-                     then unifyApp False mode loc env (NRef xt hdx) argsx
-                                           (NApp (NRef yt hdy) argsy)
-                     else unifyApp True mode loc env (NRef yt hdy) argsy 
-                                           (NApp (NRef xt hdx) argsx))
+                 do log 10 $ "In dot " ++ show (hdx, hdy)
+                    if hdx == hdy
+                       then unifyArgs InDot loc env argsx argsy
+                       else do log 10 $ "Postponing dot " ++
+                                   show (quote (noGam gam) env (NApp (NRef xt hdx) argsx))
+                                   ++ " =?= " ++
+                                   show (quote (noGam gam) env (NApp (NRef yt hdy) argsy))
+                               postpone loc env (NApp (NRef xt hdx) argsx)
+                                                (NApp (NRef yt hdy) argsy)
+              else
+                if holex && holey
+                   then
+                     (if length argsx > length argsy
+                         then unifyApp False mode loc env (NRef xt hdx) argsx 
+                                               (NApp (NRef yt hdy) argsy)
+                         else unifyApp True mode loc env (NRef yt hdy) argsy 
+                                               (NApp (NRef xt hdx) argsx))
+                   else 
+                     (if holex
+                         then unifyApp False mode loc env (NRef xt hdx) argsx
+                                               (NApp (NRef yt hdy) argsy)
+                         else unifyApp True mode loc env (NRef yt hdy) argsy 
+                                               (NApp (NRef xt hdx) argsx))
   unifyBothApps mode loc env fx ax fy ay
         = unifyApp False mode loc env fx ax (NApp fy ay)
   
@@ -1096,9 +1115,17 @@ checkDots
   where
     checkConstraint : Defs -> (Name, String, Constraint annot) -> Core annot ()
     checkConstraint gam (n, reason, MkConstraint loc env x y)
-        = do cs <- unify InLHS loc env x y
+        = do log 10 $ "Unifying dot patterns " ++ show n ++ ": " ++
+                       show (normaliseHoles gam env x) ++ " and " ++ 
+                       show (normaliseHoles gam env y)
+             cs <- unify InDot loc env x y
+             gam' <- get Ctxt
+             log 10 $ "Resulting constraints " ++ show cs
+             dumpConstraints 2 False
              if isNil cs && not (isHoleNF (gamma gam) n)
                 then pure ()
-                else throw (BadDotPattern loc reason x y)
+                else throw (BadDotPattern loc reason 
+                                (normaliseHoles gam' env x) 
+                                (normaliseHoles gam' env y))
     checkConstraint gam _ = pure ()
 

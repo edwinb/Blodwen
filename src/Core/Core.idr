@@ -143,7 +143,8 @@ Show annot => Show (Error annot) where
       = show fc ++ ":Can't infer type to match in " ++ show n
   show (BadDotPattern fc reason x y)
       = show fc ++ ":Can't match on " ++ show x ++ 
-           if reason /= "" then " (" ++ reason ++ ")" else ""
+           (if reason /= "" then " (" ++ reason ++ ")" else "") ++
+           " - it elaborates to " ++ show y
   show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"
   show (BadRunElab fc script) = show fc ++ ":Bad elaborator script " ++ show script
   show (GenericMsg fc str) = show fc ++ ":" ++ str

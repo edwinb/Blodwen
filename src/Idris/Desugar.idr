@@ -54,11 +54,6 @@ extendAs old as newsyn
                            ifaces $= mergeContextAs old as (ifaces newsyn) } 
                   syn)
 
--- Add 'IMustUnify' for any duplicated names, and any function application
--- other than 'fromInteger <literal>'
-addDots : Defs -> RawImp annot -> State (List Name) (RawImp annot)
-addDots defs tm = pure tm
-
 mkPrec : Fixity -> Nat -> OpPrec
 mkPrec InfixL p = AssocL p
 mkPrec InfixR p = AssocR p
@@ -296,8 +291,9 @@ mutual
                      (case ws of
                            [] => rhs'
                            _ => ILocal fc (concat ws) rhs')
-  desugarClause ps arg (MkImpossible fc lhs) 
-      = pure $ ImpossibleClause fc (snd (bindNames arg !(desugar LHS ps lhs)))
+  desugarClause ps arg (MkImpossible fc lhs)
+      = do dlhs <- desugar LHS ps lhs
+           pure $ ImpossibleClause fc (snd (bindNames arg dlhs))
 
   desugarData : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
