@@ -937,6 +937,10 @@ export
 fnType : Term vars -> Term vars -> Term vars
 fnType arg scope = Bind (MN "_" 0) (Pi RigW Explicit arg) (weaken scope)
 
+export
+linFnType : Term vars -> Term vars -> Term vars
+linFnType arg scope = Bind (MN "_" 0) (Pi Rig1 Explicit arg) (weaken scope)
+
 public export
 data Unapply : Term vars -> Type where
      ArgsList : {f : Term vars} -> {args : List (Term vars)} ->

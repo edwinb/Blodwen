@@ -427,7 +427,7 @@ Ord Nat where
 
 namespace Strings
     public export
-    (++) : String -> String -> String
+    (++) : (1 x : String) -> (1 y : String) -> String
     x ++ y = prim__strAppend x y
 
 public export

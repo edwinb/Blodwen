@@ -1,0 +1,5 @@
+$1 --check dots1.blod
+$1 --check dots2.blod
+$1 --check dots3.blod
+
+rm -rf build

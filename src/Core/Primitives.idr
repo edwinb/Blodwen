@@ -166,10 +166,10 @@ gt (Db x) (Db y) = pure $ toInt (x > y)
 gt _ _ = Nothing
 
 constTy : Constant -> Constant -> Constant -> ClosedTerm
-constTy a b c = PrimVal a `fnType` (PrimVal b `fnType` PrimVal c)
+constTy a b c = PrimVal a `linFnType` (PrimVal b `linFnType` PrimVal c)
 
 predTy : Constant -> Constant -> ClosedTerm
-predTy a b = PrimVal a `fnType` PrimVal b
+predTy a b = PrimVal a `linFnType` PrimVal b
 
 arithTy : Constant -> ClosedTerm
 arithTy t = constTy t t t
