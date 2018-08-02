@@ -38,7 +38,8 @@ insertImpLam env tm (Just ty) = bindLam tm ty
 expandAmbigName : ElabMode -> EState vars -> 
                   Defs -> Env Term vars -> NestedNames vars ->
                   RawImp annot -> 
-                  List (annot, RawImp annot) -> RawImp annot -> 
+                  List (annot, Maybe (Maybe Name), RawImp annot) -> 
+                  RawImp annot -> 
                   Maybe (Term vars) -> RawImp annot
 -- Insert implicit dots here, for things we can't match on directly
 -- (Only when mode is InLHS and it's not the name of the function we're 
@@ -91,11 +92,20 @@ expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
             else IMustUnify fc "Not a constructor application or primitive" tm
     wrapDot _ _ _ tm = tm
 
-    buildAlt : RawImp annot -> List (annot, RawImp annot) -> RawImp annot
+    buildAlt : RawImp annot -> 
+               List (annot, Maybe (Maybe Name), RawImp annot) -> 
+               RawImp annot
     buildAlt f [] = f
-    buildAlt f ((loc', a) :: as) = buildAlt (IApp loc' f a) as
+    buildAlt f ((loc', Nothing, a) :: as) 
+        = buildAlt (IApp loc' f a) as
+    buildAlt f ((loc', Just i, a) :: as) 
+        = buildAlt (IImplicitApp loc' f i a) as
 expandAmbigName mode estate defs env nest orig args (IApp fc f a) exp
-   = expandAmbigName mode estate defs env nest orig ((fc, a) :: args) f exp
+   = expandAmbigName mode estate defs env nest orig 
+                     ((fc, Nothing, a) :: args) f exp
+expandAmbigName mode estate defs env nest orig args (IImplicitApp fc f n a) exp
+   = expandAmbigName mode estate defs env nest orig 
+                     ((fc, Just n, a) :: args) f exp
 expandAmbigName mode estate defs env nest orig args _ _ = orig
 
 notePatVar : {auto e : Ref EST (EState vars)} ->
