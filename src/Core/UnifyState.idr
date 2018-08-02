@@ -186,7 +186,7 @@ addDelayedHoleName loc n
 
 dropFirst : (a -> b -> Bool) -> a -> List b -> List b
 dropFirst f x [] = []
-dropFirst f x (y :: ys) = if f x y then ys else y :: dropFirst f x ys
+dropFirst f x (y :: ys) = if f x y then dropFirst f x ys else y :: dropFirst f x ys
 
 export
 removeHoleName : {auto u : Ref UST (UState annot)} ->

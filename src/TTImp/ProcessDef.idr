@@ -181,7 +181,6 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
            checkNameVisibility loc defining vis lhs
            checkNameVisibility loc defining vis rhs
 
-         wrapError (InRHS loc defining) $ checkUserHoles False
 
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
@@ -228,7 +227,6 @@ processDef elab env nest loc n_in cs_raw
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>
                 do cs <- traverse (checkClause elab n env nest) cs_raw
-                   checkUserHoles False
                    (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
                    (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
                    

@@ -102,6 +102,8 @@ elabTerm {vars} process defining env nest impmode elabmode tm tyin
          normaliseHoleTypes
          clearSolvedHoles
          dumpConstraints 2 False
+         checkUserHoles False -- need to fail if there are any guards
+                              -- or 'linearCheck' will fail
          ptm' <- the (Core _ (Term vars)) $ case elabmode of
                     InLHS => pure ptm'
                     _ => do linearCheck (getAnnot tm) rigc False env ptm'
