@@ -82,6 +82,7 @@ substInPatInfo {pvar} {vars} defs n tm p ps
                                    updatePats env 
                                       (fsc (toClosure False env
                                                 (Ref Bound pvar))) ps)
+                             _ => (p, ps)
            Unknown => (p, ps)
 
 -- Substitute the name with a term in the pattern types, and reduce further
