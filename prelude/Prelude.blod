@@ -6,7 +6,8 @@ import public PrimIO
 {-
 The Prelude is minimal (since it is effectively part of the language 
 specification, this seems to be desirable - we should, nevertheless, aim to
-provide a good selection of base libraries).
+provide a good selection of base libraries). A rule of thumb is that it should
+contain the basic functions required by almost any non-trivial program.
 
 As such, it should contain:
 
@@ -183,7 +184,7 @@ Num Double where
     fromInteger = prim__cast_IntegerDouble
 
 Neg Double where
-    negate x = prim__sub_Double 0 x -- TODO: add prim__neg_Double
+    negate x = prim__negate_Double x
     (-) = prim__sub_Double
 
 -------------
@@ -628,11 +629,8 @@ public export
 isHexDigit : Char -> Bool
 isHexDigit x = elem (toUpper x) hexChars where
   hexChars : List Char
-  hexChars = []
--- TODO: Add when disambiguation works based on return type; it's
--- too slow until then (and do this soon :))
---       ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
---               'A', 'B', 'C', 'D', 'E', 'F']
+  hexChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+              'A', 'B', 'C', 'D', 'E', 'F']
 
 public export
 isOctDigit : Char -> Bool

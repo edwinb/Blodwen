@@ -2,6 +2,7 @@ module TTImp.Elab.Term
 
 import TTImp.TTImp
 import public TTImp.Elab.State
+import TTImp.Elab.Ambiguity
 import TTImp.Reflect
 
 import Core.AutoSearch
@@ -34,79 +35,6 @@ insertImpLam env tm (Just ty) = bindLam tm ty
               -- it to 'Nothing' and let the machine invent one
               ILam loc c Implicit Nothing (Implicit loc) (bindLam tm sc)
     bindLam tm sc = tm
-
-expandAmbigName : ElabMode -> EState vars -> 
-                  Defs -> Env Term vars -> NestedNames vars ->
-                  RawImp annot -> 
-                  List (annot, Maybe (Maybe Name), RawImp annot) -> 
-                  RawImp annot -> 
-                  Maybe (Term vars) -> RawImp annot
--- Insert implicit dots here, for things we can't match on directly
--- (Only when mode is InLHS and it's not the name of the function we're 
--- defining)
-expandAmbigName InLHS estate defs env nest orig args (IPrimVal fc c) exp
-    = if isType c
-         then IMustUnify fc "Primitive type constructor" orig
-         else orig
-  where
-    isType : Constant -> Bool
-    isType IntType = True
-    isType IntegerType = True
-    isType StringType = True
-    isType CharType = True
-    isType DoubleType = True
-    isType WorldType = True
-    isType _ = False
-expandAmbigName InLHS estate defs env nest orig args (IBindVar fc n) exp
-   = if n `elem` lhsPatVars estate
-        then IMustUnify fc "Non linear pattern variable" orig
-        else orig
-expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
-   = case lookup x (names nest) of
-          Just _ => orig
-          Nothing => 
-            case defined x env of
-                 Just _ => if isNil args || notLHS mode 
-                              then orig
-                              else IMustUnify fc "Name applied to arguments" orig
-                 Nothing => 
-                    case lookupDefTyNameIn (currentNS defs) x 
-                                           (gamma defs) of
-                       [] => orig
-                       [(n, def, _)] => wrapDot mode n def (buildAlt (IVar fc n) args)
-                       ns => IAlternative fc Unique
-                               (map (\n => wrapDot mode (fst n) (fst (snd n)) 
-                                              (buildAlt (IVar fc (fst n)) args)) 
-                                    ns)
-  where
-    notLHS : ElabMode -> Bool
-    notLHS InLHS = False
-    notLHS _ = True
-
-    -- If it's not a constructor application, dot it
-    wrapDot : ElabMode -> Name -> Def -> RawImp annot -> RawImp annot
-    wrapDot _ _ (DCon _ _ _) tm = tm
-    wrapDot InLHS n' _ tm 
-       = if n' == defining estate
-            then tm
-            else IMustUnify fc "Not a constructor application or primitive" tm
-    wrapDot _ _ _ tm = tm
-
-    buildAlt : RawImp annot -> 
-               List (annot, Maybe (Maybe Name), RawImp annot) -> 
-               RawImp annot
-    buildAlt f [] = f
-    buildAlt f ((loc', Nothing, a) :: as) 
-        = buildAlt (IApp loc' f a) as
-    buildAlt f ((loc', Just i, a) :: as) 
-        = buildAlt (IImplicitApp loc' f i a) as
-expandAmbigName mode estate defs env nest orig args (IApp fc f a) exp
-   = expandAmbigName mode estate defs env nest orig 
-                     ((fc, Nothing, a) :: args) f exp
-expandAmbigName mode estate defs env nest orig args (IImplicitApp fc f n a) exp
-   = expandAmbigName mode estate defs env nest orig 
-                     ((fc, Just n, a) :: args) f exp
-expandAmbigName mode estate defs env nest orig args _ _ = orig
 
 notePatVar : {auto e : Ref EST (EState vars)} ->
              ElabMode -> String -> Core annot ()
@@ -385,36 +313,40 @@ mutual
                                  log 5 $ "Added hole for ambiguous expression type (UniqueDefault) " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
+           defs <- get Ctxt
+           let alts' = pruneByType defs (nf defs env expected) alts
            delayOnFailure loc env expected ambiguous $
             (\delayed =>
                do gam <- get Ctxt
-                  log 5 $ "Ambiguous elaboration " ++ show alts ++ 
+                  log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
                   if delayed -- use the default if there's still ambiguity
                      then try (exactlyOne loc (map (\t => 
                                  checkImp rigc process elabinfo env nest t 
-                                     (Just expected)) alts))
+                                     (Just expected)) alts'))
                               (checkImp rigc process elabinfo env nest def
                                      (Just expected))
                      else exactlyOne loc (map (\t => 
                              checkImp rigc process elabinfo env nest t 
-                                 (Just expected)) alts))
+                                 (Just expected)) alts'))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
       = do expected <- maybe (do t <- addHole loc env TType
                                  log 5 $ "Added hole for ambiguous expression type " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
+           defs <- get Ctxt
+           let alts' = pruneByType defs (nf defs env expected) alts
            delayOnFailure loc env expected ambiguous $
             (\delayed =>
                do gam <- get Ctxt
-                  log 5 $ "Ambiguous elaboration " ++ show alts ++ 
+                  log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
                   let tryall = case uniq of
                                     FirstSuccess => anyOne
                                     _ => exactlyOne
                   tryall loc (map (\t => 
                          checkImp rigc process elabinfo env nest t 
-                             (Just expected)) alts))
+                             (Just expected)) alts'))
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected

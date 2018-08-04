@@ -44,6 +44,7 @@ modules = Compiler.Chez,
           Parser.Support,
 
           TTImp.Elab,
+          TTImp.Elab.Ambiguity,
           TTImp.Elab.State,
           TTImp.Elab.Term,
           TTImp.Elab.Unelab,
