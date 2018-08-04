@@ -36,6 +36,7 @@ castString _ = Nothing
 
 castInteger : Vect 1 (NF vars) -> Maybe (NF vars)
 castInteger [NPrimVal (I i)] = Just (NPrimVal (BI (cast i)))
+castInteger [NPrimVal (Ch i)] = Just (NPrimVal (BI (cast (cast {to=Int} i))))
 castInteger [NPrimVal (Db i)] = Just (NPrimVal (BI (cast i)))
 castInteger _ = Nothing
 
@@ -69,6 +70,11 @@ strTail [NPrimVal (Str "")] = Nothing
 strTail [NPrimVal (Str str)] 
     = Just (NPrimVal (Str (assert_total (strTail str))))
 strTail _ = Nothing
+
+strCons : Vect 2 (NF vars) -> Maybe (NF vars)
+strCons [NPrimVal (Ch x), NPrimVal (Str y)] 
+    = Just (NPrimVal (Str (strCons x y)))
+strCons _ = Nothing
 
 strAppend : Vect 2 (NF vars) -> Maybe (NF vars)
 strAppend [NPrimVal (Str x), NPrimVal (Str y)] 
@@ -204,6 +210,7 @@ getOp (GT ty) = binOp gt
 getOp StrLength = strLength
 getOp StrHead = strHead
 getOp StrTail = strTail
+getOp StrCons = strCons
 getOp StrAppend = strAppend
 getOp StrReverse = strReverse
 
@@ -230,6 +237,7 @@ opName (GT ty) = prim $ "gt_" ++ show ty
 opName StrLength = prim "strLength"
 opName StrHead = prim "strHead"
 opName StrTail = prim "strTail"
+opName StrCons = prim "strCons"
 opName StrAppend = prim "strAppend"
 opName StrReverse = prim "strReverse"
 opName (Cast x y) = prim $ "cast_" ++ show x ++ show y
@@ -253,11 +261,12 @@ allPrimitives =
     [MkPrim StrLength (predTy StringType IntType) Total,
      MkPrim StrHead (predTy StringType CharType) (Partial NotCovering),
      MkPrim StrTail (predTy StringType StringType) (Partial NotCovering),
+     MkPrim StrCons (constTy CharType StringType StringType) Total,
      MkPrim StrAppend (arithTy StringType) Total,
      MkPrim StrReverse (predTy StringType StringType) Total] ++
 
     map (\t => MkPrim (Cast t StringType) (predTy t StringType) Total) [IntType, IntegerType, CharType, DoubleType] ++
-    map (\t => MkPrim (Cast t IntegerType) (predTy t IntegerType) Total) [IntType, DoubleType] ++
+    map (\t => MkPrim (Cast t IntegerType) (predTy t IntegerType) Total) [IntType, CharType, DoubleType] ++
     map (\t => MkPrim (Cast t IntType) (predTy t IntType) Total) [IntegerType, CharType, DoubleType] ++
     map (\t => MkPrim (Cast t DoubleType) (predTy t DoubleType) Total) [IntType, IntegerType] ++
     map (\t => MkPrim (Cast t CharType) (predTy t CharType) Total) [IntType]

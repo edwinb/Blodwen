@@ -15,6 +15,7 @@ As such, it should contain:
 - The most important utility functions: id, the, composition, etc
 - Interfaces for arithmetic and implementations for the primitives and
   basic types
+- Char and String manipulation
 - Show, Eq, Ord, and implementations for all types in the prelude
 - Interfaces and functions for basic proof (cong, Uninhabited, etc)
 - [Possibly Enum for range syntax?]
@@ -142,11 +143,20 @@ interface Num ty where
     (*) : ty -> ty -> ty
     fromInteger : Integer -> ty
 
+interface Num ty => Neg ty where
+    negate : ty -> ty
+    (-) : ty -> ty -> ty
+
 public export
 Num Integer where
     (+) = prim__add_Integer
     (*) = prim__mul_Integer
     fromInteger = id
+
+Neg Integer where
+    negate x = prim__sub_Integer 0 x
+    (-) = prim__sub_Integer
+
 
 -- This allows us to pick integer as a default at the end of elaboration if
 -- all other possibilities fail. I don't plan to provide a nicer syntax for
@@ -162,11 +172,19 @@ Num Int where
     (*) = prim__mul_Int
     fromInteger = prim__cast_IntegerInt
 
+Neg Int where
+    negate x = prim__sub_Int 0 x
+    (-) = prim__sub_Int
+
 public export
 Num Double where
     (+) = prim__add_Double
     (*) = prim__mul_Double
     fromInteger = prim__cast_IntegerDouble
+
+Neg Double where
+    negate x = prim__sub_Double 0 x -- TODO: add prim__neg_Double
+    (-) = prim__sub_Double
 
 -------------
 -- ALGEBRA --
@@ -556,6 +574,76 @@ public export
 Monad List where
   m >>= f = concatMap f m
 
+public export
+elem : Eq a => a -> List a -> Bool
+elem x [] = False
+elem x (y :: ys) = if x == y then True else elem x ys
+
+----------------
+-- CHARACTERS --
+----------------
+public export
+isUpper : Char -> Bool
+isUpper x = x >= 'A' && x <= 'Z'
+
+public export
+isLower : Char -> Bool
+isLower x = x >= 'a' && x <= 'z'
+
+public export
+isAlpha : Char -> Bool
+isAlpha x = isUpper x || isLower x
+
+public export
+isDigit : Char -> Bool
+isDigit x = (x >= '0' && x <= '9')
+
+public export
+isAlphaNum : Char -> Bool
+isAlphaNum x = isDigit x || isAlpha x
+
+public export
+isSpace : Char -> Bool
+isSpace x = x == ' '  || x == '\t' || x == '\r' ||
+            x == '\n' || x == '\f' || x == '\v' ||
+            x == '\xa0'
+
+public export
+isNL : Char -> Bool
+isNL x = x == '\r' || x == '\n'
+
+public export
+toUpper : Char -> Char
+toUpper x = if (isLower x)
+               then prim__cast_IntChar (prim__cast_CharInt x - 32)
+               else x
+
+public export
+toLower : Char -> Char
+toLower x = if (isUpper x)
+               then prim__cast_IntChar (prim__cast_CharInt x + 32)
+               else x
+
+public export
+isHexDigit : Char -> Bool
+isHexDigit x = elem (toUpper x) hexChars where
+  hexChars : List Char
+  hexChars = []
+-- TODO: Add when disambiguation works based on return type; it's
+-- too slow until then (and do this soon :))
+--       ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+--               'A', 'B', 'C', 'D', 'E', 'F']
+
+public export
+isOctDigit : Char -> Bool
+isOctDigit x = (x >= '0' && x <= '7')
+
+public export
+isControl : Char -> Bool
+isControl x = (x >= '\x0000' && x <= '\x001f')
+           || (x >= '\x007f' && x <= '\x009f')
+
+
 ----------
 -- SHOW --
 ----------
@@ -581,7 +669,20 @@ interface Show ty where
   showPrec : (d : Prec) -> (x : ty) -> String
   showPrec _ x = show x
 
--- TODO: Instances
+public export
+Show Int where
+  show = prim__cast_IntString
+
+public export
+Show Integer where
+  show = prim__cast_IntegerString
+
+firstCharIs : (Char -> Bool) -> String -> Bool
+firstCharIs p "" = False
+firstCharIs p str = p (prim__strHead str)
+
+protectEsc : (Char -> Bool) -> String -> String -> String
+protectEsc p f s = f ++ (if firstCharIs p s then "\\&" else "") ++ s
 
 --------
 -- IO --

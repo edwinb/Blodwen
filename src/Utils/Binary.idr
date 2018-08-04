@@ -282,12 +282,10 @@ TTC annot Bool where
 
 export
 TTC annot Char where
-  toBuf b c = toBuf b (cast {to=String} c)
+  toBuf b c = toBuf b (cast {to=Int} c)
   fromBuf s b
-      = do str <- fromBuf s b
-           if length str == 1
-              then pure (assert_total (strHead str))
-              else corrupt "Char"
+      = do i <- fromBuf s b
+           pure (cast {from=Int} i)
 
 export
 TTC annot Double where

@@ -103,6 +103,17 @@ dec '8' = Just 8
 dec '9' = Just 9
 dec _ = Nothing
 
+oct : Char -> Maybe Int
+oct '0' = Just 0
+oct '1' = Just 1
+oct '2' = Just 2
+oct '3' = Just 3
+oct '4' = Just 4
+oct '5' = Just 5
+oct '6' = Just 6
+oct '7' = Just 7
+oct _ = Nothing
+
 escape' : List Char -> Maybe (List Char)
 escape' [] = pure []
 escape' ('\\' :: '\\' :: xs) = pure $ '\\' :: !(escape' xs)
@@ -115,9 +126,26 @@ escape' ('\\' :: 't' :: xs) = pure $ '\t' :: !(escape' xs)
 escape' ('\\' :: 'v' :: xs) = pure $ '\v' :: !(escape' xs)
 escape' ('\\' :: '\'' :: xs) = pure $ '\'' :: !(escape' xs)
 escape' ('\\' :: '\"' :: xs) = pure $ '\"' :: !(escape' xs)
-escape' ('\\' :: 'x' :: c1 :: c2 :: xs) 
-    = pure $ cast (!(hex (toLower c1)) * 16 + !(hex (toLower c2))) :: 
-           !(escape' xs)
+escape' ('\\' :: 'x' :: xs) 
+    = case span isHexDigit xs of
+           ([], rest) => assert_total (escape' rest)
+           (ds, rest) => pure $ cast !(toHex 1 (reverse ds)) :: 
+                                 !(assert_total (escape' rest))
+  where 
+    toHex : Int -> List Char -> Maybe Int
+    toHex _ [] = Just 0
+    toHex m (d :: ds) 
+        = pure $ !(hex (toLower d)) * m + !(toHex (m*16) ds)
+escape' ('\\' :: 'o' :: xs) 
+    = case span isOctDigit xs of
+           ([], rest) => assert_total (escape' rest)
+           (ds, rest) => pure $ cast !(toOct 1 (reverse ds)) :: 
+                                 !(assert_total (escape' rest))
+  where 
+    toOct : Int -> List Char -> Maybe Int
+    toOct _ [] = Just 0
+    toOct m (d :: ds) 
+        = pure $ !(oct (toLower d)) * m + !(toOct (m*8) ds)
 escape' ('\\' :: xs) 
     = case span isDigit xs of
            ([], rest) => assert_total (escape' rest)
@@ -133,7 +161,9 @@ getCharLit str
    = do e <- escape str
         if length e == 1
            then Just (assert_total (strHead e))
-           else Nothing
+           else if length e == 0 -- parsed the NULL character that terminated the string!
+                   then Just '\0000'
+                   else Nothing
 
 export
 constant : Rule Constant

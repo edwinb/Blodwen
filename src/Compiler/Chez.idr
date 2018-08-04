@@ -37,6 +37,7 @@ schHeader chez
     "(define b- (lambda (x y bits) (remainder (- x y) (expt 2 bits))))\n" ++
     "(define b* (lambda (x y bits) (remainder (* x y) (expt 2 bits))))\n" ++
     "(define b/ (lambda (x y bits) (remainder (/ x y) (expt 2 bits))))\n" ++
+    "(define string-cons (lambda (x y) (string-append (string x) y)))\n" ++
     "(define get-tag (lambda (x) (vector-ref x 0)))\n\n"
 
 schFooter : String
@@ -114,6 +115,7 @@ schOp (GT ty) [x, y] = boolop ">" [x, y]
 schOp StrLength [x] = op "string-length" [x]
 schOp StrHead [x] = op "string-rev" [x, "0"]
 schOp StrTail [x] = op "substring/shared" [x, "1"]
+schOp StrCons [x, y] = op "string-cons" [x, y]
 schOp StrAppend [x, y] = op "string-append" [x, y]
 schOp StrReverse [x] = op "string-reverse" [x]
 schOp (Cast IntType StringType) [x] = op "number->string" [x]

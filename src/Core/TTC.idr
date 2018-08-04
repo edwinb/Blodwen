@@ -326,9 +326,10 @@ TTC annot (PrimFn n) where
   toBuf b StrLength = tag 11
   toBuf b StrHead = tag 12
   toBuf b StrTail = tag 13
-  toBuf b StrAppend = tag 14
-  toBuf b StrReverse = tag 15
-  toBuf b (Cast x y) = do tag 16; toBuf b x; toBuf b y
+  toBuf b StrCons = tag 14
+  toBuf b StrAppend = tag 15
+  toBuf b StrReverse = tag 16
+  toBuf b (Cast x y) = do tag 17; toBuf b x; toBuf b y
 
   fromBuf {n} s b
       = case n of
@@ -344,8 +345,8 @@ TTC annot (PrimFn n) where
                  11 => pure StrLength
                  12 => pure StrHead
                  13 => pure StrTail
-                 15 => pure StrReverse
-                 16 => do x <- fromBuf s b; y <- fromBuf s b; pure (Cast x y)
+                 16 => pure StrReverse
+                 17 => do x <- fromBuf s b; y <- fromBuf s b; pure (Cast x y)
                  _ => corrupt "PrimFn 1"
 
       fromBuf2 : Ref Share (StringMap String) -> Ref Bin Binary ->
@@ -362,7 +363,8 @@ TTC annot (PrimFn n) where
                  8 => do ty <- fromBuf s b; pure (EQ ty)
                  9 => do ty <- fromBuf s b; pure (GTE ty)
                  10 => do ty <- fromBuf s b; pure (GT ty)
-                 14 => pure StrAppend
+                 14 => pure StrCons
+                 15 => pure StrAppend
                  _ => corrupt "PrimFn 2"
              
 mutual
