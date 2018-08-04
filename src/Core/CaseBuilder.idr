@@ -59,7 +59,7 @@ updatePats {todo = pvar :: ns} env (NBind _ (Pi c _ farg) fsc) (p :: ps)
   = case argType p of
          Unknown =>
             record { argType = Known c (quote initCtxt env farg) } p
-              :: updatePats env (fsc (toClosure False env (Ref Bound pvar))) ps
+              :: updatePats env (fsc (toClosure defaultOpts env (Ref Bound pvar))) ps
          _ => p :: ps
 updatePats env nf (p :: ps)
   = case argType p of
@@ -80,7 +80,7 @@ substInPatInfo {pvar} {vars} defs n tm p ps
                              NBind _ (Pi c _ farg) fsc =>
                                (record { argType = Known c (quote initCtxt env farg) } p,
                                    updatePats env 
-                                      (fsc (toClosure False env
+                                      (fsc (toClosure defaultOpts env
                                                 (Ref Bound pvar))) ps)
                              _ => (p, ps)
            Unknown => (p, ps)
@@ -276,7 +276,7 @@ nextNames {vars} root (p :: pats) fty
                   = case fty of
                          Nothing => (Nothing, Unknown)
                          Just (NBind _ (Pi c _ farg) fsc) =>
-                            (Just (fsc (toClosure False env (Ref Bound n))),
+                            (Just (fsc (toClosure defaultOpts env (Ref Bound n))),
                               Known c (quote initCtxt env farg))
                          Just t =>
                             (Nothing, Stuck (quote initCtxt env t))
@@ -673,7 +673,7 @@ mkPatClause defs args ty (ps, rhs)
         = let fa_tys = case fty of
                             Nothing => (Nothing, Unknown)
                             Just (NBind _ (Pi c _ farg) fsc) => 
-                                (Just (fsc (toClosure False [] (Ref Bound arg))),
+                                (Just (fsc (toClosure defaultOpts [] (Ref Bound arg))),
                                    Known c (embed {more = arg :: args} 
                                              (quote initCtxt [] farg)))
                             Just t => 

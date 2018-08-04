@@ -192,7 +192,7 @@ mutual
            case nf gam env fty of
                 NBind _ (Pi rigf _ ty) scdone =>
                    do (a', aty, aused) <- lcheck loc (rigMult rigf rig) erase env a
-                      let sc' = scdone (toClosure False env a')
+                      let sc' = scdone (toClosure defaultOpts env a')
                       let aerased = if erase && rigf == Rig0 then Erased else a'
                       pure (App f' aerased, quote (noGam gam) env sc', fused ++ aused)
                 _ => throw (InternalError ("Linearity checking failed on " ++ show f' ++ 

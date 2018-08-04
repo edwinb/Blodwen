@@ -948,11 +948,15 @@ parseMode : Rule REPLEval
 parseMode
      = do exactIdent "typecheck"
           pure EvalTC
+   <|> do exactIdent "tc"
+          pure EvalTC
    <|> do exactIdent "normalise"
           pure NormaliseAll
    <|> do exactIdent "normalize" -- oh alright then
           pure NormaliseAll
    <|> do exactIdent "execute"
+          pure Execute
+   <|> do exactIdent "exec"
           pure Execute
 
 setOption : Bool -> Rule REPLOpt

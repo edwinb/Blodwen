@@ -45,10 +45,10 @@ mutual
            case nf defs env fnty of
                 NBind x (Pi rig Explicit ty) sc
                   => pure (IApp loc fn' arg', 
-                           quote defs env (sc (toClosure False env arg)))
+                           quote defs env (sc (toClosure defaultOpts env arg)))
                 NBind x (Pi rig p ty) sc
                   => pure (IImplicitApp loc fn' (Just x) arg', 
-                           quote defs env (sc (toClosure False env arg)))
+                           quote defs env (sc (toClosure defaultOpts env arg)))
                 _ => pure (IApp loc fn' arg', Erased)
   unelabTy loc env (PrimVal c) = pure (IPrimVal loc c, Erased)
   unelabTy loc env Erased = pure (Implicit loc, Erased)

@@ -33,7 +33,7 @@ mkArgs loc env (NBind n (Pi c info ty) sc)
          argName <- genName "sa"
          addNamedHole loc argName False env (quote (noGam gam) env ty)
          let arg = mkConstantApp argName env
-         (rest, restTy) <- mkArgs loc env (sc (MkClosure False [] env Erased))
+         (rest, restTy) <- mkArgs loc env (sc (MkClosure defaultOpts [] env Erased))
          pure ((argName, arg) :: rest, restTy)
 mkArgs loc env ty = pure ([], ty)
 
@@ -239,7 +239,7 @@ concreteDets {vars} loc env ty i ds (cl :: cs)
     mutual
       concreteNF : Bool -> NF vars -> Core annot ()
       concreteNF top (NBind x b sc)
-          = concreteNF False (sc (toClosure False env Erased))
+          = concreteNF False (sc (toClosure defaultOpts env Erased))
       concreteNF top (NApp (NRef _ hn) args)
           = do gam <- get Ctxt
                hole <- nameIsHole loc hn
@@ -277,7 +277,7 @@ checkConcreteDets loc defaults ty (NTCon n t ar args)
     = do sd <- getSearchData loc (not defaults) n
          concreteDets loc [] ty 0 (detArgs sd) args
 checkConcreteDets loc defaults ty (NBind n (Pi _ _ _) scfn)
-    = checkConcreteDets loc defaults ty (scfn (toClosure False [] Erased))
+    = checkConcreteDets loc defaults ty (scfn (toClosure defaultOpts [] Erased))
 checkConcreteDets _ _ _ _ = pure ()
 
 -- Type directed search - take the first thing of the given type it finds using
@@ -290,7 +290,7 @@ searchType loc defaults depth trying env defining (NBind n (Pi c info ty) scfn)
     = do xn <- genName "x"
          gam <- get Ctxt
          let env' : Env Term (n :: _) = Pi c info (quote (noGam gam) env ty) :: env
-         let sc = scfn (toClosure False env (Ref Bound xn))
+         let sc = scfn (toClosure defaultOpts env (Ref Bound xn))
          let tmsc = refToLocal xn n (quote (noGam gam) env sc)
          log 6 $ "Introduced lambda, search for " ++ show (normalise gam env' tmsc)
          scVal <- searchType loc defaults depth trying env' defining (nf gam env' tmsc)

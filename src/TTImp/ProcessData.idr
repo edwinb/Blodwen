@@ -23,7 +23,7 @@ processDataOpt loc ndef (SearchBy dets)
 checkRetType : Env Term vars -> NF vars -> 
                (NF vars -> Core annot ()) -> Core annot ()
 checkRetType env (NBind x (Pi _ _ ty) sc) chk
-    = checkRetType env (sc (MkClosure False [] env Erased)) chk
+    = checkRetType env (sc (MkClosure defaultOpts [] env Erased)) chk
 checkRetType env nf chk = chk nf
 
 checkIsType : annot -> Name -> Env Term vars -> NF vars -> Core annot ()

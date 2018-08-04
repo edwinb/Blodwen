@@ -13,7 +13,7 @@ import TTImp.TTImp
   
 getRetTy : annot -> Defs -> NF [] -> Core annot Name
 getRetTy loc ctxt (NBind x (Pi _ _ _) sc)
-    = getRetTy loc ctxt (sc (MkClosure False [] [] Erased))
+    = getRetTy loc ctxt (sc (MkClosure defaultOpts [] [] Erased))
 getRetTy loc ctxt (NTCon n _ _ _) = pure n
 getRetTy loc ctxt tm 
     = throw (GenericMsg loc ("Can't use hints for return type "

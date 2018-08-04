@@ -50,7 +50,7 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
              case evalClosure defs k of
                   NBind x (Lam _ _ _) sc =>
                         elabScript loc elab env nest 
-                            (sc (toClosure False env (quote defs env p)))
+                            (sc (toClosure defaultOpts env (quote defs env p)))
                   tm => failWith defs
     elabCon defs "Log" [i, msg]
         = do i' <- doReify (evalClosure defs i)

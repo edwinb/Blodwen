@@ -100,7 +100,7 @@ mutual
 
   mightMatch : Defs -> NF vars -> NF [] -> Bool
   mightMatch defs target (NBind n (Pi _ _ _) sc)
-      = mightMatchD defs target (sc (toClosure False [] Erased))
+      = mightMatchD defs target (sc (toClosure defaultOpts [] Erased))
   mightMatch defs (NTCon n t a args) (NTCon n' t' a' args')
       = if n == n'
            then and (map Delay

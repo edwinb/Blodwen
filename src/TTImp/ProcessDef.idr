@@ -53,11 +53,11 @@ findLinear gam bound rig tm with (unapply tm)
       findLinArg (NBind x (Pi c _ _) sc) (Local {x=a} prf :: as) 
           = if boundHere bound prf
                then (a, rigMult c rig) :: 
-                    findLinArg (sc (toClosure False [] (Ref Bound x))) as
-               else findLinArg (sc (toClosure False [] (Ref Bound x))) as
+                    findLinArg (sc (toClosure defaultOpts [] (Ref Bound x))) as
+               else findLinArg (sc (toClosure defaultOpts [] (Ref Bound x))) as
       findLinArg (NBind x (Pi c _ _) sc) (a :: as) 
           = findLinear gam bound (rigMult c rig) a ++
-                findLinArg (sc (toClosure False [] (Ref Bound x))) as
+                findLinArg (sc (toClosure defaultOpts [] (Ref Bound x))) as
       findLinArg ty (a :: as) = findLinear gam bound rig a ++ findLinArg ty as
       findLinArg _ [] = []
   findLinear gam bound rig (apply f args) | ArgsList = []

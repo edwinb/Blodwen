@@ -128,18 +128,28 @@ process : {auto c : Ref Ctxt Defs} ->
           {auto o : Ref ROpts REPLOpts} ->
           REPLCmd -> Core FC Bool
 process (Eval itm)
-    = do i <- newRef ImpST (initImpState {annot = FC})
-         ttimp <- desugar AnyExpr [] itm
-         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
-                               [] (MkNested []) NONE InExpr ttimp 
-         gam <- get Ctxt
-         itm <- resugar [] (normalise gam [] tm)
-         if showTypes !(get ROpts)
-            then do ity <- resugar [] (normalise gam [] ty)
-                    coreLift (putStrLn (show itm ++ " : " ++ show ity))
-            else coreLift (putStrLn (show itm))
-         dumpConstraints 0 True
-         pure True
+    = do opts <- get ROpts
+         case evalMode opts of
+            Execute => do execExp itm; pure True
+            _ => 
+              do i <- newRef ImpST (initImpState {annot = FC})
+                 ttimp <- desugar AnyExpr [] itm
+                 (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+                                       Env.Nil (MkNested []) NONE InExpr ttimp 
+                 gam <- get Ctxt
+                 opts <- get ROpts
+                 let norm = nfun (evalMode opts)
+                 itm <- resugar [] (norm gam [] tm)
+                 if showTypes opts
+                    then do ity <- resugar [] (norm gam [] ty)
+                            coreLift (putStrLn (show itm ++ " : " ++ show ity))
+                    else coreLift (putStrLn (show itm))
+                 dumpConstraints 0 True
+                 pure True
+  where
+    nfun : REPLEval -> Defs -> Env Term vs -> Term vs -> Term vs
+    nfun NormaliseAll = normaliseAll
+    nfun _ = normalise
 process (Check (PRef fc fn))
     = do defs <- get Ctxt
          case lookupGlobalName fn (gamma defs) of
@@ -211,7 +221,8 @@ repl : {auto c : Ref Ctxt Defs} ->
        Core FC ()
 repl
     = do ns <- getNS
-         coreLift (putStr (showSep "." (reverse ns) ++ "> "))
+         opts <- get ROpts
+         coreLift (putStr (prompt (evalMode opts) ++ showSep "." (reverse ns) ++ "> "))
          inp <- coreLift getLine
          case runParser inp (do c <- command; eoi; pure c) of
               Left err => do coreLift (printLn err)
@@ -220,5 +231,9 @@ repl
                   do if !(processCatch cmd)
                         then repl
                         else pure ()
-
+  where
+    prompt : REPLEval -> String
+    prompt EvalTC = "[tc] "
+    prompt NormaliseAll = ""
+    prompt Execute = "[exec] "
 

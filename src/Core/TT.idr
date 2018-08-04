@@ -387,6 +387,25 @@ namespace Env
 -- That is - the top level constructor is known but the arguments aren't
 -- evaluted. Terms are evaluated to NF in Core.Normalise.
 
+public export
+record EvalOpts where
+  constructor MkEvalOpts
+  holesOnly : Bool
+  evalAll : Bool
+
+export
+defaultOpts : EvalOpts
+defaultOpts = MkEvalOpts False False
+
+export
+withHoles : EvalOpts
+withHoles = MkEvalOpts True False
+
+export
+withAll : EvalOpts
+withAll = MkEvalOpts False True
+
+
 -- Closures are terms linked with the environment they evaluate in.
 -- That's a local environment - local variables in the evaluation itself -
 -- and an environment describing the free variables
@@ -398,7 +417,7 @@ mutual
 
   public export
   data Closure : List Name -> Type where
-       MkClosure : (holesonly : Bool) ->
+       MkClosure : (opts : EvalOpts) ->
                    LocalEnv free vars -> 
                    Env Term free ->
                    Term (vars ++ free) -> Closure free

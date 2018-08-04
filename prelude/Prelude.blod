@@ -144,6 +144,7 @@ interface Num ty where
     (*) : ty -> ty -> ty
     fromInteger : Integer -> ty
 
+public export
 interface Num ty => Neg ty where
     negate : ty -> ty
     (-) : ty -> ty -> ty
@@ -684,6 +685,14 @@ precCon (User n)    = 4
 precCon PrefixMinus = 5
 precCon App         = 6
 
+Eq Prec where
+  (==) (User m) (User n) = m == n
+  (==) x        y        = precCon x == precCon y
+
+Ord Prec where
+  compare (User m) (User n) = compare m n
+  compare x        y        = compare (precCon x) (precCon y)
+
 public export
 interface Show ty where
   show : (x : ty) -> String
@@ -692,17 +701,34 @@ interface Show ty where
   showPrec : (d : Prec) -> (x : ty) -> String
   showPrec _ x = show x
 
-public export
-Show Int where
-  show = prim__cast_IntString
+showParens : (b : Bool) -> String -> String
+showParens False s = s
+showParens True  s = "(" ++ s ++ ")"
 
-public export
-Show Integer where
-  show = prim__cast_IntegerString
+showCon : (d : Prec) -> (conName : String) -> (shownArgs : String) -> String
+showCon d conName shownArgs = showParens (d >= App) (conName ++ shownArgs)
+
+showArg : Show a => (x : a) -> String
+showArg x = " " ++ showPrec App x
 
 firstCharIs : (Char -> Bool) -> String -> Bool
 firstCharIs p "" = False
 firstCharIs p str = p (prim__strHead str)
+
+primNumShow : (a -> String) -> Prec -> a -> String
+primNumShow f d x = let str = f x in showParens (d >= PrefixMinus && firstCharIs (== '-') str) str
+
+export
+Show Int where
+  showPrec = primNumShow prim__cast_IntString
+
+export
+Show Integer where
+  showPrec = primNumShow prim__cast_IntegerString
+
+export
+Show Double where
+  showPrec = primNumShow prim__cast_DoubleString
 
 protectEsc : (Char -> Bool) -> String -> String -> String
 protectEsc p f s = f ++ (if firstCharIs p s then "\\&" else "") ++ s

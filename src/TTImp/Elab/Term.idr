@@ -879,7 +879,7 @@ mutual
                                              process (record { implicitsGiven = [] } elabinfo)
                                              env nest arg' (Just (quote (noGam gam) env ty))
                      restoreImps impsUsed
-                     let sc' = scdone (toClosure False env argtm)
+                     let sc' = scdone (toClosure defaultOpts env argtm)
                      gam <- get Ctxt
                      checkExp rigc process loc elabinfo env nest (App fntm argtm)
                                   (quote gam env sc') expected
@@ -1141,11 +1141,11 @@ mutual
   getImps rigc process loc env nest elabinfo (NBind bn (Pi c Implicit ty) sc) imps
       = do tm <- makeImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            getImps rigc process loc env nest elabinfo 
-                   (sc (toClosure False env tm)) (tm :: imps)
+                   (sc (toClosure defaultOpts env tm)) (tm :: imps)
   getImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) imps
       = do tm <- makeAutoImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            getImps rigc process loc env nest elabinfo 
-                   (sc (toClosure False env tm)) (tm :: imps)
+                   (sc (toClosure defaultOpts env tm)) (tm :: imps)
   getImps rigc process loc env nest elabinfo ty imps = pure (ty, reverse imps)
 
   --- When converting, add implicits until we've applied enough for the
@@ -1162,11 +1162,11 @@ mutual
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c Implicit ty) sc) exp imps
       = do tm <- makeImplicit rigc process loc env nest elabinfo bn ty
            convertImps rigc process loc env nest elabinfo 
-                       (sc (toClosure False env tm)) exp (tm :: imps)
+                       (sc (toClosure defaultOpts env tm)) exp (tm :: imps)
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) exp imps
       = do tm <- makeAutoImplicit rigc process loc env nest elabinfo bn ty
            convertImps rigc process loc env nest elabinfo 
-                       (sc (toClosure False env tm)) exp (tm :: imps)
+                       (sc (toClosure defaultOpts env tm)) exp (tm :: imps)
   convertImps rigc process loc env nest elabinfo got exp imps = pure (got, reverse imps)
 
   checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->

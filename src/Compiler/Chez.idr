@@ -141,7 +141,7 @@ schConstant : Constant -> String
 schConstant (I x) = show x
 schConstant (BI x) = show x
 schConstant (Str x) = show x
-schConstant (Ch x) = "#\\" ++ show x
+schConstant (Ch x) = "#\\" ++ cast x
 schConstant (Db x) = show x
 schConstant WorldVal = "#f"
 schConstant IntType = "#t"

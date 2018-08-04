@@ -13,7 +13,7 @@ import Data.Vect
                   -- might not themselves terminate, but covering is important.
 
 export
-toClosure : Bool -> Env Term outer -> Term outer -> Closure outer
+toClosure : EvalOpts -> Env Term outer -> Term outer -> Closure outer
 toClosure h env tm = MkClosure h [] env tm
 
 -- Needs 'eval', defined later
@@ -26,7 +26,7 @@ evalClosure : Defs -> Closure free -> NF free
 Stack : List Name -> Type
 Stack vars = List (Closure vars)
 
-parameters (defs : Defs, holesonly : Bool)
+parameters (defs : Defs, opts : EvalOpts)
   mutual
     eval : Env Term free -> LocalEnv free vars -> Stack free ->
            Term (vars ++ free) -> NF free
@@ -36,15 +36,15 @@ parameters (defs : Defs, holesonly : Bool)
     eval env loc (closure :: stk) (Bind x (Lam _ _ ty) sc) 
          = eval env (closure :: loc) stk sc
     eval env loc stk (Bind x b@(Let n val ty) sc) 
-         = if holesonly
+         = if holesOnly opts
               then NBind x (map (eval env loc stk) b)
                       (\arg => eval env (arg :: loc) stk sc)
-              else eval env (MkClosure holesonly loc env val :: loc) stk sc
+              else eval env (MkClosure opts loc env val :: loc) stk sc
     eval env loc stk (Bind x b sc) 
          = NBind x (map (eval env loc stk) b)
                (\arg => eval env (arg :: loc) stk sc)
     eval env loc stk (App fn arg) 
-         = eval env loc (MkClosure holesonly loc env arg :: stk) fn
+         = eval env loc (MkClosure opts loc env arg :: stk) fn
     eval env loc stk (PrimVal x) = NPrimVal x
     eval env loc stk Erased = NErased
     eval env loc stk TType = NType
@@ -76,7 +76,7 @@ parameters (defs : Defs, holesonly : Bool)
     evalDef : Env Term free -> LocalEnv free vars -> Stack free ->
               NameType -> Name -> Def -> (inline : Bool) -> NF free
     evalDef env loc stk nt fn (PMDef h args tree _) inline
-        = if h || not holesonly || inline then
+        = if h || not (holesOnly opts) || inline then
              case extendFromStack args loc stk of
                   Nothing => NApp (NRef nt fn) stk
                   Just (loc', stk') => 
@@ -84,7 +84,7 @@ parameters (defs : Defs, holesonly : Bool)
                             Nothing => NApp (NRef nt fn) stk
                             Just val => val
              else NApp (NRef nt fn) stk
-    -- Don't check 'holesonly' here - effectively, this gives us constant
+    -- Don't check 'holesOnly' here - effectively, this gives us constant
     -- folding f the stack happens to be appropriate
     evalDef env loc stk nt fn (Builtin op) _ = evalOp (getOp op) nt fn stk
     evalDef env loc stk nt fn (DCon tag arity _) _ = NDCon fn tag arity stk
@@ -98,7 +98,8 @@ parameters (defs : Defs, holesonly : Bool)
     evalRef env loc stk nt fn
         = case lookupGlobalExact fn (gamma defs) of
                Just def => 
-                    if reducibleIn (currentNS defs) fn (visibility def)
+                    if evalAll opts ||
+                         reducibleIn (currentNS defs) fn (visibility def)
                        then evalDef env loc stk nt fn 
                                     (definition def) (Inline `elem` flags def)
                        else toRef (definition def) stk
@@ -206,12 +207,19 @@ evalClosure defs (MkClosure h loc env tm)
 
 export
 nf : Defs -> Env Term free -> Term free -> NF free
-nf defs env tm = eval defs False env [] [] tm
+nf defs env tm = eval defs defaultOpts env [] [] tm
 
 -- Only evaluate names which stand for solved holes
 export
 nfHoles : Defs -> Env Term free -> Term free -> NF free
-nfHoles defs env tm = eval defs True env [] [] tm
+nfHoles defs env tm = eval defs withHoles env [] [] tm
+
+-- Evaluate everything, even if not visible or not total (but work as
+-- normal under binders and delay)
+-- ('normalise' mode at the REPL)
+export
+nfAll : Defs -> Env Term free -> Term free -> NF free
+nfAll defs env tm = eval defs withAll env [] [] tm
 
 genName : IORef Int -> String -> IO Name
 genName num root 
@@ -271,7 +279,7 @@ mutual
   Quote NF where
     quoteGen num defs env (NBind n b sc) 
         = do var <- genName num "qv"
-             sc' <- quoteGen num defs env (sc (toClosure False env (Ref Bound var)))
+             sc' <- quoteGen num defs env (sc (toClosure defaultOpts env (Ref Bound var)))
              b' <- quoteBinder num defs env b
              pure (Bind n b' (refToLocal var n sc'))
     quoteGen num defs env (NApp f args) 
@@ -286,7 +294,7 @@ mutual
                      pure $ apply (Ref (DataCon tag arity) nm) xs'
       where
         toHolesOnly : Closure vs -> Closure vs
-        toHolesOnly (MkClosure _ locs env tm) = MkClosure True locs env tm
+        toHolesOnly (MkClosure _ locs env tm) = MkClosure withHoles locs env tm
     quoteGen num defs env (NTCon nm tag arity xs) 
         = do xs' <- quoteArgs num defs env xs
              pure $ apply (Ref (TyCon tag arity) nm) xs'
@@ -311,9 +319,13 @@ normaliseHoles : Defs -> Env Term free -> Term free -> Term free
 normaliseHoles defs env tm = quote defs env (nfHoles defs env tm)
 
 export
+normaliseAll : Defs -> Env Term free -> Term free -> Term free
+normaliseAll defs env tm = quote defs env (nfAll defs env tm)
+
+export
 getValArity : Defs -> Env Term vars -> NF vars -> Nat
 getValArity defs env (NBind x (Pi _ _ _) sc) 
-    = S (getValArity defs env (sc (MkClosure False [] env Erased)))
+    = S (getValArity defs env (sc (MkClosure defaultOpts [] env Erased)))
 getValArity defs env val = 0
 
 export
@@ -371,7 +383,7 @@ mutual
   Convert NF where
     convGen num defs env (NBind x b scope) (NBind x' b' scope') 
         = do var <- genName num "convVar"
-             let c = MkClosure False [] env (Ref Bound var)
+             let c = MkClosure defaultOpts [] env (Ref Bound var)
              convBinders num defs env b b'
              convGen num defs env (scope c) (scope' c)
     convGen num defs env tmx@(NBind x (Lam c ix tx) scx) tmy
@@ -411,33 +423,4 @@ mutual
     convGen num defs env thunkx thunky
         = convGen num defs env (evalClosure defs thunkx)
                                (evalClosure defs thunky)
-
--- Erase any Rig0 arguments from a term. This is only valid after type
--- checking is complete!
-export
-eraseRig0 : Defs -> Env Term vars -> Term vars -> Term vars
-eraseRig0 {vars} gam env tm with (unapply tm)
-  eraseRig0 {vars} gam env (apply (Ref nty n) args) | ArgsList 
-      = case lookupTyExact n (gamma gam) of
-             Just ty
-                  => let epos = getErased 0 (nf gam env (embed ty)) args in
-                         apply (Ref nty n) (dropPos 0 epos args)
-             _ => apply (Ref nty n) args
-    where
-      getErased : Nat -> NF vars -> List (Term vars) -> List Nat
-      getErased n (NBind x (Pi r p ty) sc) (a :: as)
-          = let rest = getErased (1 + n) (sc (toClosure False env a)) as in
-                case r of
-                     Rig0 => n :: rest
-                     _ => rest
-      getErased _ _ _ = []
-
-      dropPos : Nat -> List Nat -> List (Term vars) -> List (Term vars)
-      dropPos i fs [] = []
-      dropPos i fs (x :: xs)
-          = if i `elem` fs then Erased :: dropPos (S i) fs xs
-                           else x :: dropPos (S i) fs xs
-  eraseRig0 gam env (apply f args) | ArgsList 
-       = apply f (map (eraseRig0 gam env) args)
-
 

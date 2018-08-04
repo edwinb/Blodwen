@@ -789,8 +789,8 @@ mutual
                            = Pi cx ix (quote (noGam gam) env tx) :: env
                   case ct of
                        [] => -- no constraints, check the scope
-                             do let tscx = scx (toClosure False env (Ref Bound xn))
-                                let tscy = scy (toClosure False env (Ref Bound xn))
+                             do let tscx = scx (toClosure defaultOpts env (Ref Bound xn))
+                                let tscy = scy (toClosure defaultOpts env (Ref Bound xn))
                                 let termx = refToLocal xn x (quote (noGam gam) env tscx)
                                 let termy = refToLocal xn x (quote (noGam gam) env tscy)
                                 unify mode loc env' termx termy
@@ -801,8 +801,8 @@ mutual
                                        (Bind x (Lam cx Explicit txtm) (Local Here))
                                        (Bind x (Pi cx Explicit txtm)
                                            (weaken tytm)) cs
-                                let tscx = scx (toClosure False env (Ref Bound xn))
-                                let tscy = scy (toClosure False env 
+                                let tscx = scx (toClosure defaultOpts env (Ref Bound xn))
+                                let tscy = scy (toClosure defaultOpts env 
                                                (App (mkConstantApp c env) (Ref Bound xn)))
                                 let termx = refToLocal xn x (quote (noGam gam) env tscx)
                                 let termy = refToLocal xn x (quote (noGam gam) env tscy)
@@ -819,8 +819,8 @@ mutual
                   xn <- genName "x"
                   let env' : Env Term (x :: _)
                            = Lam cx ix (quote (noGam gam) env tx) :: env
-                  let tscx = scx (toClosure False env (Ref Bound xn))
-                  let tscy = scy (toClosure False env (Ref Bound xn))
+                  let tscx = scx (toClosure defaultOpts env (Ref Bound xn))
+                  let tscy = scy (toClosure defaultOpts env (Ref Bound xn))
                   let termx = refToLocal xn x (quote (noGam gam) env tscx)
                   let termy = refToLocal xn x (quote (noGam gam) env tscy)
                   cssc <- unify mode loc env' termx termy

@@ -85,7 +85,7 @@ stMain opts
 
          u <- newRef UST initUState
          s <- newRef Syn initSyntax
-         o <- newRef ROpts defaultOpts
+         o <- newRef ROpts REPL.defaultOpts
 
          case fname of
               Nothing => readPrelude
