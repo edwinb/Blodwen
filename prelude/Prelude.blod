@@ -442,23 +442,6 @@ Ord Nat where
   compare (S k) Z = GT
   compare (S j) (S k) = compare j k
 
--------------
--- STRINGS --
--------------
-
-namespace Strings
-    public export
-    (++) : (1 x : String) -> (1 y : String) -> String
-    x ++ y = prim__strAppend x y
-
-public export
-length : String -> Nat
-length str = fromInteger (prim__cast_IntInteger (prim__strLength str))
-
-public export
-reverse : String -> String
-reverse = prim__strReverse
-
 -----------
 -- MAYBE --
 -----------
@@ -580,6 +563,44 @@ elem : Eq a => a -> List a -> Bool
 elem x [] = False
 elem x (y :: ys) = if x == y then True else elem x ys
 
+-------------
+-- STRINGS --
+-------------
+
+namespace Strings
+    public export
+    (++) : (1 x : String) -> (1 y : String) -> String
+    x ++ y = prim__strAppend x y
+
+public export
+length : String -> Nat
+length str = fromInteger (prim__cast_IntInteger (prim__strLength str))
+
+public export
+reverse : String -> String
+reverse = prim__strReverse
+
+public export
+strCons : Char -> String -> String
+strCons = prim__strCons
+
+public export
+strUncons : String -> Maybe (Char, String)
+strUncons "" = Nothing
+strUncons str = Just (prim__strHead str, prim__strTail str)
+
+public export
+pack : List Char -> String
+pack [] = ""
+pack (x :: xs) = strCons x (pack xs)
+
+public export
+unpack : String -> List Char
+unpack str 
+    = case strUncons str of
+           Nothing => []
+           Just (x, xs) => x :: unpack xs
+
 ----------------
 -- CHARACTERS --
 ----------------
@@ -605,9 +626,10 @@ isAlphaNum x = isDigit x || isAlpha x
 
 public export
 isSpace : Char -> Bool
-isSpace x = x == ' '  || x == '\t' || x == '\r' ||
-            x == '\n' || x == '\f' || x == '\v' ||
-            x == '\xa0'
+isSpace x 
+    = x == ' '  || x == '\t' || x == '\r' ||
+      x == '\n' || x == '\f' || x == '\v' ||
+      x == '\xa0'
 
 public export
 isNL : Char -> Bool
@@ -615,22 +637,25 @@ isNL x = x == '\r' || x == '\n'
 
 public export
 toUpper : Char -> Char
-toUpper x = if (isLower x)
-               then prim__cast_IntChar (prim__cast_CharInt x - 32)
-               else x
+toUpper x 
+    = if (isLower x)
+         then prim__cast_IntChar (prim__cast_CharInt x - 32)
+         else x
 
 public export
 toLower : Char -> Char
-toLower x = if (isUpper x)
-               then prim__cast_IntChar (prim__cast_CharInt x + 32)
-               else x
+toLower x 
+    = if (isUpper x)
+         then prim__cast_IntChar (prim__cast_CharInt x + 32)
+         else x
 
 public export
 isHexDigit : Char -> Bool
 isHexDigit x = elem (toUpper x) hexChars where
   hexChars : List Char
-  hexChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-              'A', 'B', 'C', 'D', 'E', 'F']
+  hexChars 
+      = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+         'A', 'B', 'C', 'D', 'E', 'F']
 
 public export
 isOctDigit : Char -> Bool
@@ -638,9 +663,9 @@ isOctDigit x = (x >= '0' && x <= '7')
 
 public export
 isControl : Char -> Bool
-isControl x = (x >= '\x0000' && x <= '\x001f')
-           || (x >= '\x007f' && x <= '\x009f')
-
+isControl x 
+    = (x >= '\x0000' && x <= '\x001f')
+       || (x >= '\x007f' && x <= '\x009f')
 
 ----------
 -- SHOW --
@@ -682,6 +707,48 @@ firstCharIs p str = p (prim__strHead str)
 protectEsc : (Char -> Bool) -> String -> String -> String
 protectEsc p f s = f ++ (if firstCharIs p s then "\\&" else "") ++ s
 
+showLitChar : Char -> String -> String
+showLitChar '\a'   = ("\\a" ++)
+showLitChar '\b'   = ("\\b" ++)
+showLitChar '\f'   = ("\\f" ++)
+showLitChar '\n'   = ("\\n" ++)
+showLitChar '\r'   = ("\\r" ++)
+showLitChar '\t'   = ("\\t" ++)
+showLitChar '\v'   = ("\\v" ++)
+showLitChar '\SO'  = protectEsc (== 'H') "\\SO"
+showLitChar '\DEL' = ("\\DEL" ++)
+showLitChar '\\'   = ("\\\\" ++)
+showLitChar c      
+    = case getAt (fromInteger (prim__cast_CharInteger c)) asciiTab of
+           Just k => strCons '\\' . (k ++)
+           Nothing => if (c > '\DEL')
+                         then strCons '\\' . protectEsc isDigit (show (prim__cast_CharInt c))
+                         else strCons c
+  where
+    asciiTab : List String
+    asciiTab 
+        = ["NUL", "SOH", "STX", "ETX", "EOT", "ENQ", "ACK", "BEL",
+           "BS",  "HT",  "LF",  "VT",  "FF",  "CR",  "SO",  "SI",
+           "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB",
+           "CAN", "EM",  "SUB", "ESC", "FS",  "GS",  "RS",  "US"]
+
+    getAt : Nat -> List String -> Maybe String
+    getAt Z     (x :: xs) = Just x
+    getAt (S k) (x :: xs) = getAt k xs
+    getAt _     []        = Nothing
+
+showLitString : List Char -> String -> String
+showLitString []        = id
+showLitString ('"'::cs) = ("\\\"" ++) . showLitString cs
+showLitString (c  ::cs) = (showLitChar c) . showLitString cs
+
+Show Char where
+  show '\'' = "'\\''"
+  show c    = strCons '\'' (showLitChar c "'")
+
+Show String where
+  show cs = strCons '"' (showLitString (unpack cs) "\"")
+
 --------
 -- IO --
 --------
@@ -693,9 +760,10 @@ Functor IO where
 public export
 Applicative IO where
     pure x = io_pure x
-    f <*> a = io_bind f (\f' =>
-                io_bind a (\a' =>
-                  io_pure (f' a')))
+    f <*> a 
+        = io_bind f (\f' =>
+            io_bind a (\a' =>
+              io_pure (f' a')))
 
 public export
 Monad IO where

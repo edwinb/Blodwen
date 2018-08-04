@@ -114,9 +114,47 @@ oct '6' = Just 6
 oct '7' = Just 7
 oct _ = Nothing
 
+getEsc : String -> Maybe Char
+getEsc "NUL" = Just '\NUL'
+getEsc "SOH" = Just '\SOH'
+getEsc "STX" = Just '\STX'
+getEsc "ETX" = Just '\ETX'
+getEsc "EOT" = Just '\EOT'
+getEsc "ENQ" = Just '\ENQ'
+getEsc "ACK" = Just '\ACK'
+getEsc "BEL" = Just '\BEL'
+getEsc "BS" = Just '\BS'
+getEsc "HT" = Just '\HT'
+getEsc "LF" = Just '\LF'
+getEsc "VT" = Just '\VT'
+getEsc "FF" = Just '\FF'
+getEsc "CR" = Just '\CR'
+getEsc "SO" = Just '\SO'
+getEsc "SI" = Just '\SI'
+getEsc "DLE" = Just '\DLE'
+getEsc "DC1" = Just '\DC1'
+getEsc "DC2" = Just '\DC2'
+getEsc "DC3" = Just '\DC3'
+getEsc "DC4" = Just '\DC4'
+getEsc "NAK" = Just '\NAK'
+getEsc "SYN" = Just '\SYN'
+getEsc "ETB" = Just '\ETB'
+getEsc "CAN" = Just '\CAN'
+getEsc "EM" = Just '\EM'
+getEsc "SUB" = Just '\SUB'
+getEsc "ESC" = Just '\ESC'
+getEsc "FS" = Just '\FS'
+getEsc "GS" = Just '\GS'
+getEsc "RS" = Just '\RS'
+getEsc "US" = Just '\US'
+getEsc "SP" = Just '\SP'
+getEsc "DEL" = Just '\DEL'
+getEsc str = Nothing
+
 escape' : List Char -> Maybe (List Char)
 escape' [] = pure []
 escape' ('\\' :: '\\' :: xs) = pure $ '\\' :: !(escape' xs)
+escape' ('\\' :: '&' :: xs) = pure !(escape' xs)
 escape' ('\\' :: 'a' :: xs) = pure $ '\a' :: !(escape' xs)
 escape' ('\\' :: 'b' :: xs) = pure $ '\b' :: !(escape' xs)
 escape' ('\\' :: 'f' :: xs) = pure $ '\f' :: !(escape' xs)
@@ -148,6 +186,16 @@ escape' ('\\' :: 'o' :: xs)
         = pure $ !(oct (toLower d)) * m + !(toOct (m*8) ds)
 escape' ('\\' :: xs) 
     = case span isDigit xs of
+           ([], (a :: b :: c :: rest)) => 
+               case getEsc (pack [a, b, c]) of
+                   Just v => pure $ v :: !(assert_total (escape' rest))
+                   Nothing => case getEsc (pack [a, b]) of
+                                   Just v => pure $ v :: !(assert_total (escape' (c :: rest)))
+                                   Nothing => escape' xs
+           ([], (a :: b :: [])) => 
+               case getEsc (pack [a, b]) of
+                   Just v => pure $ v :: []
+                   Nothing => escape' xs
            ([], rest) => assert_total (escape' rest)
            (ds, rest) => pure $ cast (cast {to=Int} (pack ds)) :: 
                                  !(assert_total (escape' rest))
