@@ -36,12 +36,18 @@ insertImpLam env tm (Just ty) = bindLam tm ty
               ILam loc c Implicit Nothing (Implicit loc) (bindLam tm sc)
     bindLam tm sc = tm
 
-notePatVar : {auto e : Ref EST (EState vars)} ->
+noteLHSPatVar : {auto e : Ref EST (EState vars)} ->
              ElabMode -> String -> Core annot ()
-notePatVar InLHS n
+noteLHSPatVar InLHS n
     = do est <- get EST
          put EST (record { lhsPatVars $= (n ::) } est)
-notePatVar _ _ = pure ()
+noteLHSPatVar _ _ = pure ()
+
+notePatVar : {auto e : Ref EST (EState vars)} ->
+             Name -> Core annot ()
+notePatVar n
+    = do est <- get EST
+         put EST (record { allPatVars $= (n ::) } est)
 
 bindRig : RigCount -> RigCount
 bindRig Rig0 = Rig0
@@ -119,6 +125,7 @@ mutual
       = do defs <- get Ctxt
            handleError
              (do (ctm, cty) <- check rigc process elabinfo env nest tm_in Nothing
+                 log 10 $ "Checked force " ++ show (ctm, cty)
                  case nf defs env cty of
                       NTCon n _ _ _ =>
                           if isDelayType n defs
@@ -237,11 +244,11 @@ mutual
   checkImp {vars} rigc process elabinfo env nest (IApp loc fn arg) expected 
       = do -- Collect the implicits from the top level application first
            let (fn', args) = collectGivenImps fn
-           gam <- get Ctxt
+           ogam <- get Ctxt
            let elabinfoG = addGivenImps elabinfo args
            -- If we're elaborating a literal, we need to resolve interfaces
            -- even on the LHS, so elaborate in InExpr mode
-           let elabinfo' = if isPrimApp gam
+           let elabinfo' = if isPrimApp ogam
                               then (record { elabMode = InExpr } elabinfoG)
                               else elabinfoG
            log 10 $ "Implicits: " ++ show (implicitsGiven elabinfo')
@@ -371,7 +378,8 @@ mutual
                             _ => False
                  | _ => checkName rigc process elabinfo loc env nest (UN str) Nothing
            let n = PV (UN str)
-           notePatVar elabmode str
+           noteLHSPatVar elabmode str
+           notePatVar n
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
@@ -401,12 +409,15 @@ mutual
                  | _ => checkName rigc process elabinfo loc env nest (UN str) (Just expected)
            let n = PV (UN str)
            let elabmode = elabMode elabinfo
-           notePatVar elabmode str
+           noteLHSPatVar elabmode str
+           notePatVar n
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
                   do tm <- addBoundName loc n True env expected
                      log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
+                     gam <- get Ctxt
+                     log 10 $ show (lookupDefExact n (gamma gam))
                      put EST 
                          (record { boundNames $= ((n, (tm, expected)) ::),
                                    toBind $= ((n, (tm, expected)) :: ) } est)
@@ -848,6 +859,7 @@ mutual
   checkAs rigc process elabinfo loc env nest var tm expected
       = do let n = PV var
            (patTm, patTy) <- checkImp rigc process elabinfo env nest tm (Just expected)
+           notePatVar n
            est <- get EST
            case lookup n (boundNames est) of
                 Just (tm, ty) =>
@@ -888,11 +900,13 @@ mutual
                                      (_, IMustUnify _ _ _, _) => arg
                                      (InLHS, _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
+                     log 10 $ "Checking argument of type " ++ show (quote (noGam gam) env ty)
                      (argtm, argty) <- check (rigMult rigf rigc)
                                              process (record { implicitsGiven = [] } elabinfo)
                                              env nest arg' (Just (quote (noGam gam) env ty))
                      restoreImps impsUsed
                      let sc' = scdone (toClosure defaultOpts env argtm)
+                     log 10 $ "Scope type " ++ show (quote (noGam gam) env sc')
                      gam <- get Ctxt
                      checkExp rigc process loc elabinfo env nest (App fntm argtm)
                                   (quote gam env sc') expected

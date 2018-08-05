@@ -142,15 +142,17 @@ checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
                                     then pure Nothing
                                     else throw (ValidCase loc env (Right err))
                        _ => throw (ValidCase loc env (Right err)))
-checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
-    = do lhs_raw <- lhsInCurrentNS nest lhs_raw
+checkClause {vars} elab defining env nest (PatClause loc lhs_raw rhs_raw)
+    = do gam <- get Ctxt
+         lhs_raw_in <- lhsInCurrentNS nest lhs_raw
+         let lhs_raw = lhs_raw_in -- implicitsAs gam vars lhs_raw_in
          log 5 ("Checking LHS: " ++ show lhs_raw)
          (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
               inferTerm elab defining env nest PATTERN InLHS lhs_raw
-         gam <- get Ctxt
          -- Check there's no holes or constraints in the left hand side
          -- we've just checked - they must be resolved now (that's what
          -- True means)
+         gam <- get Ctxt
          wrapError (InLHS loc defining) $ checkUserHoles True
          -- Normalise the LHS to get any functions or let bindings evaluated
          -- (this might be allowed, e.g. for 'fromInteger')
@@ -185,8 +187,8 @@ checkClause elab defining env nest (PatClause loc lhs_raw rhs_raw)
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
   where
-    extend : Env Term vars -> NestedNames vars -> 
-             Term vars -> Term vars ->
+    extend : Env Term vs -> NestedNames vs -> 
+             Term vs -> Term vs ->
              Core annot (vars' ** (Env Term vars', NestedNames vars', 
                                    Term vars', Term vars'))
     extend env nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) with (nameEq n n')

@@ -2,6 +2,7 @@ module TTImp.TTImp
 
 import Core.Binary
 import Core.Context
+import Core.Normalise
 import Core.TT
 import Core.TTC
 import Core.UnifyState
@@ -377,6 +378,9 @@ lhsInCurrentNS : {auto c : Ref Ctxt Defs} ->
 lhsInCurrentNS nest (IApp loc f a)
     = do f' <- lhsInCurrentNS nest f
          pure (IApp loc f' a)
+lhsInCurrentNS nest (IImplicitApp loc f n a)
+    = do f' <- lhsInCurrentNS nest f
+         pure (IImplicitApp loc f' n a)
 lhsInCurrentNS nest tm@(IVar loc (NS _ _)) = pure tm -- leave explicit NS alone
 lhsInCurrentNS nest (IVar loc n)
     = case lookup n (names nest) of
@@ -388,7 +392,64 @@ lhsInCurrentNS nest (IVar loc n)
            -- parent name.
            Just _ => pure (IVar loc n)
 lhsInCurrentNS nest tm = pure tm
+
+export
+findIBinds : RawImp annot -> List String
+findIBinds (IPi fc rig p mn aty retty)
+    = findIBinds aty ++ findIBinds retty
+findIBinds (ILam fc rig p n aty sc)
+    = findIBinds aty ++ findIBinds sc
+findIBinds (IApp fc fn av)
+    = findIBinds fn ++ findIBinds av
+findIBinds (IImplicitApp fc fn n av)
+    = findIBinds fn ++ findIBinds av
+findIBinds (IAs fc n pat)
+    = findIBinds pat
+findIBinds (IMustUnify fc r pat)
+    = findIBinds pat
+findIBinds (IAlternative fc u alts)
+    = concatMap findIBinds alts
+findIBinds (IBindVar _ n) = [n]
+-- We've skipped lambda, case, let and local - rather than guess where the
+-- name should be bound, leave it to the programmer
+findIBinds tm = []
          
+-- Update the lhs of a clause so that any implicits named in the type are
+-- bound as @-patterns (unless they're already explicitly bound or appear as
+-- IBindVar anywhere else in the pattern) so that they will be available on the
+-- rhs
+export
+implicitsAs : Defs -> List Name -> RawImp annot -> RawImp annot
+implicitsAs defs ns tm = setAs (ns ++ map UN (findIBinds tm)) tm
+  where
+    setAs : List Name -> RawImp annot -> RawImp annot
+    setAs is (IApp loc f a)
+        = let f' = setAs is f in
+              IApp loc f' a
+    setAs is (IImplicitApp loc f n a)
+        = let is' = maybe is (\n' => n' :: is) n
+              f' = setAs is' f in
+              IImplicitApp loc f' n a
+    setAs is (IVar loc n)
+        = case lookupTyExact n (gamma defs) of
+               Nothing => IVar loc n
+               Just ty => impAs loc (filter (\x => not (x `elem` is))
+                                        (findImps (nf defs [] ty))) (IVar loc n)
+      where
+        findImps : NF [] -> List Name
+        findImps (NBind x (Pi _ Implicit _) sc) 
+            = x :: findImps (sc (toClosure defaultOpts [] Erased))
+        findImps (NBind x (Pi _ _ _) sc) 
+            = findImps (sc (toClosure defaultOpts [] Erased))
+        findImps _ = []
+
+        impAs : annot -> List Name -> RawImp annot -> RawImp annot
+        impAs loc' [] tm = tm
+        impAs loc' (n :: ns) tm 
+            = impAs loc' ns $
+                 IImplicitApp loc' tm (Just n) (IAs loc' n (Implicit loc'))
+    setAs is tm = tm
+
 
 remove : Maybe Name -> List (String, a) -> List (String, a)
 remove (Just (UN n)) xs = removeN n xs

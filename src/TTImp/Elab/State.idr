@@ -36,6 +36,7 @@ record EState (vars : List Name) where
                   -- names which we've bound in elab mode InLHS (i.e. not
                   -- in a dot pattern). We keep track of this because every
                   -- occurrence other than the first needs to be dotted
+  allPatVars : List Name -- All pattern variables, which need to be cleared after elaboration
   asVariables : List (Name, RigCount) -- Names bound in @-patterns
   implicitsUsed : List (Maybe Name)
                             -- explicitly given implicits which have been used
@@ -74,7 +75,7 @@ data EST : Type where
 
 export
 initEState : Name -> EState vars
-initEState n = MkElabState [] [] [] [] [] [] [] [] n
+initEState n = MkElabState [] [] [] [] [] [] [] [] [] n
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -178,6 +179,7 @@ weakenedEState
                                        (map wknTms (toBind est))
                                        (boundImplicits est)
                                        (lhsPatVars est)
+                                       (allPatVars est)
                                        (asVariables est)
                                        (implicitsUsed est)
                                        (map wknLoc (linearUsed est))
@@ -208,6 +210,7 @@ strengthenedEState False loc
          let lvs = mapMaybe dropTop (linearUsed est)
          pure (MkElabState bns todo (boundImplicits est) 
                                     (lhsPatVars est)
+                                    (allPatVars est)
                                     (asVariables est)
                                     (implicitsUsed est) 
                                     lvs
@@ -263,7 +266,19 @@ clearToBind : {auto e : Ref EST (EState vs)} ->
 clearToBind
     = do est <- get EST
          put EST (record { toBind = [] } est)
- 
+
+export
+clearPatVars : {auto e : Ref EST (EState vs)} ->
+               {auto c : Ref Ctxt Defs} ->
+               Core annot ()
+clearPatVars
+    = do est <- get EST
+         traverse deleteDef (allPatVars est)
+         pure ()
+  where
+    deleteDef : Name -> Core annot ()
+    deleteDef n = updateDef n (const (Just None))
+
 export
 dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))

@@ -108,6 +108,7 @@ elabTerm {vars} process defining env nest impmode elabmode tm tyin
                     InLHS => pure ptm'
                     _ => do linearCheck (getAnnot tm) rigc False env ptm'
                             pure ptm'
+         clearPatVars
          -- If there are remaining holes, we need to save them to the ttc
          -- since they haven't been normalised away yet, and they may be
          -- solved later

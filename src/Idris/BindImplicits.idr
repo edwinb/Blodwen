@@ -49,27 +49,6 @@ findBindableNames arg env used (IAlternative fc u alts)
 -- name should be bound, leave it to the programmer
 findBindableNames arg env used tm = []
 
-export
-findIBinds : RawImp annot -> List String
-findIBinds (IPi fc rig p mn aty retty)
-    = findIBinds aty ++ findIBinds retty
-findIBinds (ILam fc rig p n aty sc)
-    = findIBinds aty ++ findIBinds sc
-findIBinds (IApp fc fn av)
-    = findIBinds fn ++ findIBinds av
-findIBinds (IImplicitApp fc fn n av)
-    = findIBinds fn ++ findIBinds av
-findIBinds (IAs fc n pat)
-    = findIBinds pat
-findIBinds (IMustUnify fc r pat)
-    = findIBinds pat
-findIBinds (IAlternative fc u alts)
-    = concatMap findIBinds alts
-findIBinds (IBindVar _ n) = [n]
--- We've skipped lambda, case, let and local - rather than guess where the
--- name should be bound, leave it to the programmer
-findIBinds tm = []
-
 -- Rename the IBindVars in a term. Anything which appears in the list 'renames'
 -- should be renamed, to something which is *not* in the list 'used'
 export
