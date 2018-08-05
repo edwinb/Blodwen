@@ -794,9 +794,7 @@ Show () where
     show (x, y) = "(" ++ show x ++ ", " ++ show y ++ ")"
 
 Show a => Show (List a) where
-    -- TODO: Idris 1 automatically binds {a} here since it's a parameter;
-    -- we should do the same. We need it in the 'where' block
-    show {a} xs = "[" ++ show' "" xs ++ "]" 
+    show xs = "[" ++ show' "" xs ++ "]" 
       where
         show' : String -> List a -> String
         show' acc []        = acc

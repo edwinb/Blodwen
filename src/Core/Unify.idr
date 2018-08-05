@@ -750,7 +750,7 @@ mutual
               else
                 if holex && holey
                    then
-                     (if length argsx > length argsy
+                     (if length argsx >= length argsy
                          then unifyApp False mode loc env (NRef xt hdx) argsx 
                                                (NApp (NRef yt hdy) argsy)
                          else unifyApp True mode loc env (NRef yt hdy) argsy 

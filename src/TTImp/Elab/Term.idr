@@ -872,7 +872,10 @@ mutual
                                      toBind $= ((n, (tm, expected)) ::),
                                      asVariables $= ((n, rigc) ::) } est)
                        gam <- get Ctxt
-                       convert loc InLHS env (nf gam env patTm) (nf gam env tm)
+                       -- Unify the given expression with the as pattern hole.
+                       -- This will resolve the as pattern hole with the
+                       -- pattern, which gets let-bound later
+                       convert loc InLHS env (nf gam env tm) (nf gam env patTm)
                        pure (patTm, expected)
 
   checkApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->

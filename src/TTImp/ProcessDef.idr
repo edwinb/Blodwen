@@ -145,7 +145,7 @@ checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
 checkClause {vars} elab defining env nest (PatClause loc lhs_raw rhs_raw)
     = do gam <- get Ctxt
          lhs_raw_in <- lhsInCurrentNS nest lhs_raw
-         let lhs_raw = lhs_raw_in -- implicitsAs gam vars lhs_raw_in
+         let lhs_raw = implicitsAs gam vars lhs_raw_in
          log 5 ("Checking LHS: " ++ show lhs_raw)
          (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
               inferTerm elab defining env nest PATTERN InLHS lhs_raw
