@@ -443,6 +443,11 @@ Ord Nat where
   compare (S k) Z = GT
   compare (S j) (S k) = compare j k
 
+public export
+natToInteger : Nat -> Integer
+natToInteger Z = 0
+natToInteger (S k) = 1 + natToInteger k
+
 -----------
 -- MAYBE --
 -----------
@@ -774,6 +779,33 @@ Show Char where
 
 Show String where
   show cs = strCons '"' (showLitString (unpack cs) "\"")
+
+Show Nat where
+    show n = show (the Integer (natToInteger n))
+
+Show Bool where
+    show True = "True"
+    show False = "False"
+
+Show () where
+  show () = "()"
+
+(Show a, Show b) => Show (a, b) where
+    show (x, y) = "(" ++ show x ++ ", " ++ show y ++ ")"
+
+Show a => Show (List a) where
+    -- TODO: Idris 1 automatically binds {a} here since it's a parameter;
+    -- we should do the same. We need it in the 'where' block
+    show {a} xs = "[" ++ show' "" xs ++ "]" 
+      where
+        show' : String -> List a -> String
+        show' acc []        = acc
+        show' acc [x]       = acc ++ show x
+        show' acc (x :: xs) = show' (acc ++ show x ++ ", ") xs
+
+Show a => Show (Maybe a) where
+  showPrec d Nothing  = "Nothing"
+  showPrec d (Just x) = showCon d "Just" (showArg x)
 
 --------
 -- IO --

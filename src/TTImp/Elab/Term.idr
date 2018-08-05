@@ -364,6 +364,12 @@ mutual
       = checkExp rigc process loc elabinfo env nest TType TType exp
   checkImp rigc process elabinfo env nest (IBindVar loc str) Nothing
       = do let elabmode = elabMode elabinfo
+           -- In types, don't rebind if the name is already in scope;
+           -- Below, return True if we don't need to implicitly bind the name
+           let False = case implicitMode elabinfo of
+                            PI _ => maybe False (const True) (defined (UN str) env)
+                            _ => False
+                 | _ => checkName rigc process elabinfo loc env nest (UN str) Nothing
            let n = PV (UN str)
            notePatVar elabmode str
            est <- get EST
@@ -386,7 +392,14 @@ mutual
                 Just (tm, ty) =>
                      pure (tm, ty)
   checkImp rigc process elabinfo env nest (IBindVar loc str) (Just expected)
-      = do let n = PV (UN str)
+      = do let elabmode = elabMode elabinfo
+           -- In types, don't rebind if the name is already in scope;
+           -- Below, return True if we don't need to implicitly bind the name
+           let False = case implicitMode elabinfo of
+                            PI _ => maybe False (const True) (defined (UN str) env)
+                            _ => False
+                 | _ => checkName rigc process elabinfo loc env nest (UN str) (Just expected)
+           let n = PV (UN str)
            let elabmode = elabMode elabinfo
            notePatVar elabmode str
            est <- get EST
