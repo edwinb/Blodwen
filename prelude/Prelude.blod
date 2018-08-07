@@ -133,74 +133,6 @@ intToBool 0 = False
 intToBool x = True
 
 ------------------------
--- NUMERIC INTERFACES --
-------------------------
-
-%integerLit fromInteger
-
-public export
-interface Num ty where
-    (+) : ty -> ty -> ty
-    (*) : ty -> ty -> ty
-    fromInteger : Integer -> ty
-
-public export
-interface Num ty => Neg ty where
-    negate : ty -> ty
-    (-) : ty -> ty -> ty
-
-public export
-Num Integer where
-    (+) = prim__add_Integer
-    (*) = prim__mul_Integer
-    fromInteger = id
-
-Neg Integer where
-    negate x = prim__sub_Integer 0 x
-    (-) = prim__sub_Integer
-
-
--- This allows us to pick integer as a default at the end of elaboration if
--- all other possibilities fail. I don't plan to provide a nicer syntax for
--- this...
-%defaulthint
-public export
-defaultInteger : Num Integer
-defaultInteger = %search
-
-public export
-Num Int where
-    (+) = prim__add_Int
-    (*) = prim__mul_Int
-    fromInteger = prim__cast_IntegerInt
-
-Neg Int where
-    negate x = prim__sub_Int 0 x
-    (-) = prim__sub_Int
-
-public export
-Num Double where
-    (+) = prim__add_Double
-    (*) = prim__mul_Double
-    fromInteger = prim__cast_IntegerDouble
-
-Neg Double where
-    negate x = prim__negate_Double x
-    (-) = prim__sub_Double
-
--------------
--- ALGEBRA --
--------------
-
-public export
-interface Semigroup ty where
-    (<+>) : ty -> ty -> ty
-
-public export
-interface Semigroup ty => Monoid ty where
-    neutral : ty
-
-------------------------
 -- EQUALITY, ORDERING --
 ------------------------
 
@@ -250,34 +182,32 @@ data Ordering = LT | EQ | GT
 
 public export
 Eq Ordering where
-    LT == LT = True
-    EQ == EQ = True
-    GT == GT = True
-    _  == _  = False
+  LT == LT = True
+  EQ == EQ = True
+  GT == GT = True
+  _  == _  = False
 
 public export
 interface Eq ty => Ord ty where
-    constructor MkOrd
+  compare : ty -> ty -> Ordering
 
-    compare : ty -> ty -> Ordering
-
-    (<) : ty -> ty -> Bool
-    (<) x y = compare x y == LT
+  (<) : ty -> ty -> Bool
+  (<) x y = compare x y == LT
     
-    (>) : ty -> ty -> Bool
-    (>) x y = compare x y == GT
+  (>) : ty -> ty -> Bool
+  (>) x y = compare x y == GT
 
-    (<=) : ty -> ty -> Bool
-    (<=) x y = compare x y /= GT
+  (<=) : ty -> ty -> Bool
+  (<=) x y = compare x y /= GT
 
-    (>=) : ty -> ty -> Bool
-    (>=) x y = compare x y /= LT
+  (>=) : ty -> ty -> Bool
+  (>=) x y = compare x y /= LT
 
-    max : ty -> ty -> ty
-    max x y = if x > y then x else y
+  max : ty -> ty -> ty
+  max x y = if x > y then x else y
 
-    min : ty -> ty -> ty
-    min x y = if (x < y) then x else y
+  min : ty -> ty -> ty
+  min x y = if (x < y) then x else y
 
 public export
 Ord () where
@@ -341,13 +271,112 @@ Ord a => Ord b => Ord (a, b) where
       = if x1 /= x2 then compare x1 x2
                     else compare y1 y2
 
+------------------------
+-- NUMERIC INTERFACES --
+------------------------
+
+%integerLit fromInteger
+
+public export
+interface Num ty where
+  (+) : ty -> ty -> ty
+  (*) : ty -> ty -> ty
+  fromInteger : Integer -> ty
+
+public export
+interface Num ty => Neg ty where
+  negate : ty -> ty
+  (-) : ty -> ty -> ty
+
+public export
+interface Num ty => Abs ty where
+  abs : ty -> ty
+
+public export
+interface Num ty => Fractional ty where
+  (/) : ty -> ty -> ty
+  recip : ty -> ty
+
+  recip x = 1 / x
+
+public export
+interface Num ty => Integral ty where
+  div : ty -> ty -> ty
+  mod : ty -> ty -> ty
+
+----- instances for primitives
+-- Integer
+
+public export
+Num Integer where
+  (+) = prim__add_Integer
+  (*) = prim__mul_Integer
+  fromInteger = id
+
+Neg Integer where
+  negate x = prim__sub_Integer 0 x
+  (-) = prim__sub_Integer
+
+Abs Integer where
+  abs x = if x < 0 then -x else x
+
+-- This allows us to pick integer as a default at the end of elaboration if
+-- all other possibilities fail. I don't plan to provide a nicer syntax for
+-- this...
+%defaulthint
+public export
+defaultInteger : Num Integer
+defaultInteger = %search
+
+-- Int
+
+public export
+Num Int where
+  (+) = prim__add_Int
+  (*) = prim__mul_Int
+  fromInteger = prim__cast_IntegerInt
+
+Neg Int where
+  negate x = prim__sub_Int 0 x
+  (-) = prim__sub_Int
+
+Abs Int where
+  abs x = if x < 0 then -x else x
+
+-- Double
+
+public export
+Num Double where
+  (+) = prim__add_Double
+  (*) = prim__mul_Double
+  fromInteger = prim__cast_IntegerDouble
+
+Neg Double where
+  negate x = prim__negate_Double x
+  (-) = prim__sub_Double
+
+Abs Double where
+  abs x = if x < 0 then -x else x
+
+-------------
+-- ALGEBRA --
+-------------
+
+public export
+interface Semigroup ty where
+  (<+>) : ty -> ty -> ty
+
+public export
+interface Semigroup ty => Monoid ty where
+  neutral : ty
+
 ---------------------------------
 -- FUNCTOR, APPLICATIVE, MONAD --
 ---------------------------------
 
 public export
 interface Functor f where
-    map : (a -> b) -> f a -> f b
+  map : (a -> b) -> f a -> f b
 
 public export
 (<$>) : Functor f => (func : a -> b) -> f a -> f b
@@ -355,17 +384,17 @@ public export
 
 public export
 interface Functor f => Applicative f where
-    pure : a -> f a
-    (<*>) : f (a -> b) -> f a -> f b
+  pure : a -> f a
+  (<*>) : f (a -> b) -> f a -> f b
 
 public export
 interface Applicative m => Monad m where
-    (>>=) : m a -> (a -> m b) -> m b
-    join : m (m a) -> m a
+  (>>=) : m a -> (a -> m b) -> m b
+  join : m (m a) -> m a
 
-    -- default implementations
-    (>>=) x f = join (f <$> x)
-    join x = x >>= id
+  -- default implementations
+  (>>=) x f = join (f <$> x)
+  join x = x >>= id
 
 ---------------------------
 -- FOLDABLE, TRAVERSABLE --
@@ -454,8 +483,8 @@ natToInteger (S k) = 1 + natToInteger k
 
 public export
 data Maybe : (ty : Type) -> Type where
-    Nothing : Maybe ty
-    Just : (1 x : ty) -> Maybe ty
+  Nothing : Maybe ty
+  Just : (1 x : ty) -> Maybe ty
 
 public export
 maybe : Lazy b -> Lazy (a -> b) -> Maybe a -> b
@@ -487,20 +516,20 @@ Monoid (Maybe a) where
 
 public export
 Functor Maybe where
-    map f (Just x) = Just (f x)
-    map f Nothing  = Nothing
+  map f (Just x) = Just (f x)
+  map f Nothing  = Nothing
 
 public export
 Applicative Maybe where
-    pure = Just
+  pure = Just
 
-    (Just f) <*> (Just a) = Just (f a)
-    _        <*> _        = Nothing
+  Just f <*> Just a = Just (f a)
+  _      <*> _        = Nothing
 
 public export
 Monad Maybe where
-    Nothing  >>= k = Nothing
-    (Just x) >>= k = k x
+  Nothing  >>= k = Nothing
+  (Just x) >>= k = k x
 
 public export
 Foldable Maybe where
@@ -529,10 +558,10 @@ Ord a => Ord (List a) where
             c => c
 
 namespace List
-    public export
-    (++) : List a -> List a -> List a
-    [] ++ ys = ys
-    (x :: xs) ++ ys = x :: xs ++ ys
+  public export
+  (++) : List a -> List a -> List a
+  [] ++ ys = ys
+  (x :: xs) ++ ys = x :: xs ++ ys
 
 public export
 Functor List where
@@ -574,9 +603,9 @@ elem x (y :: ys) = if x == y then True else elem x ys
 -------------
 
 namespace Strings
-    public export
-    (++) : (1 x : String) -> (1 y : String) -> String
-    x ++ y = prim__strAppend x y
+  public export
+  (++) : (1 x : String) -> (1 y : String) -> String
+  x ++ y = prim__strAppend x y
 
 public export
 length : String -> Nat
@@ -710,9 +739,11 @@ showParens : (b : Bool) -> String -> String
 showParens False s = s
 showParens True  s = "(" ++ s ++ ")"
 
+export
 showCon : (d : Prec) -> (conName : String) -> (shownArgs : String) -> String
 showCon d conName shownArgs = showParens (d >= App) (conName ++ shownArgs)
 
+export
 showArg : Show a => (x : a) -> String
 showArg x = " " ++ showPrec App x
 
@@ -781,25 +812,25 @@ Show String where
   show cs = strCons '"' (showLitString (unpack cs) "\"")
 
 Show Nat where
-    show n = show (the Integer (natToInteger n))
+  show n = show (the Integer (natToInteger n))
 
 Show Bool where
-    show True = "True"
-    show False = "False"
+  show True = "True"
+  show False = "False"
 
 Show () where
   show () = "()"
 
 (Show a, Show b) => Show (a, b) where
-    show (x, y) = "(" ++ show x ++ ", " ++ show y ++ ")"
+  show (x, y) = "(" ++ show x ++ ", " ++ show y ++ ")"
 
 Show a => Show (List a) where
-    show xs = "[" ++ show' "" xs ++ "]" 
-      where
-        show' : String -> List a -> String
-        show' acc []        = acc
-        show' acc [x]       = acc ++ show x
-        show' acc (x :: xs) = show' (acc ++ show x ++ ", ") xs
+  show xs = "[" ++ show' "" xs ++ "]" 
+    where
+      show' : String -> List a -> String
+      show' acc []        = acc
+      show' acc [x]       = acc ++ show x
+      show' acc (x :: xs) = show' (acc ++ show x ++ ", ") xs
 
 Show a => Show (Maybe a) where
   showPrec d Nothing  = "Nothing"
@@ -815,15 +846,15 @@ Functor IO where
 
 public export
 Applicative IO where
-    pure x = io_pure x
-    f <*> a 
-        = io_bind f (\f' =>
-            io_bind a (\a' =>
-              io_pure (f' a')))
+  pure x = io_pure x
+  f <*> a 
+      = io_bind f (\f' =>
+          io_bind a (\a' =>
+            io_pure (f' a')))
 
 public export
 Monad IO where
-    b >>= k = io_bind b k
+  b >>= k = io_bind b k
 
 export
 print : Show a => a -> IO ()

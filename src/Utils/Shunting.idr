@@ -37,6 +37,23 @@ data Tree annot a = Inf annot String (Tree annot a) (Tree annot a)
                   | Pre annot String (Tree annot a)
                   | Leaf a
 
+export
+Show a => Show (Tree annot a) where
+  show (Inf _ op l r) = "(" ++ op ++ " " ++ show l ++ " " ++ show r ++ ")"
+  show (Pre _ op l) = "(" ++ op ++ " " ++ show l ++ ")"
+  show (Leaf val) = show val
+
+Show OpPrec where
+  show (AssocL p) = "infixl " ++ show p
+  show (AssocR p) = "infixr " ++ show p
+  show (NonAssoc p) = "infix " ++ show p
+  show (Prefix p) = "prefix " ++ show p
+
+export
+Show a => Show (Tok annot a) where
+  show (Op _ op p) = op ++ " " ++ show p
+  show (Expr val) = show val
+
 -- Label for the output queue state
 data Out : Type where
 
@@ -67,6 +84,7 @@ isLAssoc _ = False
 -- Return whether the first operator should be applied before the second,
 -- assuming 
 higher : annot -> String -> OpPrec -> String -> OpPrec -> Core annot Bool
+higher loc opx op opy (Prefix p) = pure False
 higher loc opx (NonAssoc x) opy oy
     = if x == getPrec oy
          then throw (GenericMsg loc ("Operator '" ++ opx ++ 
@@ -120,11 +138,6 @@ parseOps toks
          shunt [] toks
 
 -- Some things to help with testing, not exported
-
-Show a => Show (Tree annot a) where
-  show (Inf _ op x y) = "(" ++ show x ++ " " ++ op ++ " " ++ show y ++ ")"
-  show (Pre _ op x) = "(" ++ op ++ " " ++ show x ++ ")"
-  show (Leaf x) = show x
 
 pl : Tok () Int
 pl = Op () "+" (AssocL 8)

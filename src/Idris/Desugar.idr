@@ -265,6 +265,11 @@ mutual
       = do l' <- desugarTree side ps l
            r' <- desugarTree side ps r
            pure (IApp loc (IApp loc (IVar loc (UN op)) l') r')
+  -- negation is a special case, since we can't have an operator with
+  -- two meanings otherwise
+  desugarTree side ps (Pre loc "-" arg)
+      = do arg' <- desugarTree side ps arg
+           pure (IApp loc (IVar loc (UN "negate")) arg')
   desugarTree side ps (Pre loc op arg)
       = do arg' <- desugarTree side ps arg
            pure (IApp loc (IVar loc (UN op)) arg')

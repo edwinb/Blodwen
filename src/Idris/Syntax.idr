@@ -429,7 +429,9 @@ TTC FC SyntaxInfo where
 
 export
 initSyntax : SyntaxInfo
-initSyntax = MkSyntax (insert "=" (Infix, 0) empty) empty empty
+initSyntax = MkSyntax (insert "=" (Infix, 0) empty) 
+                      (insert "-" 10 empty)
+                      empty
 
 -- A label for Syntax info in the global state
 export
