@@ -255,6 +255,7 @@ mutual
            (restm, resty) <- checkApp rigc process elabinfo' loc env nest fn' arg expected
            -- Add any remaining implicits greedily
            gam <- get Ctxt
+           log 10 $ "Result type: " ++ show (quote gam env (nf gam env resty))
            (ty, imps) <- getImps rigc process loc env nest elabinfo' (nf gam env resty) []
            log 10 $ "Checked app " ++ show (restm, quote (noGam gam) env ty, imps)
            -- Check all of the implicits we collected have been used
@@ -290,6 +291,7 @@ mutual
            (restm, resty) <- check rigc process elabinfo' env nest fn' expected
            -- Add any remaining implicits greedily
            gam <- get Ctxt
+           log 10 $ "Result type: " ++ show (quote gam env (nf gam env resty))
            (ty, imps) <- getImps rigc process loc env nest elabinfo' (nf gam env resty) []
            log 10 $ "Checked app " ++ show (restm, quote (noGam gam) env ty, imps)
            -- Check all of the implicits we collected have been used
@@ -904,6 +906,7 @@ mutual
                                      (InLHS, _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      log 10 $ "Checking argument of type " ++ show (quote (noGam gam) env ty)
+                                 ++ " at " ++ show (rigMult rigf rigc)
                      (argtm, argty) <- check (rigMult rigf rigc)
                                              process (record { implicitsGiven = [] } elabinfo)
                                              env nest arg' (Just (quote (noGam gam) env ty))
@@ -1078,7 +1081,9 @@ mutual
   makeImplicit rigc process loc env nest elabinfo bn ty
       = case lookup (Just bn) (implicitsGiven elabinfo) of
              Just rawtm => 
-               do gam <- get Ctxt
+               do log 10 $ "Checking implicit " ++ show bn ++ " = " ++ show rawtm
+                            ++ " at " ++ show rigc
+                  gam <- get Ctxt
                   usedImp (Just bn)
                   impsUsed <- saveImps
                   (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
@@ -1190,11 +1195,11 @@ mutual
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c Implicit ty) sc) (NBind bn' (Pi c' Implicit ty') sc') imps
       = pure (NBind bn (Pi c Implicit ty) sc, reverse imps)
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c Implicit ty) sc) exp imps
-      = do tm <- makeImplicit rigc process loc env nest elabinfo bn ty
+      = do tm <- makeImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            convertImps rigc process loc env nest elabinfo 
                        (sc (toClosure defaultOpts env tm)) exp (tm :: imps)
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) exp imps
-      = do tm <- makeAutoImplicit rigc process loc env nest elabinfo bn ty
+      = do tm <- makeAutoImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            convertImps rigc process loc env nest elabinfo 
                        (sc (toClosure defaultOpts env tm)) exp (tm :: imps)
   convertImps rigc process loc env nest elabinfo got exp imps = pure (got, reverse imps)
