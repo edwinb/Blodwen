@@ -171,6 +171,7 @@ mutual
   desugar side ps (PDotted fc x) 
       = pure $ IMustUnify fc "User dotted" !(desugar side ps x)
   desugar side ps (PImplicit fc) = pure $ Implicit fc
+  desugar side ps (PInfer fc) = pure $ Infer fc
   desugar side ps (PDoBlock fc block)
       = expandDo side ps fc block
   desugar side ps (PList fc args)

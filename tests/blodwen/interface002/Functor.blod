@@ -1,6 +1,6 @@
 import Stuff
 
-data Functor : (f : _) -> Type where
+data Functor : (f : ?) -> Type where
      [noHints, search f]
      MkFunctor : (map : {0 a, b: Type} -> (a -> b) -> f a -> f b) -> Functor f 
 
@@ -19,7 +19,7 @@ ListFunctor = MkFunctor mapList
 tryMap : Nat -> Nat -> List Nat
 tryMap x y = map (plus x) [y, S y]
 
-data Vect : _ -> Type -> Type where
+data Vect : ? -> Type -> Type where
      Nil : Vect Z a
      (::) : a -> Vect k a -> Vect (S k) a
 

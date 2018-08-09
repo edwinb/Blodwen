@@ -49,7 +49,7 @@ Functor (Vect n) where
 tryVMap : Nat -> Nat -> Vect (S (S Z)) Nat
 tryVMap x y = map (plus x) [y, S y]
 
-data Deeper : (f : _) -> Type -> Type where
+data Deeper : (f : ?) -> Type -> Type where
      MkD : f a -> Deeper f a
 
 Functor f => Functor (Deeper f) where

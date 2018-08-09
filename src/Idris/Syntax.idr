@@ -115,6 +115,7 @@ mutual
        PAs : FC -> Name -> (pattern : PTerm) -> PTerm
        PDotted : FC -> PTerm -> PTerm
        PImplicit : FC -> PTerm
+       PInfer : FC -> PTerm
 
        -- Operators
 
@@ -332,6 +333,7 @@ Show PTerm where
   show (PAs _ n p) = show n ++ "@" ++ show p
   show (PDotted _ p) = "." ++ show p
   show (PImplicit _) = "_"
+  show (PInfer _) = "?"
   show (POp _ op x y) = show x ++ " " ++ op ++ " " ++ show y
   show (PPrefixOp _ op x) = op ++ show x
   show (PSectionL _ op x) = "(" ++ op ++ " " ++ show x ++ ")"

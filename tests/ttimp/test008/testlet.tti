@@ -14,7 +14,7 @@ fn2 x y = let w : Nat
           plus (help y) w
 
 fn : Nat -> Nat -> Nat;
-fn x y = let w : _; w = plus x x in
+fn x y = let w : ?; w = plus x x in
          let foo = plus x x in
          let help : Nat -> Nat;
              help z = plus z w in

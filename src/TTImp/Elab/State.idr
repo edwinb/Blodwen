@@ -339,7 +339,7 @@ getToBind {vars} env
     normImps gam ns ((n, tm, ty) :: ts)
         = case (getFnArgs (normaliseHoles gam env tm)) of
              (Ref nt n', args) => 
-                do hole <- isHole n'
+                do hole <- isCurrentHole n'
                    if hole && not (n' `elem` ns)
                       then do rest <- normImps gam (n' :: ns) ts
                               pure ((n', normaliseHoles gam env ty) :: rest)

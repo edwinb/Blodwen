@@ -1,2 +1,2 @@
-foo : _ -> Int
+foo : ? -> Int
 foo x = 42

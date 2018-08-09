@@ -125,6 +125,13 @@ isHole n
          pure (n `elem` map snd (holes ust))
 
 export
+isCurrentHole : {auto u : Ref UST (UState annot)} ->
+         Name -> Core annot Bool
+isCurrentHole n 
+    = do ust <- get UST
+         pure (n `elem` map snd (currentHoles ust))
+
+export
 getHoleNames : {auto u : Ref UST (UState annot)} ->
                Core annot (List Name)
 getHoleNames 
@@ -240,6 +247,7 @@ checkDelayedHoles : {auto u : Ref UST (UState annot)} ->
                     Core annot ()
 checkDelayedHoles
     = do hs <- getDelayedHoleInfo
+         allHs <- getHoleNames
          when (not (isNil hs)) $ throw (UnsolvedHoles hs)
          pure ()
 

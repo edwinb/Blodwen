@@ -39,7 +39,10 @@ atom fname
          pure (PImplicit (MkFC fname start end))
   <|> do start <- location
          symbol "?"
-         x <- unqualifiedName
+         end <- location
+         pure (PInfer (MkFC fname start end))
+  <|> do start <- location
+         x <- holeName
          end <- location
          pure (PHole (MkFC fname start end) x)
   <|> do start <- location
@@ -254,7 +257,7 @@ mutual
                (do rig <- multiplicity
                    n <- unqualifiedName
                    ty <- option 
-                            (PImplicit (MkFC fname start start))
+                            (PInfer (MkFC fname start start))
                             (do symbol ":"
                                 opExpr EqOK fname indents)
                    pure (rig, UN n, ty))
@@ -777,7 +780,7 @@ ifaceParam fname indents
   <|> do start <- location
          n <- name
          end <- location
-         pure (n, PImplicit (MkFC fname start end))
+         pure (n, PInfer (MkFC fname start end))
 
 ifaceDecl : FileName -> IndentInfo -> Rule PDecl
 ifaceDecl fname indents

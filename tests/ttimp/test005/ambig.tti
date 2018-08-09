@@ -52,6 +52,6 @@ namespace Vect
     append Nil         ys = ys;
     append (Cons x xs) ys = Cons x (append xs ys);
 
-    the : (a : Type) -> a -> _;
+    the : (a : Type) -> a -> ?;
     the _ x = x;
 

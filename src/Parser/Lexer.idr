@@ -6,6 +6,7 @@ import public Text.Lexer
 
 public export
 data Token = Ident String
+           | HoleIdent String
            | Literal Integer
            | StrLit String
            | CharLit String
@@ -19,6 +20,7 @@ data Token = Ident String
 export
 Show Token where
   show (Ident x) = "Ident " ++ x
+  show (HoleIdent x) = "HoleIdent " ++ x
   show (Literal x) = "Lit " ++ show x
   show (StrLit x) = "Str " ++ show x
   show (CharLit x) = "Char " ++ show x
@@ -60,6 +62,9 @@ ident = pred startIdent <+> many (pred validIdent)
     validIdent '_' = True
     validIdent '\'' = True
     validIdent x = isAlphaNum x
+
+holeIdent : Lexer
+holeIdent = is '?' <+> ident
 
 doubleLit : Lexer
 doubleLit = digits <+> is '.' <+> digits <+> opt
@@ -104,7 +109,8 @@ symbolChar c = c `elem` unpack ":!#$%&*+./<=>?@\\^|-~"
 rawTokens : TokenMap Token
 rawTokens = 
     [(comment, Comment),
-     (blockComment, Comment)] ++
+     (blockComment, Comment),
+     (holeIdent, \x => HoleIdent (assert_total (strTail x)))] ++
     map (\x => (exact x, Symbol)) symbols ++
     [(doubleLit, \x => DoubleLit (cast x)),
      (digits, \x => Literal (cast x)),

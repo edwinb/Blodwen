@@ -489,7 +489,11 @@ mutual
            pure (mkConstantApp n env, hty)
   checkImp rigc process elabinfo env nest (Implicit loc) (Just expected) 
       = case elabMode elabinfo of
-             InLHS =>
+             InExpr =>
+                do n <- addHole loc env expected
+                   log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
+                   pure (mkConstantApp n env, expected)
+             _ =>
                 do hn <- genName "_"
                    -- Add as a pattern variable, but let it unify with other
                    -- things, hence 'False' as an argument to addBoundName
@@ -498,10 +502,16 @@ mutual
                    put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
                                      toBind $= ((hn, (tm, expected)) :: ) } est)
                    pure (tm, expected)
-             _ =>
-                do n <- addHole loc env expected
-                   log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
-                   pure (mkConstantApp n env, expected)
+  checkImp rigc process elabinfo env nest (Infer loc) Nothing
+      = do t <- addHole loc env TType
+           let hty = mkConstantApp t env
+           n <- addHole loc env hty
+           log 10 $ "Added hole for implicit type " ++ show n
+           pure (mkConstantApp n env, hty)
+  checkImp rigc process elabinfo env nest (Infer loc) (Just expected) 
+      = do n <- addHole loc env expected
+           log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
+           pure (mkConstantApp n env, expected)
 
   addGivenImps : ElabInfo annot -> List (Maybe Name, RawImp annot) -> ElabInfo annot
   addGivenImps elabinfo ns = record { implicitsGiven $= (ns ++) } elabinfo

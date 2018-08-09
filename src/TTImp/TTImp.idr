@@ -71,7 +71,8 @@ mutual
        IBindHere : annot -> RawImp annot -> RawImp annot -- point where IBindVars get bound
        IAs : annot -> Name -> (pattern : RawImp annot) -> RawImp annot
        IMustUnify : annot -> (reason : String) -> (pattern : RawImp annot) -> RawImp annot
-       Implicit : annot -> RawImp annot
+       Implicit : annot -> RawImp annot -- _  'Match anything'
+       Infer : annot -> RawImp annot -- ?   'Must be inferred'
 
   public export
   data AltType : Type -> Type where
@@ -256,6 +257,7 @@ getAnnot (IBindHere x _) = x
 getAnnot (IMustUnify x _ _) = x
 getAnnot (IAs x _ _) = x
 getAnnot (Implicit x) = x
+getAnnot (Infer x) = x
 
 export
 apply : RawImp a -> List (RawImp a) -> RawImp a
@@ -315,6 +317,7 @@ mutual
     show (IMustUnify _ r tm) = ".(" ++ show tm ++ ")"
     show (IAs _ n tm) = show n ++ "@(" ++ show tm ++ ")"
     show (Implicit _) = "_"
+    show (Infer _) = "?"
 
   export
   Show (ImpTy annot) where
@@ -609,6 +612,8 @@ mutual
         = do tag 19; toBuf b fc; toBuf b pattern
     toBuf b (Implicit fc)
         = do tag 20; toBuf b fc
+    toBuf b (Infer fc)
+        = do tag 21; toBuf b fc
 
     fromBuf s b
         = case !getTag of
@@ -669,6 +674,8 @@ mutual
                         pure (IMustUnify fc "" pattern)
                20 => do fc <- fromBuf s b
                         pure (Implicit fc)
+               21 => do fc <- fromBuf s b
+                        pure (Infer fc)
                _ => corrupt "RawImp"
   
   export

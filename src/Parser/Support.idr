@@ -290,6 +290,13 @@ unqualifiedName : Rule String
 unqualifiedName = identPart
 
 export
+holeName : Rule String
+holeName 
+    = terminal (\x => case tok x of
+                           HoleIdent str => Just str
+                           _ => Nothing)
+
+export
 name : Rule Name
 name 
     = do ns <- namespace_ 

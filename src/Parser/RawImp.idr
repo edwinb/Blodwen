@@ -34,11 +34,12 @@ atom
          pure (IType ())
   <|> do symbol "_"
          pure (Implicit ())
+  <|> do symbol "?"
+         pure (Infer ())
   <|> do symbol "$"
          x <- unqualifiedName
          pure (IBindVar () x)
-  <|> do symbol "?"
-         x <- unqualifiedName
+  <|> do x <- holeName
          pure (IHole () x)
   <|> do symbol "%"
          exactIdent "MkWorld"
@@ -174,7 +175,7 @@ mutual
            rig <- multiplicity
            n <- name
            ty <- option 
-                    (Implicit ())
+                    (Infer ())
                     (do symbol ":"
                         expr indents)
            symbol "=>"
