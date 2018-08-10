@@ -1,10 +1,10 @@
 package ttimp
 
-pkgs = contrib
-
 modules = Compiler.Chez,
           Compiler.Common,
           Compiler.CompileExpr,
+          
+          Control.Delayed,
 
           Core.AutoSearch,
           Core.Binary,
@@ -30,6 +30,7 @@ modules = Compiler.Chez,
 
           Control.Monad.StateE,
 
+          Data.Bool.Extra,
           Data.CMap,
           Data.CSet,
           Data.StringMap,
@@ -42,6 +43,13 @@ modules = Compiler.Chez,
           Parser.RawImp,
           Parser.REPL,
           Parser.Support,
+
+          Text.Lexer,
+          Text.Lexer.Core,
+          Text.Parser,
+          Text.Parser.Core,
+          Text.Quantity,
+          Text.Token,
 
           TTImp.Elab,
           TTImp.Elab.Ambiguity,

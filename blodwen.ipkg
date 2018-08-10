@@ -1,7 +1,5 @@
 package blodwen
 
-pkgs = contrib
-
 modules = Idris.BindImplicits,
           Idris.CommandLine,
           Idris.Desugar,
