@@ -51,8 +51,8 @@ putStrLn : String -> IO ()
 putStrLn str = putStr (prim__strAppend str "\n")
 
 export
-getStr : IO String
-getStr = MkIO prim__getStr
+getLine : IO String
+getLine = MkIO prim__getStr
 
 unsafeCreateWorld : (1 f : (1 x : %World) -> a) -> a
 unsafeCreateWorld f = f %MkWorld

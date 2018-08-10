@@ -320,6 +320,14 @@ Neg Integer where
 Abs Integer where
   abs x = if x < 0 then -x else x
 
+Integral Integer where
+  div x y 
+      = case y == 0 of
+             False => prim__div_Integer x y
+  mod x y 
+      = case y == 0 of
+             False => prim__mod_Integer x y
+
 -- This allows us to pick integer as a default at the end of elaboration if
 -- all other possibilities fail. I don't plan to provide a nicer syntax for
 -- this...
@@ -343,6 +351,14 @@ Neg Int where
 Abs Int where
   abs x = if x < 0 then -x else x
 
+Integral Int where
+  div x y 
+      = case y == 0 of
+             False => prim__div_Int x y
+  mod x y 
+      = case y == 0 of
+             False => prim__mod_Int x y
+
 -- Double
 
 public export
@@ -357,6 +373,9 @@ Neg Double where
 
 Abs Double where
   abs x = if x < 0 then -x else x
+
+Fractional Double where
+  (/) = prim__div_Double
 
 -------------
 -- ALGEBRA --
