@@ -40,6 +40,7 @@ data Error annot
     | CantSolveGoal annot (Env Term vars) (Term vars)
     | DeterminingArg annot Name (Env Term vars) (Term vars)
     | UnsolvedHoles (List (annot, Name))
+    | CantInferArgType annot Name Name (Term vars)
     | SolvedNamedHole annot Name
     | VisibilityError annot Visibility Name Visibility Name
     | NonLinearPattern annot Name
@@ -126,6 +127,9 @@ Show annot => Show (Error annot) where
       = show fc ++ ":Can't solve goal " ++ assert_total (show g) ++ 
                 " since argument " ++ show n ++ " can't be inferred"
   show (UnsolvedHoles hs) = "Unsolved holes " ++ show hs
+  show (CantInferArgType fc n h ty)
+      = show fc ++ ":Can't infer type for " ++ show n ++
+                   " (got " ++ show ty ++ " with hole " ++ show h ++ ")"
   show (SolvedNamedHole fc h) = show fc ++ ":Named hole " ++ show h ++ " is solved by unification"
   show (VisibilityError fc vx x vy y)
       = show fc ++ ":" ++ show vx ++ " " ++ show x ++ " cannot refer to "

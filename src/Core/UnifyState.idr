@@ -7,6 +7,7 @@ import Core.TT
 import Core.TTC
 import Utils.Binary
 
+import Data.CSet
 import Data.List
 import Data.List.Views
 
@@ -250,6 +251,30 @@ checkDelayedHoles
          allHs <- getHoleNames
          when (not (isNil hs)) $ throw (UnsolvedHoles hs)
          pure ()
+
+-- Check that the argument types in a type are valid. If the unbound
+-- implicit rules bind a thing too late (they bind dependencies at the point 
+-- the name is first encountered) then further unification might require that
+-- the name is used earlier in a type. If this happens, report that we
+-- can't infer the argument type.
+export
+checkArgTypes : {auto c : Ref Ctxt Defs} ->
+                annot -> Term vars -> Core annot ()
+checkArgTypes loc (Bind n (Pi _ _ ty) sc)
+    = do let ns = toList (getRefs ty)
+         defs <- get Ctxt
+         traverse (checkDefinedName defs) ns
+         checkArgTypes loc sc
+  where
+    badarg : Name -> Core annot ()
+    badarg h = throw (CantInferArgType loc n h ty)
+
+    checkDefinedName : Defs -> Name -> Core annot ()
+    checkDefinedName defs h
+        = case lookupDefExact h (gamma defs) of
+               Just ImpBind => badarg h
+               _ => pure ()
+checkArgTypes loc tm = pure ()
 
 -- Make a new constant by applying a term to everything in the current
 -- environment (except the lets, which aren't in the constant's type)

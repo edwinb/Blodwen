@@ -123,6 +123,30 @@ Core.Unify.solveConstraints revisits all of the currently unsolved holes and
 constrained definitions, and tries again to unify any constraints which they
 require. It also tries to resolve anything defined by proof search.
 
+Additional type inference
+-------------------------
+A '?' in a type means "infer this part of the type".  This is distinct from "_"
+in types, which means "I don't care what this is". The distinction is in what
+happens when inference fails.  If inference fails for "_", we implicitly bind a
+new name (just like pattern matching on the lhs - i.e. it means match
+anything). If inference fails for "?", we leave it as a hole and try to fill it
+in later. As a result, we can say:
+
+    foo : Vect Int ?
+    foo = [1,2,3,4]
+
+...and the ? will be inferred to be 4. But if we say
+
+    foo : Vect Int _
+    foo = [1,2,3,4]
+
+...we'll get an error, because the '_' has been bound as a new name.
+
+So the meaning of "_" is now consistent on the lhs and in types (i.e. it
+means infer a value and bind a variable on failure to infer anything). In
+practice, using "_" will get you the old Idris behaviour, but "?" might get
+you a bit more type inference.
+
 Auto Implicits
 --------------
 Auto implicits are resolved by proof search, and can be given explicit
@@ -155,12 +179,19 @@ effectively)
 
 @-Patterns
 ----------
-There a pattern binding PLet in the core theory, which binds a name as
+There is a pattern binding PLet in the core theory, which binds a name as
 being equal to something using other pattern bindings. See 
 TTImp.Elab.Term.checkAs. To elaborate, we check the pattern term as usual,
 add a new hole for the @-pattern variable name and assert that it converts
 (therefore unifies) with the pattern. Then, when we get to bindImplicits,
 we'll see that the @-pattern name is defined, so turn it into a PLet.
+
+Names which are bound in types are also bound as @-patterns, meaning that
+functions have access to them. For example, we can say:
+
+vlength : Vect n a -> Nat
+vlength [] = n
+vlength (x :: xs) = n
 
 Linear Types
 ------------

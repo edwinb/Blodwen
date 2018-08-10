@@ -1,0 +1,3 @@
+crong : forall f . a = b -> f a = f b
+crong Refl = Refl
+

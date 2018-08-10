@@ -1,0 +1,9 @@
+
+data Vect : Nat -> Type -> Type where
+     Nil : Vect Z a
+     (::) : a -> Vect k a -> Vect (S k) a
+
+data VThing : (n : Nat) -> Vect n a -> Type where
+     VCons : VThing ? xs ->
+             VThing ? (x :: xs)
+

@@ -17,7 +17,7 @@ blodwenTests
     = ["test001", "test002", "test003", "test004", "test005",
        "test006", "test007", "test008", "test009", "test010",
        "test011", "test012", "test013", "test014", "test015",
-       "test016",
+       "test016", "test017",
        "chez001",
        "import001", "import002",
        "reflect001",
