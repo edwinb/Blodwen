@@ -371,44 +371,14 @@ mutual
       = throw (InternalError "Escape should have been resolved before here")
   checkImp rigc process elabinfo env nest (IType loc) exp
       = checkExp rigc process loc elabinfo env nest TType TType exp
-  checkImp rigc process elabinfo env nest (IBindVar loc str) Nothing
+  checkImp rigc process elabinfo env nest (IBindVar loc str) topexp
       = do let elabmode = elabMode elabinfo
            -- In types, don't rebind if the name is already in scope;
            -- Below, return True if we don't need to implicitly bind the name
            let False = case implicitMode elabinfo of
                             PI _ => maybe False (const True) (defined (UN str) env)
                             _ => False
-                 | _ => checkName rigc process elabinfo loc env nest (UN str) Nothing
-           let n = PV (UN str)
-           noteLHSPatVar elabmode str
-           notePatVar n
-           est <- get EST
-           case lookup n (boundNames est) of
-                Nothing =>
-                  do t <- addHole loc [] TType
-                     -- Use an empty environment, because if we can't
-                     -- resolve the hole type in the current scope, there'll
-                     -- be some names out of scope in the hole type and
-                     -- we'll never be able to resolve it.
-                     let hty_in = mkConstantApp t []
-                     tm_in <- addBoundName loc n True [] hty_in
-                     let hty = embed hty_in
-                     let tm = embed tm_in
-                     log 5 $ "Added Bound implicit (invented type) " ++ show (n, (tm, hty))
-                     put EST 
-                         (record { boundNames $= ((n, (tm, hty)) ::),
-                                   toBind $= ((n, (tm, hty)) ::) } est)
-                     pure (tm, hty)
-                Just (tm, ty) =>
-                     pure (tm, ty)
-  checkImp rigc process elabinfo env nest (IBindVar loc str) (Just expected)
-      = do let elabmode = elabMode elabinfo
-           -- In types, don't rebind if the name is already in scope;
-           -- Below, return True if we don't need to implicitly bind the name
-           let False = case implicitMode elabinfo of
-                            PI _ => maybe False (const True) (defined (UN str) env)
-                            _ => False
-                 | _ => checkName rigc process elabinfo loc env nest (UN str) (Just expected)
+                 | _ => checkName rigc process elabinfo loc env nest (UN str) topexp
            let n = PV (UN str)
            let elabmode = elabMode elabinfo
            noteLHSPatVar elabmode str
@@ -416,23 +386,30 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
-                  do tm <- addBoundName loc n True env expected
-                     log 5 $ "Added Bound implicit " ++ show (n, (tm, expected))
-                     gam <- get Ctxt
-                     log 10 $ show (lookupDefExact n (gamma gam))
+                  do (tm, exp) <- mkOuterHole loc n True topexp
+                     log 5 $ "Added Bound implicit " ++ show (n, (tm, exp))
+                     defs <- get Ctxt
+                     log 10 $ show (lookupDefExact n (gamma defs))
                      put EST 
-                         (record { boundNames $= ((n, (tm, expected)) ::),
-                                   toBind $= ((n, (tm, expected)) :: ) } est)
-                     pure (tm, expected)
+                         (record { boundNames $= ((n, (tm, exp)) ::),
+                                   toBind $= ((n, (tm, exp)) :: ) } est)
+                     checkExp rigc process loc elabinfo env nest tm exp topexp
                 Just (tm, ty) =>
-                     checkExp rigc process loc elabinfo env nest tm ty (Just expected)
+                     checkExp rigc process loc elabinfo env nest tm ty topexp
   checkImp rigc process elabinfo env nest (IBindHere loc tm) expected
-      = do (tmv, tmt) <- check rigc process elabinfo env nest tm expected
+      = do est <- get EST
+           let oldenv = outerEnv est
+           let oldsub = subEnv est
+           -- Set the binding environment in the elab state - unbound
+           -- implicits should have access to whatever is in scope here
+           put EST (updateEnv env SubRefl est)
+           (tmv, tmt) <- check rigc process elabinfo env nest tm expected
            argImps <- getToBind env
            clearToBind
            gam <- get Ctxt
            est <- get EST
-           put EST (record { boundNames = [] } est)
+           put EST (updateEnv oldenv oldsub
+                       (record { boundNames = [] } est))
            let (bv, bt) = bindImplicits (implicitMode elabinfo)
                                         gam env argImps (asVariables est)
                                         tmv TType
@@ -960,51 +937,21 @@ mutual
             Maybe (Term vars) ->
             Core annot (Term vars, Term vars) 
   checkPi rigc process elabinfo loc env nest rigf info n argty retty expected
-      = do let top = topLevel elabinfo
-           let impmode = implicitMode elabinfo
+      = do let impmode = implicitMode elabinfo
            let elabmode = elabMode elabinfo
-           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
+           (tyv, tyt) <- Term.check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest argty (Just TType)
            let env' : Env Term (n :: _) = Pi RigW info tyv :: env
            est <- get EST
            
            tobind <- getToBind env
-           let argImps = if top then tobind else []
-           -- note the names as now being bound implicits, so we don't bind again
-           setBound (map fst argImps)
-           when top $ clearToBind 
            e' <- weakenedEState 
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} Rig0 process elabinfo env' (weaken nest') retty (Just TType)
-           scopeImps <- getToBind {e=e'} env'
-           -- note the names as now being bound implicits, so we don't bind again
-           setBound (map fst scopeImps)
-           st' <- strengthenedEState {e=e'} top loc
+           (scopev, scopet) <- Term.check {e=e'} Rig0 process elabinfo env' (weaken nest') retty (Just TType)
+           st' <- strengthenedEState {e=e'} False loc env'
            put EST st'
-           -- Bind implicits which were first used in
-           -- the argument type 'tyv'
-           -- This is only in 'PI' implicit mode - it's an error to
-           -- have implicits at this level in 'PATT' implicit mode
-           case (top, impmode) of
-                (True, PI _) =>
-                   do log 5 $ "Binding arg implicits " ++ show argImps
-                      gam <- get Ctxt
-                      let (scopev', scopet')
-                          = bindImplicits impmode gam env'
-                                          scopeImps 
-                                          (asVariables st') scopev scopet
-                      let (binder, bindert)
-                          = bindImplicits impmode gam env
-                                          argImps
-                                          (asVariables st')
-                                          (Bind n (Pi rigf info tyv) scopev')
-                                          TType
-                      log 5 $ "Result " ++ show binder ++ " : " ++ show bindert
-                      traverse implicitBind (map fst scopeImps)
-                      traverse implicitBind (map fst argImps)
-                      checkExp rigc process loc elabinfo env nest binder bindert expected
-                _ => checkExp rigc process loc elabinfo env nest (Bind n (Pi rigf info tyv) scopev)
-                                      TType expected
+           checkExp rigc process loc elabinfo env nest (Bind n (Pi rigf info tyv) scopev)
+                    TType expected
 
   checkLam : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
@@ -1021,10 +968,11 @@ mutual
            e' <- weakenedEState
            let rigb = min rigl c
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) (Lam rigb plicity pty :: env) 
+           let env' = Lam rigb plicity pty :: env
+           (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) env'
                                      (weaken nest') scope 
                                      (Just (renameTop n psc))
-           st' <- strengthenedEState False loc
+           st' <- strengthenedEState False loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
@@ -1037,7 +985,7 @@ mutual
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' (weaken nest') scope Nothing
-           st' <- strengthenedEState False loc
+           st' <- strengthenedEState False loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
@@ -1074,7 +1022,7 @@ mutual
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' 
                                      (weaken nest') scope (map weaken expected)
-           st' <- strengthenedEState (topLevel elabinfo) loc
+           st' <- strengthenedEState (topLevel elabinfo) loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest
                             (Bind n (Let rigb valv tyv) scopev)
@@ -1115,8 +1063,8 @@ mutual
                         hn <- genName (nameRoot bn)
                         -- Add as a pattern variable, but let it unify with other
                         -- things, hence 'False' as an argument to addBoundName
-                        let expected = quote (noGam gam) env ty
-                        tm <- addBoundName loc hn False env expected
+                        let expected_in = quote (noGam gam) env ty
+                        (tm, expected) <- mkOuterHole loc hn False (Just expected_in)
                         log 5 $ "Added Bound implicit (makeImplicit) " ++ show (hn, (tm, expected))
                         est <- get EST
                         put EST (record { boundNames $= ((hn, (tm, expected)) :: ),

@@ -20,18 +20,23 @@ data ImplicitMode = NONE | PI RigCount | PATTERN
 public export
 data ElabMode = InType | InLHS | InExpr
 
+data BoundVar : List Name -> Type where
+  MkBoundVar : Term outer -> Term outer -> BoundVar (vars ++ outer)
+
 public export
 record EState (vars : List Name) where
   constructor MkElabState
+  -- The environment in which we bind the unbound implicits - they are always
+  -- all bound in the same environment, so that we can safely bind them all
+  -- at the same time
+  outerEnv : Env Term outer
+  subEnv : SubVars outer vars
   boundNames : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variable bindings and the 
                   -- term/type they elaborated to
   toBind : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variables which haven't been
                   -- bound yet.
-  boundImplicits : List Name
-                  -- names we've already decided will be bound implicits, no
-                  -- we don't need to bind again
   lhsPatVars : List String
                   -- names which we've bound in elab mode InLHS (i.e. not
                   -- in a dot pattern). We keep track of this because every
@@ -74,8 +79,17 @@ export
 data EST : Type where
 
 export
-initEState : Name -> EState vars
-initEState n = MkElabState [] [] [] [] [] [] [] [] [] n
+initEState : Name -> Env Term vars -> EState vars
+initEState n env = MkElabState env SubRefl [] [] [] [] [] [] [] [] n
+
+export
+updateEnv : Env Term new -> SubVars new vars -> EState vars -> EState vars
+updateEnv env sub st
+    = MkElabState env sub
+                  (boundNames st) (toBind st)
+                  (lhsPatVars st) (allPatVars st) (asVariables st)
+                  (implicitsUsed st) (linearUsed st)
+                  (holesMade st) (defining st)
 
 -- Convenient way to record all of the elaborator state, for the times
 -- we need to backtrack
@@ -175,9 +189,10 @@ weakenedEState : {auto e : Ref EST (EState vs)} ->
                  Core annot (Ref EST (EState (n :: vs)))
 weakenedEState
     = do est <- get EST
-         e' <- newRef EST (MkElabState (map wknTms (boundNames est))
+         e' <- newRef EST (MkElabState (outerEnv est)
+                                       (DropCons (subEnv est))
+                                       (map wknTms (boundNames est))
                                        (map wknTms (toBind est))
-                                       (boundImplicits est)
                                        (lhsPatVars est)
                                        (allPatVars est)
                                        (asVariables est)
@@ -199,17 +214,22 @@ weakenedEState
 -- be bound at the top level, which is an error.
 export
 strengthenedEState : {auto e : Ref EST (EState (n :: vs))} ->
-                     (top : Bool) -> annot ->
+                     {auto c : Ref Ctxt Defs} ->
+                     (top : Bool) -> annot -> Env Term (n :: vs) ->
                      Core annot (EState vs)
-strengthenedEState True loc = do est <- get EST
-                                 pure (initEState (defining est))
-strengthenedEState False loc 
+-- strengthenedEState True loc env 
+--     = do est <- get EST
+--          pure (initEState (defining est))
+strengthenedEState {n} {vs} _ loc env
     = do est <- get EST
-         bns <- traverse strTms (boundNames est)
-         todo <- traverse strTms (toBind est)
+         defs <- get Ctxt
+         bns <- traverse (strTms defs) (boundNames est)
+         todo <- traverse (strTms defs) (toBind est)
          let lvs = mapMaybe dropTop (linearUsed est)
-         pure (MkElabState bns todo (boundImplicits est) 
-                                    (lhsPatVars est)
+         svs <- dropSub (subEnv est)
+         pure (MkElabState (outerEnv est)
+                           svs
+                           bns todo (lhsPatVars est)
                                     (allPatVars est)
                                     (asVariables est)
                                     (implicitsUsed est) 
@@ -217,6 +237,10 @@ strengthenedEState False loc
                                     (holesMade est)
                                     (defining est))
   where
+    dropSub : SubVars xs (y :: ys) -> Core annot (SubVars xs ys)
+    dropSub (DropCons sub) = pure sub
+    dropSub _ = throw (InternalError "Badly formed weakened environment")
+
     -- Remove any instance of the top level local variable from an
     -- application. Fail if it turns out to be necessary.
     -- NOTE: While this isn't strictly correct given the type of the hole
@@ -243,22 +267,62 @@ strengthenedEState False loc
                f' <- shrinkTerm f (DropCons SubRefl)
                pure (apply f' args')
 
-    strTms : (Name, (Term (n :: vs), Term (n :: vs))) -> 
+    strTms : Defs -> (Name, (Term (n :: vs), Term (n :: vs))) -> 
              Core annot (Name, (Term vs, Term vs))
-    strTms {vs} (f, (x, y))
-        = case (removeArg x, shrinkTerm y (DropCons SubRefl)) of
+    strTms defs (f, (x, y))
+        = let xnf = normaliseHoles defs env x
+              ynf = normaliseHoles defs env y in
+              case (removeArg xnf, shrinkTerm ynf (DropCons SubRefl)) of
                (Just x', Just y') => pure (f, (x', y'))
-               _ => throw (GenericMsg loc ("Invalid unbound implicit " ++ show f))
+               _ => throw (GenericMsg loc ("Invalid unbound implicit " ++ 
+                               show f ++ " " ++ show xnf ++ " : " ++ show ynf))
 
     dropTop : (x ** Elem x (n :: vs)) -> Maybe (x ** Elem x vs)
     dropTop (_ ** Here) = Nothing
     dropTop (_ ** There p) = Just (_ ** p)
 
+elemEmbedSub : SubVars small vars -> Elem x small -> Elem x vars
+elemEmbedSub SubRefl y = y
+elemEmbedSub (DropCons prf) y = There (elemEmbedSub prf y)
+elemEmbedSub (KeepCons prf) Here = Here
+elemEmbedSub (KeepCons prf) (There later) = There (elemEmbedSub prf later)
+
+embedSub : SubVars small vars -> Term small -> Term vars
+embedSub sub (Local prf) = Local (elemEmbedSub sub prf)
+embedSub sub (Ref x fn) = Ref x fn
+embedSub sub (Bind x b tm) 
+    = Bind x (assert_total (map (embedSub sub) b))
+             (embedSub (KeepCons sub) tm)
+embedSub sub (App f a) = App (embedSub sub f) (embedSub sub a)
+embedSub sub (PrimVal x) = PrimVal x
+embedSub sub Erased = Erased
+embedSub sub TType = TType
+
+-- Make a hole for a bound implicit in the outer environment
 export
-clearEState : {auto e : Ref EST (EState vs)} ->
-              Core annot ()
-clearEState = do est <- get EST
-                 put EST (initEState (defining est))
+mkOuterHole : {auto e : Ref EST (EState vars)} ->
+              {auto c : Ref Ctxt Defs} ->
+              {auto e : Ref UST (UState annot)} ->
+              annot -> Name -> Bool -> Maybe (Term vars) ->
+              Core annot (Term vars, Term vars)
+mkOuterHole {vars} loc n patvar (Just expected)
+    = do est <- get EST
+         let sub = subEnv est
+         case shrinkTerm expected sub of
+              Nothing => 
+                  throw (GenericMsg loc ("Can't make hole for " ++ show n ++ " here "
+                            ++ show expected ++ " " ++ show vars))
+              Just exp' => 
+                  do tm <- addBoundName loc n patvar (outerEnv est) exp'
+                     pure (embedSub sub tm, embedSub sub exp')
+mkOuterHole loc n patvar Nothing
+    = do est <- get EST
+         let sub = subEnv est
+         let env = outerEnv est
+         t <- addHole loc env TType
+         let ty = mkConstantApp t env
+         tm <- addBoundName loc n patvar env ty
+         pure (embedSub sub tm, embedSub sub ty)
 
 export
 clearToBind : {auto e : Ref EST (EState vs)} ->
@@ -283,15 +347,6 @@ export
 dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))
 
--- Record the given names, arising as unbound implicits, as having been bound
--- now (so don't bind them again)
-export
-setBound : {auto e : Ref EST (EState vars)} ->
-           List Name -> Core annot ()
-setBound ns
-    = do est <- get EST
-         put EST (record { boundImplicits $= (ns ++) } est)
-
 -- 'toBind' are the names which are to be implicitly bound (pattern bindings and
 -- unbound implicits).
 -- Return the names in the order they should be bound: i.e. respecting
@@ -308,9 +363,7 @@ getToBind {vars} env
          gam <- get Ctxt
          log 7 $ "To bind: " ++ show (map (norm gam) (reverse $ toBind est))
          log 10 $ "With holes " ++ show (map snd (holes ust))
-         -- if we encounter a hole name that we've seen before, and is now 
-         -- stored in boundImplicits, we don't want to bind it again
-         res <- normImps gam (boundImplicits est) (reverse $ toBind est)
+         res <- normImps gam [] (reverse $ toBind est)
          let hnames = map fst res
          log 10 $ "Sorting " ++ show res
          let ret = asLast (map fst (asVariables est)) (depSort hnames res)

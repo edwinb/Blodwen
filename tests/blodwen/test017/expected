@@ -1,7 +1,0 @@
-1/1: Building noinf1 (noinf1.blod)
-noinf1.blod:1:1--2:1:When elaborating type of Main.crong:
-noinf1.blod:1:9--2:1:Can't infer type for f (got ({aTy:6} : Main.{arg_type:7}) -> Main.{res_type:8} with hole Main.{res_type:8})
-1/1: Building noinf2 (noinf2.blod)
-noinf2.blod:7:6--10:1:When elaborating type of constructor Main.VCons:
-noinf2.blod:7:14--10:1:Can't infer type for xs (got (Main.Vect Main.{h:7} !{a:6}) with hole Main.{h:7})
-1/1: Building inf3 (inf3.blod)

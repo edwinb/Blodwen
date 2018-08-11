@@ -42,8 +42,8 @@ Eq a => Eq (List a) where
 test : ((Eq b, Eq b, Eq a), Eq b) => a -> a -> Bool
 test x y = x == y
 
-interface DecEq a where
-  decEq : (x : a) -> (y : a) -> Dec (x = y)
+interface DecEq ty where
+  decEq : (x : ty) -> (y : ty) -> Dec (x = y)
 
 -- partial!
 eqNat : (x : Nat) -> (y : Nat) -> Dec (x = y)

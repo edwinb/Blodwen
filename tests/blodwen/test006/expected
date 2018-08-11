@@ -1,5 +1,5 @@
 1/1: Building vect (vect.blod)
 vect.blod:12:1--13:1:When elaborating right hand side of Main.append:
-vect.blod:12:25--13:1:(Main.plus !m (Main.S !{k:13})) and (Main.S (Main.plus !m !{k:13})) are not equal
+vect.blod:12:25--13:1:(Main.plus !m (Main.S !{k:12})) and (Main.S (Main.plus !m !{k:12})) are not equal
 Welcome to Blodwen. Good luck.
 Main> Bye for now!

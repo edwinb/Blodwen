@@ -55,7 +55,7 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
                        Term vars) -- type
 elabTerm {vars} process defining env nest impmode elabmode tm tyin
     = do resetHoles
-         e <- newRef EST (initEState defining)
+         e <- newRef EST (initEState defining env)
          let rigc = getRigNeeded elabmode
          (chktm, ty) <- check {e} rigc process (initElabInfo impmode elabmode) env nest tm tyin
          log 10 $ "Initial check: " ++ show chktm ++ " : " ++ show ty
@@ -84,7 +84,6 @@ elabTerm {vars} process defining env nest impmode elabmode tm tyin
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'
          fullImps <- getToBind env
-         setBound (map fst fullImps) -- maybe not necessary since we're done now
          clearToBind -- remove the bound holes
          gam <- get Ctxt
          log 5 $ "Binding implicits " ++ show fullImps ++

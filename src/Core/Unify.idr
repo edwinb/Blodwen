@@ -945,15 +945,21 @@ retry mode cname
               -- constraint context so we don't do it again
               Just Resolved => pure []
               Just (MkConstraint loc env x y) =>
-                   do chs <- getHoleInfo
-                      log 5 $ "Retrying " ++ show (normalise gam env x)
-                                          ++ " and " ++ show (normalise gam env y)
-                      do cs <- unify mode loc env x y
-                         case cs of
-                              [] => do log 5 "Success!"
-                                       setConstraint cname Resolved
-                                       pure []
-                              _ => pure cs
+                   catch
+                    (do chs <- getHoleInfo
+                        log 5 $ "Retrying " ++ show (normalise gam env x)
+                                            ++ " and " ++ show (normalise gam env y)
+                        do cs <- unify mode loc env x y
+                           case cs of
+                                [] => do log 5 "Success!"
+                                         setConstraint cname Resolved
+                                         pure []
+                                _ => pure cs)
+                    (\err => do gam <- get Ctxt 
+                                throw (WhenUnifying loc env
+                                                    (normaliseHoles gam env x)
+                                                    (normaliseHoles gam env y)
+                                          err))
               Just (MkSeqConstraint loc env xs ys) =>
                    do cs <- unifyArgs mode loc env xs ys
                       case cs of

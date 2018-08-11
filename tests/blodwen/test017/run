@@ -1,5 +1,0 @@
-$1 --check noinf1.blod
-$1 --check noinf2.blod
-$1 --check inf3.blod
-
-rm -rf build
