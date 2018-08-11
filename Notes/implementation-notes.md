@@ -85,9 +85,9 @@ gets turned into a local binding (either Pi or Pat as appropriate, or PLet for
 Unbound Implicits
 -----------------
 Any name beginning with a lower case letter is considered an unbound implicit.
-They are elaborated as holes, which may depend on whatever is in the
-environment when they first appear, and after elaboration they are converted to
-an implicit pi binding, with multiplicity 0. So, for example:
+They are elaborated as holes, which may depend on the initial environment of
+the elaboration, and after elaboration they are converted to an implicit pi
+binding, with multiplicity 0. So, for example:
 
 map : {f : _} -> (a -> b) -> f a -> f b
 becomes

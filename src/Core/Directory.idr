@@ -27,13 +27,26 @@ dropExtension fname
                -- assert that root can't be empty
                reverse (assert_total (strTail root))
     
-firstAvailable : annot -> List String -> List String -> Core annot String
-firstAvailable loc ns [] = throw (ModuleNotFound loc ns)
-firstAvailable loc ns (f :: fs)
+-- Return the contents of the first file available in the list
+firstAvailable : List String -> Core annot (Maybe String)
+firstAvailable [] = pure Nothing
+firstAvailable (f :: fs)
     = do Right ok <- coreLift $ openFile f Read
-               | Left err => firstAvailable loc ns fs
+               | Left err => firstAvailable fs
          coreLift $ closeFile ok
-         pure f
+         pure (Just f)
+
+export
+readDataFile : {auto c : Ref Ctxt Defs} ->
+               String -> Core annot String
+readDataFile fname
+    = do d <- getDirs
+         let fs = map (\p => p ++ cast sep ++ fname) (data_dirs d)
+         Just f <- firstAvailable fs
+            | Nothing => throw (InternalError ("Can't find data file " ++ fname))
+         Right d <- coreLift $ readFile f
+            | Left err => throw (FileErr f err)
+         pure d
 
 -- Given a namespace, return the full path to the checked module, 
 -- looking first in the build directory then in the extra_dirs
@@ -45,7 +58,9 @@ nsToPath loc ns
          let fnameBase = showSep (cast sep) (reverse ns)
          let fs = map (\p => p ++ cast sep ++ fnameBase ++ ".ttc")
                       (build_dir d :: extra_dirs d)
-         firstAvailable loc ns fs
+         Just f <- firstAvailable fs
+            | Nothing => throw (ModuleNotFound loc ns)
+         pure f
 
 -- Given a namespace, return the full path to the source module (if it
 -- exists in the working directory)
@@ -57,7 +72,9 @@ nsToSource loc ns
          let fnameBase = showSep (cast sep) (reverse ns)
          let fs = map (\ext => fnameBase ++ ext)
                       [".blod", ".idr", ".lidr"]
-         firstAvailable loc ns fs
+         Just f <- firstAvailable fs
+            | Nothing => throw (ModuleNotFound loc ns)
+         pure f
 
 -- Given a filename in the working directory, return the correct
 -- namespace for it

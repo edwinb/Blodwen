@@ -4,6 +4,7 @@ import Compiler.Common
 import Compiler.CompileExpr
 
 import Core.Context
+import Core.Directory
 import Core.Name
 import Core.TT
 
@@ -22,23 +23,12 @@ findChez : IO String
 findChez 
     = do e <- firstExists [p ++ x | p <- ["/usr/bin/", "/usr/local/bin/"],
                                     x <- ["scheme", "chez"]]
-         maybe (pure "/usr/bin/scheme") pure e
+         maybe (pure "/usr/bin/env scheme") pure e
 
 schHeader : String -> String
 schHeader chez
   = "#!" ++ chez ++ " --script\n\n" ++
-    "(let ()\n" ++
-    "(define blodwen-read-args (lambda (desc)\n" ++
-    "  (case (vector-ref desc 0)\n" ++
-    "    ((0) '())\n" ++
-    "    ((1) (cons (vector-ref desc 2)\n" ++
-    "               (blodwen-read-args (vector-ref desc 3)))))))\n" ++
-    "(define b+ (lambda (x y bits) (remainder (+ x y) (expt 2 bits))))\n" ++
-    "(define b- (lambda (x y bits) (remainder (- x y) (expt 2 bits))))\n" ++
-    "(define b* (lambda (x y bits) (remainder (* x y) (expt 2 bits))))\n" ++
-    "(define b/ (lambda (x y bits) (remainder (/ x y) (expt 2 bits))))\n" ++
-    "(define string-cons (lambda (x y) (string-append (string x) y)))\n" ++
-    "(define get-tag (lambda (x) (vector-ref x 0)))\n\n"
+    "(let ()\n"
 
 schFooter : String
 schFooter = ")"
@@ -267,7 +257,8 @@ compileExpr {annot} tm outfile
             | Left err => throw err
          let main = schExp [] !(compileExp tm)
          chez <- coreLift findChez
-         let scm = schHeader chez ++ code ++ main ++ schFooter
+         support <- readDataFile "chez/support.ss"
+         let scm = schHeader chez ++ support ++ code ++ main ++ schFooter
          Right () <- coreLift $ writeFile outfile scm
             | Left err => throw (FileErr outfile err)
          coreLift $ chmod outfile 0o755

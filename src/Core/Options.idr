@@ -68,6 +68,7 @@ record Dirs where
   build_dir : String -- build directory, relative to working directory
   dir_prefix : String -- installation prefix, for finding data files (e.g. run time support)
   extra_dirs : List String -- places to look for import files
+  data_dirs : List String -- places to look for data file
 
 public export
 record PPrinter where
@@ -94,7 +95,7 @@ record Options where
   primnames : PrimNames
 
 defaultDirs : Dirs
-defaultDirs = MkDirs "build" "/usr/local" ["."]
+defaultDirs = MkDirs "build" "/usr/local" ["."] []
 
 defaultPPrint : PPrinter
 defaultPPrint = MkPPOpts False

@@ -68,11 +68,17 @@ updatePaths
               Just path => do traverse addExtraDir (map trim (split (==':') path))
                               pure ()
               Nothing => pure ()
+         bdata <- coreLift $ getEnv "BLODWEN_DATA"
+         case bdata of
+              Just path => do traverse addDataDir (map trim (split (==':') path))
+                              pure ()
+              Nothing => pure ()
          -- BLODWEN_PATH goes first so that it overrides this if there's
          -- any conflicts. In particular, that means that setting BLODWEN_PATH
          -- for the tests means they test the local version not the installed
          -- version
          addExtraDir (dir_prefix (dirs (options defs)) ++ "/blodwen/prelude")
+         addDataDir (dir_prefix (dirs (options defs)) ++ "/blodwen/support")
 
 stMain : List CLOpt -> Core FC ()
 stMain opts

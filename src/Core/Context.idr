@@ -689,6 +689,12 @@ addExtraDir dir
          put Ctxt (record { options->dirs->extra_dirs $= (++ [dir]) } defs)
 
 export
+addDataDir : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
+addDataDir dir
+    = do defs <- get Ctxt
+         put Ctxt (record { options->dirs->data_dirs $= (++ [dir]) } defs)
+
+export
 setBuildDir : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
 setBuildDir dir
     = do defs <- get Ctxt

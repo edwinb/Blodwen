@@ -1,5 +1,6 @@
 PREFIX = ${HOME}/.blodwen
 export BLODWEN_PATH = ${CURDIR}/prelude/build
+export BLODWEN_DATA = ${CURDIR}/support
 
 .PHONY: ttimp blodwen prelude test
 
@@ -24,5 +25,8 @@ test:
 install:
 	mkdir -p ${PREFIX}/bin
 	mkdir -p ${PREFIX}/blodwen/prelude
+	mkdir -p ${PREFIX}/blodwen/support/chez
+
 	install blodwen ${PREFIX}/bin
 	install prelude/build/* ${PREFIX}/blodwen/prelude
+	install support/chez/* ${PREFIX}/blodwen/support/chez
