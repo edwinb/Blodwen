@@ -2,6 +2,7 @@ module Compiler.Chez
 
 import Compiler.Common
 import Compiler.CompileExpr
+import Compiler.Inline
 
 import Core.Context
 import Core.Directory
@@ -115,6 +116,13 @@ schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show
 
 data ExtPrim = CCall | SchemeCall | PutStr | GetStr | Unknown Name
 
+Show ExtPrim where
+  show CCall = "CCall"
+  show SchemeCall = "SchemeCall"
+  show PutStr = "PutStr"
+  show GetStr = "GetStr"
+  show (Unknown n) = "Unknown " ++ show n
+
 toPrim : Name -> ExtPrim
 toPrim pn@(NS _ n) 
     = cond [(n == UN "prim__schemeCall", SchemeCall),
@@ -148,28 +156,30 @@ schCaseDef (Just tm) = "(else " ++ tm ++ ")"
 mutual
   -- Need to convert the argument (a list of scheme arguments that may
   -- have been constructed at run time) to a scheme list to be passed to apply
-  readArgs : SVars vars -> CExp vars -> String
-  readArgs vs tm = "(blodwen-read-args " ++ schExp vs tm ++ ")"
+  readArgs : SVars vars -> CExp vars -> Core annot String
+  readArgs vs tm = pure $ "(blodwen-read-args " ++ !(schExp vs tm) ++ ")"
 
-  schExtPrim : SVars vars -> ExtPrim -> List (CExp vars) -> String
+  schExtPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
   schExtPrim vs SchemeCall [ret, CPrimVal (Str fn), args, world]
-     = mkWorld ("(apply " ++ fn ++") "
-                  ++ readArgs vs args ++ ")")
+     = pure $ mkWorld ("(apply " ++ fn ++") "
+                  ++ !(readArgs vs args) ++ ")")
   schExtPrim vs SchemeCall [ret, fn, args, world]
-     = mkWorld ("(apply (eval (string->symbol " ++ schExp vs fn ++")) "
-                  ++ readArgs vs args ++ ")")
+     = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp vs fn) ++")) "
+                  ++ !(readArgs vs args) ++ ")")
   schExtPrim vs PutStr [arg, world] 
-      = "(display " ++ schExp vs arg ++ ") " ++ mkWorld "0" -- 0 is the code for MkUnit
+      = pure $ "(display " ++ !(schExp vs arg) ++ ") " ++ mkWorld "0" -- 0 is the code for MkUnit
   schExtPrim vs GetStr [world] 
-      = mkWorld "(get-line (current-input-port))"
-  schExtPrim vs (Unknown n) args = "(error \"Unknown external primitive " ++ show n ++ ")"
-  schExtPrim vs _ args = "(error \"Badly formed external primitive\")"
+      = pure $ mkWorld "(get-line (current-input-port))"
+  schExtPrim vs (Unknown n) args 
+      = throw (InternalError ("Can't compile unknown external primitive " ++ show n))
+  schExtPrim vs prim args 
+      = throw (InternalError ("Badly formed external primitive " ++ show prim))
 
-  schConAlt : SVars vars -> String -> CConAlt vars -> String
+  schConAlt : SVars vars -> String -> CConAlt vars -> Core annot String
   schConAlt {vars} vs target (MkConAlt n tag args sc)
       = let vs' = extendSVars args vs in
-            "((" ++ show tag ++ ") "
-                 ++ bindArgs 1 args vs' (schExp vs' sc) ++ ")"
+            pure $ "((" ++ show tag ++ ") "
+                        ++ bindArgs 1 args vs' !(schExp vs' sc) ++ ")"
     where
       bindArgs : Int -> (ns : List Name) -> SVars (ns ++ vars) -> String -> String
       bindArgs i [] vs body = body
@@ -177,75 +187,77 @@ mutual
           = "(let ((" ++ v ++ " " ++ "(vector-ref " ++ target ++ " " ++ show i ++ "))) "
                   ++ bindArgs (i + 1) ns vs body ++ ")"
 
-  schConstAlt : SVars vars -> CConstAlt vars -> String
+  schConstAlt : SVars vars -> CConstAlt vars -> Core annot String
   schConstAlt vs (MkConstAlt c exp)
-      = "((" ++ schConstant c ++ ") " ++ schExp vs exp ++ ")"
+      = pure $ "((" ++ schConstant c ++ ") " ++ !(schExp vs exp) ++ ")"
 
-  schExp : SVars vars -> CExp vars -> String
-  schExp vs (CLocal el) = lookupSVar el vs
-  schExp vs (CRef n) = schName n
+  schExp : SVars vars -> CExp vars -> Core annot String
+  schExp vs (CLocal el) = pure $ lookupSVar el vs
+  schExp vs (CRef n) = pure $ schName n
   schExp vs (CLam x sc) 
-     = let vs' = extendSVars [x] vs 
-           sc' = schExp vs' sc in
-           "(lambda (" ++ lookupSVar Here vs' ++ ") " ++ sc' ++ ")"
+     = do let vs' = extendSVars [x] vs 
+          sc' <- schExp vs' sc
+          pure $ "(lambda (" ++ lookupSVar Here vs' ++ ") " ++ sc' ++ ")"
   schExp vs (CLet x val sc) 
-     = let vs' = extendSVars [x] vs
-           val' = schExp vs val
-           sc' = schExp vs' sc in
-           "(let ((" ++ lookupSVar Here vs' ++ " " ++ val' ++ ")) " ++ sc' ++ ")"
+     = do let vs' = extendSVars [x] vs
+          val' <- schExp vs val
+          sc' <- schExp vs' sc
+          pure $ "(let ((" ++ lookupSVar Here vs' ++ " " ++ val' ++ ")) " ++ sc' ++ ")"
   schExp vs (CApp x []) 
-      = "(" ++ schExp vs x ++ ")"
+      = pure $ "(" ++ !(schExp vs x) ++ ")"
   schExp vs (CApp x args) 
-      = "(" ++ schExp vs x ++ " " ++ showSep " " (map (schExp vs) args) ++ ")"
-  schExp vs (CCon x tag args) = schConstructor tag (map (schExp vs) args)
-  schExp vs (COp op args) = schOp op (map (schExp vs) args)
-  schExp vs (CExtPrim p args) = schExtPrim vs (toPrim p) args
-  schExp vs (CForce t) = "(force " ++ schExp vs t ++ ")"
-  schExp vs (CDelay t) = "(delay " ++ schExp vs t ++ ")"
+      = pure $ "(" ++ !(schExp vs x) ++ " " ++ showSep " " !(traverse (schExp vs) args) ++ ")"
+  schExp vs (CCon x tag args) 
+      = pure $ schConstructor tag !(traverse (schExp vs) args)
+  schExp {vars} vs (COp op args) 
+      = pure $ schOp op !(schArgs args)
+    where -- oops, no traverse for Vect in Core
+      schArgs : Vect n (CExp vars) -> Core annot (Vect n String)
+      schArgs [] = pure []
+      schArgs (arg :: args) = pure $ !(schExp vs arg) :: !(schArgs args)
+  schExp vs (CExtPrim p args) 
+      = schExtPrim vs (toPrim p) args
+  schExp vs (CForce t) = pure $ "(force " ++ !(schExp vs t) ++ ")"
+  schExp vs (CDelay t) = pure $ "(delay " ++ !(schExp vs t) ++ ")"
   schExp vs (CConCase sc alts def) 
-      = let tcode = schExp vs sc in
-            "(case (get-tag " ++ tcode ++ ") "
-                   ++ showSep " " (map (schConAlt vs tcode) alts)
-                   ++ schCaseDef (map (schExp vs) def) ++ ")"
+      = do tcode <- schExp vs sc
+           defc <- maybe (pure Nothing) (\v => pure (Just !(schExp vs v))) def
+           pure $ "(case (get-tag " ++ tcode ++ ") "
+                   ++ showSep " " !(traverse (schConAlt vs tcode) alts)
+                   ++ schCaseDef defc ++ ")"
   schExp vs (CConstCase sc alts def) 
-      = "(case " ++ schExp vs sc ++ " " 
-                 ++ showSep " " (map (schConstAlt vs) alts)
-                 ++ schCaseDef (map (schExp vs) def) ++ ")"
-  schExp vs (CPrimVal c) = schConstant c
-  schExp vs CErased = "9999"
-  schExp vs (CCrash msg) = "(error " ++ show msg ++ ")"
+      = do defc <- maybe (pure Nothing) (\v => pure (Just !(schExp vs v))) def
+           pure $ "(case " ++ !(schExp vs sc) ++ " " 
+                    ++ showSep " " !(traverse (schConstAlt vs) alts)
+                    ++ schCaseDef defc ++ ")"
+  schExp vs (CPrimVal c) = pure $ schConstant c
+  schExp vs CErased = pure "9999"
+  schExp vs (CCrash msg) = pure $ "(error " ++ show msg ++ ")"
 
 schArgs : SVars ns -> String
 schArgs [] = ""
 schArgs [x] = x
 schArgs (x :: xs) = x ++ " " ++ schArgs xs
 
-schDef : Name -> CDef -> String
+schDef : Name -> CDef -> Core annot String
 schDef n (MkFun args exp)
    = let vs = initSVars args in
-         "(define " ++ schName n ++ " (lambda (" ++ schArgs vs ++ ") "
-                    ++ schExp vs exp ++ "))\n"
+         pure $ "(define " ++ schName n ++ " (lambda (" ++ schArgs vs ++ ") "
+                    ++ !(schExp vs exp) ++ "))\n"
 schDef n (MkError exp)
-   = "(define (" ++ schName n ++ " . any-args) " ++ schExp [] exp ++ ")\n"
-schDef n (MkCon t a) = "" -- Nothing to compile here
+   = pure $ "(define (" ++ schName n ++ " . any-args) " ++ !(schExp [] exp) ++ ")\n"
+schDef n (MkCon t a) = pure "" -- Nothing to compile here
 
 -- Convert the name to scheme code
 -- (There may be no code generated, for example if it's a constructor)
-getScheme : Defs -> Name -> Either (Error annot) String
+getScheme : Defs -> Name -> Core annot String
 getScheme defs n
     = case lookupGlobalExact n (gamma defs) of
-           Nothing => Left (InternalError ("Compiling undefined name " ++ show n))
+           Nothing => throw (InternalError ("Compiling undefined name " ++ show n))
            Just d => case compexpr d of
                           Nothing =>
-                             Left (InternalError ("No compiled definition for " ++ show n))
-                          Just d => Right (schDef n d)
-
-getSchemes : Defs -> List Name -> Either (Error annot) String
-getSchemes defs [] = pure ""
-getSchemes defs (n :: ns)
-    = do ncomp <- getScheme defs n
-         nscomp <- getSchemes defs ns
-         pure (ncomp ++ nscomp)
+                             throw (InternalError ("No compiled definition for " ++ show n))
+                          Just d => schDef n d
 
 export
 compileExpr : {auto c : Ref Ctxt Defs} ->
@@ -253,9 +265,9 @@ compileExpr : {auto c : Ref Ctxt Defs} ->
 compileExpr {annot} tm outfile
     = do ns <- findUsedNames tm
          defs <- get Ctxt
-         let Right code = getSchemes {annot} defs ns
-            | Left err => throw err
-         let main = schExp [] !(compileExp tm)
+         compdefs <- traverse (getScheme defs) ns
+         let code = concat compdefs
+         main <- schExp [] !(compileExp tm)
          chez <- coreLift findChez
          support <- readDataFile "chez/support.ss"
          let scm = schHeader chez ++ support ++ code ++ main ++ schFooter

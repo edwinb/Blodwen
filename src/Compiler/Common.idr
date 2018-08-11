@@ -1,6 +1,7 @@
 module Compiler.Common
 
 import Compiler.CompileExpr
+import Compiler.Inline
 
 import Core.Context
 import Core.TT
@@ -37,6 +38,7 @@ findUsedNames tm
          let allNs = ns ++ concatMap (\n => getDesc n (gamma defs)) ns
          let cns = toList (fromList allNs)
          traverse compileDef cns
+         traverse inlineDef cns
          pure cns
 
 -- Some things missing from Prelude.File

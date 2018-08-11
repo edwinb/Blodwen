@@ -30,9 +30,9 @@ data FArgList : Type where
      (::) : {a : Type} -> a -> FArgList -> FArgList
 
 %extern prim__cCall : (ret : Type) -> String -> FArgList -> 
-                      (1 x : % World) -> IORes ret
+                      (1 x : %World) -> IORes ret
 %extern prim__schemeCall : (ret : Type) -> String -> FArgList -> 
-                           (1 x : % World) -> IORes ret
+                           (1 x : %World) -> IORes ret
 
 export %inline
 schemeCall : (ret : Type) -> String -> FArgList -> IO ret

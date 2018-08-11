@@ -3,6 +3,7 @@ package ttimp
 modules = Compiler.Chez,
           Compiler.Common,
           Compiler.CompileExpr,
+          Compiler.Inline,
           
           Control.Delayed,
 

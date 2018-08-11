@@ -15,6 +15,8 @@ public export
 Force : {0 t, a : _} -> Delayed t a -> a
 Force (Delay x) = x
 
+-- This directive tells the elaborator how to implicitly insert 
+-- laziness annotations
 %lazy Delayed Delay Force
 
 public export
@@ -42,6 +44,7 @@ public export
 snd : {0 a, b : Type} -> (a, b) -> b
 snd (x, y) = y
 
+-- This directive tells auto implicit search what to use to look inside pairs
 %pair Pair fst snd
 
 -- The empty type
