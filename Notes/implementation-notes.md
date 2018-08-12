@@ -89,14 +89,15 @@ They are elaborated as holes, which may depend on the initial environment of
 the elaboration, and after elaboration they are converted to an implicit pi
 binding, with multiplicity 0. So, for example:
 
-map : {f : _} -> (a -> b) -> f a -> f b
+    map : {f : _} -> (a -> b) -> f a -> f b
 becomes
-map : {f : _} -> {0 a : _} -> {0 b : _} -> (a -> b) -> f a -> f b
+
+    map : {f : _} -> {0 a : _} -> {0 b : _} -> (a -> b) -> f a -> f b
 
 Bindings are ordered according to dependency.  It'll infer any additional
 names, e.g. in
 
-lookup : HasType i xs t -> Env xs -> t
+    lookup : HasType i xs t -> Env xs -> t
 ...where 'xs' is a Vect n a, it infers bindings for n and a.
 
 (TODO: %auto_implicits directive)
@@ -155,7 +156,7 @@ arguments in the same way as ordinary implicits: i.e. {x = exp} to give
 auto implicits (it uses the resolution mechanism - interfaces translate into
 records, and implementations translate into hints for the search).
 
-The argument syntax @{exp} means that the value of the next auto implicit in
+The argument syntax `@{exp}` means that the value of the next auto implicit in
 the application should be 'exp' - this is the same as the syntax for invoking
 named implementations in Idris 1, but interfaces and auto implicits have been
 combined now.
@@ -189,9 +190,9 @@ we'll see that the @-pattern name is defined, so turn it into a PLet.
 Names which are bound in types are also bound as @-patterns, meaning that
 functions have access to them. For example, we can say:
 
-vlength : Vect n a -> Nat
-vlength [] = n
-vlength (x :: xs) = n
+    vlength : Vect n a -> Nat
+    vlength [] = n
+    vlength (x :: xs) = n
 
 Linear Types
 ------------
