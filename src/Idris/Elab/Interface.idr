@@ -273,7 +273,7 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                   
              let ity = apply (IVar fc iname) (map (IVar fc) (map fst params))
              let dty_imp = bindTypeNames vars (bindIFace fc ity dty)
-             let dtydecl = IClaim fc vis [Inline] (MkImpTy fc dn dty_imp) 
+             let dtydecl = IClaim fc vis [] (MkImpTy fc dn dty_imp) 
              processDecl env nest dtydecl
 
              let cs' = map (changeName dn) cs

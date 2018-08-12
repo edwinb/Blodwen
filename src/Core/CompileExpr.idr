@@ -97,6 +97,7 @@ Show CDef where
   show (MkError exp) = "Error: " ++ show exp
 
 mutual
+  export
   thin : (n : Name) -> CExp (outer ++ inner) -> CExp (outer ++ n :: inner)
   thin n (CLocal prf) = CLocal (insertElem prf)
   thin n (CRef x) = CRef x
@@ -136,6 +137,36 @@ mutual
 
   thinConstAlt : (n : Name) -> CConstAlt (outer ++ inner) -> CConstAlt (outer ++ n :: inner)
   thinConstAlt n (MkConstAlt x sc) = MkConstAlt x (thin n sc)
+
+mutual
+  export
+  embed : CExp args -> CExp (args ++ vars)
+  embed (CLocal prf) = CLocal (elemExtend prf)
+  embed (CRef n) = CRef n
+  embed (CLam x sc) = CLam x (embed sc)
+  embed (CLet x val sc) = CLet x (embed val) (embed sc)
+  embed (CApp f args) = CApp (embed f) (assert_total (map embed args))
+  embed (CCon n t args) = CCon n t (assert_total (map embed args))
+  embed (COp p args) = COp p (assert_total (map embed args))
+  embed (CExtPrim p args) = CExtPrim p (assert_total (map embed args))
+  embed (CForce e) = CForce (embed e)
+  embed (CDelay e) = CDelay (embed e)
+  embed (CConCase sc alts def) 
+      = CConCase (embed sc) (assert_total (map embedAlt alts)) 
+                 (assert_total (map embed def))
+  embed (CConstCase sc alts def) 
+      = CConstCase (embed sc) (assert_total (map embedConstAlt alts)) 
+                   (assert_total (map embed def))
+  embed (CPrimVal c) = CPrimVal c
+  embed CErased = CErased
+  embed (CCrash msg) = CCrash msg
+  
+  embedAlt : CConAlt args -> CConAlt (args ++ vars)
+  embedAlt {args} {vars} (MkConAlt n t as sc) 
+     = MkConAlt n t as (rewrite appendAssociative as args vars in embed sc)
+
+  embedConstAlt : CConstAlt args -> CConstAlt (args ++ vars)
+  embedConstAlt (MkConstAlt c sc) = MkConstAlt c (embed sc)
 
 mutual
   export

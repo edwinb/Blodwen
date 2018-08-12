@@ -639,6 +639,7 @@ mutual
            log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
            addDef casen (newDef casefnty Private None)
+           setFlag loc casen Inline
 
            let alts' = map (updateClause casen env smaller) alts
            log 5 $ "Generated alts: " ++ show alts'

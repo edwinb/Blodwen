@@ -1,0 +1,2 @@
+$1 comptest.blod < input
+rm -rf build

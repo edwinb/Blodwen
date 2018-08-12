@@ -161,7 +161,7 @@ mutual
 
   schExtPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
   schExtPrim vs SchemeCall [ret, CPrimVal (Str fn), args, world]
-     = pure $ mkWorld ("(apply " ++ fn ++") "
+     = pure $ mkWorld ("(apply " ++ fn ++" "
                   ++ !(readArgs vs args) ++ ")")
   schExtPrim vs SchemeCall [ret, fn, args, world]
      = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp vs fn) ++")) "
@@ -222,9 +222,9 @@ mutual
   schExp vs (CConCase sc alts def) 
       = do tcode <- schExp vs sc
            defc <- maybe (pure Nothing) (\v => pure (Just !(schExp vs v))) def
-           pure $ "(case (get-tag " ++ tcode ++ ") "
-                   ++ showSep " " !(traverse (schConAlt vs tcode) alts)
-                   ++ schCaseDef defc ++ ")"
+           pure $ "(let ((sc " ++ tcode ++ ")) (case (get-tag sc) "
+                   ++ showSep " " !(traverse (schConAlt vs "sc") alts)
+                   ++ schCaseDef defc ++ "))"
   schExp vs (CConstCase sc alts def) 
       = do defc <- maybe (pure Nothing) (\v => pure (Just !(schExp vs v))) def
            pure $ "(case " ++ !(schExp vs sc) ++ " " 

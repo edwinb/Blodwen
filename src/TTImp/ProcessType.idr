@@ -32,7 +32,7 @@ processFnOpt loc ndef (Hint d)
 processFnOpt loc ndef (GlobalHint a)
     = addGlobalHint loc a ndef
 processFnOpt loc ndef ExternFn
-    = pure ()
+    = setFlag loc ndef Inline
 
 export
 processType : {auto c : Ref Ctxt Defs} ->

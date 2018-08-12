@@ -296,7 +296,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
              pure (mn, n, mty)
              
     mkTopMethDecl : (Name, Name, RawImp FC) -> ImpDecl FC
-    mkTopMethDecl (mn, n, mty) = IClaim fc vis [Inline] (MkImpTy fc n mty)
+    mkTopMethDecl (mn, n, mty) = IClaim fc vis [] (MkImpTy fc n mty)
 
     -- Given the method type (result of topMethType) return the mapping from
     -- top level method name to current implementation's method name
