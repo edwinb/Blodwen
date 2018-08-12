@@ -26,9 +26,9 @@ data BoundVar : List Name -> Type where
 public export
 record EState (vars : List Name) where
   constructor MkElabState
-  -- The environment in which we bind the unbound implicits - they are always
-  -- all bound in the same environment, so that we can safely bind them all
-  -- at the same time
+  -- The outer environment in which we're running the elaborator. Things here should
+  -- be considered parametric as far as case expression elaboration goes, and are
+  -- the only things that unbound implicits can depend on
   outerEnv : Env Term outer
   subEnv : SubVars outer vars
   boundNames : List (Name, (Term vars, Term vars))
@@ -79,8 +79,12 @@ export
 data EST : Type where
 
 export
+initEStateSub : Name -> Env Term outer -> SubVars outer vars -> EState vars
+initEStateSub n env sub = MkElabState env sub [] [] [] [] [] [] [] [] n
+
+export
 initEState : Name -> Env Term vars -> EState vars
-initEState n env = MkElabState env SubRefl [] [] [] [] [] [] [] [] n
+initEState n env = initEStateSub n env SubRefl
 
 export
 updateEnv : Env Term new -> SubVars new vars -> EState vars -> EState vars

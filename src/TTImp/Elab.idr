@@ -46,16 +46,16 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
            Reflect annot =>
            Elaborator annot ->
            Name ->
-           Env Term vars -> NestedNames vars ->
+           Env Term vars -> Env Term outer -> SubVars outer vars -> NestedNames vars ->
            ImplicitMode -> ElabMode ->
            (term : RawImp annot) ->
            (tyin : Maybe (Term vars)) ->
            Core annot (Term vars, -- checked term
                        Term vars, -- checked and erased term
                        Term vars) -- type
-elabTerm {vars} process defining env nest impmode elabmode tm tyin
+elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
     = do resetHoles
-         e <- newRef EST (initEState defining env)
+         e <- newRef EST (initEStateSub defining env' sub)
          let rigc = getRigNeeded elabmode
          (chktm, ty) <- check {e} rigc process (initElabInfo impmode elabmode) env nest tm tyin
          log 10 $ "Initial check: " ++ show chktm ++ " : " ++ show ty
@@ -143,7 +143,7 @@ inferTerm : {auto c : Ref Ctxt Defs} ->
             (term : RawImp annot) ->
             Core annot (Term vars, Term vars, Term vars) 
 inferTerm process defining env nest impmode elabmode tm 
-    = elabTerm process defining env nest impmode elabmode tm Nothing
+    = elabTerm process defining env env SubRefl nest impmode elabmode tm Nothing
 
 export
 checkTerm : {auto c : Ref Ctxt Defs} ->
@@ -152,11 +152,12 @@ checkTerm : {auto c : Ref Ctxt Defs} ->
             Reflect annot =>
             Elaborator annot ->
             Name ->
-            Env Term vars -> NestedNames vars ->
+            Env Term vars -> Env Term outer ->
+            SubVars outer vars -> NestedNames vars ->
             ImplicitMode -> ElabMode ->
             (term : RawImp annot) -> (ty : Term vars) ->
             Core annot (Term vars, Term vars) 
-checkTerm process defining env nest impmode elabmode tm ty 
-    = do (tm_elab, tm_erase, _) <- elabTerm process defining env nest impmode elabmode tm (Just ty)
+checkTerm process defining env env' sub nest impmode elabmode tm ty 
+    = do (tm_elab, tm_erase, _) <- elabTerm process defining env env' sub nest impmode elabmode tm (Just ty)
          pure (tm_elab, tm_erase)
 

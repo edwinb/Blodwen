@@ -346,6 +346,33 @@ applyToSubFull {vars} tm env sub
   = let args = reverse (mkConstantAppArgsSub {done = []} True env sub []) in
         apply tm (rewrite sym (appendNilRightNeutral vars) in args)
 
+mkConstantAppArgsOthers : Bool -> Env Term vars -> SubVars smaller vars ->
+                       List (Term done) -> List (Term (vars ++ done))
+mkConstantAppArgsOthers lets [] p xs = xs
+mkConstantAppArgsOthers lets (b :: env) SubRefl xs
+    = map weaken (mkConstantAppArgsOthers lets env SubRefl xs)
+mkConstantAppArgsOthers lets (b :: env) (KeepCons p) xs
+    = map weaken (mkConstantAppArgsOthers lets env p xs)
+mkConstantAppArgsOthers lets (b :: env) (DropCons p) xs
+    = let rec = mkConstantAppArgsOthers lets env p xs in
+          if lets 
+             then Local Here :: map weaken rec
+             else case b of
+                     Let _ _ _ => map weaken rec
+                     _ => Local Here :: map weaken rec
+
+export
+applyToOthers : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars
+applyToOthers {vars} tm env sub
+  = let args = reverse (mkConstantAppArgsOthers {done = []} False env sub []) in
+        apply tm (rewrite sym (appendNilRightNeutral vars) in args)
+
+export
+applyToOthersFull : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars
+applyToOthersFull {vars} tm env sub
+  = let args = reverse (mkConstantAppArgsOthers {done = []} True env sub []) in
+        apply tm (rewrite sym (appendNilRightNeutral vars) in args)
+
 -- Apply a named constant to the current environment, excluding lets.
 export
 mkConstantApp : Name -> Env Term vars -> Term vars

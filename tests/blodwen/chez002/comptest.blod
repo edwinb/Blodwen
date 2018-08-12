@@ -2,13 +2,17 @@ data Vect : Nat -> Type -> Type where
      Nil : Vect Z a
      (::) : a -> Vect k a -> Vect (S k) a
 
+-- Testing two things here: cases in where blocks (which need to set up the
+-- environment correctly, treating the outer environment as parametric); and
+-- that the inliner deals with the case correctly when compiling
 Show a => Show (Vect n a) where
   show xs = "[" ++ show' xs ++ "]"
     where
       show' : forall n . Vect n a -> String
       show' [] = ""
-      show' [x] = show x
-      show' (x :: xs) = show x ++ ", " ++ show' xs
+      show' (x :: xs) = case xs of
+                             [] => show x
+                             _ => show x ++ ", " ++ show' xs
 
 empties : {m : Nat} -> Vect m (Vect Z a)
 empties {m = Z} = []

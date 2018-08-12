@@ -166,11 +166,18 @@ checkClause {vars} elab defining env nest (PatClause loc lhs_raw rhs_raw)
          let lhs' = setLinear linvars lhs
          let lhsty' = setLinear linvars lhsty
 
-         (vs ** (env', nest', lhspat, reqty)) <- extend env nest lhs' lhsty'
+         -- Extend the environment with the names bound on the LHS, but also
+         -- remember the outer environment.  Everything there is treated as
+         -- parameters, and this is important when making types for case
+         -- expressions (we don't want to abstract over the outer environment
+         -- again)
+         (vs ** (prf, env', nest', lhspat, reqty)) <- extend env SubRefl nest lhs' lhsty'
          log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
          log 5 ("Checking RHS: " ++ show rhs_raw)
+         log 10 ("Old env: " ++ show env)
+         log 10 ("New env: " ++ show env')
          (rhs, rhs_erased) <- wrapError (InRHS loc defining) $
-                checkTerm elab defining env' nest' NONE InExpr rhs_raw reqty
+                checkTerm elab defining env' env prf nest' NONE InExpr rhs_raw reqty
          log 5 ("Checked and erased RHS: " ++ show rhs_erased)
 
          -- only need to check body for visibility if name is
@@ -187,22 +194,24 @@ checkClause {vars} elab defining env nest (PatClause loc lhs_raw rhs_raw)
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
   where
-    extend : Env Term vs -> NestedNames vs -> 
-             Term vs -> Term vs ->
-             Core annot (vars' ** (Env Term vars', NestedNames vars', 
+    extend : Env Term extvs -> SubVars vs extvs ->
+             NestedNames extvs -> 
+             Term extvs -> Term extvs ->
+             Core annot (vars' ** (SubVars vs vars',
+                                   Env Term vars', NestedNames vars', 
                                    Term vars', Term vars'))
-    extend env nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) with (nameEq n n')
-      extend env nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) | Nothing 
+    extend env p nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) with (nameEq n n')
+      extend env p nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) | Nothing 
             = throw (InternalError "Names don't match in pattern type")
-      extend env nest (Bind n (PVar c tmsc) sc) (Bind n (PVTy _ _) tysc) | (Just Refl) 
-            = extend (PVar c tmsc :: env) (weaken nest) sc tysc
-    extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) with (nameEq n n')
-      extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) | Nothing 
+      extend env p nest (Bind n (PVar c tmsc) sc) (Bind n (PVTy _ _) tysc) | (Just Refl) 
+            = extend (PVar c tmsc :: env) (DropCons p) (weaken nest) sc tysc
+    extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) with (nameEq n n')
+      extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) | Nothing 
             = throw (InternalError "Names don't match in pattern type")
       -- PLet on the left becomes Let on the right, to give it computational force
-      extend env nest (Bind n (PLet c tmv tmt) sc) (Bind n (PLet _ _ _) tysc) | (Just Refl) 
-            = extend (Let c tmv tmt :: env) (weaken nest) sc tysc
-    extend env nest tm ty = pure (_ ** (env, nest, tm, ty))
+      extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n (PLet _ _ _) tysc) | (Just Refl) 
+            = extend (Let c tmv tmt :: env) (DropCons p) (weaken nest) sc tysc
+    extend env p nest tm ty = pure (_ ** (p, env, nest, tm, ty))
 
 nameListEq : (xs : List Name) -> (ys : List Name) -> Maybe (xs = ys)
 nameListEq [] [] = Just Refl

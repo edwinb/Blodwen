@@ -770,7 +770,27 @@ absSmaller {done} {vs = x :: vars} (b :: env) (KeepCons sub) tm
                 absSmaller {done = done ++ [x]} env sub
                     (rewrite sym (appendAssociative done [x] vars) in btm)
 
-
+-- For any variable *not* in vs', re-abstract over it in the term
+export
+absOthers : Env Term vs -> SubVars vs' vs -> 
+					 Term (done ++ vs) -> Term (done ++ vs)
+absOthers _ SubRefl tm = tm
+absOthers {done} {vs = x :: vars} (b :: env) (KeepCons sub) tm 
+  = rewrite appendAssociative done [x] vars in
+            absOthers {done = done ++ [x]} env sub
+               (rewrite sym (appendAssociative done [x] vars) in tm)
+absOthers {done} {vs = x :: vars} (b :: env) (DropCons sub) tm
+  = let bindervs : Binder (Term (done ++ (x :: vars)))
+                      = rewrite appendAssociative done [x] vars in
+                                map (weakenNs (done ++ [x])) b
+        b' = case bindervs of
+                  Let c val ty => Let c val ty
+                  _ => Pi (multiplicity b) Explicit (binderType bindervs)
+        btm = Bind x b' 
+                   (changeVar (findLater (x :: done)) Here (weaken tm)) in
+        rewrite appendAssociative done [x] vars in
+                absOthers {done = done ++ [x]} env sub
+                    (rewrite sym (appendAssociative done [x] vars) in btm)
 
 -- Would be handy if binders were Traversable...
 

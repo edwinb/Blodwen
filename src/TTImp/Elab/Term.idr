@@ -613,16 +613,12 @@ mutual
            let pre_env = mkLocalEnv env
 
            gam <- getCtxt
-           -- TODO: Calculate the smallest environment we need to check
-           -- the scrutinee and make sure and types which are refined are
-           -- pushed through. This is just for tidiness, so for now, we'll
-           -- just use the same environment.
-           -- It's not just the names needed to check the scrutinee (which
-           -- is what the commented out code here does), but also any other 
-           -- name which uses a name the scrutinee depends on.
---            let (_ ** smallerIn) = findSubEnv env scrty
---            let (_ ** smaller) = dropParams gam env smallerIn scrty
-           let smaller = SubRefl
+           -- To build the type, we abstract over the whole environment (so that
+           -- we can use the nested names which might use that environment) and the
+           -- part of the environment which is not the outer environment (so that we
+           -- can dependent pattern match on parts of it). "smaller" is the outer
+           -- environment, taken from the elaboration state.
+           let smaller = subEnv est
            
            caseretty <- case expected of
                              Just ty => pure ty
@@ -631,11 +627,12 @@ mutual
                                    log 10 $ "Invented hole for case type " ++ show t
                                    pure (mkConstantApp t env)
            let casefnty = abstractOver env $
-                            absSmaller {done = []} env smaller 
+                            absOthers {done = []} env smaller 
                               (Bind scrn (Pi caseRig Explicit scrty) 
                                          (weaken caseretty))
 
            log 10 $ "Env: " ++ show vars
+           log 10 $ "Outer env: " ++ show (outerEnv est)
            log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
            addDef casen (newDef casefnty Private None)
@@ -643,13 +640,14 @@ mutual
 
            let alts' = map (updateClause casen env smaller) alts
            log 5 $ "Generated alts: " ++ show alts'
+           log 5 $ "Nested: " ++ show (mkConstantAppFull casen pre_env)
 
            let nest' = record { names $= ((casen, (casen, 
                                     (mkConstantAppFull casen pre_env))) ::) } 
                               nest
            process c u i pre_env nest' (IDef loc casen alts')
 
-           pure (App (applyToSub (mkConstantAppFull casen env) env smaller) 
+           pure (App (applyToOthers (mkConstantAppFull casen env) env smaller) 
                      scrtm, caseretty)
     where
       -- Is every occurence of the given variable name in a parameter
@@ -746,14 +744,12 @@ mutual
       addEnv [] sub used = []
       -- Skip the let bindings, they were let bound in the case function type
       addEnv (Let _ _ _ :: bs) SubRefl used = addEnv bs SubRefl used
-      addEnv (Let _ _ _ :: bs) (KeepCons p) used = addEnv bs p used
+      addEnv (Let _ _ _ :: bs) (DropCons p) used = addEnv bs p used
       addEnv {vs = v :: vs} (b :: bs) SubRefl used
-          = case canBindName v (vs ++ used) of
-                 Just n => IAs loc n (Implicit loc) :: addEnv bs SubRefl used
-                 _ => Implicit loc :: addEnv bs SubRefl used
-      addEnv (b :: bs) (DropCons p) used
+          = addEnv bs SubRefl used
+      addEnv (b :: bs) (KeepCons p) used
           = addEnv bs p used
-      addEnv {vs = v :: vs} (b :: bs) (KeepCons p) used
+      addEnv {vs = v :: vs} (b :: bs) (DropCons p) used
           = case canBindName v (vs ++ used) of
                  Just n => IAs loc n (Implicit loc) :: addEnv bs p used
                  _ => Implicit loc :: addEnv bs p used
