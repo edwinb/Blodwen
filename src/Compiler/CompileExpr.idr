@@ -90,7 +90,7 @@ mutual
   toCExpTm : Defs -> Name -> Term vars -> CExp vars
   toCExpTm defs n (Local prf) = CLocal prf
   toCExpTm defs n (Ref (DataCon tag arity) fn) = CCon fn tag []
-  toCExpTm defs n (Ref (TyCon tag arity) fn) = CErased
+  toCExpTm defs n (Ref (TyCon tag arity) fn) = CCon fn tag []
   toCExpTm defs n (Ref _ fn) = CApp (CRef fn) []
   toCExpTm defs n (Bind x (Lam _ _ _) sc)
       = CLam x (toCExp defs n sc)

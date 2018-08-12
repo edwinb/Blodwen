@@ -29,6 +29,10 @@ findChez
 schHeader : String -> String
 schHeader chez
   = "#!" ++ chez ++ " --script\n\n" ++
+    "(case (machine-type)\n" ++
+    "  [(i3le ti3le a6le ta6le) (load-shared-object \"libc.so.6\")]\n" ++
+    "  [(i3osx ti3osx a6osx ta6osx) (load-shared-object \"libc.dylib\")]\n" ++
+    "  [else (load-shared-object \"libc.so\")])\n\n" ++
     "(let ()\n"
 
 schFooter : String
@@ -111,6 +115,7 @@ schOp StrAppend [x, y] = op "string-append" [x, y]
 schOp StrReverse [x] = op "string-reverse" [x]
 schOp (Cast IntType StringType) [x] = op "number->string" [x]
 schOp (Cast IntegerType StringType) [x] = op "number->string" [x]
+schOp (Cast IntegerType IntType) [x] = x
 schOp (Cast DoubleType StringType) [x] = op "number->string" [x]
 schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show to ++ ")"
 
@@ -159,6 +164,25 @@ mutual
   readArgs : SVars vars -> CExp vars -> Core annot String
   readArgs vs tm = pure $ "(blodwen-read-args " ++ !(schExp vs tm) ++ ")"
 
+  tySpec : CExp vars -> Core annot String
+  tySpec (CPrimVal IntType) = pure "int"
+  tySpec (CPrimVal StringType) = pure "string"
+  tySpec (CPrimVal DoubleType) = pure "double"
+  tySpec (CCon unit _ []) 
+     = if dropNS unit == UN "Unit"
+          then pure "void"
+          else throw (InternalError ("Can't pass argument of type " ++ show unit ++ " to foreign function"))
+  tySpec ty = throw (InternalError ("Can't pass argument of type " ++ show ty ++ " to foreign function"))
+
+  handleRet : String -> String -> String
+  handleRet "void" op = op ++ " " ++ mkWorld (schConstructor 0 [])
+  handleRet _ op = mkWorld op
+
+  getFArgs : CExp vars -> Core annot (List (CExp vars, CExp vars))
+  getFArgs (CCon _ 0 _) = pure []
+  getFArgs (CCon _ 1 [ty, val, rest]) = pure $ (ty, val) :: !(getFArgs rest)
+  getFArgs arg = throw (InternalError ("Badly formed c call argument list " ++ show arg))
+
   schExtPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
   schExtPrim vs SchemeCall [ret, CPrimVal (Str fn), args, world]
      = pure $ mkWorld ("(apply " ++ fn ++" "
@@ -166,8 +190,19 @@ mutual
   schExtPrim vs SchemeCall [ret, fn, args, world]
      = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp vs fn) ++")) "
                   ++ !(readArgs vs args) ++ ")")
+  schExtPrim vs CCall [ret, CPrimVal (Str fn), fargs, world]
+      = do args <- getFArgs fargs
+           argTypes <- traverse tySpec (map fst args)
+           retType <- tySpec ret
+           argsc <- traverse (schExp vs) (map snd args)
+           pure $ handleRet retType ("((foreign-procedure #f " ++ show fn ++ " ("
+                    ++ showSep " " argTypes ++ ") " ++ retType ++ ") "
+                    ++ showSep " " argsc ++ ")")
+  schExtPrim vs CCall [ret, fn, args, world]
+      = pure "(error \"bad ffi call\")"
+      -- throw (InternalError ("C FFI calls must be to statically known functions (" ++ show fn ++ ")"))
   schExtPrim vs PutStr [arg, world] 
-      = pure $ "(display " ++ !(schExp vs arg) ++ ") " ++ mkWorld "0" -- 0 is the code for MkUnit
+      = pure $ "(display " ++ !(schExp vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
   schExtPrim vs GetStr [world] 
       = pure $ mkWorld "(get-line (current-input-port))"
   schExtPrim vs (Unknown n) args 
