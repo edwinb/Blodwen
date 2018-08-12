@@ -38,17 +38,20 @@ castInteger : Vect 1 (NF vars) -> Maybe (NF vars)
 castInteger [NPrimVal (I i)] = Just (NPrimVal (BI (cast i)))
 castInteger [NPrimVal (Ch i)] = Just (NPrimVal (BI (cast (cast {to=Int} i))))
 castInteger [NPrimVal (Db i)] = Just (NPrimVal (BI (cast i)))
+castInteger [NPrimVal (Str i)] = Just (NPrimVal (BI (cast i)))
 castInteger _ = Nothing
 
 castInt : Vect 1 (NF vars) -> Maybe (NF vars)
 castInt [NPrimVal (BI i)] = Just (NPrimVal (I (fromInteger i)))
 castInt [NPrimVal (Db i)] = Just (NPrimVal (I (cast i)))
 castInt [NPrimVal (Ch i)] = Just (NPrimVal (I (cast i)))
+castInt [NPrimVal (Str i)] = Just (NPrimVal (I (cast i)))
 castInt _ = Nothing
 
 castDouble : Vect 1 (NF vars) -> Maybe (NF vars)
 castDouble [NPrimVal (I i)] = Just (NPrimVal (Db (cast i)))
 castDouble [NPrimVal (BI i)] = Just (NPrimVal (Db (cast i)))
+castDouble [NPrimVal (Str i)] = Just (NPrimVal (Db (cast i)))
 castDouble _ = Nothing
 
 castChar : Vect 1 (NF vars) -> Maybe (NF vars)
@@ -266,7 +269,7 @@ allPrimitives =
      MkPrim StrReverse (predTy StringType StringType) Total] ++
 
     map (\t => MkPrim (Cast t StringType) (predTy t StringType) Total) [IntType, IntegerType, CharType, DoubleType] ++
-    map (\t => MkPrim (Cast t IntegerType) (predTy t IntegerType) Total) [IntType, CharType, DoubleType] ++
-    map (\t => MkPrim (Cast t IntType) (predTy t IntType) Total) [IntegerType, CharType, DoubleType] ++
-    map (\t => MkPrim (Cast t DoubleType) (predTy t DoubleType) Total) [IntType, IntegerType] ++
-    map (\t => MkPrim (Cast t CharType) (predTy t CharType) Total) [IntType]
+    map (\t => MkPrim (Cast t IntegerType) (predTy t IntegerType) Total) [StringType, IntType, CharType, DoubleType] ++
+    map (\t => MkPrim (Cast t IntType) (predTy t IntType) Total) [StringType, IntegerType, CharType, DoubleType] ++
+    map (\t => MkPrim (Cast t DoubleType) (predTy t DoubleType) Total) [StringType, IntType, IntegerType] ++
+    map (\t => MkPrim (Cast t CharType) (predTy t CharType) Total) [StringType, IntType]

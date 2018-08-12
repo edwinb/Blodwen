@@ -102,22 +102,45 @@ schOp (Mul ty) [x, y] = op "*" [x, y]
 schOp (Div ty) [x, y] = op "/" [x, y]
 schOp (Mod ty) [x, y] = op "remainder" [x, y]
 schOp (Neg ty) [x] = op "-" [x]
+schOp (LT CharType) [x, y] = boolop "char<?" [x, y]
+schOp (LTE CharType) [x, y] = boolop "char<=?" [x, y]
+schOp (EQ CharType) [x, y] = boolop "char=?" [x, y]
+schOp (GTE CharType) [x, y] = boolop "char>=?" [x, y]
+schOp (GT CharType) [x, y] = boolop "char>?" [x, y]
 schOp (LT ty) [x, y] = boolop "<" [x, y]
 schOp (LTE ty) [x, y] = boolop "<=" [x, y]
 schOp (EQ ty) [x, y] = boolop "=" [x, y]
 schOp (GTE ty) [x, y] = boolop ">=" [x, y]
 schOp (GT ty) [x, y] = boolop ">" [x, y]
 schOp StrLength [x] = op "string-length" [x]
-schOp StrHead [x] = op "string-rev" [x, "0"]
-schOp StrTail [x] = op "substring/shared" [x, "1"]
+schOp StrHead [x] = op "string-ref" [x, "0"]
+schOp StrTail [x] = op "substring" [x, "1", op "string-length" [x]]
 schOp StrCons [x, y] = op "string-cons" [x, y]
 schOp StrAppend [x, y] = op "string-append" [x, y]
 schOp StrReverse [x] = op "string-reverse" [x]
+
 schOp (Cast IntType StringType) [x] = op "number->string" [x]
 schOp (Cast IntegerType StringType) [x] = op "number->string" [x]
-schOp (Cast IntegerType IntType) [x] = x
 schOp (Cast DoubleType StringType) [x] = op "number->string" [x]
-schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show to ++ ")"
+schOp (Cast CharType StringType) [x] = op "string" [x]
+
+schOp (Cast IntType IntegerType) [x] = x
+schOp (Cast DoubleType IntegerType) [x] = op "floor" [x]
+schOp (Cast CharType IntegerType) [x] = op "char->integer" [x]
+schOp (Cast StringType IntegerType) [x] = op "cast-string-int" [x]
+
+schOp (Cast IntegerType IntType) [x] = x
+schOp (Cast DoubleType IntType) [x] = op "floor" [x]
+schOp (Cast StringType IntType) [x] = op "cast-string-int" [x]
+schOp (Cast CharType IntType) [x] = op "char->integer" [x]
+
+schOp (Cast IntegerType DoubleType) [x] = x
+schOp (Cast IntType DoubleType) [x] = x
+schOp (Cast StringType DoubleType) [x] = op "cast-string-double" [x]
+
+schOp (Cast IntType CharType) [x] = op "integer->char" [x]
+
+schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show to ++ "\")"
 
 data ExtPrim = CCall | SchemeCall | PutStr | GetStr | Unknown Name
 
