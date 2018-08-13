@@ -1001,5 +1001,7 @@ command
   <|> do symbol ":"; exactIdent "exec"
          tm <- expr EqOK "(interactive)" init
          pure (Exec tm)
+  <|> do symbol ":"; exactIdent "r"
+         pure Reload
   <|> do tm <- expr EqOK "(interactive)" init
          pure (Eval tm)

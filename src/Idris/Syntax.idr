@@ -249,6 +249,7 @@ public export
 data REPLCmd : Type where
      Eval : PTerm -> REPLCmd
      Check : PTerm -> REPLCmd
+     Reload : REPLCmd
      Compile : PTerm -> String -> REPLCmd
      Exec : PTerm -> REPLCmd
      ProofSearch : Name -> REPLCmd

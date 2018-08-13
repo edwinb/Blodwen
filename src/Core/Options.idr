@@ -108,6 +108,14 @@ defaults : Options
 defaults = MkOptions defaultDirs defaultPPrint defaultSession 
                      Nothing Nothing (MkPrimNs Nothing Nothing Nothing)
 
+-- Reset the options which are set by source files
+export
+clearNames : Options -> Options
+clearNames = record { laziness = Nothing,
+                      pairnames = Nothing,
+                      primnames = MkPrimNs Nothing Nothing Nothing
+                    } 
+
 -- Some relevant options get stored in TTC; merge in the options from
 -- a TTC file
 export

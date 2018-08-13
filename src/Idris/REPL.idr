@@ -5,12 +5,14 @@ import Compiler.Chez
 import Core.AutoSearch
 import Core.CompileExpr
 import Core.Context
+import Core.InitPrimitives
 import Core.Normalise
 import Core.Options
 import Core.TT
 import Core.Unify
 
 import Idris.Desugar
+import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
 import Idris.Syntax
@@ -29,10 +31,11 @@ record REPLOpts where
   constructor MkREPLOpts
   showTypes : Bool
   evalMode : REPLEval
+  mainfile : Maybe String
 
 export
-defaultOpts : REPLOpts
-defaultOpts = MkREPLOpts False NormaliseAll
+defaultOpts : Maybe String -> REPLOpts
+defaultOpts fname = MkREPLOpts False NormaliseAll fname
 
 export
 data ROpts : Type where
@@ -120,7 +123,18 @@ execExp ctm
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          executeExpr tm
-          
+         
+resetContext : {auto u : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState FC)} ->
+               {auto s : Ref Syn SyntaxInfo} ->
+               Core FC ()
+resetContext
+    = do defs <- get Ctxt
+         put Ctxt (record { options = clearNames (options defs) } initCtxt)
+         addPrimitives
+         put UST initUState
+         put Syn initSyntax
+
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
@@ -166,6 +180,16 @@ process (Check itm)
          ity <- resugar [] (normaliseHoles gam [] ty)
          coreLift (putStrLn (show itm ++ " : " ++ show ity))
          pure True
+process Reload
+    = do opts <- get ROpts
+         case mainfile opts of
+              Nothing => do coreLift $ putStrLn "No file loaded"
+                            pure True
+              Just f =>
+                do -- Clear the context and load again
+                   resetContext
+                   buildAll f
+                   pure True
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
