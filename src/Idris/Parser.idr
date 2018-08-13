@@ -972,6 +972,9 @@ setOption set
          then do exactIdent "eval"
                  mode <- parseMode
                  pure (EvalMode mode)
+               <|> do exactIdent "editor"
+                      e <- unqualifiedName 
+                      pure (Editor e)
          else fail "Invalid option"
 
 export
@@ -1003,5 +1006,7 @@ command
          pure (Exec tm)
   <|> do symbol ":"; exactIdent "r"
          pure Reload
+  <|> do symbol ":"; exactIdent "e"
+         pure Edit
   <|> do tm <- expr EqOK "(interactive)" init
          pure (Eval tm)

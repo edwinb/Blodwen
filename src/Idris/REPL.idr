@@ -24,6 +24,8 @@ import TTImp.ProcessTTImp
 import Control.Catchable
 import TTImp.Reflect
 
+import System
+
 %default covering
 
 public export
@@ -32,10 +34,12 @@ record REPLOpts where
   showTypes : Bool
   evalMode : REPLEval
   mainfile : Maybe String
+  editor : String
+  errorLine : Maybe Int
 
 export
 defaultOpts : Maybe String -> REPLOpts
-defaultOpts fname = MkREPLOpts False NormaliseAll fname
+defaultOpts fname = MkREPLOpts False NormaliseAll fname "vim" Nothing
 
 export
 data ROpts : Type where
@@ -111,6 +115,9 @@ setOpt (ShowTypes t)
 setOpt (EvalMode m) 
     = do opts <- get ROpts
          put ROpts (record { evalMode = m } opts)
+setOpt (Editor e)
+    = do opts <- get ROpts
+         put ROpts (record { editor = e } opts)
 
 export
 execExp : {auto c : Ref Ctxt Defs} ->
@@ -190,6 +197,24 @@ process Reload
                    resetContext
                    buildAll f
                    pure True
+process (Load f)
+    = do opts <- get ROpts
+         put ROpts (record { mainfile = Just f } opts)
+         -- Clear the context and load again
+         resetContext
+         buildAll f
+         pure True
+process Edit
+    = do opts <- get ROpts
+         case mainfile opts of
+              Nothing => do coreLift $ putStrLn "No file loaded"
+                            pure True
+              Just f =>
+                do let line = maybe "" (\i => " +" ++ show i) (errorLine opts)
+                   coreLift $ system (editor opts ++ " " ++ f ++ line)
+                   resetContext
+                   buildAll f
+                   pure True
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
@@ -237,6 +262,19 @@ processCatch cmd
                            coreLift (putStrLn (show err))
                            pure True)
 
+parseRepl : String -> Either ParseError REPLCmd
+parseRepl inp
+   = if isPrefixOf ":load" inp
+        then getLoad 5 inp
+        else if isPrefixOf ":l" inp
+                then getLoad 2 inp
+                else runParser inp (do c <- command; eoi; pure c)
+  where
+    -- a right load of hackery - we can't tokenise the filename using the
+    -- ordinary parser. There's probably a better way...
+    getLoad : Nat -> String -> Either ParseError REPLCmd
+    getLoad n str = Right (Load (trim (substr n (length str) str)))
+
 export
 repl : {auto c : Ref Ctxt Defs} ->
        {auto u : Ref UST (UState FC)} ->
@@ -248,7 +286,7 @@ repl
          opts <- get ROpts
          coreLift (putStr (prompt (evalMode opts) ++ showSep "." (reverse ns) ++ "> "))
          inp <- coreLift getLine
-         case runParser inp (do c <- command; eoi; pure c) of
+         case parseRepl inp of
               Left err => do coreLift (printLn err)
                              repl
               Right cmd =>

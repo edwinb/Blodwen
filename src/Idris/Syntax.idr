@@ -244,12 +244,15 @@ data REPLOpt : Type where
      ShowImplicits : Bool -> REPLOpt
      ShowTypes : Bool -> REPLOpt
      EvalMode : REPLEval -> REPLOpt
+     Editor : String -> REPLOpt
 
 public export
 data REPLCmd : Type where
      Eval : PTerm -> REPLCmd
      Check : PTerm -> REPLCmd
      Reload : REPLCmd
+     Load : String -> REPLCmd
+     Edit : REPLCmd
      Compile : PTerm -> String -> REPLCmd
      Exec : PTerm -> REPLCmd
      ProofSearch : Name -> REPLCmd

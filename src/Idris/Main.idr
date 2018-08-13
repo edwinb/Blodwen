@@ -80,6 +80,15 @@ updatePaths
          addExtraDir (dir_prefix (dirs (options defs)) ++ "/blodwen/prelude")
          addDataDir (dir_prefix (dirs (options defs)) ++ "/blodwen/support")
 
+updateREPLOpts : {auto c : Ref ROpts REPLOpts} ->
+                 Core annot ()
+updateREPLOpts
+    = do opts <- get ROpts
+         ed <- coreLift $ getEnv "EDITOR"
+         case ed of
+              Just e => put ROpts (record { editor = e } opts)
+              Nothing => pure ()
+
 stMain : List CLOpt -> Core FC ()
 stMain opts
     = do c <- newRef Ctxt initCtxt
@@ -93,6 +102,7 @@ stMain opts
          s <- newRef Syn initSyntax
          o <- newRef ROpts (REPL.defaultOpts fname)
 
+         updateREPLOpts
          case fname of
               Nothing => readPrelude
               Just f => buildAll f
