@@ -132,7 +132,7 @@ putStrLnQ : {auto c : Ref Ctxt Defs} ->
 putStrLnQ str = putStrQ (str ++ "\n")
 
 buildMod : {auto c : Ref Ctxt Defs} ->
-           FC -> Nat -> Nat -> BuildMod -> Core FC Bool
+           FC -> Nat -> Nat -> BuildMod -> Core FC (List (Error FC))
 -- Build from source if any of the dependencies, or the associated source
 -- file, have a modification time which is newer than the module's ttc
 -- file
@@ -161,29 +161,29 @@ buildMod loc num len mod
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
                    process {u} {s} src
-           else pure True
+           else pure []
 
 buildMods : {auto c : Ref Ctxt Defs} ->
-            FC -> Nat -> Nat -> List BuildMod -> Core FC Bool
-buildMods fc num len [] = pure True
+            FC -> Nat -> Nat -> List BuildMod -> Core FC (List (Error FC))
+buildMods fc num len [] = pure []
 buildMods fc num len (m :: ms)
-    = do ok <- buildMod fc num len m
-         if ok
-            then buildMods fc (1 + num) len ms
-            else pure False
+    = case !(buildMod fc num len m) of
+           [] => buildMods fc (1 + num) len ms
+           errs => pure errs
 
 export
 buildAll : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState FC)} ->
            {auto s : Ref Syn SyntaxInfo} ->
-           (mainFile : String) -> Core FC ()
+           (mainFile : String) -> Core FC (List (Error FC))
 buildAll fname
     = do mods <- getBuildMods toplevelFC fname
          ok <- buildMods toplevelFC 1 (length mods) mods
-         if ok
-            then do -- On success, reload the main ttc in a clean context
-                    clearCtxt; addPrimitives
-                    mainttc <- getTTCFileName fname
-                    readAsMain mainttc
-            else pure () -- Error happened, give up
+         case ok of
+              [] => do -- On success, reload the main ttc in a clean context
+                       clearCtxt; addPrimitives
+                       mainttc <- getTTCFileName fname
+                       readAsMain mainttc
+                       pure []
+              errs => pure errs -- Error happened, give up
 

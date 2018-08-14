@@ -178,6 +178,54 @@ Show annot => Show (Error annot) where
          show err
 
 export
+getAnnot : Error annot -> Maybe annot
+getAnnot (Fatal err) = getAnnot err
+getAnnot (CantConvert loc env tm y) = Just loc
+getAnnot (CantSolveEq loc env tm y) = Just loc
+getAnnot (Cycle loc env tm y) = Just loc
+getAnnot (WhenUnifying loc env tm y z) = Just loc
+getAnnot (ValidCase loc env y) = Just loc
+getAnnot (UndefinedName loc y) = Just loc
+getAnnot (InvisibleName loc y) = Just loc
+getAnnot (BadTypeConType loc y) = Just loc
+getAnnot (BadDataConType loc y z) = Just loc
+getAnnot (LinearUsed loc k y) = Just loc
+getAnnot (LinearMisuse loc y z w) = Just loc
+getAnnot (AmbiguousName loc xs) = Just loc
+getAnnot (AmbiguousElab loc xs) = Just loc
+getAnnot (AmbiguousSearch loc xs) = Just loc
+getAnnot (AllFailed (x :: xs)) = getAnnot x
+getAnnot (AllFailed []) = Nothing
+getAnnot (InvalidImplicit loc y tm) = Just loc
+getAnnot (CantSolveGoal loc env tm) = Just loc
+getAnnot (DeterminingArg loc y env tm) = Just loc
+getAnnot (UnsolvedHoles ((loc, _) :: xs)) = Just loc
+getAnnot (UnsolvedHoles []) = Nothing
+getAnnot (CantInferArgType loc y z tm) = Just loc
+getAnnot (SolvedNamedHole loc y) = Just loc
+getAnnot (VisibilityError loc y z w s) = Just loc
+getAnnot (NonLinearPattern loc y) = Just loc
+getAnnot (BadPattern loc y) = Just loc
+getAnnot (NoDeclaration loc y) = Just loc
+getAnnot (AlreadyDefined loc y) = Just loc
+getAnnot (NotFunctionType loc tm) = Just loc
+getAnnot (CaseCompile loc y z) = Just loc
+getAnnot (BadDotPattern loc y tm z) = Just loc
+getAnnot (BadImplicit loc y) = Just loc
+getAnnot (BadRunElab loc tm) = Just loc
+getAnnot (GenericMsg loc y) = Just loc
+getAnnot (TTCError x) = Nothing
+getAnnot (FileErr x y) = Nothing
+getAnnot (ParseFail x) = Nothing
+getAnnot (ModuleNotFound loc xs) = Just loc
+getAnnot (CyclicImports xs) = Nothing
+getAnnot (InternalError x) = Nothing
+getAnnot (InType x y err) = getAnnot err
+getAnnot (InCon x y err) = getAnnot err
+getAnnot (InLHS x y err) = getAnnot err
+getAnnot (InRHS x y err) = getAnnot err
+
+export
 error : Error annot -> Either (Error annot) a
 error = Left
 

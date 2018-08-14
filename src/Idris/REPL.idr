@@ -47,6 +47,9 @@ data ROpts : Type where
 replFC : FC
 replFC = MkFC "(interactive)" (0, 0) (0, 0)
 
+getFCLine : FC -> Int
+getFCLine fc = fst (startPos fc)
+
 showInfo : (Name, GlobalDef) -> Core annot ()
 showInfo (n, d) 
     = do coreLift $ putStrLn (show n ++ " ==> " ++ show (definition d))
@@ -142,6 +145,16 @@ resetContext
          put UST initUState
          put Syn initSyntax
 
+export
+updateErrorLine : {auto o : Ref ROpts REPLOpts} ->
+                  List (Error FC) -> Core FC ()
+updateErrorLine []
+    = do opts <- get ROpts
+         put ROpts (record { errorLine = Nothing } opts)
+updateErrorLine (e :: es)
+    = do opts <- get ROpts
+         put ROpts (record { errorLine = map getFCLine (getAnnot e) } opts)
+
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
@@ -195,14 +208,14 @@ process Reload
               Just f =>
                 do -- Clear the context and load again
                    resetContext
-                   buildAll f
+                   updateErrorLine !(buildAll f)
                    pure True
 process (Load f)
     = do opts <- get ROpts
          put ROpts (record { mainfile = Just f } opts)
          -- Clear the context and load again
          resetContext
-         buildAll f
+         updateErrorLine !(buildAll f)
          pure True
 process Edit
     = do opts <- get ROpts
@@ -213,7 +226,7 @@ process Edit
                 do let line = maybe "" (\i => " +" ++ show i) (errorLine opts)
                    coreLift $ system (editor opts ++ " " ++ f ++ line)
                    resetContext
-                   buildAll f
+                   updateErrorLine !(buildAll f)
                    pure True
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})
@@ -254,12 +267,13 @@ processCatch cmd
          u' <- get UST
          s' <- get Syn
          o' <- get ROpts
-         catch (process cmd) 
+         catch (process cmd)
                (\err => do put Ctxt c'
                            put UST u'
                            put Syn s'
                            put ROpts o'
                            coreLift (putStrLn (show err))
+                           opts <- get ROpts
                            pure True)
 
 parseRepl : String -> Either ParseError REPLCmd

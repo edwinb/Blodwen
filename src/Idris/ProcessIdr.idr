@@ -140,7 +140,7 @@ export
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
-          FileName -> Core FC Bool
+          FileName -> Core FC (List (Error FC))
 process file
     = do Right res <- coreLift (readFile file)
                | Left err => throw (FileErr file err)
@@ -152,7 +152,7 @@ process file
                               makeBuildDirectory (pathToNS file)
                               fn <- getTTCFileName file
                               writeToTTC !(get Syn) fn
-                              pure True)
+                              pure [])
                           (\err => do coreLift (printLn err)
-                                      pure False)
+                                      pure [err])
 

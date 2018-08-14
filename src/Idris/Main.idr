@@ -105,7 +105,7 @@ stMain opts
          updateREPLOpts
          case fname of
               Nothing => readPrelude
-              Just f => buildAll f
+              Just f => updateErrorLine !(buildAll f)
 
          doRepl <- postOptions opts
          when doRepl $ 
