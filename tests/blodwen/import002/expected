@@ -3,5 +3,6 @@
 3/3: Building Test (Test.blod)
 Test.blod:5:1--6:1:When elaborating type of Test.thing:
 Test.blod:5:9--5:13:Name Nat is inaccessible since Nat is not explicitly imported
+Test.blod:6:1--8:1:No type declaration for Test.thing
 Welcome to Blodwen. Good luck.
 Test> Bye for now!

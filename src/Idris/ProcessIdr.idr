@@ -21,23 +21,25 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto i : Ref ImpST (ImpState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
-              PDecl -> Core FC ()
+              PDecl -> Core FC (Maybe (Error FC))
 processDecl decl
-    = do impdecls <- desugarDecl [] decl 
-         traverse (ProcessTTImp.processDecl [] (MkNested [])) impdecls
-         pure ()
+    = catch (do impdecls <- desugarDecl [] decl 
+                traverse (ProcessTTImp.processDecl [] (MkNested [])) impdecls
+                pure Nothing)
+            (\err => pure (Just err))
 
 processDecls : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto i : Ref ImpST (ImpState FC)} ->
                {auto s : Ref Syn SyntaxInfo} ->
-               List PDecl -> Core FC ()
+               List PDecl -> Core FC (List (Error FC))
 processDecls decls
     = do xs <- traverse processDecl decls
-         checkDelayedHoles 
+         Nothing <- checkDelayedHoles 
+             | Just err => pure (mapMaybe id xs ++ [err])
          hs <- getHoleNames
          traverse addToSave hs
-         pure ()
+         pure (mapMaybe id xs)
 
 readModule : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
@@ -112,30 +114,33 @@ addPrelude imps
 processMod : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
              {auto s : Ref Syn SyntaxInfo} ->
-             Module -> Core FC ()
+             Module -> Core FC (List (Error FC))
 processMod mod
-    = do i <- newRef ImpST (initImpState {annot = FC})
-         let ns = moduleNS mod
-         when (ns /= ["Main"]) $
-            do let MkFC fname _ _ = headerloc mod
-               when (pathToNS fname /= ns) $
-                   throw (GenericMsg (headerloc mod) 
-                            ("Module name " ++ showSep "." (reverse ns) ++
-                             " does not match file name " ++ fname))
-         -- Add an implicit prelude import
-         let imps =
-              if (noprelude !getSession || moduleNS mod == ["Prelude"])
-                 then imports mod
-                 else addPrelude (imports mod)
-         -- read imports here
-         -- Note: We should only import .ttc - assumption is that there's
-         -- a phase before this which builds the dependency graph
-         -- (also that we only build child dependencies if rebuilding
-         -- changes the interface - will need to store a hash in .ttc!)
-         traverse readImport imps
-         setNS ns
-         processDecls (decls mod)
+    = catch (do i <- newRef ImpST (initImpState {annot = FC})
+                let ns = moduleNS mod
+                when (ns /= ["Main"]) $
+                   do let MkFC fname _ _ = headerloc mod
+                      when (pathToNS fname /= ns) $
+                          throw (GenericMsg (headerloc mod) 
+                                   ("Module name " ++ showSep "." (reverse ns) ++
+                                    " does not match file name " ++ fname))
+                -- Add an implicit prelude import
+                let imps =
+                     if (noprelude !getSession || moduleNS mod == ["Prelude"])
+                        then imports mod
+                        else addPrelude (imports mod)
+                -- read imports here
+                -- Note: We should only import .ttc - assumption is that there's
+                -- a phase before this which builds the dependency graph
+                -- (also that we only build child dependencies if rebuilding
+                -- changes the interface - will need to store a hash in .ttc!)
+                traverse readImport imps
+                setNS ns
+                processDecls (decls mod))
+            (\err => pure [err])
 
+-- Process a file. Returns any errors, rather than throwing them, because there
+-- might be lots of errors collected across a whole file.
 export
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
@@ -143,16 +148,26 @@ process : {auto c : Ref Ctxt Defs} ->
           FileName -> Core FC (List (Error FC))
 process file
     = do Right res <- coreLift (readFile file)
-               | Left err => throw (FileErr file err)
+               | Left err => pure [FileErr file err]
          case runParser res (do p <- prog file; eoi; pure p) of
-              Left err => throw (ParseFail err)
+              Left err => pure [ParseFail err]
               Right mod =>
-                    catch (do processMod mod
-                              defs <- get Ctxt
-                              makeBuildDirectory (pathToNS file)
-                              fn <- getTTCFileName file
-                              writeToTTC !(get Syn) fn
-                              pure [])
+                -- Processing returns a list of errors across a whole module,
+                -- but may fail for other reasons, so we still need to catch
+                -- other possible errors
+                    catch (do errs <- processMod mod
+                              if isNil errs
+                                 then
+                                   do defs <- get Ctxt
+                                      makeBuildDirectory (pathToNS file)
+                                      fn <- getTTCFileName file
+                                      writeToTTC !(get Syn) fn
+                                      pure []
+                                 else do printAll errs
+                                         pure errs)
                           (\err => do coreLift (printLn err)
                                       pure [err])
+  where
+    printAll : List (Error FC) -> Core FC ()
+    printAll xs = coreLift $ putStrLn $ showSep "\n" (map show xs)
 

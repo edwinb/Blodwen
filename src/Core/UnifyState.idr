@@ -245,12 +245,13 @@ checkUserHoles now
 export
 checkDelayedHoles : {auto u : Ref UST (UState annot)} ->
                     {auto c : Ref Ctxt Defs} ->
-                    Core annot ()
+                    Core annot (Maybe (Error annot))
 checkDelayedHoles
     = do hs <- getDelayedHoleInfo
          allHs <- getHoleNames
-         when (not (isNil hs)) $ throw (UnsolvedHoles hs)
-         pure ()
+         if (not (isNil hs)) 
+            then pure (Just (UnsolvedHoles hs))
+            else pure Nothing
 
 -- Check that the argument types in a type are valid. If the unbound
 -- implicit rules bind a thing too late (they bind dependencies at the point 
