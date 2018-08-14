@@ -38,6 +38,15 @@ preOptions (Quiet :: opts)
 preOptions (NoPrelude :: opts)
     = do setSession (record { noprelude = True } !getSession)
          preOptions opts
+preOptions (SetCG e :: opts)
+    = case getCG e of
+           Just cg => setCG cg
+           Nothing => 
+              do coreLift $ putStrLn "No such code generator"
+                 coreLift $ putStrLn $ "Code generators available: " ++
+                                 showSep ", " (map fst availableCGs)
+                 coreLift $ exit 1
+
 preOptions (_ :: opts) = preOptions opts
 
 -- Options to be processed after type checking. Returns whether execution

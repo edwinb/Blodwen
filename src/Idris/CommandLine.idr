@@ -8,6 +8,7 @@ public export
 data CLOpt
   = CheckOnly
   | ExecFn String
+  | SetCG String
   | NoPrelude
   | Version
   | Help
@@ -32,6 +33,8 @@ options = [MkOpt ["--check", "-c"] [] [CheckOnly]
               (Just "Execute function after checking source file"),
            MkOpt ["--no-prelude", "-q"] [] [NoPrelude]
               (Just "Don't implicitly import Prelude"),
+           MkOpt ["--codegen"] ["backend"] (\f => [SetCG f])
+              (Just "Set code generator (default chez)"),
 
            MkOpt ["--quiet", "-q"] [] [Quiet]
               (Just "Quiet mode; display fewer messages"),

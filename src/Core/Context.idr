@@ -670,6 +670,13 @@ setSession sopts
          put Ctxt (record { options->session = sopts } defs)
 
 export
+setCG : {auto c : Ref Ctxt Defs} ->
+        CG -> Core annot ()
+setCG cg
+    = do defs <- get Ctxt
+         put Ctxt (record { options->session->codegen = cg } defs)
+
+export
 getPPrint : {auto c : Ref Ctxt Defs} ->
             Core annot PPrinter
 getPPrint

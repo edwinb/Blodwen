@@ -1,6 +1,7 @@
 module Idris.REPL
 
 import Compiler.Chez
+import Compiler.Common
 
 import Core.AutoSearch
 import Core.CompileExpr
@@ -121,6 +122,16 @@ setOpt (EvalMode m)
 setOpt (Editor e)
     = do opts <- get ROpts
          put ROpts (record { editor = e } opts)
+setOpt (CG e)
+    = case getCG e of
+           Just cg => setCG cg
+           Nothing => coreLift $ putStrLn "No such code generator available"
+
+findCG : {auto c : Ref Ctxt Defs} -> Core FC (Codegen FC)
+findCG 
+    = do defs <- get Ctxt
+         case codegen (session (options defs)) of
+              Chez => pure codegenChez
 
 export
 execExp : {auto c : Ref Ctxt Defs} ->
@@ -132,7 +143,7 @@ execExp ctm
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
-         executeExpr tm
+         execute !findCG tm
          
 resetContext : {auto u : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
@@ -233,7 +244,7 @@ process (Compile ctm outfile)
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
-         compileExpr tm (outfile ++ ".ss")
+         compile !findCG tm (outfile ++ ".ss")
          coreLift $ putStrLn (outfile ++ ".ss written")
          pure True
 process (Exec ctm)

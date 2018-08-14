@@ -962,20 +962,25 @@ parseMode
    <|> do exactIdent "exec"
           pure Execute
 
+setVarOption : Rule REPLOpt
+setVarOption
+    = do exactIdent "eval"
+         mode <- parseMode
+         pure (EvalMode mode)
+  <|> do exactIdent "editor"
+         e <- unqualifiedName 
+         pure (Editor e)
+  <|> do exactIdent "cg"
+         c <- unqualifiedName
+         pure (CG c)
+
 setOption : Bool -> Rule REPLOpt
 setOption set
     = do exactIdent "showimplicits"
          pure (ShowImplicits set)
   <|> do exactIdent "showtypes"
          pure (ShowTypes set)
-  <|> if set
-         then do exactIdent "eval"
-                 mode <- parseMode
-                 pure (EvalMode mode)
-               <|> do exactIdent "editor"
-                      e <- unqualifiedName 
-                      pure (Editor e)
-         else fail "Invalid option"
+  <|> if set then setVarOption else fail "Invalid option"
 
 export
 command : Rule REPLCmd

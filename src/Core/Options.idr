@@ -75,12 +75,24 @@ record PPrinter where
   constructor MkPPOpts
   showImplicits : Bool
 
+public export
+data CG = Chez -- that's all for now...
+
+export
+availableCGs : List (String, CG)
+availableCGs = [("chez", Chez)]
+
+export
+getCG : String -> Maybe CG
+getCG cg = lookup (toLower cg) availableCGs
+
 -- Other options relevant to the current session (so not to be saved in a TTC)
 public export
 record Session where
   constructor MkSessionOpts
   quiet : Bool
   noprelude : Bool
+  codegen : CG
 
 -- NOTE: If adding options, remember to save any relevant ones in the TTC
 -- implementation for Defs in Context.idr
@@ -101,7 +113,7 @@ defaultPPrint : PPrinter
 defaultPPrint = MkPPOpts False
 
 defaultSession : Session
-defaultSession = MkSessionOpts False False
+defaultSession = MkSessionOpts False False Chez
 
 export
 defaults : Options

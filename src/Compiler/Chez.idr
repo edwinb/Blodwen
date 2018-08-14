@@ -317,10 +317,9 @@ getScheme defs n
                              throw (InternalError ("No compiled definition for " ++ show n))
                           Just d => schDef n d
 
-export
-compileExpr : {auto c : Ref Ctxt Defs} ->
+compileExpr : Ref Ctxt Defs ->
               ClosedTerm -> (outfile : String) -> Core annot ()
-compileExpr {annot} tm outfile
+compileExpr {annot} c tm outfile
     = do ns <- findUsedNames tm
          defs <- get Ctxt
          compdefs <- traverse (getScheme defs) ns
@@ -334,13 +333,16 @@ compileExpr {annot} tm outfile
          coreLift $ chmod outfile 0o755
          pure ()
 
-export
-executeExpr : {auto c : Ref Ctxt Defs} -> ClosedTerm -> Core annot ()
-executeExpr tm
+executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
+executeExpr c tm
     = do tmp <- coreLift $ tmpName
          let outn = tmp ++ ".ss"
-         compileExpr tm outn
+         compileExpr c tm outn
          chez <- coreLift findChez
          coreLift $ system (chez ++ " --script " ++ outn)
          pure ()
+
+export
+codegenChez : Codegen annot
+codegenChez = MkCG compileExpr executeExpr
 

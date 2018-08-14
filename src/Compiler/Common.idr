@@ -10,6 +10,25 @@ import Data.CSet
 
 %include C "sys/stat.h"
     
+public export
+record Codegen annot where
+  constructor MkCG
+  compileExpr : Ref Ctxt Defs -> 
+                ClosedTerm -> (outfile : String) -> Core annot ()
+  executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
+
+export
+compile : {auto c : Ref Ctxt Defs} ->
+          Codegen annot ->
+          ClosedTerm -> (outfile : String) -> Core annot ()
+compile {c} cg = compileExpr cg c
+
+export
+execute : {auto c : Ref Ctxt Defs} ->
+          Codegen annot ->
+          ClosedTerm -> Core annot ()
+execute {c} cg = executeExpr cg c
+
 getAllDesc : List Name -> SortedSet -> Gamma -> SortedSet
 getAllDesc [] ns g = ns
 getAllDesc (n :: rest) ns g

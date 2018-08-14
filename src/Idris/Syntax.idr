@@ -245,6 +245,7 @@ data REPLOpt : Type where
      ShowTypes : Bool -> REPLOpt
      EvalMode : REPLEval -> REPLOpt
      Editor : String -> REPLOpt
+     CG : String -> REPLOpt
 
 public export
 data REPLCmd : Type where
