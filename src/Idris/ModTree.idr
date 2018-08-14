@@ -118,19 +118,6 @@ fnameModified fname
          coreLift $ closeFile f
          pure t
 
--- Print, but only when not in quiet mode
-export
-putStrQ : {auto c : Ref Ctxt Defs} ->
-          String -> Core annot ()
-putStrQ str
-    = when (not (quiet !getSession)) $
-         coreLift $ putStr str
-
-export
-putStrLnQ : {auto c : Ref Ctxt Defs} ->
-            String -> Core annot ()
-putStrLnQ str = putStrQ (str ++ "\n")
-
 buildMod : {auto c : Ref Ctxt Defs} ->
            FC -> Nat -> Nat -> BuildMod -> Core FC (List (Error FC))
 -- Build from source if any of the dependencies, or the associated source

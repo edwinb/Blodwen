@@ -1,6 +1,7 @@
 module Idris.REPL
 
-import Compiler.Chez
+import Compiler.Scheme.Chez
+import Compiler.Scheme.Chicken
 import Compiler.Common
 
 import Core.AutoSearch
@@ -132,6 +133,7 @@ findCG
     = do defs <- get Ctxt
          case codegen (session (options defs)) of
               Chez => pure codegenChez
+              Chicken => pure codegenChicken
 
 export
 execExp : {auto c : Ref Ctxt Defs} ->
@@ -244,8 +246,7 @@ process (Compile ctm outfile)
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
          (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
-         compile !findCG tm (outfile ++ ".ss")
-         coreLift $ putStrLn (outfile ++ ".ss written")
+         compile !findCG tm outfile
          pure True
 process (Exec ctm)
     = do execExp ctm

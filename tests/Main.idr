@@ -19,6 +19,7 @@ blodwenTests
        "test011", "test012", "test013", "test014", "test015",
        "test016",
        "chez001", "chez002",
+       "chicken001", "chicken002",
        "import001", "import002",
        "reflect001",
        "linear001", "linear002", "linear003", "linear004",

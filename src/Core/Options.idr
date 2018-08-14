@@ -76,11 +76,12 @@ record PPrinter where
   showImplicits : Bool
 
 public export
-data CG = Chez -- that's all for now...
+data CG = Chez 
+        | Chicken
 
 export
 availableCGs : List (String, CG)
-availableCGs = [("chez", Chez)]
+availableCGs = [("chez", Chez), ("chicken", Chicken)]
 
 export
 getCG : String -> Maybe CG

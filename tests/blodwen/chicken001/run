@@ -1,0 +1,2 @@
+$1 --no-prelude --codegen chicken IOtest.blod < input
+rm -rf build
