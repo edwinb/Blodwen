@@ -24,13 +24,13 @@ translates to TTImp by desugaring operators, do notation, etc.
 
 Where to find things:
 
-Core/ -- anything related to the core TT, typechecking and unification
-TTImp/ -- anything related to the implicit TT and its elaboration
-  TTImp/Elab/ -- Elaboration state and elaboration of terms 
-Parser/ -- various utilities for parsing and lexing TT and TTImp (and other things)
-Utils/ -- some generally useful utilities
-Idris/ -- anything relating to the high level language, translating to TTImp
-  Idris/Elab/ -- High level construct elaboration machinery (e.g. interfaces)
+* Core/ -- anything related to the core TT, typechecking and unification
+* TTImp/ -- anything related to the implicit TT and its elaboration
+  * TTImp/Elab/ -- Elaboration state and elaboration of terms 
+* Parser/ -- various utilities for parsing and lexing TT and TTImp (and other things)
+* Utils/ -- some generally useful utilities
+* Idris/ -- anything relating to the high level language, translating to TTImp
+  * Idris/Elab/ -- High level construct elaboration machinery (e.g. interfaces)
 
 The Core Type, and Ref
 ----------------------
@@ -88,15 +88,19 @@ Any name beginning with a lower case letter is considered an unbound implicit.
 They are elaborated as holes, which may depend on the initial environment of
 the elaboration, and after elaboration they are converted to an implicit pi
 binding, with multiplicity 0. So, for example:
-
+```idris
 map : {f : _} -> (a -> b) -> f a -> f b
+```
 becomes
+```idris
 map : {f : _} -> {0 a : _} -> {0 b : _} -> (a -> b) -> f a -> f b
+```
 
 Bindings are ordered according to dependency.  It'll infer any additional
 names, e.g. in
-
+```idris
 lookup : HasType i xs t -> Env xs -> t
+```
 ...where 'xs' is a Vect n a, it infers bindings for n and a.
 
 (TODO: %auto_implicits directive)
@@ -132,14 +136,16 @@ new name (just like pattern matching on the lhs - i.e. it means match
 anything). If inference fails for "?", we leave it as a hole and try to fill it
 in later. As a result, we can say:
 
-    foo : Vect Int ?
-    foo = [1,2,3,4]
-
+```idris
+foo : Vect Int ?
+foo = [1,2,3,4]
+```
 ...and the ? will be inferred to be 4. But if we say
 
-    foo : Vect Int _
-    foo = [1,2,3,4]
-
+```idris
+foo : Vect Int _
+foo = [1,2,3,4]
+```
 ...we'll get an error, because the '_' has been bound as a new name.
 
 So the meaning of "_" is now consistent on the lhs and in types (i.e. it
@@ -155,7 +161,7 @@ arguments in the same way as ordinary implicits: i.e. {x = exp} to give
 auto implicits (it uses the resolution mechanism - interfaces translate into
 records, and implementations translate into hints for the search).
 
-The argument syntax @{exp} means that the value of the next auto implicit in
+The argument syntax `@{exp}` means that the value of the next auto implicit in
 the application should be 'exp' - this is the same as the syntax for invoking
 named implementations in Idris 1, but interfaces and auto implicits have been
 combined now.
@@ -189,9 +195,11 @@ we'll see that the @-pattern name is defined, so turn it into a PLet.
 Names which are bound in types are also bound as @-patterns, meaning that
 functions have access to them. For example, we can say:
 
+```idris
 vlength : Vect n a -> Nat
 vlength [] = n
 vlength (x :: xs) = n
+```
 
 Linear Types
 ------------
