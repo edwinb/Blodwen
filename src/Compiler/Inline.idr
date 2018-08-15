@@ -118,8 +118,9 @@ parameters (defs : Defs)
     eval rec env stk (CForce e)
         = case eval rec env [] e of
                CDelay e' => eval rec [] stk e'
-               res => res
-    eval rec env stk (CDelay e) = unload stk (CDelay (eval rec env [] e))
+               res => unload stk (CForce res)
+    eval rec env stk (CDelay e) 
+        = unload stk (CDelay (eval rec env [] e))
     eval rec env stk (CConCase sc alts def) 
         = let sc' = eval rec env [] sc in
               case pickAlt rec env stk sc' alts def of

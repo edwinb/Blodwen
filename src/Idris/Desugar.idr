@@ -396,4 +396,5 @@ mutual
              PrimInteger n => pure [IPragma (\env, next => setFromInteger fc n)]
              PrimString n => pure [IPragma (\env, next => setFromString fc n)]
              PrimChar n => pure [IPragma (\env, next => setFromChar fc n)]
+             CGAction cg dir => pure [IPragma (\env, nest => addDirective cg dir)]
 

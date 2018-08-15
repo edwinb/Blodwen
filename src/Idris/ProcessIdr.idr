@@ -163,11 +163,5 @@ process file
                                       fn <- getTTCFileName file
                                       writeToTTC !(get Syn) fn
                                       pure []
-                                 else do printAll errs
-                                         pure errs)
-                          (\err => do coreLift (printLn err)
-                                      pure [err])
-  where
-    printAll : List (Error FC) -> Core FC ()
-    printAll xs = coreLift $ putStrLn $ showSep "\n" (map show xs)
-
+                                 else pure errs)
+                          (\err => pure [err])

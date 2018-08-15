@@ -669,6 +669,13 @@ dataDecl fname indents
          end <- location
          pure (PData (MkFC fname start end) vis dat)
 
+stripBraces : String -> String
+stripBraces str = pack (drop '{' (reverse (drop '}' (reverse (unpack str)))))
+  where
+    drop : Char -> List Char -> List Char
+    drop c [] = []
+    drop c (c' :: xs) = if c == c' then drop c xs else c' :: xs
+
 directive : IndentInfo -> Rule Directive
 directive indents
     = do exactIdent "logging"
@@ -870,6 +877,14 @@ topDecl fname indents
          pure [d]
   <|> do d <- directiveDecl fname indents
          pure [d]
+  <|> do start <- location
+         dstr <- terminal (\x => case tok x of
+                                      CGDirective d => Just d
+                                      _ => Nothing)
+         end <- location
+         let cgrest = span isAlphaNum dstr
+         pure [PDirective (MkFC fname start end)
+                (CGAction (fst cgrest) (stripBraces (trim (snd cgrest))))]
   <|> fixDecl fname indents
   <|> do d <- ifaceDecl fname indents
          pure [d]

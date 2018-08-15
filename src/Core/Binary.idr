@@ -22,7 +22,7 @@ import Data.Buffer
 -- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 ttcVersion : Int
-ttcVersion = 8
+ttcVersion = 9
 
 checkTTCVersion : Int -> Int -> Core annot ()
 checkTTCVersion ver exp
@@ -100,7 +100,8 @@ writeToTTC extradata fname
          let defs' = mkSaveDefs (getSave defs) 
                          (record { options = options defs,
                                    imported = imported defs,
-                                   currentNS = currentNS defs
+                                   currentNS = currentNS defs,
+                                   cgdirectives = cgdirectives defs
                                  } initCtxt)
                          defs
          toBuf buf (MkTTCFile ttcVersion (holes ust) (constraints ust) defs'

@@ -80,6 +80,23 @@ data CG = Chez
         | Chicken
 
 export
+Eq CG where
+  Chez == Chez = True
+  Chicken == Chicken = True
+  _ == _ = False
+
+export
+TTC annot CG where
+  toBuf b Chez = tag 0
+  toBuf b Chicken = tag 1
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Chez
+             1 => pure Chicken
+             _ => corrupt "CG"
+
+export
 availableCGs : List (String, CG)
 availableCGs = [("chez", Chez), ("chicken", Chicken)]
 

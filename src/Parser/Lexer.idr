@@ -15,6 +15,7 @@ data Token = Ident String
            | Keyword String
            | Unrecognised String
            | Comment String
+           | CGDirective String
            | EndInput
 
 export
@@ -29,6 +30,7 @@ Show Token where
   show (Keyword x) = "Keyword " ++ x
   show (Unrecognised x) = "BAD_TOKEN " ++ x
   show (Comment x) = "Comment"
+  show (CGDirective x) = "CGDirective " ++ x
   show EndInput = "EndInput"
 
 export
@@ -67,8 +69,23 @@ holeIdent : Lexer
 holeIdent = is '?' <+> ident
 
 doubleLit : Lexer
-doubleLit = digits <+> is '.' <+> digits <+> opt
-               (is 'e' <+> opt (is '-' <|> is '+') <+> digits)
+doubleLit 
+    = digits <+> is '.' <+> digits <+> opt
+           (is 'e' <+> opt (is '-' <|> is '+') <+> digits)
+
+-- Do this as an entire token, because the contents will be processed by
+-- a specific back end
+cgDirective : Lexer
+cgDirective
+    = exact "%cg" <+> 
+      ((some space <+> 
+           some (pred isAlphaNum) <+> many space <+>
+           is '{' <+> many (isNot '}') <+> 
+           is '}') 
+         <|> many (isNot '\n'))
+
+mkDirective : String -> Token
+mkDirective str = CGDirective (trim (substr 3 (length str) str))
 
 -- Reserved words
 keywords : List String
@@ -110,6 +127,7 @@ rawTokens : TokenMap Token
 rawTokens = 
     [(comment, Comment),
      (blockComment, Comment),
+     (cgDirective, mkDirective),
      (holeIdent, \x => HoleIdent (assert_total (strTail x)))] ++
     map (\x => (exact x, Symbol)) symbols ++
     [(doubleLit, \x => DoubleLit (cast x)),

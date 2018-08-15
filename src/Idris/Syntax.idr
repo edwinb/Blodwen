@@ -186,6 +186,7 @@ mutual
        PrimInteger : Name -> Directive
        PrimString : Name -> Directive
        PrimChar : Name -> Directive
+       CGAction : String -> String -> Directive
 
   public export
   data PDecl : Type where

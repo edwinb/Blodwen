@@ -8,6 +8,7 @@ import Compiler.Scheme.Common
 import Core.Context
 import Core.Directory
 import Core.Name
+import Core.Options
 import Core.TT
 
 import Data.List
@@ -27,13 +28,23 @@ findChez
                                     x <- ["scheme", "chez"]]
          maybe (pure "/usr/bin/env scheme") pure e
 
-schHeader : String -> String
-schHeader chez
+findLibs : List String -> List String
+findLibs = mapMaybe (isLib . trim)
+  where
+    isLib : String -> Maybe String
+    isLib d 
+        = if isPrefixOf "lib" d
+             then Just (trim (substr 3 (length d) d))
+             else Nothing
+
+schHeader : String -> List String -> String
+schHeader chez libs
   = "#!" ++ chez ++ " --script\n\n" ++
     "(case (machine-type)\n" ++
     "  [(i3le ti3le a6le ta6le) (load-shared-object \"libc.so.6\")]\n" ++
     "  [(i3osx ti3osx a6osx ta6osx) (load-shared-object \"libc.dylib\")]\n" ++
     "  [else (load-shared-object \"libc.so\")])\n\n" ++
+    showSep "\n" (map (\x => "(load-shared-object \"" ++ x ++ "\")") libs) ++ "\n\n" ++
     "(let ()\n"
 
 schFooter : String
@@ -49,10 +60,10 @@ mutual
   tySpec (CPrimVal IntType) = pure "int"
   tySpec (CPrimVal StringType) = pure "string"
   tySpec (CPrimVal DoubleType) = pure "double"
-  tySpec (CCon unit _ []) 
-     = if dropNS unit == UN "Unit"
-          then pure "void"
-          else throw (InternalError ("Can't pass argument of type " ++ show unit ++ " to foreign function"))
+  tySpec (CCon (NS _ n) _ []) 
+     = cond [(n == UN "Unit", pure "void"),
+             (n == UN "Ptr", pure "void*")]
+          (throw (InternalError ("Can't pass argument of type " ++ show n ++ " to foreign function")))
   tySpec ty = throw (InternalError ("Can't pass argument of type " ++ show ty ++ " to foreign function"))
 
   handleRet : String -> String -> String
@@ -94,14 +105,16 @@ mutual
 compileToSS : Ref Ctxt Defs ->
               ClosedTerm -> (outfile : String) -> Core annot ()
 compileToSS c tm outfile
-    = do ns <- findUsedNames tm
+    = do ds <- getDirectives Chez
+         let libs = findLibs ds
+         ns <- findUsedNames tm
          defs <- get Ctxt
          compdefs <- traverse (getScheme chezExtPrim defs) ns
          let code = concat compdefs
          main <- schExp chezExtPrim [] !(compileExp tm)
          chez <- coreLift findChez
          support <- readDataFile "chez/support.ss"
-         let scm = schHeader chez ++ support ++ code ++ main ++ schFooter
+         let scm = schHeader chez libs ++ support ++ code ++ main ++ schFooter
          Right () <- coreLift $ writeFile outfile scm
             | Left err => throw (FileErr outfile err)
          coreLift $ chmod outfile 0o755
@@ -110,8 +123,7 @@ compileToSS c tm outfile
 compileExpr : Ref Ctxt Defs ->
               ClosedTerm -> (outfile : String) -> Core annot ()
 compileExpr c tm outfile
-    = do tmp <- coreLift $ tmpName
-         let outn = tmp ++ ".ss"
+    = do let outn = outfile ++ ".ss"
          compileToSS c tm outn
          -- TODO: Compile to .so too?
          putStrLnQ $ outn ++ " written"

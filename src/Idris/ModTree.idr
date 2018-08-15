@@ -156,7 +156,11 @@ buildMods fc num len [] = pure []
 buildMods fc num len (m :: ms)
     = case !(buildMod fc num len m) of
            [] => buildMods fc (1 + num) len ms
-           errs => pure errs
+           errs => do printAll errs
+                      pure errs
+  where
+    printAll : List (Error FC) -> Core FC ()
+    printAll xs = coreLift $ putStrLn $ showSep "\n" (map show xs)
 
 export
 buildAll : {auto c : Ref Ctxt Defs} ->

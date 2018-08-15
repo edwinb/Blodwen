@@ -344,6 +344,7 @@ record Defs where
                   -- at the end to resolve defaults 'False'
       typeHints : Context (List (Name, Bool)) -- type name hints
       openHints : List Name -- global hints just for this module; prioritised
+      cgdirectives : List (CG, String)
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
@@ -365,6 +366,7 @@ TTC annot Defs where
            toBuf b (laziness (options val))
            toBuf b (pairnames (options val))
            toBuf b (primnames (options val))
+           toBuf b (cgdirectives val)
   fromBuf s b 
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
            modNS <- fromBuf s b
@@ -372,12 +374,13 @@ TTC annot Defs where
            lazy <- fromBuf s b
            pair <- fromBuf s b
            prim <- fromBuf s b
+           ds <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) modNS 
                             (record { laziness = lazy,
                                       pairnames = pair,
                                       primnames = prim
                                     } defaults)
-                            empty imported [] [] empty [] 100 0 0)
+                            empty imported [] [] empty [] ds 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -386,7 +389,7 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty [] 100 0 0
+initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty [] [] 100 0 0
 
 export
 getSave : Defs -> List Name
@@ -759,6 +762,28 @@ getImported : {auto c : Ref Ctxt Defs} ->
 getImported
     = do defs <- get Ctxt
          pure (imported defs)
+
+export
+addDirective : {auto c : Ref Ctxt Defs} ->
+               String -> String -> Core annot ()
+addDirective c str
+    = do defs <- get Ctxt
+         case getCG c of
+              Nothing => -- warn, rather than fail, because the CG may exist
+                         -- but be unknown to this particular instance
+                         coreLift $ putStrLn $ "Unknown code generator " ++ c
+              Just cg => put Ctxt (record { cgdirectives $= ((cg, str) ::) } defs)
+
+export
+getDirectives : {auto c : Ref Ctxt Defs} ->
+                CG -> Core annot (List String)
+getDirectives cg
+    = do defs <- get Ctxt
+         pure (mapMaybe getDir (cgdirectives defs))
+  where
+    getDir : (CG, String) -> Maybe String
+    getDir (x', str) = if cg == x' then Just str else Nothing
+
 
 -- Add a new nested namespace to the current namespace for new definitions
 -- e.g. extendNS ["Data"] when namespace is "Prelude.List" leads to
@@ -1317,7 +1342,8 @@ extend : {auto c : Ref Ctxt Defs} ->
 extend loc new
     = do ctxt <- get Ctxt
          put Ctxt (record { gamma $= mergeContext (gamma new),
-                            options $= mergeOptions (options new)
+                            options $= mergeOptions (options new),
+                            cgdirectives $= (++ cgdirectives new)
                           } ctxt)
          -- Process any flags that need processing in the newly added
          -- thing (e.g. whether they are search hints)
@@ -1334,7 +1360,8 @@ extendAs loc modNS importAs new
          then extend loc new
          else do ctxt <- get Ctxt
                  put Ctxt (record { gamma $= mergeContextAs modNS importAs (gamma new),
-                                    options $= mergeOptions (options new)
+                                    options $= mergeOptions (options new),
+                                    cgdirectives $= (++ cgdirectives new)
                                   } ctxt)
                  -- Process any flags that need processing in the newly added
                  -- thing (e.g. whether they are search hints)
