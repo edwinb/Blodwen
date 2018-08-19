@@ -514,7 +514,8 @@ mutual
                              (record { linearUsed $= ((_ ** lv) :: ) } est)
                     let varty = binderType (getBinder lv env) 
                     (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
-                    checkExp rigc process loc elabinfo env nest (apply (Local lv) imps)
+                    checkExp rigc process loc elabinfo env nest 
+                         (apply (Local (Just rigb) lv) imps)
                             (quote (noGam gam) env ty) expected
              Nothing =>
                  do nspace <- getNS
@@ -662,7 +663,7 @@ mutual
           = asParam gam False var (binderType b) && 
             asParam gam ppos (There var) sc
       asParam gam ppos var tm with (unapply tm)
-        asParam gam ppos var (apply (Local x) []) | ArgsList
+        asParam gam ppos var (apply (Local r x) []) | ArgsList
             = if sameVar var x then ppos else True
         asParam gam ppos var (apply (Ref nt n) args) | ArgsList
             = case lookupDefExact n gam of

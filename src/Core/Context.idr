@@ -1002,11 +1002,11 @@ addFnDef loc n treeCT treeRT
 -- considered a parameter
 dropReps : List (Maybe (Term vars)) -> List (Maybe (Term vars))
 dropReps [] = []
-dropReps {vars} (Just (Local x) :: xs)
-    = Just (Local x) :: assert_total (dropReps (map toNothing xs))
+dropReps {vars} (Just (Local r x) :: xs)
+    = Just (Local r x) :: assert_total (dropReps (map toNothing xs))
   where
     toNothing : Maybe (Term vars) -> Maybe (Term vars)
-    toNothing tm@(Just (Local v'))
+    toNothing tm@(Just (Local r v'))
         = if sameVar x v' then Nothing else tm
     toNothing tm = tm
 dropReps (x :: xs) = x :: dropReps xs
@@ -1022,13 +1022,13 @@ updateParams : Maybe (List (Maybe (Term vars))) ->
 updateParams Nothing args = dropReps $ map couldBeParam args
   where
     couldBeParam : Term vars -> Maybe (Term vars)
-    couldBeParam (Local v) = Just (Local v)
+    couldBeParam (Local r v) = Just (Local r v)
     couldBeParam _ = Nothing
 updateParams (Just args) args' = dropReps $ zipWith mergeArg args args'
   where
     mergeArg : Maybe (Term vars) -> Term vars -> Maybe (Term vars)
-    mergeArg (Just (Local x)) (Local y)
-        = if sameVar x y then Just (Local x) else Nothing
+    mergeArg (Just (Local r x)) (Local r' y)
+        = if sameVar x y then Just (Local r x) else Nothing
     mergeArg _ _ = Nothing
 
 getPs : Maybe (List (Maybe (Term vars))) -> Name -> Term vars ->
@@ -1097,7 +1097,7 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
 			     = nub $ assert_total (concatMap (findGuarded as) args)
       findGuarded as (apply (Ref (TyCon _ _) _) args) | ArgsList 
 			     = nub $ assert_total (concatMap (findGuarded as) args)
-      findGuarded as (apply (Local {x} var) []) | ArgsList
+      findGuarded as (apply (Local {x} r var) []) | ArgsList
 	         = [getCorresponding as var]
       findGuarded as (apply f args) | ArgsList 
 			     = []

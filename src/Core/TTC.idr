@@ -181,7 +181,7 @@ TTC annot Constant where
 
 export
 TTC annot (Term vars) where
-  toBuf b (Local {x} h) = do tag 0; toBuf b x; toBuf b h
+  toBuf b (Local {x} r h) = do tag 0; toBuf b x; toBuf b r; toBuf b h
   toBuf b (Ref nt fn) = do tag 1; toBuf b nt; toBuf b fn
   toBuf b (Bind x bnd tm) 
       = do tag 2; toBuf b x
@@ -194,7 +194,8 @@ TTC annot (Term vars) where
 
   fromBuf s b -- total because it'll fail at the end of the buffer!
       = assert_total $ case !getTag of
-           0 => do x <- fromBuf s b; y <- fromBuf s b; pure (Local {x} y)
+           0 => do x <- fromBuf s b; r <- fromBuf s b;
+                   y <- fromBuf s b; pure (Local {x} r y)
            1 => do x <- fromBuf s b; y <- fromBuf s b
                    pure (Ref x y)
            2 => do x <- fromBuf s b; y <- fromBuf s b

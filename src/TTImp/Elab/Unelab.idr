@@ -10,7 +10,7 @@ import Data.List
 %default covering
 
 used : Elem x vars -> Term vars -> Bool
-used el (Local v) = sameVar el v
+used el (Local _ v) = sameVar el v
 used {vars} el (Bind x b sc) = usedBinder b || used (There el) sc
   where
     usedBinder : Binder (Term vars) -> Bool
@@ -27,7 +27,7 @@ mutual
   unelabTy : {auto c : Ref Ctxt Defs} ->
            annot -> Env Term vars -> Term vars -> 
            Core annot (RawImp annot, Term vars)
-  unelabTy loc env (Local {x} el) 
+  unelabTy loc env (Local {x} _ el) 
       = pure (IVar loc x, binderType (getBinder el env))
   unelabTy loc env (Ref nt n)
       = do defs <- get Ctxt

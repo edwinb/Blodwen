@@ -254,10 +254,10 @@ strengthenedEState {n} {vs} _ loc env
     -- in scope.
     removeArgVars : List (Term (n :: vs)) -> Maybe (List (Term vs))
     removeArgVars [] = pure []
-    removeArgVars (Local (There p) :: args) 
+    removeArgVars (Local r (There p) :: args) 
         = do args' <- removeArgVars args
-             pure (Local p :: args')
-    removeArgVars (Local Here :: args) 
+             pure (Local r p :: args')
+    removeArgVars (Local r Here :: args) 
         = removeArgVars args
     removeArgVars (a :: args)
         = do a' <- shrinkTerm a (DropCons SubRefl)
@@ -292,7 +292,7 @@ elemEmbedSub (KeepCons prf) Here = Here
 elemEmbedSub (KeepCons prf) (There later) = There (elemEmbedSub prf later)
 
 embedSub : SubVars small vars -> Term small -> Term vars
-embedSub sub (Local prf) = Local (elemEmbedSub sub prf)
+embedSub sub (Local r prf) = Local r (elemEmbedSub sub prf)
 embedSub sub (Ref x fn) = Ref x fn
 embedSub sub (Bind x b tm) 
     = Bind x (assert_total (map (embedSub sub) b))
@@ -459,31 +459,32 @@ bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
                                   let tm = normalise gam env (applyTo (Ref Func n) env) 
                                       rig = maybe RigW id (lookup n asvs) in
                                       substPLet rig n' tm ty 
-                                          (refToLocal tmpN n' repNameTm)
-                                          (refToLocal tmpN n' repNameTy)
+                                          (refToLocal Nothing tmpN n' repNameTm)
+                                          (refToLocal Nothing tmpN n' repNameTy)
 
                                _ => (subst (normalise gam env (applyTo (Ref Func n) env))
-                                           (refToLocal tmpN n repNameTm),
+                                           (refToLocal Nothing tmpN n repNameTm),
                                      subst (normalise gam env (applyTo (Ref Func n) env))
-                                           (refToLocal tmpN n repNameTy))
+                                           (refToLocal Nothing tmpN n repNameTy))
                        _ =>
-                          (Bind n' (PVar RigW ty) (refToLocal tmpN n' repNameTm), 
-                           Bind n' (PVTy RigW ty) (refToLocal tmpN n' repNameTy))
+                          (Bind n' (PVar RigW ty) (refToLocal Nothing tmpN n' repNameTm), 
+                           Bind n' (PVTy RigW ty) (refToLocal Nothing tmpN n' repNameTy))
                -- unless explicitly given, unbound implicits are Rig0
                PI rig =>
                   case lookupDefExact n (gamma gam) of
                      Just (PMDef _ _ _ _) =>
                         (subst (normalise gam env (applyTo (Ref Func n) env))
-                               (refToLocal tmpN n repNameTm),
+                               (refToLocal Nothing tmpN n repNameTm),
                          subst (normalise gam env (applyTo (Ref Func n) env))
-                               (refToLocal tmpN n repNameTy))
-                     _ => (Bind n' (Pi rig Implicit ty) (refToLocal tmpN n' repNameTm), ty')
-               _ => (Bind n' (Pi RigW Implicit ty) (refToLocal tmpN n' repNameTm), ty')
+                               (refToLocal Nothing tmpN n repNameTy))
+                     _ => (Bind n' (Pi rig Implicit ty) (refToLocal Nothing tmpN n' repNameTm), ty')
+               _ => (Bind n' (Pi RigW Implicit ty) 
+                          (refToLocal Nothing tmpN n' repNameTm), ty')
   where
     -- Replace the name applied to the given number of arguments 
     -- with another term
     repName : (new : Term vars) -> Term vars -> Term vars
-    repName new (Local p) = Local p
+    repName new (Local r p) = Local r p
     repName new (Ref nt fn)
         = case nameEq n fn of
                Nothing => Ref nt fn
@@ -520,7 +521,7 @@ swapElem {xs = n :: ns} (There prf) = There (swapElem prf)
 -- We've swapped two binders (in 'push' below) so we'd better swap the
 -- corresponding references
 swapVars : Term (vs ++ x :: y :: ys) -> Term (vs ++ y :: x :: ys)
-swapVars (Local prf) = Local (swapElem prf)
+swapVars (Local r prf) = Local r (swapElem prf)
 swapVars (Ref nt n) = Ref nt n
 swapVars {vs} (Bind x b sc) 
     = Bind x (map swapVars b) (swapVars {vs = x :: vs} sc)

@@ -285,7 +285,7 @@ Functor Binder where
 -- indexed by the names of local variables in scope
 public export
 data Term : List Name -> Type where
-     Local : Elem x vars -> Term vars
+     Local : Maybe RigCount -> Elem x vars -> Term vars
      Ref : NameType -> (fn : Name) -> Term vars
      Bind : (x : Name) -> Binder (Term vars) -> 
                           Term (x :: vars) -> Term vars
@@ -425,7 +425,7 @@ mutual
 -- The head of a value: things you can apply arguments to
 public export
 data NHead : List Name -> Type where
-     NLocal : Elem x vars -> NHead vars
+     NLocal : Maybe RigCount -> Elem x vars -> NHead vars
      NRef   : NameType -> Name -> NHead vars
 
 -- Values themselves
@@ -478,7 +478,7 @@ insertElem {outer = (y :: xs)} (There later)
 
 export
 thin : (n : Name) -> Term (outer ++ inner) -> Term (outer ++ n :: inner)
-thin n (Local prf) = Local (insertElem prf)
+thin n (Local r prf) = Local r (insertElem prf)
 thin n (Ref x fn) = Ref x fn
 thin {outer} {inner} n (Bind x b sc) 
    = let sc' = thin {outer = x :: outer} {inner} n sc in
@@ -504,7 +504,7 @@ insertElemNames {outer = (x :: xs)} ns (There later)
 export
 insertNames : (ns : List Name) -> Term (outer ++ inner) ->
               Term (outer ++ (ns ++ inner))
-insertNames ns (Local prf) = Local (insertElemNames ns prf)
+insertNames ns (Local r prf) = Local r (insertElemNames ns prf)
 insertNames ns (Ref x fn) = Ref x fn
 insertNames {outer} {inner} ns (Bind x b sc) 
     = Bind x (assert_total (map (insertNames ns) b)) 
@@ -521,7 +521,7 @@ elemExtend (There later) = There (elemExtend later)
 
 export
 embed : Term vars -> Term (vars ++ more)
-embed (Local prf) = Local (elemExtend prf)
+embed (Local r prf) = Local r (elemExtend prf)
 embed (Ref x fn) = Ref x fn
 embed (Bind x b tm) = Bind x (assert_total (map embed b)) (embed tm)
 embed (App f a) = App (embed f) (embed a)
@@ -566,31 +566,26 @@ localPrf : Elem fn (later ++ fn :: vars)
 localPrf {later = []} = Here
 localPrf {later = (x :: xs)} = There localPrf
 
-export
 mkLocal : (x : Name) -> 
-          Elem new (later ++ new :: vars) ->
+          Maybe RigCount -> Elem new (later ++ new :: vars) ->
           Term (later ++ vars) -> Term (later ++ new :: vars)
-mkLocal x loc (Local prf) = Local (addVar prf)
-mkLocal x loc (Ref y fn) with (x == fn)
-  mkLocal x loc (Ref y fn) | True = Local loc
-  mkLocal x loc (Ref y fn) | False = Ref y fn
-mkLocal {later} x loc (Bind y b tm) 
-    = Bind y (assert_total (map (mkLocal x loc) b)) 
-             (mkLocal {later = y :: later} x (There loc) tm)
-mkLocal x loc (App f a) = App (mkLocal x loc f) (mkLocal x loc a)
-mkLocal x loc (PrimVal y) = PrimVal y
-mkLocal x loc Erased = Erased
-mkLocal x loc TType = TType
+mkLocal x _ loc (Local r prf) = Local r (addVar prf)
+mkLocal x r loc (Ref y fn) with (x == fn)
+  mkLocal x r loc (Ref y fn) | True = Local r loc
+  mkLocal x r loc (Ref y fn) | False = Ref y fn
+mkLocal {later} x r loc (Bind y b tm) 
+    = Bind y (assert_total (map (mkLocal x r loc) b)) 
+             (mkLocal {later = y :: later} x r (There loc) tm)
+mkLocal x r loc (App f a) = App (mkLocal x r loc f) (mkLocal x r loc a)
+mkLocal x r loc (PrimVal y) = PrimVal y
+mkLocal x r loc Erased = Erased
+mkLocal x r loc TType = TType
 
 -- Replace any reference to 'x' with a locally bound name 'new'
 export
-refToLocal : (x : Name) -> (new : Name) -> Term vars -> Term (new :: vars)
-refToLocal x new tm = mkLocal {later = []} x Here tm
-
-export
-refToLocals : (ns : List Name) -> Term vars -> Term (ns ++ vars)
-refToLocals [] tm = tm
-refToLocals (n :: ns) tm = refToLocal n n (refToLocals ns tm)
+refToLocal : Maybe RigCount ->
+						 (x : Name) -> (new : Name) -> Term vars -> Term (new :: vars)
+refToLocal r x new tm = mkLocal {later = []} x r Here tm
 
 -- Oops, no DecEq for Name, so we need this
 export
@@ -602,25 +597,18 @@ isVar n (m :: ms)
                          pure (There p)
            Just Refl => pure Here
 
--- Replace any Ref Bound with appropriate proof
+-- Replace any Ref Bound in a type with appropriate local
 export
 resolveRefs : (vars : List Name) -> Term vars -> Term vars
 resolveRefs vars (Ref Bound n)
     = case isVar n vars of
-           Just prf => Local prf
+           Just prf => Local Nothing prf
            _ => Ref Bound n
 resolveRefs vars (Bind x b sc)
     = Bind x (assert_total (map (resolveRefs vars) b))
              (resolveRefs (x :: vars) sc)
 resolveRefs vars (App f a) = App (resolveRefs vars f) (resolveRefs vars a)
 resolveRefs vars tm = tm
-
-export
-innerRefToLocals : (ns : List Name) -> 
-                   Term (outer ++ vars) -> Term (outer ++ ns ++ vars)
-innerRefToLocals [] tm = tm
-innerRefToLocals (n :: ns) tm 
-     = mkLocal n {new = n} localPrf (innerRefToLocals ns tm)
 
 -- Substitute some explicit terms for names in a term, and remove those
 -- names from the scope
@@ -630,21 +618,21 @@ namespace SubstEnv
        (::) : Term vars -> 
               SubstEnv ds vars -> SubstEnv (d :: ds) vars
 
-  findDrop : Elem x (drop ++ vars) -> SubstEnv drop vars -> Term vars
-  findDrop {drop = []} var env = Local var
-  findDrop {drop = (x :: xs)} Here (tm :: env) = tm
-  findDrop {drop = (x :: xs)} (There later) (tm :: env) = findDrop later env
+  findDrop : Maybe RigCount -> Elem x (drop ++ vars) -> SubstEnv drop vars -> Term vars
+  findDrop {drop = []} r var env = Local r var
+  findDrop {drop = (x :: xs)} r Here (tm :: env) = tm
+  findDrop {drop = (x :: xs)} r (There later) (tm :: env) = findDrop r later env
 
-  find : Elem x (outer ++ (drop ++ vars)) ->
+  find : Maybe RigCount -> Elem x (outer ++ (drop ++ vars)) ->
          SubstEnv drop vars ->
          Term (outer ++ vars)
-  find {outer = []} var env = findDrop var env
-  find {outer = (x :: xs)} Here env = Local Here
-  find {outer = (x :: xs)} (There later) env = weaken (find later env)
+  find {outer = []} r var env = findDrop r var env
+  find {outer = (x :: xs)} r Here env = Local r Here
+  find {outer = (x :: xs)} r (There later) env = weaken (find r later env)
 
   substEnv : SubstEnv drop vars -> Term (outer ++ (drop ++ vars)) -> 
              Term (outer ++ vars)
-  substEnv env (Local prf) = find prf env
+  substEnv env (Local r prf) = find r prf env
   substEnv env (Ref y fn) = Ref y fn
   substEnv {outer} env (Bind y b tm) 
       = Bind y (assert_total (map (substEnv env) b)) 
@@ -662,7 +650,7 @@ subst val tm = substEnv {outer = []} {drop = [_]} [val] tm
 -- Replace an explicit name with a term
 export
 substName : Name -> Term vars -> Term vars -> Term vars
-substName x new (Local p) = Local p
+substName x new (Local r p) = Local r p
 substName x new (Ref nt fn) 
     = case nameEq x fn of
            Nothing => Ref nt fn
@@ -719,10 +707,10 @@ subElem (There later) (KeepCons ds)
 
 export
 changeVar : (old : Elem x vs) -> (new : Elem y vs) -> Term vs -> Term vs
-changeVar old new (Local y) 
+changeVar old new (Local r y) 
     = if sameVar old y
-         then Local new
-         else Local y
+         then Local r new
+         else Local r y
 changeVar old new (Bind x b sc) 
     = Bind x (assert_total (map (changeVar old new) b)) 
 		         (changeVar (There old) (There new) sc)
@@ -816,7 +804,7 @@ mutual
   -- the variables given as a subset
   export
   shrinkTerm : Term vars -> SubVars newvars vars -> Maybe (Term newvars)
-  shrinkTerm (Local y) subprf = Just (Local !(subElem y subprf))
+  shrinkTerm (Local r y) subprf = Just (Local r !(subElem y subprf))
   shrinkTerm (Ref nt fn) subprf = Just (Ref nt fn)
   shrinkTerm (Bind x b sc) subprf 
       = do sc' <- shrinkTerm sc (KeepCons subprf)
@@ -875,7 +863,7 @@ mkShrink {vars = v :: vs} xs = mkShrinkSub _ xs
 
 mutual
   findUsedLocs : Env Term vars -> Term vars -> List (x ** Elem x vars)
-  findUsedLocs env (Local y) 
+  findUsedLocs env (Local r y) 
 	  = (_ ** y) :: assert_total (findUsedInBinder env (getBinder y env))
   findUsedLocs env (Bind x b tm) 
     = assert_total (findUsedInBinder env b) ++ 
@@ -937,9 +925,9 @@ areVarsCompatible _ _ = Nothing
 export
 renameVars : CompatibleVars xs ys -> Term xs -> Term ys 
 renameVars CompatPre tm = tm
-renameVars prf (Local p) 
+renameVars prf (Local r p) 
     = let (_ ** yprf) = renameLocal prf p in
-          Local yprf
+          Local r yprf
   where
     renameLocal : CompatibleVars xs ys -> Elem x xs -> (y ** Elem y ys)
     renameLocal CompatPre Here = (_ ** Here)
@@ -1019,7 +1007,7 @@ getRefs : Term vars -> SortedSet
 getRefs tm = getSet empty tm
   where
     getSet : SortedSet -> Term vars -> SortedSet
-    getSet ns (Local y) = ns
+    getSet ns (Local r y) = ns
     getSet ns (Ref nt fn) = insert fn ns
     getSet ns (Bind x (Let c val ty) tm) 
 		   = assert_total $ getSet (getSet (getSet ns val) ty) tm
@@ -1068,7 +1056,7 @@ Show (Term vars) where
         showApp : Term vars -> List (Term vars) -> String
         -- It's for debugging purposes, so it's useful to mark resolved
         -- names somehow; resolved names are prefixed with a '!'
-        showApp (Local {x} y) [] = "!" ++ show x -- ++ "[" ++ show (vCount y) ++ "]"
+        showApp (Local {x} r y) [] = "!" ++ show x -- ++ "[" ++ show (vCount y) ++ "]"
         showApp (Ref x fn) [] = show fn
         showApp (Bind n (Lam c x ty) sc) [] 
             = assert_total ("\\" ++ showCount c ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)

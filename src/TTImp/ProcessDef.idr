@@ -50,7 +50,7 @@ findLinear gam bound rig tm with (unapply tm)
       boundHere (S k) (There p) = boundHere k p
 
       findLinArg : NF [] -> List (Term vars) -> List (Name, RigCount)
-      findLinArg (NBind x (Pi c _ _) sc) (Local {x=a} prf :: as) 
+      findLinArg (NBind x (Pi c _ _) sc) (Local {x=a} _ prf :: as) 
           = if boundHere bound prf
                then (a, rigMult c rig) :: 
                     findLinArg (sc (toClosure defaultOpts [] (Ref Bound x))) as

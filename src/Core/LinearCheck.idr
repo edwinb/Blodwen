@@ -75,7 +75,7 @@ mutual
                    (useInHole : Bool) ->
                    Elem x vars -> Nat -> Term vs -> List (Term vars) ->
                    Core annot (Term vs)
-  updateHoleType useInHole var (S k) (Bind nm (Pi c e ty) sc) (Local v :: as)
+  updateHoleType useInHole var (S k) (Bind nm (Pi c e ty) sc) (Local r v :: as)
       -- if the argument to the hole type is the variable of interest,
       -- and the variable should be used in the hole, set it to Rig1,
       -- otherwise set it to Rig0
@@ -126,10 +126,10 @@ mutual
            {auto u : Ref UST (UState annot)} ->
            annot -> RigCount -> (erase : Bool) -> Env Term vars -> Term vars -> 
            Core annot (Term vars, Term vars, Usage vars)
-  lcheck {vars} loc rig erase env (Local {x} v) 
+  lcheck {vars} loc rig erase env (Local {x} r v) 
       = let (rigb, ty) = lookup v env in
             do rigSafe rigb rig
-               pure (Local v, ty, used rig)
+               pure (Local r v, ty, used rig)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
       rigSafe Rig1 RigW = throw (LinearMisuse loc x Rig1 RigW)

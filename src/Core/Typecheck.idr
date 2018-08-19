@@ -34,7 +34,8 @@ parameters (loc : annot, gam : Defs)
                        Just (_, ty) => 
                             pure $ (Ref Func x, embed ty)
                        Nothing => error (UndefinedName loc x)
-               Just (m, lv) => pure $ (Local lv, binderType (getBinder lv env))
+               Just (m, lv) => pure $ (Local Nothing lv, 
+                                       binderType (getBinder lv env))
     chk env (RBind nm b sc) 
         = do (b', bt) <- chkBinder env b
              (sc', sct) <- chk {vars = nm :: _} (b' :: env) sc

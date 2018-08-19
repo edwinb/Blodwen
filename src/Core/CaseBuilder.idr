@@ -632,8 +632,8 @@ mutual
       updateVar : PatClause vars (a :: todo) -> PatClause vars todo
       -- replace the name with the relevant variable on the rhs
       updateVar (MkPatClause (MkInfo (PVar n) prf fty :: pats) rhs)
-          = MkPatClause (substInPats defs a (Local prf) pats)
-                        (substName n (Local prf) rhs) 
+          = MkPatClause (substInPats defs a (Local Nothing prf) pats)
+                        (substName n (Local Nothing prf) rhs) 
       -- match anything, name won't appear in rhs but need to update
       -- LHS pattern types based on what we've learned
       updateVar (MkPatClause (MkInfo pat prf fty :: pats) rhs)

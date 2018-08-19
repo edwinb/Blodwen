@@ -24,7 +24,7 @@ getRigNeeded InType = Rig0 -- unrestricted usage in types
 getRigNeeded _ = Rig1
 
 findPLetRenames : Term vars -> List (Name, Name)
-findPLetRenames (Bind n (PLet c (Local {x = x@(MN _ _)} p) ty) sc)
+findPLetRenames (Bind n (PLet c (Local {x = x@(MN _ _)} _ p) ty) sc)
     = (x, n) :: findPLetRenames sc
 findPLetRenames (Bind n _ sc) = findPLetRenames sc
 findPLetRenames tm = []

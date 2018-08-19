@@ -30,7 +30,7 @@ parameters (defs : Defs, opts : EvalOpts)
   mutual
     eval : Env Term free -> LocalEnv free vars -> Stack free ->
            Term (vars ++ free) -> NF free
-    eval env loc stk (Local p) = evalLocal env loc stk p
+    eval env loc stk (Local r p) = evalLocal env loc stk r p
     eval env loc stk (Ref nt fn)
          = evalRef env loc stk nt fn
     eval env loc (closure :: stk) (Bind x (Lam _ _ ty) sc) 
@@ -50,16 +50,16 @@ parameters (defs : Defs, opts : EvalOpts)
     eval env loc stk TType = NType
 
     evalLocal : Env Term free -> LocalEnv free vars -> Stack free -> 
-                Elem x (vars ++ free) -> NF free
-    evalLocal {vars = []} env loc stk p 
+                Maybe RigCount -> Elem x (vars ++ free) -> NF free
+    evalLocal {vars = []} env loc stk r p 
         = case getBinder p env of
                Let _ val ty => eval env [] stk val
-               b => NApp (NLocal p) stk
+               b => NApp (NLocal r p) stk
     evalLocal {vars = (x :: xs)} 
-              env ((MkClosure _ loc' env' tm') :: locs) stk Here 
+              env ((MkClosure _ loc' env' tm') :: locs) stk r Here 
         = eval env' loc' stk tm'
-    evalLocal {vars = (x :: xs)} env (_ :: loc) stk (There later) 
-        = evalLocal env loc stk later
+    evalLocal {vars = (x :: xs)} env (_ :: loc) stk r (There later) 
+        = evalLocal env loc stk r later
 
     evalOp : (Vect arity (NF free) -> Maybe (NF free)) ->
              NameType -> Name -> Stack free -> NF free
@@ -191,7 +191,7 @@ parameters (defs : Defs, opts : EvalOpts)
       = let x' : List.Elem _ ((args ++ vars) ++ free) 
                = rewrite sym (appendAssociative args vars free) in
                          elemExtend x
-            xval = evalLocal env loc [] x' in
+            xval = evalLocal env loc [] Nothing x' in
                    findAlt env loc stk xval alts
     evalTree {args} {vars} {free} env loc stk (STerm tm) 
           = let tm' : Term ((args ++ vars) ++ free) 
@@ -249,7 +249,7 @@ mutual
                  !(quoteArgs num defs env args)
 
   quoteHead :  NHead free -> IO (Term free)
-  quoteHead (NLocal y) = pure $ Local y
+  quoteHead (NLocal r y) = pure $ Local r y
   quoteHead (NRef nt n) = pure $ Ref nt n
 
   quoteBinder : IORef Int -> Defs -> Env Term free -> Binder (NF free) -> 
@@ -281,7 +281,7 @@ mutual
         = do var <- genName num "qv"
              sc' <- quoteGen num defs env (sc (toClosure defaultOpts env (Ref Bound var)))
              b' <- quoteBinder num defs env b
-             pure (Bind n b' (refToLocal var n sc'))
+             pure (Bind n b' (refToLocal Nothing var n sc'))
     quoteGen num defs env (NApp f args) 
         = do f' <- quoteHead f
              args' <- quoteArgs num defs env args
@@ -355,7 +355,7 @@ mutual
   
   chkConvHead : Defs -> Env Term vars ->
                 NHead vars -> NHead vars -> IO Bool 
-  chkConvHead defs env (NLocal x) (NLocal y) = pure $ sameVar x y
+  chkConvHead defs env (NLocal _ x) (NLocal _ y) = pure $ sameVar x y
   chkConvHead defs env (NRef x y) (NRef x' y') = pure $ y == y'
   chkConvHead defs env x y = pure False
   
@@ -389,12 +389,12 @@ mutual
     convGen num defs env tmx@(NBind x (Lam c ix tx) scx) tmy
         = let etay = nf defs env (Bind x (Lam c ix (quote (noGam defs) env tx))
                                    (App (weaken (quote (noGam defs) env tmy))
-                                        (Local Here))) in
+                                        (Local Nothing Here))) in
               convGen num defs env tmx etay
     convGen num defs env tmx tmy@(NBind y (Lam c iy ty) scy)
         = let etax = nf defs env (Bind y (Lam c iy (quote (noGam defs) env ty))
                                    (App (weaken (quote (noGam defs) env tmx))
-                                        (Local Here))) in
+                                        (Local Nothing Here))) in
               convGen num defs env etax tmy
     convGen num defs env (NApp val args) (NApp val' args') 
         = do hs <- chkConvHead defs env val val'

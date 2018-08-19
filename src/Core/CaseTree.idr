@@ -149,6 +149,7 @@ argToPat tm with (unapply tm)
   argToPat (apply (PrimVal c) []) | ArgsList = PConstTy c
   argToPat (apply f args) | ArgsList = PAny
    
+-- Convert a pattern back into a term so that we can refine types of patterns
 export
 mkTerm : (vars : List Name) -> Pat -> Term vars
 mkTerm vars (PCon n t args) 
@@ -161,7 +162,7 @@ mkTerm vars (PConst c) = PrimVal c
 mkTerm vars (PConstTy c) = PrimVal c
 mkTerm vars (PVar n) 
     = case isVar n vars of
-           Just prf => Local prf
+           Just prf => Local Nothing prf
            _ => Ref Bound n
 mkTerm _ _ = Erased
 

@@ -40,7 +40,7 @@ Reflect annot => Reflect (RawImp annot) where
            appCon defs (NS ["Reflect"] (UN "App")) [fc', f', a']
   reflect defs env (IUnquote fc (IVar _ nm))
       = do (count, el) <- defined nm env
-           pure (Local el)
+           pure (Local Nothing el)
   reflect defs env _ = Nothing
 
 export

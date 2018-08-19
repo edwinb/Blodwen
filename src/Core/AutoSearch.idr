@@ -42,7 +42,7 @@ getAllEnv : (done : List Name) ->
 getAllEnv done [] = []
 getAllEnv {vars = v :: vs} done (b :: env) 
    = let rest = getAllEnv (done ++ [v]) env in
-         (Local (weakenElem {ns = done} Here), 
+         (Local Nothing (weakenElem {ns = done} Here), 
            rewrite appendAssociative done [v] vs in 
               weakenNs (done ++ [v]) (binderType b)) :: 
                    rewrite appendAssociative done [v] vs in rest
@@ -291,7 +291,7 @@ searchType loc defaults depth trying env defining (NBind n (Pi c info ty) scfn)
          gam <- get Ctxt
          let env' : Env Term (n :: _) = Pi c info (quote (noGam gam) env ty) :: env
          let sc = scfn (toClosure defaultOpts env (Ref Bound xn))
-         let tmsc = refToLocal xn n (quote (noGam gam) env sc)
+         let tmsc = refToLocal Nothing xn n (quote (noGam gam) env sc)
          log 6 $ "Introduced lambda, search for " ++ show (normalise gam env' tmsc)
          scVal <- searchType loc defaults depth trying env' defining (nf gam env' tmsc)
          pure (Bind n (Lam c info (quote (noGam gam) env ty)) scVal)

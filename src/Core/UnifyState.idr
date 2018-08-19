@@ -289,6 +289,10 @@ mkConstant {vars = x :: _} (b :: env) tm
 
 -- Make the type of a new constant which applies a term to everything in
 -- the current environment
+-- Use 'Nothing' as the multiplicity for the local, because we don't know
+-- the context this is being checked in, which is important as well as the
+-- binder. We only need to know the count for explicitly given variables 
+-- anyway...
 mkConstantTy : Env Term vars -> Term vars -> ClosedTerm
 mkConstantTy = abstractEnvType 
 
@@ -297,11 +301,11 @@ mkConstantAppArgs : Bool -> Env Term vars ->
 mkConstantAppArgs lets [] xs = xs
 mkConstantAppArgs lets (Let c val ty :: env) xs
     = if lets
-         then Local Here :: map weaken (mkConstantAppArgs lets env xs)
+         then Local Nothing Here :: map weaken (mkConstantAppArgs lets env xs)
          else map weaken (mkConstantAppArgs lets env xs)
 mkConstantAppArgs lets (b :: env) xs 
     = let rec = mkConstantAppArgs lets env xs in
-          Local Here :: map weaken rec
+          Local Nothing Here :: map weaken rec
 
 export
 applyTo : Term vars -> Env Term vars -> Term vars
@@ -321,19 +325,19 @@ mkConstantAppArgsSub lets [] p xs = xs
 mkConstantAppArgsSub lets (b :: env) SubRefl xs
     = let rec = mkConstantAppArgsSub lets env SubRefl xs in
           if lets 
-             then Local Here :: map weaken rec
+             then Local Nothing Here :: map weaken rec
              else case b of
                      Let _ _ _ => map weaken rec
-                     _ => Local Here :: map weaken rec
+                     _ => Local Nothing Here :: map weaken rec
 mkConstantAppArgsSub lets (b :: env) (DropCons p) xs
     = map weaken (mkConstantAppArgsSub lets env p xs)
 mkConstantAppArgsSub lets (b :: env) (KeepCons p) xs
     = let rec = mkConstantAppArgsSub lets env p xs in
           if lets 
-             then Local Here :: map weaken rec
+             then Local Nothing Here :: map weaken rec
              else case b of
                      Let _ _ _ => map weaken rec
-                     _ => Local Here :: map weaken rec
+                     _ => Local Nothing Here :: map weaken rec
 
 export
 applyToSub : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars
@@ -357,10 +361,10 @@ mkConstantAppArgsOthers lets (b :: env) (KeepCons p) xs
 mkConstantAppArgsOthers lets (b :: env) (DropCons p) xs
     = let rec = mkConstantAppArgsOthers lets env p xs in
           if lets 
-             then Local Here :: map weaken rec
+             then Local Nothing Here :: map weaken rec
              else case b of
                      Let _ _ _ => map weaken rec
-                     _ => Local Here :: map weaken rec
+                     _ => Local Nothing Here :: map weaken rec
 
 export
 applyToOthers : Term vars -> Env Term vars -> SubVars smaller vars -> Term vars

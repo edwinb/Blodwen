@@ -143,7 +143,7 @@ postponeS s loc env x y
 -- when solving a metavariable applied to arguments
 getVars : List (NF vars) -> Maybe (List (x ** Elem x vars))
 getVars [] = Just []
-getVars (NApp (NLocal v) [] :: xs) 
+getVars (NApp (NLocal r v) [] :: xs) 
     = if vIn xs then Nothing
          else do xs' <- getVars xs
                  pure ((_ ** v) :: xs')
@@ -151,7 +151,7 @@ getVars (NApp (NLocal v) [] :: xs)
     -- Check the variable doesn't appear later
     vIn : List (NF vars) -> Bool
     vIn [] = False
-    vIn (NApp (NLocal el') [] :: xs)
+    vIn (NApp (NLocal r el') [] :: xs)
         = if sameVar v el' then True else vIn xs
     vIn (_ :: xs) = vIn xs
 getVars (_ :: xs) = Nothing
@@ -345,9 +345,9 @@ mutual
                   (argPrefix : List (Term vars)) ->
                   Core annot (Term vars)
   mkSmallerHole loc sofar holetype oldhole 
-                              (Local arg :: args) newhole (Local a :: as)
+                              (Local r arg :: args) newhole (Local r' a :: as)
       = if sameVar arg a
-           then mkSmallerHole loc (sofar ++ [Local a]) holetype oldhole
+           then mkSmallerHole loc (sofar ++ [Local r' a]) holetype oldhole
                               args newhole as
            else pure (apply (Ref Func oldhole) (sofar ++ args))
   -- We have the right number of arguments, so the hole is usable in this
@@ -553,8 +553,8 @@ mutual
       = do gam <- get Ctxt
            let nty = lookupTyExact n (gamma gam)
            unifyInvertible mode loc env nt var args nty (NDCon n t a) args'
-  unifyHoleApp mode loc env nt var args (NApp (NLocal lvar) args')
-      = unifyInvertible mode loc env nt var args Nothing (NApp (NLocal lvar)) args'
+  unifyHoleApp mode loc env nt var args (NApp (NLocal r lvar) args')
+      = unifyInvertible mode loc env nt var args Nothing (NApp (NLocal r lvar)) args'
   unifyHoleApp mode loc env nt var args tm
       = do gam <- get Ctxt
            log 10 $ "Postponing constraint " ++
@@ -651,14 +651,14 @@ mutual
                    then unifyHole mode loc env nt var args' (NApp hd args)
                    else unifyIfEq True loc env (NApp hd args)
                                                (NApp (NRef nt var) args')
-  unifyApp swap mode loc env (NLocal x) [] (NApp (NLocal y) [])
+  unifyApp swap mode loc env (NLocal rx x) [] (NApp (NLocal ry y) [])
       = do gam <- get Ctxt
            if sameVar x y then pure []
              else do log 10 $ "Postponing var constraint " ++
-                              show (quote (noGam gam) env (NApp (NLocal x) [])) ++ 
+                              show (quote (noGam gam) env (NApp (NLocal rx x) [])) ++ 
                               " =?= " ++ 
-                              show (quote (noGam gam) env (NApp (NLocal y) []))
-                     postponeS swap loc env (NApp (NLocal x) []) (NApp (NLocal y) [])
+                              show (quote (noGam gam) env (NApp (NLocal ry y) []))
+                     postponeS swap loc env (NApp (NLocal rx x) []) (NApp (NLocal ry y) [])
   unifyApp swap mode loc env hd args (NApp hd' args')
       = do gam <- get Ctxt
            if convert (noGam gam) env (NApp hd args) (NApp hd' args')
@@ -669,20 +669,20 @@ mutual
                      postponeS swap loc env (NApp hd args) (NApp hd' args')
   -- A local variable against a constructor or binder is impossible, because
   -- the local should quantify over everything
-  unifyApp swap mode loc env (NLocal x) xs (NDCon n t a args)
+  unifyApp swap mode loc env (NLocal rx x) xs (NDCon n t a args)
       = do gam <- get Ctxt
            convertErrorS swap loc env  
-               (quote (noGam gam) env (NApp (NLocal x) xs))
+               (quote (noGam gam) env (NApp (NLocal rx x) xs))
                (quote (noGam gam) env (NDCon n t a args))
-  unifyApp swap mode loc env (NLocal x) xs (NTCon n t a args)
+  unifyApp swap mode loc env (NLocal rx x) xs (NTCon n t a args)
       = do gam <- get Ctxt
            convertErrorS swap loc env 
-               (quote (noGam gam) env (NApp (NLocal x) xs))
+               (quote (noGam gam) env (NApp (NLocal rx x) xs))
                (quote (noGam gam) env (NTCon n t a args))
-  unifyApp swap mode loc env (NLocal x) xs (NBind n b sc)
+  unifyApp swap mode loc env (NLocal rx x) xs (NBind n b sc)
       = do gam <- get Ctxt
            convertErrorS swap loc env 
-               (quote (noGam gam) env (NApp (NLocal x) xs))
+               (quote (noGam gam) env (NApp (NLocal rx x) xs))
                (quote (noGam gam) env (NBind n b sc))
   -- If they're already convertible without metavariables, we're done,
   -- otherwise postpone
@@ -703,33 +703,33 @@ mutual
              NHead vars -> List (Closure vars) -> 
              NHead vars -> List (Closure vars) ->
              Core annot (List Name)
-  unifyBothApps _ loc env (NLocal xv) [] (NLocal yv) []
+  unifyBothApps _ loc env (NLocal rx xv) [] (NLocal ry yv) []
      = do gam <- get Ctxt
           if sameVar xv yv
             then pure []
             else convertError loc env 
-                             (quote (noGam gam) env (NApp (NLocal xv) []))
-                             (quote (noGam gam) env (NApp (NLocal yv) []))
+                             (quote (noGam gam) env (NApp (NLocal rx xv) []))
+                             (quote (noGam gam) env (NApp (NLocal ry yv) []))
   -- Locally bound things, in a term (not LHS). Since we have to unify
   -- for *all* possible values, we can safely unify the arguments.
-  unifyBothApps InTerm loc env (NLocal xv) argsx (NLocal yv) argsy
+  unifyBothApps InTerm loc env (NLocal rx xv) argsx (NLocal ry yv) argsy
      = do gam <- get Ctxt
           if sameVar xv yv
             then unifyArgs InTerm loc env argsx argsy
             else do log 10 $ "Postponing constraint (locals) " ++
-                             show (quote (noGam gam) env (NApp (NLocal xv) argsx))
+                             show (quote (noGam gam) env (NApp (NLocal rx xv) argsx))
                              ++ " =?= " ++
-                             show (quote (noGam gam) env (NApp (NLocal yv) argsy))
-                    postpone loc env (NApp (NLocal xv) argsx)
-                                     (NApp (NLocal yv) argsy)
-  unifyBothApps _ loc env (NLocal xv) argsx (NLocal yv) argsy
+                             show (quote (noGam gam) env (NApp (NLocal ry yv) argsy))
+                    postpone loc env (NApp (NLocal rx xv) argsx)
+                                     (NApp (NLocal ry yv) argsy)
+  unifyBothApps _ loc env (NLocal rx xv) argsx (NLocal ry yv) argsy
       = do gam <- get Ctxt
            log 10 $ "Postponing constraint (locals, LHS) " ++
-                     show (quote (noGam gam) env (NApp (NLocal xv) argsx))
+                     show (quote (noGam gam) env (NApp (NLocal rx xv) argsx))
                      ++ " =?= " ++
-                     show (quote (noGam gam) env (NApp (NLocal yv) argsy))
-           postpone loc env (NApp (NLocal xv) argsx)
-                            (NApp (NLocal yv) argsy)
+                     show (quote (noGam gam) env (NApp (NLocal ry yv) argsy))
+           postpone loc env (NApp (NLocal rx xv) argsx)
+                            (NApp (NLocal ry yv) argsy)
   -- If they're both holes, solve the one with the bigger context with
   -- the other
   unifyBothApps mode loc env (NRef xt hdx) argsx (NRef yt hdy) argsy
@@ -791,21 +791,21 @@ mutual
                        [] => -- no constraints, check the scope
                              do let tscx = scx (toClosure defaultOpts env (Ref Bound xn))
                                 let tscy = scy (toClosure defaultOpts env (Ref Bound xn))
-                                let termx = refToLocal xn x (quote (noGam gam) env tscx)
-                                let termy = refToLocal xn x (quote (noGam gam) env tscy)
+                                let termx = refToLocal Nothing xn x (quote (noGam gam) env tscx)
+                                let termy = refToLocal Nothing xn x (quote (noGam gam) env tscy)
                                 unify mode loc env' termx termy
                        cs => -- constraints, make new guarded constant
                              do let txtm = quote (noGam gam) env tx
                                 let tytm = quote (noGam gam) env ty
                                 c <- addConstant loc env
-                                       (Bind x (Lam cx Explicit txtm) (Local Here))
+                                       (Bind x (Lam cx Explicit txtm) (Local Nothing Here))
                                        (Bind x (Pi cx Explicit txtm)
                                            (weaken tytm)) cs
                                 let tscx = scx (toClosure defaultOpts env (Ref Bound xn))
                                 let tscy = scy (toClosure defaultOpts env 
                                                (App (mkConstantApp c env) (Ref Bound xn)))
-                                let termx = refToLocal xn x (quote (noGam gam) env tscx)
-                                let termy = refToLocal xn x (quote (noGam gam) env tscy)
+                                let termx = refToLocal Nothing xn x (quote (noGam gam) env tscx)
+                                let termy = refToLocal Nothing xn x (quote (noGam gam) env tscy)
                                 cs' <- unify mode loc env' termx termy
                                 pure (union cs cs')
   unifyBothBinders mode loc env x (Lam cx ix tx) scx y (Lam cy iy ty) scy 
@@ -821,8 +821,8 @@ mutual
                            = Lam cx ix (quote (noGam gam) env tx) :: env
                   let tscx = scx (toClosure defaultOpts env (Ref Bound xn))
                   let tscy = scy (toClosure defaultOpts env (Ref Bound xn))
-                  let termx = refToLocal xn x (quote (noGam gam) env tscx)
-                  let termy = refToLocal xn x (quote (noGam gam) env tscy)
+                  let termx = refToLocal Nothing xn x (quote (noGam gam) env tscx)
+                  let termy = refToLocal Nothing xn x (quote (noGam gam) env tscy)
                   cssc <- unify mode loc env' termx termy
                   pure (union csty cssc)
   unifyBothBinders mode loc env x bx scx y by scy
@@ -869,13 +869,13 @@ mutual
         = do gam <- get Ctxt
              let etay = nf gam env 
                            (Bind x (Lam cx ix (quote (noGam gam) env tx))
-                                   (App (weaken (quote (noGam gam) env tmy)) (Local Here)))
+                                   (App (weaken (quote (noGam gam) env tmy)) (Local Nothing Here)))
              unify mode loc env tmx etay
     unifyD _ _ mode loc env tmx tmy@(NBind y (Lam cy iy ty) scy)
         = do gam <- get Ctxt
              let etax = nf gam env 
                            (Bind y (Lam cy iy (quote (noGam gam) env ty))
-                                   (App (weaken (quote (noGam gam) env tmx)) (Local Here)))
+                                   (App (weaken (quote (noGam gam) env tmx)) (Local Nothing Here)))
              unify mode loc env etax tmy
     unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
         = do gam <- get Ctxt

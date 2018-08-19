@@ -88,7 +88,7 @@ specialApp defs f args = Nothing
 
 mutual
   toCExpTm : Defs -> Name -> Term vars -> CExp vars
-  toCExpTm defs n (Local prf) = CLocal prf
+  toCExpTm defs n (Local _ prf) = CLocal prf
   toCExpTm defs n (Ref (DataCon tag arity) fn) = CCon fn tag []
   toCExpTm defs n (Ref (TyCon tag arity) fn) = CCon fn tag []
   toCExpTm defs n (Ref _ fn) = CApp (CRef fn) []
