@@ -27,8 +27,10 @@ install:
 	mkdir -p ${PREFIX}/blodwen/prelude
 	mkdir -p ${PREFIX}/blodwen/support/chez
 	mkdir -p ${PREFIX}/blodwen/support/chicken
+	mkdir -p ${PREFIX}/blodwen/support/racket
 
 	install blodwen ${PREFIX}/bin
 	install prelude/build/* ${PREFIX}/blodwen/prelude
 	install support/chez/* ${PREFIX}/blodwen/support/chez
 	install support/chicken/* ${PREFIX}/blodwen/support/chicken
+	install support/racket/* ${PREFIX}/blodwen/support/racket

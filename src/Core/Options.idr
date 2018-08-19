@@ -78,27 +78,31 @@ record PPrinter where
 public export
 data CG = Chez 
         | Chicken
+        | Racket
 
 export
 Eq CG where
   Chez == Chez = True
   Chicken == Chicken = True
+  Racket == Racket = True
   _ == _ = False
 
 export
 TTC annot CG where
   toBuf b Chez = tag 0
   toBuf b Chicken = tag 1
+  toBuf b Racket = tag 2
 
   fromBuf s b
       = case !getTag of
              0 => pure Chez
              1 => pure Chicken
+             2 => pure Racket
              _ => corrupt "CG"
 
 export
 availableCGs : List (String, CG)
-availableCGs = [("chez", Chez), ("chicken", Chicken)]
+availableCGs = [("chez", Chez), ("chicken", Chicken), ("racket", Racket)]
 
 export
 getCG : String -> Maybe CG

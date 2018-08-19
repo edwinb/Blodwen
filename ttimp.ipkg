@@ -5,6 +5,7 @@ modules = Compiler.Common,
           Compiler.Scheme.Chez,
           Compiler.Scheme.Chicken,
           Compiler.Scheme.Common,
+          Compiler.Scheme.Racket,
           Compiler.Inline,
           
           Control.Delayed,
