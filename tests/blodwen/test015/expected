@@ -1,7 +1,7 @@
 1/1: Building dots1 (dots1.blod)
 1/1: Building dots2 (dots2.blod)
 dots2.blod:2:1--3:1:When elaborating left hand side of Main.foo:
-dots2.blod:2:7--2:9:Can't match on {P:x} (Non linear pattern variable) - it elaborates to {P:x}
+dots2.blod:2:7--2:9:Can't match on {P:x:Main.foo} (Non linear pattern variable) - it elaborates to {P:x:Main.foo}
 1/1: Building dots3 (dots3.blod)
 dots3.blod:5:1--6:1:When elaborating left hand side of Main.addBaz:
-dots3.blod:5:9--5:14:Can't match on (Prelude.{+_Num__Int:0} {P:x} {P:y}) (Not a constructor application or primitive) - it elaborates to (prim__add_Int {P:x} {P:z})
+dots3.blod:5:9--5:14:Can't match on (Prelude.{+_Num__Int:0} {P:x:Main.addBaz} {P:y:Main.addBaz}) (Not a constructor application or primitive) - it elaborates to (prim__add_Int {P:x:Main.addBaz} {P:z:Main.addBaz})

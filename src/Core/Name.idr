@@ -14,7 +14,7 @@ mutual
             | NS (List String) Name -- a name in a hierarchical namespace 
                   -- namespaces are in reverse order (innermost name first)
             | HN String Int -- machine generated metavariable name
-            | PV Name -- implicitly bound pattern variable name
+            | PV Name Name -- implicitly bound pattern variable name, and the parent function
             | GN GenName -- various kinds of generated names
 
 gnameTag : GenName -> Int
@@ -27,7 +27,7 @@ nameTag (UN _) = 0
 nameTag (MN _ _) = 1
 nameTag (NS _ _) = 2
 nameTag (HN _ _) = 3
-nameTag (PV _) = 4
+nameTag (PV _ _) = 4
 nameTag (GN _) = 5
 
 mutual
@@ -43,7 +43,7 @@ mutual
   nameRoot (MN x y) = x
   nameRoot (NS xs x) = nameRoot x
   nameRoot (HN x y) = x
-  nameRoot (PV x) = nameRoot x
+  nameRoot (PV x y) = nameRoot x
   nameRoot (GN x) = gnameRoot x
 
   export
@@ -52,7 +52,7 @@ mutual
   userNameRoot (MN x y) = Nothing
   userNameRoot (NS xs x) = userNameRoot x
   userNameRoot (HN x y) = Nothing
-  userNameRoot (PV x) = Nothing
+  userNameRoot (PV x y) = Nothing
   userNameRoot (GN x) = Nothing
 
 export
@@ -85,7 +85,7 @@ mutual
     show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
     show (NS ns n) = showSep "." (reverse ns) ++ "." ++ show n
     show (HN str int) = "?" ++ str ++ "_" ++ show int
-    show (PV n) = "{P:" ++ show n ++ "}"
+    show (PV n d) = "{P:" ++ show n ++ ":" ++ show d ++ "}"
     show (GN gn) = show gn
 
 mutual
@@ -103,7 +103,7 @@ mutual
     (==) (MN x y) (MN x' y') = y == y' && x == x'
     (==) (NS xs x) (NS xs' x') = x == x' && xs == xs'
     (==) (HN x y) (HN x' y') = y == y' && x == x'
-    (==) (PV x) (PV y) = x == y
+    (==) (PV x y) (PV x' y') = x == x' && y == y'
     (==) (GN x) (GN y) = x == y
     (==) _ _ = False
 
@@ -154,9 +154,11 @@ mutual
       nameEq (HN x t) (HN x t) | (Yes Refl) | (Yes Refl) = Just Refl
       nameEq (HN x t) (HN x t') | (Yes Refl) | (No contra) = Nothing
     nameEq (HN x t) (HN x' t') | (No contra) = Nothing
-  nameEq (PV x) (PV y) with (nameEq x y)
-    nameEq (PV y) (PV y) | (Just Refl) = Just Refl
-    nameEq (PV x) (PV y) | Nothing = Nothing
+  nameEq (PV x t) (PV y t') with (nameEq x y)
+    nameEq (PV y t) (PV y t') | (Just Refl) with (nameEq t t')
+      nameEq (PV y t) (PV y t) | (Just Refl) | (Just Refl) = Just Refl
+      nameEq (PV y t) (PV y t') | (Just Refl) | Nothing = Nothing
+    nameEq (PV x t) (PV y t') | Nothing = Nothing
   nameEq (GN x) (GN y) with (gnameEq x y)
     nameEq (GN x) (GN y) | Nothing = Nothing
     nameEq (GN x) (GN x) | (Just Refl) = Just Refl
@@ -194,7 +196,10 @@ mutual
         = case compare y y' of
                EQ => compare x x'
                t => t
-    compare (PV x) (PV y) = compare x y
+    compare (PV x y) (PV x' y')
+        = case compare y y' of
+               EQ => compare x x'
+               t => t
     compare (GN x) (GN y) = compare x y
 
     compare x y = compare (nameTag x) (nameTag y)

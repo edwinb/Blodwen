@@ -388,11 +388,11 @@ getToBind {vars} env
     normImps : Defs -> List Name -> List (Name, Term vars, Term vars) -> 
                Core annot (List (Name, Term vars))
     normImps gam ns [] = pure []
-    normImps gam ns ((PV n, tm, ty) :: ts) 
-        = if PV n `elem` ns
+    normImps gam ns ((PV n i, tm, ty) :: ts) 
+        = if PV n i `elem` ns
              then normImps gam ns ts
-             else do rest <- normImps gam (PV n :: ns) ts
-                     pure ((PV n, normaliseHoles gam env ty) :: rest)
+             else do rest <- normImps gam (PV n i :: ns) ts
+                     pure ((PV n i, normaliseHoles gam env ty) :: rest)
     normImps gam ns ((n, tm, ty) :: ts)
         = case (getFnArgs (normaliseHoles gam env tm)) of
              (Ref nt n', args) => 
@@ -453,7 +453,7 @@ bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
                           -- if n is an accessible pattern variable, bind it,
                           -- otherwise reduce it
                           case n of
-                               PV _ =>
+                               PV _ _ =>
                                   -- Need to apply 'n' to the surrounding environment in these cases!
                                   -- otherwise it won't work in nested defs...
                                   let tm = normalise gam env (applyTo (Ref Func n) env) 
@@ -533,11 +533,11 @@ swapVars TType = TType
 -- move it under implicit binders that don't depend on it, and stop
 -- when hitting any non-implicit binder
 push : (n : Name) -> Binder (Term vs) -> Term (n :: vs) -> Term vs
-push n b tm@(Bind (PV x) (Pi c Implicit ty) sc) -- only push past 'PV's
+push n b tm@(Bind (PV x i) (Pi c Implicit ty) sc) -- only push past 'PV's
     = case shrinkTerm ty (DropCons SubRefl) of
            Nothing => -- needs explicit pi, do nothing
                       Bind n b tm
-           Just ty' => Bind (PV x) (Pi c Implicit ty') 
+           Just ty' => Bind (PV x i) (Pi c Implicit ty') 
                             (push n (map weaken b) (swapVars {vs = []} sc))
 push n b tm = Bind n b tm
 
@@ -549,8 +549,8 @@ liftImps : ImplicitMode -> (Term vars, Term vars) -> (Term vars, Term vars)
 liftImps (PI _) (tm, TType) = (liftImps' tm, TType)
   where
     liftImps' : Term vars -> Term vars
-    liftImps' (Bind (PV n) (Pi c Implicit ty) sc) 
-        = Bind (PV n) (Pi c Implicit ty) (liftImps' sc)
+    liftImps' (Bind (PV n i) (Pi c Implicit ty) sc) 
+        = Bind (PV n i) (Pi c Implicit ty) (liftImps' sc)
     liftImps' (Bind n (Pi c p ty) sc)
         = push n (Pi c p ty) (liftImps' sc)
     liftImps' tm = tm
@@ -586,8 +586,8 @@ bindTopImplicits {vars} mode gam env hs asvs tm ty
 
 export
 renameImplicits : Gamma -> Term vars -> Term vars
-renameImplicits gam (Bind (PV n) b sc) 
-    = case lookupDefExact (PV n) gam of
+renameImplicits gam (Bind (PV n i) b sc) 
+    = case lookupDefExact (PV n i) gam of
            Just (PMDef _ _ _ _) =>
 --                 trace ("OOPS " ++ show n ++ " = " ++ show def) $
                     Bind n (map (renameImplicits gam) b)

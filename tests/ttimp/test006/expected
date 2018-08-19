@@ -2,5 +2,5 @@ Welcome to TTImp. Good luck.
 Loading dotpatterns.tti
 Processing as TTImp
 ():When elaborating left hand side of Main.silly:
-():Can't match on (Main.plus {P:n} {P:m}) (Not a constructor application or primitive) - it elaborates to (Main.plus {P:n} {P:m})
+():Can't match on (Main.plus {P:n:Main.silly} {P:m:Main.silly}) (Not a constructor application or primitive) - it elaborates to (Main.plus {P:n:Main.silly} {P:m:Main.silly})
 Blodwen> Bye for now!

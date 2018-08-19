@@ -25,11 +25,11 @@ mutual
   schName (MN n i) = schString n ++ "-" ++ show i
   schName (NS ns n) = showSep "-" ns ++ "-" ++ schName n
   schName (HN n i) = schString n ++ "--" ++ show i
-  schName (PV n) = "pat--" ++ schName n
+  schName (PV n d) = "pat--" ++ schName n
   schName (GN g) = schGName g
 
   schGName : GenName -> String
-  schGName (Nested o i) = schName o ++ "--in--" ++ schName i
+  schGName (Nested o i) = schName i ++ "--in--" ++ schName o
   schGName (CaseBlock n i) = "case--" ++ schName n ++ "-" ++ show i
   schGName (WithBlock n i) = "with--" ++ schName n ++ "-" ++ show i
 

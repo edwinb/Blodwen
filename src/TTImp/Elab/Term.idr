@@ -379,7 +379,8 @@ mutual
                             PI _ => maybe False (const True) (defined (UN str) env)
                             _ => False
                  | _ => checkName rigc process elabinfo loc env nest (UN str) topexp
-           let n = PV (UN str)
+           est <- get EST
+           let n = PV (UN str) (defining est)
            let elabmode = elabMode elabinfo
            noteLHSPatVar elabmode str
            notePatVar n
@@ -843,7 +844,8 @@ mutual
             Term vars ->
             Core annot (Term vars, Term vars) 
   checkAs rigc process elabinfo loc env nest var tm expected
-      = do let n = PV var
+      = do est <- get EST
+           let n = PV var (defining est)
            (patTm, patTy) <- checkImp rigc process elabinfo env nest tm (Just expected)
            notePatVar n
            est <- get EST
