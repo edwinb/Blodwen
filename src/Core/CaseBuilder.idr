@@ -737,19 +737,25 @@ getPMDef : {auto x : Ref Ctxt Defs} ->
            annot -> Name -> ClosedTerm -> List Clause -> 
            Core annot (args ** CaseTree args)
 getPMDef loc fn ty clauses
-    = let cs = map toClosed clauses in
-          simpleCase loc fn ty Nothing cs
+    = do defs <- get Ctxt
+         let cs = map (toClosed defs) clauses
+         simpleCase loc fn ty Nothing cs
   where
-    close : Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm
-    close i plets [] tm = tm
-    close i True (PLet c val ty :: bs) tm 
-		    = close (i + 1) True bs (Bind (MN "pat" i) (Let c val ty) (renameTop _ tm))
-    close i True (Let c val ty :: bs) tm 
-		    = close (i + 1) True bs (Bind (MN "pat" i) (Let c val ty) (renameTop _ tm))
-    close i plets (b :: bs) tm 
-        = close (i + 1) plets bs (subst (Ref Bound (MN "pat" i)) tm)
+    close : Defs ->
+            Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm
+    close defs i plets [] tm = tm
+    close defs i True (PLet c val ty :: bs) tm 
+		    = close defs (i + 1) True bs 
+                (Bind (MN "pat" i) 
+                    (Let c (normalise defs bs val) ty) (renameTop _ tm))
+    close defs i True (Let c val ty :: bs) tm 
+		    = close defs (i + 1) True bs 
+                (Bind (MN "pat" i) 
+                      (Let c (normalise defs bs val) ty) (renameTop _ tm))
+    close defs i plets (b :: bs) tm 
+        = close defs (i + 1) plets bs (subst (Ref Bound (MN "pat" i)) tm)
 
-    toClosed : Clause -> (ClosedTerm, ClosedTerm)
-    toClosed (MkClause env lhs rhs) 
-          = (close 0 False env lhs, close 0 True env rhs)
+    toClosed : Defs -> Clause -> (ClosedTerm, ClosedTerm)
+    toClosed defs (MkClause env lhs rhs) 
+          = (close defs 0 False env lhs, close defs 0 True env rhs)
 

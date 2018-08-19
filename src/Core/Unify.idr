@@ -967,23 +967,6 @@ retry mode cname
                                     pure []
                            _ => pure cs
 
-rerunDelayed : {auto c : Ref Ctxt Defs} ->
-               {auto u : Ref UST (UState annot)} ->
-               (hole : Name) -> (cname : Name) ->
-               Core annot ()
-rerunDelayed hole cname
-    = do ust <- get UST
-         case lookupCtxtExact cname (delayedElab ust) of
-              Nothing => 
-                   do log 5 $ "Missing elaborator " ++ show cname
-                      throw (InternalError ("No such delayed elaborator" ++ show cname))
-              Just elab => 
-                   do updateDef hole (const (Just (Processing cname)))
-                      tm <- elab
-                      updateDef hole (const (Just (PMDef True [] (STerm tm) (STerm tm))))
-                      log 5 $ "Resolved delayed hole " ++ show hole ++ " = " ++ show tm
-                      removeHoleName hole
-
 setInvertible : {auto c : Ref Ctxt Defs} ->
                 annot -> Name -> Core annot ()
 setInvertible loc n
@@ -1049,28 +1032,6 @@ retryHole mode smode (loc, hole)
                                                   pure ()) -- postpone again
                      _ => pure () -- Nothing we can do
 
-retryDelayed : {auto c : Ref Ctxt Defs} ->
-               {auto u : Ref UST (UState annot)} ->
-               (smode : SolveMode) -> (hole : (annot, Name)) ->
-               Core annot Bool
-retryDelayed smode (loc, hole)
-    = do gam <- get Ctxt
-         case lookupDefExact hole (gamma gam) of
-              Nothing => pure False
-              Just (Delayed c) =>
-                   case smode of
-                        LastChance =>
-                           do rerunDelayed hole c
-                              pure True
-                        _ =>
-                           tryUnify
-                               (do rerunDelayed hole c
-                                   pure True)
-                               (do log 5 $ "Delayed elaborator failed for " ++ show hole
-                                   updateDef hole (const (Just (Context.Delayed c)))
-                                   pure False)
-              Just _ => pure False
-
 -- Attempt to solve any remaining constraints in the unification context.
 -- Do this by working through the list of holes
 -- On encountering a 'Guess', try the constraints attached to it 
@@ -1085,29 +1046,6 @@ solveConstraints mode smode
          hs' <- getHoleInfo
          when (length hs' < length hs) $ solveConstraints mode smode
          pure ()
-
-export
-retryAllDelayed : {auto c : Ref Ctxt Defs} ->
-                  {auto u : Ref UST (UState annot)} ->
-                  Core annot ()
-retryAllDelayed
-    = do hs <- getHoleInfo
-         case hs of
-              [] => pure ()
-              _ => do log 5 $ "Running delayed elaborators " ++ show (map snd hs)
-                      -- Reverse so that we do oldest first
-                      results <- traverse (retryDelayed Normal) (reverse hs)
-                      log 5 $ "Finished, results: " ++ show results
-                   -- if we made any progress, go around again
-                   -- Assumption is that this terminates because the set
-                   -- of holes 'hs' will be smaller next time around, as
-                   -- a successful result removes a hole
-                      if or (map Delay results)
-                         then retryAllDelayed
-                         -- Otherwise one more go just to get the error
-                         -- message
-                         else do traverse (retryDelayed LastChance) hs
-                                 pure ()
 
 export
 checkDots : {auto u : Ref UST (UState annot)} ->

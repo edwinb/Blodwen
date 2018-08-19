@@ -792,11 +792,11 @@ delayOnFailure loc env expected pred elab
     = handle (elab False)
         (\err => do if pred err 
                         then 
-                          do (cn, cref, dty) <- addDelayedElab loc env expected
+                          do (cn, dty) <- addDelayedElab loc env expected
                              log 5 $ "Postponing elaborator for " ++ show expected
-                             log 5 $ "New hole type " ++ show cref ++ " : " ++ show dty
+                             log 5 $ "New hole type " ++ show cn ++ " : " ++ show dty
                              ust <- get UST
-                             put UST (record { delayedElab $= addCtxt cref
+                             put UST (record { delayedElab $= addCtxt cn
                                                  (mkClosedElab env (elab True)) } ust)
                              pure (mkConstantAppFull cn env, expected)
                         else throw err)
@@ -810,11 +810,11 @@ delayElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             Core annot (Term vars, Term vars)
 delayElab {vars} loc env expected elab
     = do exp <- mkExpected expected
-         (cn, cref, dty) <- addDelayedElab loc env exp
+         (cn, dty) <- addDelayedElab loc env exp
          log 5 $ "Postponing elaborator for " ++ show exp
-         log 5 $ "New hole type " ++ show cref ++ " : " ++ show dty
+         log 5 $ "New hole type " ++ show cn ++ " : " ++ show dty
          ust <- get UST
-         put UST (record { delayedElab $= addCtxt cref
+         put UST (record { delayedElab $= addCtxt cn
                              (mkClosedElab env elab) } ust)
          pure (mkConstantAppFull cn env, exp)
   where

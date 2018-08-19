@@ -163,11 +163,9 @@ data Def : Type where
      -- The constraint names refer into a context of constraints,
      -- defined in Core.UnifyState
      Guess : (guess : ClosedTerm) -> (constraints : List Name) -> Def
-     -- A delayed elaboration. Name refers into a context of delayed
-     -- elaborators in Core.UnifyState
-     Delayed : Name -> Def
-     -- A delayed elaboration, in progress
-     Processing : Name -> Def
+     -- A delayed elaboration. The elaborators themselves are stored in the
+     -- unifiation state
+     Delayed : Def
 
 export
 Show Def where
@@ -196,8 +194,7 @@ Show Def where
       = "Search with depth " ++ show n
   show ImpBind = "Implicitly bound name"
   show (Guess g cons) = "Guess " ++ show g ++ " with constraints " ++ show cons
-  show (Delayed n) = "Delayed " ++ show n
-  show (Processing n) = "Processing " ++ show n
+  show Delayed = "Delayed"
 
 TTC annot Def where
   toBuf b None = tag 0
@@ -219,10 +216,8 @@ TTC annot Def where
   toBuf b ImpBind = tag 7
   toBuf b (Guess guess constraints) 
       = do tag 8; toBuf b guess; toBuf b constraints
-  toBuf b (Delayed n)
+  toBuf b Delayed
       = throw (InternalError "Trying to serialise a Delayed elaborator")
-  toBuf b (Processing n)
-      = throw (InternalError "Trying to serialise a Processing elaborator")
 
   fromBuf s b 
       = case !getTag of
@@ -313,8 +308,7 @@ getRefs (Hole numlocs _ _) = []
 getRefs (BySearch _ _) = []
 getRefs ImpBind = []
 getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
-getRefs (Delayed n) = []
-getRefs (Processing n) = []
+getRefs Delayed = []
 
 export
 newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef

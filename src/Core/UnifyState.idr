@@ -172,7 +172,6 @@ resetHoles : {auto u : Ref UST (UState annot)} ->
              Core annot ()
 resetHoles 
     = do ust <- get UST
-         -- TODO: Also clear out solved/ImpBind holes
          put UST (record { currentHoles = [] } ust)
 
 export
@@ -456,16 +455,14 @@ export
 addDelayedElab : {auto u : Ref UST (UState annot)} ->
                  {auto c : Ref Ctxt Defs} ->       
                  annot -> Env Term vars ->
-                 (ty : Term vars) -> Core annot (Name, Name, ClosedTerm)
+                 (ty : Term vars) -> Core annot (Name, ClosedTerm)
 addDelayedElab loc env ty
     = do cn <- genName "delayed"
-         c_id <- getNextHole
-         let cref = MN "elab" c_id
          let defty = mkConstantTy env ty
-         let hole = newDef defty Public (Delayed cref)
+         let hole = newDef defty Public Delayed
          addHoleName loc cn
          addDef cn hole
-         pure (cn, cref, defty)
+         pure (cn, defty)
 
 export
 addBoundName : {auto u : Ref UST (UState annot)} ->
@@ -536,7 +533,7 @@ dumpHole lvl hole
                     Just (ImpBind, ty) =>
                          log 4 $ "Bound: " ++ show hole ++ " : " ++ 
                                        show (normalise gam [] ty)
-                    Just (Delayed n, ty) =>
+                    Just (Delayed, ty) =>
                          log 4 $ "Delayed elaborator : " ++ 
                                        show (normalise gam [] ty)
                     _ => pure ()
