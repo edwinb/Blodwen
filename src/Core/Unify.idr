@@ -70,9 +70,9 @@ search : {auto c : Ref Ctxt Defs} ->
 
 -- try one elaborator; if it fails, try another
 export
-try : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
-      Core annot a -> Core annot a -> Core annot a
-try elab1 elab2
+tryUnify : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+           Core annot a -> Core annot a -> Core annot a
+tryUnify elab1 elab2
     = do ctxt <- get Ctxt
          ust <- get UST
          catch elab1
@@ -84,9 +84,9 @@ try elab1 elab2
 
 -- try one elaborator; if it fails, try another
 export
-handleError : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
-      Core annot a -> (Error annot -> Core annot a) -> Core annot a
-handleError elab1 elab2
+handleUnify : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
+              Core annot a -> (Error annot -> Core annot a) -> Core annot a
+handleUnify elab1 elab2
     = do ctxt <- get Ctxt
          ust <- get UST
          catch elab1
@@ -1034,7 +1034,7 @@ retryHole mode smode (loc, hole)
                             LastChance =>
                                 do search loc False depth [] fn hole; pure ()
                             _ =>       
-                               handleError (do search loc (smode == Defaults) depth [] fn hole
+                               handleUnify (do search loc (smode == Defaults) depth [] fn hole
                                                pure ())
                                -- if it failed due to a determining argument
                                -- being missing, we at least now know that the
@@ -1063,7 +1063,8 @@ retryDelayed smode (loc, hole)
                            do rerunDelayed hole c
                               pure True
                         _ =>
-                           try (do rerunDelayed hole c
+                           tryUnify
+                               (do rerunDelayed hole c
                                    pure True)
                                (do log 5 $ "Delayed elaborator failed for " ++ show hole
                                    updateDef hole (const (Just (Context.Delayed c)))

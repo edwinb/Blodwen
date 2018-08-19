@@ -664,12 +664,12 @@ tryError elab
 
 -- try one elaborator; if it fails, try another
 export
-tryElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-          Core annot a ->
-          Core annot a ->
-          Core annot a
-tryElab elab1 elab2
+try : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+      {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+      Core annot a ->
+      Core annot a ->
+      Core annot a
+try elab1 elab2
     = do Right ok <- tryError elab1
                | Left err => elab2
          pure ok
@@ -677,11 +677,28 @@ tryElab elab1 elab2
 -- try one elaborator; if it fails, handle the error
 export
 handle : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-         {auto i : Ref ImpST (ImpState annot)} ->
+         {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
          Core annot a ->
          (Error annot -> Core annot a) ->
          Core annot a
 handle elab1 elab2
+    = do -- store the current state of everything
+         st <- getAllState
+         catch elab1
+               (\err => do -- reset the state
+                           putAllState st
+                           elab2 err)
+
+-- try one (outer) elaborator; if it fails, handle the error. Doesn't
+-- save the elaborator state!
+export
+handleClause
+       : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+         {auto i : Ref ImpST (ImpState annot)} ->
+         Core annot a ->
+         (Error annot -> Core annot a) ->
+         Core annot a
+handleClause elab1 elab2
     = do -- store the current state of everything
          st <- getState
          catch elab1
@@ -740,7 +757,7 @@ anyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
          Core annot (Term vars, Term vars)
 anyOne loc [] = throw (GenericMsg loc "All elaborators failed")
 anyOne loc [elab] = elab
-anyOne loc (e :: es) = tryElab e (anyOne loc es)
+anyOne loc (e :: es) = try e (anyOne loc es)
 
 -- We run the elaborator in the given environment, but need to end up with a
 -- closed term. It'll get substituted into the right place at the end of

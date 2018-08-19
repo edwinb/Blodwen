@@ -123,7 +123,7 @@ mutual
                Core annot (Term vars, Term vars) 
   checkForce rigc process elabinfo env nest tm_in
       = do defs <- get Ctxt
-           handleError
+           handle
              (do (ctm, cty) <- check rigc process elabinfo env nest tm_in Nothing
                  log 10 $ "Checked force " ++ show (ctm, cty)
                  case nf defs env cty of
@@ -162,6 +162,7 @@ mutual
 
   insertForce : {auto c : Ref Ctxt Defs} -> 
                 {auto u : Ref UST (UState annot)} ->
+                {auto e : Ref EST (EState vars)} ->
                 {auto i : Ref ImpST (ImpState annot)} ->
                 RawImp annot ->
                 Core annot (Term vars, Term vars) ->

@@ -127,7 +127,7 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               Core annot (Maybe (Clause, Clause)) -- Compile time vs run time clauses
                      -- (the run time version has had 0-multiplicities erased)
 checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
-    = handle
+    = handleClause
          (do lhs_raw <- lhsInCurrentNS nest lhs_raw
              (lhs_in, _, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
              gam <- get Ctxt

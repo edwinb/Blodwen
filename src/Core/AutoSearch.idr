@@ -148,7 +148,7 @@ anyOne : {auto c : Ref Ctxt Defs} ->
 anyOne loc env ty [] = do gam <- get Ctxt
                           throw (CantSolveGoal loc env (quote gam env ty))
 anyOne loc env ty [elab] = elab
-anyOne loc env ty (e :: es) = try e (anyOne loc env ty es)
+anyOne loc env ty (e :: es) = tryUnify e (anyOne loc env ty es)
 
 searchNames : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -171,7 +171,8 @@ searchLocalWith : {auto c : Ref Ctxt Defs} ->
 searchLocalWith loc defaults depth trying env [] ty defining
     = throw (CantSolveGoal loc env ty)
 searchLocalWith {vars} loc defaults depth trying env ((p, pty) :: rest) ty defining
-    = try (do gam <- get Ctxt
+    = tryUnify
+          (do gam <- get Ctxt
               findPos gam p id (nf gam env pty) (nf gam env ty))
           (searchLocalWith loc defaults depth trying env rest ty defining)
   where
@@ -194,7 +195,7 @@ searchLocalWith {vars} loc defaults depth trying env ((p, pty) :: rest) ty defin
               (Term vars -> Term vars) ->
               NF vars -> NF vars -> Core annot (Term vars)
     findPos gam prf f x@(NTCon pn _ _ [xty, yty]) ty
-        = try (findDirect gam prf f x ty)
+        = tryUnify (findDirect gam prf f x ty)
               (do fname <- maybe (throw (CantSolveGoal loc env (quote gam env ty)))
                                  pure
                                  (fstName gam)
@@ -203,7 +204,8 @@ searchLocalWith {vars} loc defaults depth trying env ((p, pty) :: rest) ty defin
                                  (sndName gam)
                   if isPairType pn gam
                      then
-                       try (findPos gam prf
+                       tryUnify
+                           (findPos gam prf
                                (\r => apply (Ref Bound sname)
                                             [quote gam env xty, 
                                              quote gam env yty, (f r)])
@@ -310,9 +312,9 @@ searchType loc defaults depth trying env defining ty@(NTCon n t ar args)
                    -- or, only if there are no open hints,
                    --     *Exactly one* of the other hints
                    -- or, finally, try chasing indirect hints
-                   try (searchLocal loc defaults depth trying env (quote (noGam gam) env ty) defining)
-                       (handleError 
-                         (handleError 
+                   tryUnify (searchLocal loc defaults depth trying env (quote (noGam gam) env ty) defining)
+                       (handleUnify 
+                         (handleUnify 
                            (searchNames loc defaults depth trying env ty defining opens)
                            (\err => if ambig err
                                        then throw err
@@ -329,7 +331,8 @@ searchType loc defaults depth trying env defining (NPrimVal IntType)
     = pure (PrimVal (I 0))
 searchType loc defaults depth trying env defining ty 
     = do gam <- get Ctxt
-         try (searchLocal loc defaults depth trying env (quote (noGam gam) env ty) defining)
+         tryUnify
+             (searchLocal loc defaults depth trying env (quote (noGam gam) env ty) defining)
              (throw (CantSolveGoal loc env (quote gam env ty)))
 
 abandonIfCycle : {auto c : Ref Ctxt Defs} ->
