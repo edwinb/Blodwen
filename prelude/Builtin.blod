@@ -58,3 +58,18 @@ public export
 data Equal : a -> b -> Type where
      Refl : {0 x : a} -> Equal x x
 
+public export
+sym : x = y -> y = x
+sym Refl = Refl
+
+public export
+rewrite__impl : {0 x, y : a} -> (0 p : _) -> x = y -> p y -> p x
+rewrite__impl p Refl prf = prf
+
+public export
+replace : forall a, x, y, p . x = y -> p x -> p y
+replace Refl prf = prf
+
+public export
+trans : forall a, b, c . a = b -> b = c -> a = c
+trans Refl Refl = Refl

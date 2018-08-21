@@ -22,8 +22,8 @@ As such, it should contain:
 - [Possibly Enum for range syntax?]
 - Semigroup, Monoid
 - Functor, Applicative, Monad and related functions
-- Foldable, Traversable
-- Basic interaction (Console and File IO)
+- Foldable
+- Console IO
 
 Everything else should be in the base libraries, and imported as required.
 In particular, proofs of Nat/List properties that almost never get used in
@@ -457,8 +457,6 @@ public export
 product : (Foldable t, Num a) => t a -> a
 product = foldr (*) 1
 
--- TODO: Traversable
-
 -----------
 -- NATS ---
 -----------
@@ -891,5 +889,87 @@ export
 printLn : Show a => a -> IO ()
 printLn x = putStrLn (show x)
 
--- TODO: Files
+-----------
+-- CASTS --
+-----------
+
+-- Casts between primitives only here. They might be lossy.
+
+-- To String
+
+public export
+interface Cast from to where
+  cast : from -> to
+
+export
+Cast Int String where
+  cast = prim__cast_IntString
+
+export
+Cast Integer String where
+  cast = prim__cast_IntegerString
+
+export
+Cast Char String where
+  cast = prim__cast_CharString
+
+export
+Cast Double String where
+  cast = prim__cast_DoubleString
+
+-- To Integer
+
+export
+Cast Int Integer where
+  cast = prim__cast_IntInteger
+
+export
+Cast Char Integer where
+  cast = prim__cast_CharInteger
+
+export
+Cast Double Integer where
+  cast = prim__cast_DoubleInteger
+
+export
+Cast String Integer where
+  cast = prim__cast_StringInteger
+
+-- To Int
+
+export
+Cast Integer Int where
+  cast = prim__cast_IntegerInt
+
+export
+Cast Char Int where
+  cast = prim__cast_CharInt
+
+export
+Cast Double Int where
+  cast = prim__cast_DoubleInt
+
+export
+Cast String Int where
+  cast = prim__cast_StringInt
+
+-- To Char
+
+export
+Cast Int Char where
+  cast = prim__cast_IntChar
+
+-- To Double
+
+export
+Cast Int Double where
+  cast = prim__cast_IntDouble
+
+export
+Cast Integer Double where
+  cast = prim__cast_IntegerDouble
+
+export
+Cast String Double where
+  cast = prim__cast_StringDouble
 
