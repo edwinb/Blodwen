@@ -117,7 +117,9 @@ main = do Right opts <- getCmdOpts
           if continue
              then
                 coreRun (stMain opts)
-                     (\err : Error _ => putStrLn ("Uncaught error: " ++ show err))
+                     (\err : Error _ => 
+                             do putStrLn ("Uncaught error: " ++ show err)
+                                exit 1)
                      (\res => pure ())
              else pure ()
 

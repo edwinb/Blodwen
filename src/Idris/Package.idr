@@ -239,7 +239,10 @@ runRepl pkg
 processPackage : {auto c : Ref Ctxt Defs} ->
                  PkgCommand -> String -> Core FC ()
 processPackage cmd file 
-    = do Right (pname, fs) <- coreLift $ parseFile file (parsePkgDesc file)
+    = do Right (pname, fs) <- coreLift $ parseFile file 
+                                  (do desc <- parsePkgDesc file
+                                      eoi
+                                      pure desc)
              | Left err => throw (ParseFail err)
          pkg <- addFields fs (initPkgDesc pname)
          case cmd of
