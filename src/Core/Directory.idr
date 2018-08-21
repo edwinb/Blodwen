@@ -15,6 +15,10 @@ isWindows = os `elem` ["win32", "mingw32", "cygwin32"]
 sep : Char
 sep = if isWindows then '\\' else '/'
 
+export
+dirSep : String
+dirSep = cast sep
+
 fullPath : String -> List String
 fullPath fp = filter (/="") $ split (==sep) fp
 
@@ -86,6 +90,7 @@ pathToNS fname
            (mod, rest) => assert_total (pathToNS (strTail rest)) ++ [mod]
 
 -- Create subdirectories, if they don't exist
+export
 mkdirs : List String -> IO (Either FileError ())
 mkdirs [] = pure (Right ())
 mkdirs (d :: ds)

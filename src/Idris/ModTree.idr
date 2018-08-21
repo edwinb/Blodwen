@@ -163,11 +163,11 @@ buildMods fc num len (m :: ms)
     printAll xs = coreLift $ putStrLn $ showSep "\n" (map show xs)
 
 export
-buildAll : {auto c : Ref Ctxt Defs} ->
-           {auto u : Ref UST (UState FC)} ->
-           {auto s : Ref Syn SyntaxInfo} ->
-           (mainFile : String) -> Core FC (List (Error FC))
-buildAll fname
+buildDeps : {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState FC)} ->
+            {auto s : Ref Syn SyntaxInfo} ->
+            (mainFile : String) -> Core FC (List (Error FC))
+buildDeps fname
     = do mods <- getBuildMods toplevelFC fname
          ok <- buildMods toplevelFC 1 (length mods) mods
          case ok of
@@ -177,4 +177,18 @@ buildAll fname
                        readAsMain mainttc
                        pure []
               errs => pure errs -- Error happened, give up
+
+export
+buildAll : {auto c : Ref Ctxt Defs} ->
+           (allFiles : List String) -> Core FC (List (Error FC))
+buildAll allFiles
+    = do mods <- traverse (getBuildMods toplevelFC) allFiles
+         -- There'll be duplicates, so if something is already built, drop it
+         let mods' = dropLater (concat mods)
+         buildMods toplevelFC 1 (length mods') mods'
+  where
+    dropLater : List BuildMod -> List BuildMod
+    dropLater [] = []
+    dropLater (b :: bs)
+        = b :: dropLater (filter (\x => buildFile x /= buildFile b) bs)
 

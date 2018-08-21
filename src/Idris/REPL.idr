@@ -223,14 +223,14 @@ process Reload
               Just f =>
                 do -- Clear the context and load again
                    resetContext
-                   updateErrorLine !(buildAll f)
+                   updateErrorLine !(buildDeps f)
                    pure True
 process (Load f)
     = do opts <- get ROpts
          put ROpts (record { mainfile = Just f } opts)
          -- Clear the context and load again
          resetContext
-         updateErrorLine !(buildAll f)
+         updateErrorLine !(buildDeps f)
          pure True
 process Edit
     = do opts <- get ROpts
@@ -241,7 +241,7 @@ process Edit
                 do let line = maybe "" (\i => " +" ++ show i) (errorLine opts)
                    coreLift $ system (editor opts ++ " " ++ f ++ line)
                    resetContext
-                   updateErrorLine !(buildAll f)
+                   updateErrorLine !(buildDeps f)
                    pure True
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})

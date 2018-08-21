@@ -11,10 +11,12 @@ import Core.Unify
 import Idris.CommandLine
 import Idris.Desugar
 import Idris.ModTree
-import Idris.Syntax
+import Idris.Package
 import Idris.Parser
 import Idris.ProcessIdr
 import Idris.REPL
+import Idris.SetOptions
+import Idris.Syntax
 
 import Data.Vect
 import System
@@ -27,43 +29,6 @@ findInput : List CLOpt -> Maybe String
 findInput [] = Nothing
 findInput (InputFile f :: fs) = Just f
 findInput (_ :: fs) = findInput fs
-
--- Options to be processed before type checking
-preOptions : {auto c : Ref Ctxt Defs} ->
-             List CLOpt -> Core FC ()
-preOptions [] = pure ()
-preOptions (Quiet :: opts)
-    = do setSession (record { quiet = True } !getSession)
-         preOptions opts
-preOptions (NoPrelude :: opts)
-    = do setSession (record { noprelude = True } !getSession)
-         preOptions opts
-preOptions (SetCG e :: opts)
-    = case getCG e of
-           Just cg => setCG cg
-           Nothing => 
-              do coreLift $ putStrLn "No such code generator"
-                 coreLift $ putStrLn $ "Code generators available: " ++
-                                 showSep ", " (map fst availableCGs)
-                 coreLift $ exit 1
-
-preOptions (_ :: opts) = preOptions opts
-
--- Options to be processed after type checking. Returns whether execution
--- should continue (i.e., whether to start a REPL)
-postOptions : {auto c : Ref Ctxt Defs} ->
-              {auto u : Ref UST (UState FC)} ->
-              {auto s : Ref Syn SyntaxInfo} ->
-              List CLOpt -> Core FC Bool
-postOptions [] = pure True
-postOptions (ExecFn str :: rest) 
-    = do execExp (PRef (MkFC "(script)" (0, 0) (0, 0)) (UN str))
-         postOptions rest
-         pure False
-postOptions (CheckOnly :: rest) 
-    = do postOptions rest
-         pure False
-postOptions (_ :: rest) = postOptions rest
 
 -- Add extra library directories from the "BLODWEN_PATH"
 -- environment variable
@@ -86,8 +51,10 @@ updatePaths
          -- any conflicts. In particular, that means that setting BLODWEN_PATH
          -- for the tests means they test the local version not the installed
          -- version
-         addExtraDir (dir_prefix (dirs (options defs)) ++ "/blodwen/prelude")
-         addDataDir (dir_prefix (dirs (options defs)) ++ "/blodwen/support")
+         addPkgDir "prelude"
+         addPkgDir "base"
+         addDataDir (dir_prefix (dirs (options defs)) ++ dirSep ++
+                        "blodwen" ++ dirSep ++ "support")
 
 updateREPLOpts : {auto c : Ref ROpts REPLOpts} ->
                  Core annot ()
@@ -102,24 +69,29 @@ stMain : List CLOpt -> Core FC ()
 stMain opts
     = do c <- newRef Ctxt initCtxt
          addPrimitives
-         preOptions opts
+
          updatePaths
+         -- If there's a --build or --install, just do that then quit
+         done <- processPackageOpts opts
 
-         let fname = findInput opts
+         when (not done) $
+            do preOptions opts
 
-         u <- newRef UST initUState
-         s <- newRef Syn initSyntax
-         o <- newRef ROpts (REPL.defaultOpts fname)
+               let fname = findInput opts
 
-         updateREPLOpts
-         case fname of
-              Nothing => readPrelude
-              Just f => updateErrorLine !(buildAll f)
+               u <- newRef UST initUState
+               s <- newRef Syn initSyntax
+               o <- newRef ROpts (REPL.defaultOpts fname)
 
-         doRepl <- postOptions opts
-         when doRepl $ 
-              do putStrLnQ "Welcome to Blodwen. Good luck."
-                 repl {c} {u}
+               updateREPLOpts
+               case fname of
+                    Nothing => readPrelude
+                    Just f => updateErrorLine !(buildDeps f)
+
+               doRepl <- postOptions opts
+               when doRepl $ 
+                    do putStrLnQ "Welcome to Blodwen. Good luck."
+                       repl {c} {u}
 
 -- Run any options (such as --version or --help) which imply printing a
 -- message then exiting. Returns wheter the program should continue
@@ -131,10 +103,13 @@ quitOpts (Version :: _)
 quitOpts (Help :: _)
     = do putStrLn usage
          pure False
+quitOpts (ShowPrefix :: _)
+    = do putStrLn bprefix
+         pure False
 quitOpts (_ :: opts) = quitOpts opts
 
 main : IO ()
-main = do Right opts <- getOpts
+main = do Right opts <- getCmdOpts
              | Left err =>
                     do putStrLn err
                        putStrLn usage

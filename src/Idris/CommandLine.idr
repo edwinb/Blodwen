@@ -5,14 +5,30 @@ import Data.Vect
 %default total
 
 public export
+data PkgCommand
+      = Build
+      | Install
+      | REPL
+
+
+export
+Show PkgCommand where
+  show Build = "--build"
+  show Install = "--install"
+  show REPL = "--repl"
+
+public export
 data CLOpt
   = CheckOnly
   | ExecFn String
   | SetCG String
   | NoPrelude
+  | ShowPrefix
   | Version
   | Help
   | Quiet
+  | PkgPath String
+  | Package PkgCommand String
   | InputFile String
 
 ActType : List String -> Type
@@ -31,10 +47,19 @@ options = [MkOpt ["--check", "-c"] [] [CheckOnly]
               (Just "Exit after checking source file"),
            MkOpt ["--exec", "-x"] ["name"] (\f => [ExecFn f, Quiet])
               (Just "Execute function after checking source file"),
-           MkOpt ["--no-prelude", "-q"] [] [NoPrelude]
+           MkOpt ["--no-prelude"] [] [NoPrelude]
               (Just "Don't implicitly import Prelude"),
-           MkOpt ["--codegen"] ["backend"] (\f => [SetCG f])
+           MkOpt ["--codegen", "--cg"] ["backend"] (\f => [SetCG f])
               (Just "Set code generator (default chez)"),
+           MkOpt ["--package", "-p"] ["package"] (\f => [PkgPath f])
+              (Just "Add a package as a dependency"),
+
+           MkOpt ["--prefix"] [] [ShowPrefix]
+              (Just "Show installation prefix"),
+           MkOpt ["--build"] ["package file"] (\f => [Package Build f])
+              (Just "Build modules/executable for the given package"),
+           MkOpt ["--install"] ["package file"] (\f => [Package Install f])
+              (Just "Install the given package"),
 
            MkOpt ["--quiet", "-q"] [] [Quiet]
               (Just "Quiet mode; display fewer messages"),
@@ -51,7 +76,7 @@ optUsage d
         (\h => 
             let optshow = showSep "," (flags d) ++ " " ++
                     showSep " " (map (\x => "<" ++ x ++ ">") (argdescs d)) in
-                optshow ++ pack (List.replicate (minus 20 (length optshow)) ' ')
+                optshow ++ pack (List.replicate (minus 26 (length optshow)) ' ')
                 ++ h ++ "\n") (help d)
   where
     showSep : String -> List String -> String
@@ -107,9 +132,14 @@ parseOpts opts args
         cls <- assert_total (parseOpts opts rest) -- 'rest' smaller than 'args'
         pure (cl ++ cls)
 
+export
+getOpts : List String -> Either String (List CLOpt)
+getOpts opts = parseOpts options opts
+
+
 export covering
-getOpts : IO (Either String (List CLOpt))
-getOpts = do (_ :: opts) <- getArgs
-                 | pure (Left "Invalid command line")
-             pure $ parseOpts options opts
+getCmdOpts : IO (Either String (List CLOpt))
+getCmdOpts = do (_ :: opts) <- getArgs
+                    | pure (Left "Invalid command line")
+                pure $ getOpts opts
 
