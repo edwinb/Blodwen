@@ -7,6 +7,7 @@ import Core.TT
 import Core.Unify
 
 import Idris.BindImplicits
+import Idris.Elab.Utils
 import Idris.Resugar
 import Idris.Syntax
 
@@ -24,91 +25,6 @@ bindConstraints : FC -> PiInfo ->
 bindConstraints fc p [] ty = ty
 bindConstraints fc p ((n, ty) :: rest) sc
     = IPi fc RigW p n ty (bindConstraints fc p rest sc)
-
-mutual
-  substParams : List Name -> List (Name, RawImp FC) -> RawImp FC -> RawImp FC
-  substParams bound ps (IVar fc n) 
-      = if not (n `elem` bound)
-           then case lookup n ps of
-                     Just t => t
-                     _ => IVar fc n
-           else IVar fc n
-  substParams bound ps (IPi fc r p mn argTy retTy) 
-      = let bound' = maybe bound (\n => n :: bound) mn in
-            IPi fc r p mn (substParams bound ps argTy) 
-                          (substParams bound' ps retTy)
-  substParams bound ps (ILam fc r p mn argTy scope)
-      = let bound' = maybe bound (\n => n :: bound) mn in
-            ILam fc r p mn (substParams bound ps argTy) 
-                           (substParams bound' ps scope)
-  substParams bound ps (ILet fc r n nTy nVal scope)
-      = let bound' = n :: bound in
-            ILet fc r n (substParams bound ps nTy) 
-                        (substParams bound ps nVal)
-                        (substParams bound' ps scope)
-  substParams bound ps (ICase fc y ty xs) 
-      = ICase fc (substParams bound ps y) (substParams bound ps ty)
-                 (map (substParamsClause bound ps) xs)
-  substParams bound ps (ILocal fc xs y) 
-      = let bound' = definedInBlock xs ++ bound in
-            ILocal fc (map (substParamsDecl bound ps) xs) 
-                      (substParams bound' ps y)
-  substParams bound ps (IApp fc fn arg) 
-      = IApp fc (substParams bound ps fn) (substParams bound ps arg)
-  substParams bound ps (IImplicitApp fc fn y arg)
-      = IImplicitApp fc (substParams bound ps fn) y (substParams bound ps arg)
-  substParams bound ps (IAlternative fc y xs) 
-      = IAlternative fc y (map (substParams bound ps) xs)
-  substParams bound ps (ICoerced fc y) 
-      = ICoerced fc (substParams bound ps y)
-  substParams bound ps (IQuote fc y)
-      = IQuote fc (substParams bound ps y)
-  substParams bound ps (IUnquote fc y)
-      = IUnquote fc (substParams bound ps y)
-  substParams bound ps (IAs fc y pattern)
-      = IAs fc y (substParams bound ps pattern)
-  substParams bound ps (IMustUnify fc r pattern)
-      = IMustUnify fc r (substParams bound ps pattern)
-  substParams bound ps tm = tm
-
-  substParamsClause : List Name -> List (Name, RawImp FC) -> 
-                      ImpClause FC -> ImpClause FC
-  substParamsClause bound ps (PatClause fc lhs rhs)
-      = let bound' = map UN (map snd (findBindableNames True bound [] lhs))
-                        ++ bound in
-            PatClause fc (substParams [] [] lhs) 
-                         (substParams bound' ps rhs)
-  substParamsClause bound ps (ImpossibleClause fc lhs)
-      = ImpossibleClause fc (substParams bound [] lhs)
-
-  substParamsTy : List Name -> List (Name, RawImp FC) ->
-                  ImpTy FC -> ImpTy FC
-  substParamsTy bound ps (MkImpTy fc n ty) 
-      = MkImpTy fc n (substParams bound ps ty)
-  
-  substParamsData : List Name -> List (Name, RawImp FC) ->
-                    ImpData FC -> ImpData FC
-  substParamsData bound ps (MkImpData fc n con opts dcons) 
-      = MkImpData fc n (substParams bound ps con) opts
-                  (map (substParamsTy bound ps) dcons)
-  substParamsData bound ps (MkImpLater fc n con) 
-      = MkImpLater fc n (substParams bound ps con)
-
-  substParamsDecl : List Name -> List (Name, RawImp FC) ->
-                    ImpDecl FC -> ImpDecl FC
-  substParamsDecl bound ps (IClaim fc vis opts td) 
-      = IClaim fc vis opts (substParamsTy bound ps td)
-  substParamsDecl bound ps (IDef fc n cs) 
-      = IDef fc n (map (substParamsClause bound ps) cs)
-  substParamsDecl bound ps (IData fc vis d) 
-      = IData fc vis (substParamsData bound ps d)
-  substParamsDecl bound ps (INamespace fc ns ds) 
-      = INamespace fc ns (map (substParamsDecl bound ps) ds)
-  substParamsDecl bound ps (IReflect fc y) 
-      = IReflect fc (substParams bound ps y)
-  substParamsDecl bound ps (ImplicitNames fc xs) 
-      = ImplicitNames fc (map (\ (n, t) => (n, substParams bound ps t)) xs)
-  substParamsDecl bound ps d = d
 
 addDefaults : FC -> List Name -> List (Name, List (ImpClause FC)) ->
               List (ImpDecl FC) -> 
@@ -163,7 +79,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
 
          let impsp = nub (concatMap findIBinds ps)
 
-         log 3 $ "Found interface " ++ show cn ++ " : "
+         log 1 $ "Found interface " ++ show cn ++ " : "
                  ++ show (normaliseHoles defs [] ity)
                  ++ " with params: " ++ show (params cdata)
                  ++ " and parents: " ++ show (parents cdata)
@@ -196,7 +112,8 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
 
          -- 2. Elaborate top level function types for this interface
          defs <- get Ctxt
-         fns <- traverse (topMethType impName impsp (params cdata)) 
+         fns <- traverse (topMethType impName impsp (params cdata)
+                                      (map fst (methods cdata))) 
                          (methods cdata)
          traverse (processDecl env nest) (map mkTopMethDecl fns)
 
@@ -257,13 +174,13 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
     mkMethField : List String -> (Name, RawImp FC) -> RawImp FC
     mkMethField impsp (n, ty) 
         = let argns = getExplicitArgs 0 ty 
+              imps = nub (filter (\n => n `elem` impsp) (findIBinds ty)) in
               -- Pass through implicit arguments to the function which are also
               -- implicit arguments to the declaration
-              impargs = filter (\x => elem x impsp) (nub (findIBinds ty)) in
               mkLam argns 
                     (impsApply 
                          (apply (IVar fc n) (map (IVar fc) argns))
-                         (map (\n => (UN n, IVar fc (UN n))) impsp))
+                         (map (\n => (UN n, IVar fc (UN n))) imps))
 
     methName : Name -> Name
     methName (NS _ n) = methName n
@@ -271,9 +188,14 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
                      maybe "" show impln ++ "_" ++
                      showSep "_" (map show ps)) 0
     
-    topMethType : Name -> List String -> List Name -> (Name, RawImp FC) -> 
+    applyCon : Name -> Name -> Core FC (Name, RawImp FC)
+    applyCon impl n = do mn <- inCurrentNS (methName n)
+                         pure (dropNS n, IVar fc mn)
+    
+    topMethType : Name -> List String -> List Name -> List Name ->
+                  (Name, RawImp FC) -> 
                   Core FC (Name, Name, RawImp FC)
-    topMethType impName impsp pnames (mn, mty_in)
+    topMethType impName impsp pnames allmeths (mn, mty_in)
         = do -- Get the specialised type by applying the method to the
              -- parameters
              n <- inCurrentNS (methName mn)
@@ -281,9 +203,10 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
              -- Avoid any name clashes between parameters and method types by
              -- renaming IBindVars in the method types which appear in the
              -- paramaters
+             let mty_in = substNames vars !(traverse (applyCon impName) allmeths) mty_in
              let mty_in = renameIBinds impsp (findIBinds mty_in) mty_in
              let mbase = bindConstraints fc AutoImplicit cons $
-                         substParams vars (zip pnames ps) mty_in
+                         substNames vars (zip pnames ps) mty_in
              let ibound = findIBinds mbase
 
              let mty = bindTypeNamesUsed ibound vars mbase

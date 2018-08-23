@@ -676,8 +676,8 @@ stripBraces str = pack (drop '{' (reverse (drop '}' (reverse (unpack str)))))
     drop c [] = []
     drop c (c' :: xs) = if c == c' then drop c xs else c' :: xs
 
-directive : IndentInfo -> Rule Directive
-directive indents
+directive : FileName -> IndentInfo -> Rule Directive
+directive fname indents
     = do exactIdent "logging"
          lvl <- intLit
          atEnd indents
@@ -703,6 +703,9 @@ directive indents
   <|> do exactIdent "charLit"
          n <- name
          pure (PrimChar n)
+  <|> do exactIdent "start"
+         e <- expr EqOK fname indents
+         pure (StartExpr e)
 
 fix : Rule Fixity
 fix
@@ -858,7 +861,7 @@ directiveDecl : FileName -> IndentInfo -> Rule PDecl
 directiveDecl fname indents
     = do start <- location
          symbol "%" 
-         (do d <- directive indents
+         (do d <- directive fname indents
              end <- location
              pure (PDirective (MkFC fname start end) d))
            <|>

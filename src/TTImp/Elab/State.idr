@@ -20,6 +20,13 @@ data ImplicitMode = NONE | PI RigCount | PATTERN
 public export
 data ElabMode = InType | InLHS | InExpr
 
+export
+Eq ElabMode where
+  InType == InType = True
+  InLHS == InLHS = True
+  InExpr == InExpr = True
+  _ == _ = False
+
 data BoundVar : List Name -> Type where
   MkBoundVar : Term outer -> Term outer -> BoundVar (vars ++ outer)
 
@@ -711,31 +718,34 @@ handleClause elab1 elab2
 export
 successful : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-             List (Core annot a) ->
+             ElabMode -> List (Core annot a) ->
              Core annot (List (Either (Error annot)
                                       (a, AllState vars annot)))
-successful [] = pure []
-successful (elab :: elabs)
-    = do init_st <- getAllState
+successful elabmode [] = pure []
+successful elabmode (elab :: elabs)
+    = do solveConstraints (case elabmode of
+                                InLHS => InLHS
+                                _ => InTerm) Normal
+         init_st <- getAllState
          Right res <- tryError elab
-               | Left err => do rest <- successful elabs
+               | Left err => do rest <- successful elabmode elabs
                                 pure (Left err :: rest)
 
          elabState <- getAllState -- save state at end of successful elab
          -- reinitialise state for next elabs
          putAllState init_st
-         rest <- successful elabs
+         rest <- successful elabmode elabs
          pure (Right (res, elabState) :: rest)
 
 export
 exactlyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-             annot ->
+             annot -> ElabMode ->
              List (Core annot (Term vars, Term vars)) ->
              Core annot (Term vars, Term vars)
-exactlyOne loc [elab] = elab
-exactlyOne loc all
-    = do elabs <- successful all
+exactlyOne loc elabmode [elab] = elab
+exactlyOne loc elabmode all
+    = do elabs <- successful elabmode all
          case rights elabs of
               [(res, state)] =>
                    do putAllState state
@@ -752,12 +762,17 @@ exactlyOne loc all
 export
 anyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-         annot ->
+         annot -> ElabMode ->
          List (Core annot (Term vars, Term vars)) ->
          Core annot (Term vars, Term vars)
-anyOne loc [] = throw (GenericMsg loc "All elaborators failed")
-anyOne loc [elab] = elab
-anyOne loc (e :: es) = try e (anyOne loc es)
+anyOne loc elabmode [] = throw (GenericMsg loc "All elaborators failed")
+anyOne loc elabmode [elab] = elab
+anyOne loc elabmode (e :: es) 
+    = try (do solveConstraints (case elabmode of
+                                     InLHS => InLHS
+                                     _ => InTerm) Normal
+              e) 
+          (anyOne loc elabmode es)
 
 -- We run the elaborator in the given environment, but need to end up with a
 -- closed term. It'll get substituted into the right place at the end of

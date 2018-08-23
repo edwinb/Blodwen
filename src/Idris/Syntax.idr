@@ -187,6 +187,7 @@ mutual
        PrimString : Name -> Directive
        PrimChar : Name -> Directive
        CGAction : String -> String -> Directive
+       StartExpr : PTerm -> Directive
 
   public export
   data PDecl : Type where
@@ -406,6 +407,7 @@ record SyntaxInfo where
   infixes : StringMap (Fixity, Nat)
   prefixes : StringMap Nat
   ifaces : Context IFaceInfo
+  startExpr : RawImp FC
 
 export
 TTC annot Fixity where
@@ -428,18 +430,21 @@ TTC FC SyntaxInfo where
       = do toBuf b (toList (infixes syn))
            toBuf b (toList (prefixes syn))
            toBuf b (ifaces syn) 
+           toBuf b (startExpr syn)
 
   fromBuf s b 
       = do inf <- fromBuf s b
            pre <- fromBuf s b
            ifs <- fromBuf s b
-           pure (MkSyntax (fromList inf) (fromList pre) ifs)
+           start <- fromBuf s b
+           pure (MkSyntax (fromList inf) (fromList pre) ifs start)
 
 export
 initSyntax : SyntaxInfo
 initSyntax = MkSyntax (insert "=" (Infix, 0) empty) 
                       (insert "-" 10 empty)
                       empty
+                      (IVar (MkFC "(default)" (0, 0) (0, 0)) (UN "main"))
 
 -- A label for Syntax info in the global state
 export

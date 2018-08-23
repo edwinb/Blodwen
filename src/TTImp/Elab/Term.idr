@@ -56,6 +56,7 @@ bindRig _ = Rig1
 ambiguous : Error annot -> Bool
 ambiguous (AmbiguousElab _ _) = True
 ambiguous (AmbiguousName _ _) = True
+ambiguous (AllFailed _) = True
 ambiguous (InType _ _ err) = ambiguous err
 ambiguous (InCon _ _ err) = ambiguous err
 ambiguous (InLHS _ _ err) = ambiguous err
@@ -316,27 +317,30 @@ mutual
       = do est <- get EST
            n <- addSearchable loc env expected depth (defining est)
            pure (mkConstantApp n env, expected)
-  checkImp rigc process elabinfo env nest (IAlternative loc _ [alt]) expected
-      = checkImp rigc process elabinfo env nest alt expected
   checkImp rigc process elabinfo env nest (IAlternative loc (UniqueDefault def) alts) mexpected
       = do expected <- maybe (do t <- addHole loc env TType
                                  log 5 $ "Added hole for ambiguous expression type (UniqueDefault) " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
+           solveConstraints (case elabMode elabinfo of
+                                  InLHS => InLHS
+                                  _ => InTerm) Normal
            defs <- get Ctxt
            let alts' = pruneByType defs (nf defs env expected) alts
            delayOnFailure loc env expected ambiguous $
             (\delayed =>
                do gam <- get Ctxt
                   log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
+                          "\nDefault " ++ show def ++
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
                   if delayed -- use the default if there's still ambiguity
-                     then try (exactlyOne loc (map (\t => 
-                                 checkImp rigc process elabinfo env nest t 
-                                     (Just expected)) alts'))
+                     then try (exactlyOne loc (elabMode elabinfo) 
+                                 (map (\t => 
+                                   checkImp rigc process elabinfo env nest t 
+                                       (Just expected)) alts'))
                               (checkImp rigc process elabinfo env nest def
                                      (Just expected))
-                     else exactlyOne loc (map (\t => 
+                     else exactlyOne loc (elabMode elabinfo) (map (\t => 
                              checkImp rigc process elabinfo env nest t 
                                  (Just expected)) alts'))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
@@ -354,9 +358,9 @@ mutual
                   let tryall = case uniq of
                                     FirstSuccess => anyOne
                                     _ => exactlyOne
-                  tryall loc (map (\t => 
-                         checkImp rigc process elabinfo env nest t 
-                             (Just expected)) alts'))
+                  tryall loc (elabMode elabinfo)
+                             (map (\t => checkImp rigc process elabinfo env nest t 
+                                             (Just expected)) alts'))
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected
@@ -524,7 +528,8 @@ mutual
                          [] => throw $ UndefinedName loc x
                          [(fullname, def, ty)] => 
                               resolveRef fullname def gam (embed ty)
-                         ns => exactlyOne loc (map (\ (n, def, ty) =>
+                         ns => exactlyOne loc (elabMode elabinfo)
+                                    (map (\ (n, def, ty) =>
                                        resolveRef n def gam (embed ty)) ns)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
@@ -880,6 +885,8 @@ mutual
   checkApp {vars} rigc process elabinfo loc env nest fn arg expected
       = do (fntm, fnty) <- checkForce rigc process elabinfo env nest fn
            gam <- get Ctxt
+           when (elabMode elabinfo /= InLHS) $
+             solveConstraints InTerm Normal
            case nf gam env fnty of
                 NBind _ (Pi rigf _ ty) scdone =>
                   do impsUsed <- saveImps

@@ -180,7 +180,11 @@ elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
          solveConstraints (case elabmode of
                                 InLHS => InLHS
                                 _ => InTerm) Normal
-         chktm <- retryDelayedIn env (getAnnot tm) chktm_in
+         solveConstraints (case elabmode of
+                                InLHS => InLHS
+                                _ => InTerm) Normal
+         gam <- get Ctxt
+         chktm <- retryDelayedIn env (getAnnot tm) (normaliseHoles gam env chktm_in)
          log 10 $ "Check after delays: " ++ show chktm
 
          -- resolve any default hints

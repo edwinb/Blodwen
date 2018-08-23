@@ -412,6 +412,12 @@ mutual
              Just (Hole _ pvar _) => not pvar
              _ => False
   
+  isPatVar : Gamma -> Name -> Bool
+  isPatVar gam n
+      = case lookupDefExact n gam of
+             Just (Hole _ pvar _) => pvar
+             _ => False
+  
   isHoleInv : Gamma -> Name -> Bool
   isHoleInv gam n
       = case lookupDefExact n gam of
@@ -555,6 +561,15 @@ mutual
            unifyInvertible mode loc env nt var args nty (NDCon n t a) args'
   unifyHoleApp mode loc env nt var args (NApp (NLocal r lvar) args')
       = unifyInvertible mode loc env nt var args Nothing (NApp (NLocal r lvar)) args'
+  unifyHoleApp mode loc env nt var args tm@(NApp (NRef lnt lvar) args')
+      = do gam <- get Ctxt
+           if isPatVar (gamma gam) lvar
+              then unifyInvertible mode loc env nt var args Nothing (NApp (NRef lnt lvar)) args'
+              else do log 10 $ "Postponing constraint " ++
+                            show (quote (noGam gam) env (NApp (NRef nt var) args))
+                             ++ " =?= " ++
+                            show (quote (noGam gam) env tm)
+                      postpone loc env (NApp (NRef nt var) args) tm
   unifyHoleApp mode loc env nt var args tm
       = do gam <- get Ctxt
            log 10 $ "Postponing constraint " ++
@@ -562,6 +577,34 @@ mutual
                          ++ " =?= " ++
                         show (quote (noGam gam) env tm)
            postpone loc env (NApp (NRef nt var) args) tm
+                            
+  unifyPatVar : {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState annot)} ->
+                UnifyMode -> annot -> Env Term vars ->
+                NameType -> Name -> List (Closure vars) -> NF vars ->
+                Core annot (List Name)
+  -- if either side is a pattern variable application, and we're in a term,
+  -- (which will be a type) we can proceed because the pattern variable
+  -- has to end up pi bound. Unify the right most variables, and continue.
+  unifyPatVar InTerm loc env nt var args tm@(NApp (NRef rnt rvar) args')
+      = do gam <- get Ctxt
+           if isPatVar (gamma gam) var || isPatVar (gamma gam) rvar
+             then case (reverse args, reverse args') of
+                       (l :: largs, r :: rargs) =>
+                            do log 10 $ "Continuing pattern var with " ++
+                                   show (quote (noGam gam) env (NApp (NRef nt var) (reverse largs)))
+                                     ++ " =?= " ++
+                                   show (quote (noGam gam) env (NApp (NRef rnt rvar) (reverse rargs)))
+                               unify InTerm loc env l r
+                               unify InTerm loc env (NApp (NRef nt var) (reverse largs))
+                                                  (NApp (NRef rnt rvar) (reverse rargs))
+                       _ => do log 10 $ "Postponing hole application " ++
+                                   show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++
+                                   show (quote (noGam gam) env tm)
+                               postpone loc env (NApp (NRef nt var) args) tm
+             else postpone loc env (NApp (NRef nt var) args) tm
+  unifyPatVar mode loc env nt var args tm
+      = postpone loc env (NApp (NRef nt var) args) tm
 
   unifyHole : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -624,7 +667,7 @@ mutual
                          gam <- get Ctxt
                          if isHoleInv (gamma gam) var
                             then unifyHoleApp mode loc env nt var args tm
-                            else postpone loc env (NApp (NRef nt var) args) tm
+                            else unifyPatVar mode loc env nt var args tm
 
   unifyApp : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -641,7 +684,9 @@ mutual
               else
                if isHoleNF (gamma gam) var
                   then unifyHole mode loc env nt var args tm
-                  else unifyIfEq True loc env (NApp (NRef nt var) args) tm
+                  else if isPatVar (gamma gam) var
+                          then unifyPatVar mode loc env nt var args tm
+                          else unifyIfEq True loc env (NApp (NRef nt var) args) tm
   unifyApp swap mode loc env hd args (NApp (NRef nt var) args')
       = do gam <- get Ctxt
            if convert (noGam gam) env (NApp hd args) (NApp (NRef nt var) args')
@@ -968,9 +1013,11 @@ retry mode cname
                            _ => pure cs
 
 setInvertible : {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState annot)} ->
                 annot -> Name -> Core annot ()
 setInvertible loc n
     = do gam <- get Ctxt
+         log 5 $ "Set " ++ show n ++ " invertible"
          updateDef n 
              (\old => case old of
                            Hole locs False _ => Just (Hole locs False True)
@@ -1015,7 +1062,8 @@ retryHole mode smode (loc, hole)
                      BySearch depth fn => 
                        case smode of
                             LastChance =>
-                                do search loc False depth [] fn hole; pure ()
+                                do log 5 $ "Last chance at " ++ show hole
+                                   search loc False depth [] fn hole; pure ()
                             _ =>       
                                handleUnify (do search loc (smode == Defaults) depth [] fn hole
                                                pure ())

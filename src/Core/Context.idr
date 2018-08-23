@@ -448,6 +448,15 @@ lookupDefTyName n gam
     = map (\(x, g) => (x, definition g, type g)) (lookupGlobalName n gam)
 
 export
+lookupGlobalNameIn : (nspace : List String) ->
+                     Name -> Gamma -> List (Name, GlobalDef)
+lookupGlobalNameIn nspace n gam
+    = filter isVisible (lookupGlobalName n gam)
+  where
+    isVisible : (Name, GlobalDef) -> Bool
+    isVisible (n, gdef) = visibleIn nspace n (visibility gdef)
+
+export
 lookupDefTyNameIn : (nspace : List String) ->
                     Name -> Gamma -> List (Name, Def, ClosedTerm)
 lookupDefTyNameIn nspace n gam

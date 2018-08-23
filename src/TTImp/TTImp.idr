@@ -123,6 +123,13 @@ mutual
        ExternFn : FnOpt
 
   export
+  Show FnOpt where
+    show Inline = "%inline"
+    show (Hint t) = "%hint " ++ show t
+    show (GlobalHint t) = "%globalhint " ++ show t
+    show ExternFn = "%extern"
+
+  export
   Eq FnOpt where
     Inline == Inline = True
     (Hint x) == (Hint y) = x == y

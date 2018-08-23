@@ -32,7 +32,7 @@ processFnOpt loc ndef (Hint d)
 processFnOpt loc ndef (GlobalHint a)
     = addGlobalHint loc a ndef
 processFnOpt loc ndef ExternFn
-    = setFlag loc ndef Inline
+    = setFlag loc ndef Inline -- if externally defined, inline when compiling
 
 export
 processType : {auto c : Ref Ctxt Defs} ->
@@ -68,6 +68,7 @@ processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
                       else None
          addDef n (newDef (abstractFullEnvType env ty) vis def)
 
+         log 1 $ "Setting options for " ++ show n ++ ": " ++ show fnopts
          traverse (processFnOpt loc n) fnopts
          addToSave n
 

@@ -397,4 +397,5 @@ mutual
              PrimString n => pure [IPragma (\env, next => setFromString fc n)]
              PrimChar n => pure [IPragma (\env, next => setFromChar fc n)]
              CGAction cg dir => pure [IPragma (\env, nest => addDirective cg dir)]
+             StartExpr tm => pure [IPragma (\env, nest => throw (InternalError "%start not implemented"))] -- TODO!
 

@@ -353,9 +353,10 @@ searchHole loc defaults depth trying defining n gam glob
          abandonIfCycle searchty trying
          let nty = nf gam [] searchty
          log 2 $ "Running search: " ++ show n ++ " in " ++ show defining ++
-                 " for " ++ show (quote gam [] nty)
+                 " for " ++ show (quote gam [] nty) ++ " defaults " ++ show defaults
          dumpConstraints 5 True
          checkConcreteDets loc defaults nty nty
+         log 5 $ "Determining arguments okay"
          soln <- searchType loc defaults depth (searchty :: trying) [] defining nty
          log 5 $ "Solution: " ++ show n ++ " = " ++ show (normalise gam [] soln)
          addDef n (record { definition = PMDef True [] (STerm soln) (STerm soln) } glob)

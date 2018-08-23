@@ -69,4 +69,3 @@ unsafePerformIO (MkIO f)
     = unsafeCreateWorld (\w => case f w of
                                MkIORes res w' => unsafeDestroyWorld w' res)
 
-

@@ -47,18 +47,21 @@ expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
                               then orig
                               else IMustUnify fc "Name applied to arguments" orig
                  Nothing => 
-                    case lookupDefTyNameIn (currentNS defs) x 
-                                           (gamma defs) of
+                    case lookupGlobalNameIn (currentNS defs) x 
+                                            (gamma defs) of
                        [] => orig
-                       [(n, def, _)] => wrapDot mode n def (buildAlt (IVar fc n) args)
-                       ns => IAlternative fc Unique
-                               (map (\n => wrapDot mode (fst n) (fst (snd n)) 
-                                              (buildAlt (IVar fc (fst n)) args)) 
-                                    ns)
+                       [(n, gdef)] => mkTerm n gdef
+                       ns => IAlternative fc Unique 
+                                 (map (\t => mkTerm (fst t) (snd t)) ns)
   where
-    notLHS : ElabMode -> Bool
-    notLHS InLHS = False
-    notLHS _ = True
+    buildAlt : RawImp annot -> 
+               List (annot, Maybe (Maybe Name), RawImp annot) -> 
+               RawImp annot
+    buildAlt f [] = f
+    buildAlt f ((loc', Nothing, a) :: as) 
+        = buildAlt (IApp loc' f a) as
+    buildAlt f ((loc', Just i, a) :: as) 
+        = buildAlt (IImplicitApp loc' f i a) as
 
     -- If it's not a constructor application, dot it
     wrapDot : ElabMode -> Name -> Def -> RawImp annot -> RawImp annot
@@ -69,14 +72,13 @@ expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
             else IMustUnify fc "Not a constructor application or primitive" tm
     wrapDot _ _ _ tm = tm
 
-    buildAlt : RawImp annot -> 
-               List (annot, Maybe (Maybe Name), RawImp annot) -> 
-               RawImp annot
-    buildAlt f [] = f
-    buildAlt f ((loc', Nothing, a) :: as) 
-        = buildAlt (IApp loc' f a) as
-    buildAlt f ((loc', Just i, a) :: as) 
-        = buildAlt (IImplicitApp loc' f i a) as
+    mkTerm : Name -> GlobalDef -> RawImp annot
+    mkTerm n def = wrapDot mode n (definition def) (buildAlt (IVar fc n) args)
+
+    notLHS : ElabMode -> Bool
+    notLHS InLHS = False
+    notLHS _ = True
+
 expandAmbigName mode estate defs env nest orig args (IApp fc f a) exp
    = expandAmbigName mode estate defs env nest orig 
                      ((fc, Nothing, a) :: args) f exp
