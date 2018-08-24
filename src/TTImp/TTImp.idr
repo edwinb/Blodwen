@@ -424,6 +424,27 @@ findIBinds (IBindVar _ n) = [n]
 -- name should be bound, leave it to the programmer
 findIBinds tm = []
          
+export
+findImplicits : RawImp annot -> List String
+findImplicits (IPi fc rig p (Just (UN mn)) aty retty)
+    = mn :: findImplicits aty ++ findImplicits retty
+findImplicits (IPi fc rig p mn aty retty)
+    = findImplicits aty ++ findImplicits retty
+findImplicits (ILam fc rig p n aty sc)
+    = findImplicits aty ++ findImplicits sc
+findImplicits (IApp fc fn av)
+    = findImplicits fn ++ findImplicits av
+findImplicits (IImplicitApp fc fn n av)
+    = findImplicits fn ++ findImplicits av
+findImplicits (IAs fc n pat)
+    = findImplicits pat
+findImplicits (IMustUnify fc r pat)
+    = findImplicits pat
+findImplicits (IAlternative fc u alts)
+    = concatMap findImplicits alts
+findImplicits (IBindVar _ n) = [n]
+findImplicits tm = []
+         
 -- Update the lhs of a clause so that any implicits named in the type are
 -- bound as @-patterns (unless they're already explicitly bound or appear as
 -- IBindVar anywhere else in the pattern) so that they will be available on the

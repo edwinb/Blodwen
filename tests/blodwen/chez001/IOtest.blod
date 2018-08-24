@@ -7,6 +7,7 @@ hworld : IO ()
 hworld = putStrLn "Hello world!"
 
 interface Functor (f : Type -> Type) where
+    constructor MkFunctor
     map : (a -> b) -> f a -> f b
 
 Functor List where

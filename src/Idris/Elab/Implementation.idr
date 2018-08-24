@@ -7,7 +7,6 @@ import Core.TT
 import Core.Unify
 
 import Idris.BindImplicits
-import Idris.Elab.Utils
 import Idris.Resugar
 import Idris.Syntax
 
@@ -15,6 +14,7 @@ import TTImp.ProcessTTImp
 import TTImp.Elab
 import TTImp.Elab.Unelab
 import TTImp.TTImp
+import TTImp.Utils
 
 mkImpl : Name -> List (RawImp FC) -> Name
 mkImpl n ps = MN ("__Impl_" ++ show n ++ "_" ++
@@ -172,13 +172,13 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
     -- the explicit arguments so that implicits get inserted in the right 
     -- place
     mkMethField : List String -> (Name, RawImp FC) -> RawImp FC
-    mkMethField impsp (n, ty) 
-        = let argns = getExplicitArgs 0 ty 
+    mkMethField impsp (n, ty)
+        = let argns = getExplicitArgs 0 ty
               imps = nub (filter (\n => n `elem` impsp) (findIBinds ty)) in
               -- Pass through implicit arguments to the function which are also
               -- implicit arguments to the declaration
-              mkLam argns 
-                    (impsApply 
+              mkLam argns
+                    (impsApply
                          (apply (IVar fc n) (map (IVar fc) argns))
                          (map (\n => (UN n, IVar fc (UN n))) imps))
 
@@ -202,12 +202,12 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
 
              -- Avoid any name clashes between parameters and method types by
              -- renaming IBindVars in the method types which appear in the
-             -- paramaters
+             -- parameters
              let mty_in = substNames vars !(traverse (applyCon impName) allmeths) mty_in
-             let mty_in = renameIBinds impsp (findIBinds mty_in) mty_in
+             let mty_in = renameIBinds impsp (findImplicits mty_in) mty_in
              let mbase = bindConstraints fc AutoImplicit cons $
                          substNames vars (zip pnames ps) mty_in
-             let ibound = findIBinds mbase
+             let ibound = findImplicits mbase
 
              let mty = bindTypeNamesUsed ibound vars mbase
 

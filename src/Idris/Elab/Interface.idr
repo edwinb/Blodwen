@@ -7,7 +7,6 @@ import Core.TT
 import Core.Unify
 
 import Idris.BindImplicits
-import Idris.Elab.Utils
 import Idris.Resugar
 import Idris.Syntax
 
@@ -15,6 +14,7 @@ import TTImp.ProcessTTImp
 import TTImp.Elab
 import TTImp.Elab.Unelab
 import TTImp.TTImp
+import TTImp.Utils
 
 -- TODO: Check all the parts of the body are legal
 -- TODO: Deal with default superclass implementations

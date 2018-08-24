@@ -828,7 +828,9 @@ mutual
                     (quote (noGam gam) env (NBind x (Pi cx ix tx) scx))
                     (quote (noGam gam) env (NBind y (Pi cy iy ty) scy))
              else
-               do ct <- unify mode loc env tx ty
+               do log 10 $ "Unifying Pi " ++ show (quote gam env tx) ++ 
+                           " and " ++ show (quote gam env ty)
+                  ct <- unify mode loc env tx ty
                   xn <- genName "x"
                   let env' : Env Term (x :: _)
                            = Pi cx ix (quote (noGam gam) env tx) :: env
@@ -1012,6 +1014,7 @@ retry mode cname
                                     pure []
                            _ => pure cs
 
+export
 setInvertible : {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState annot)} ->
                 annot -> Name -> Core annot ()

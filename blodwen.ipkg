@@ -13,8 +13,7 @@ modules = Idris.BindImplicits,
           Idris.Resugar,
 
           Idris.Elab.Implementation,
-          Idris.Elab.Interface,
-          Idris.Elab.Utils
+          Idris.Elab.Interface
 
 sourcedir = src
 executable = blodwen

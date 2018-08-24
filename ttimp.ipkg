@@ -68,6 +68,7 @@ modules = Compiler.Common,
           TTImp.REPL,
           TTImp.RunElab,
           TTImp.TTImp,
+          TTImp.Utils,
 
           Utils.Binary
 

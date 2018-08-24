@@ -20,8 +20,7 @@ import Data.List.Views
 %default covering
 
 -- If the expected type has an implicit pi, elaborate with leading
--- implicit lambdas (so at the moment, implicit lambdas can only be inserted
--- by the machine, not a programmer.)
+-- implicit lambdas if they aren't there already. 
 insertImpLam : Env Term vars ->
                (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
                RawImp annot
@@ -29,6 +28,8 @@ insertImpLam env tm Nothing = tm
 insertImpLam env tm (Just ty) = bindLam tm ty
   where
     bindLam : RawImp annot -> Term vars -> RawImp annot
+    bindLam tm@(ILam _ _ Implicit _ _ _) (Bind n (Pi _ Implicit _) sc)
+        = tm
     bindLam tm (Bind n (Pi c Implicit ty) sc)
         = let loc = getAnnot tm in
               -- Can't use the same name, there may be a clash, so set
@@ -989,7 +990,7 @@ mutual
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
            let rigb = rigl -- rigMult rigl rigc
-           let env' : Env Term (n :: _) = Lam rigb Explicit tyv :: env
+           let env' : Env Term (n :: _) = Lam rigb plicity tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' (weaken nest') scope Nothing

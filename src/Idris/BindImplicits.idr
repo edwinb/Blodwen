@@ -2,52 +2,12 @@ module Idris.BindImplicits
 
 import Core.TT
 import TTImp.TTImp
+import TTImp.Utils
 
 %default covering
 
-lowerFirst : String -> Bool
-lowerFirst "" = False
-lowerFirst str = assert_total (isLower (strHead str))
-
 getUnique : List String -> String -> String
 getUnique xs x = if x `elem` xs then getUnique xs (x ++ "'") else x
-
--- Bind lower case names in argument position
--- Don't go under case, let, or local bindings, or IAlternative
-export
-findBindableNames : (arg : Bool) -> List Name -> (used : List String) ->
-                    RawImp annot -> List (String, String)
-findBindableNames True env used (IVar fc (UN n))
-    = if not (UN n `elem` env) && lowerFirst n
-         then [(n, getUnique used n)]
-         else []
-findBindableNames arg env used (IPi fc rig p mn aty retty)
-    = let env' = case mn of
-                      Nothing => env
-                      Just n => n :: env in
-          findBindableNames True env' used aty ++
-          findBindableNames True env' used retty
-findBindableNames arg env used (ILam fc rig p mn aty sc)
-    = let env' = case mn of
-                      Nothing => env
-                      Just n => n :: env in
-      findBindableNames True env' used aty ++
-      findBindableNames True env' used sc
-findBindableNames arg env used (IApp fc fn av)
-    = findBindableNames False env used fn ++ findBindableNames True env used av
-findBindableNames arg env used (IImplicitApp fc fn n av)
-    = findBindableNames False env used fn ++ findBindableNames True env used av
-findBindableNames arg env used (IAs fc (UN n) pat)
-    = (n, getUnique used n) :: findBindableNames arg env used pat
-findBindableNames arg env used (IAs fc n pat)
-    = findBindableNames arg env used pat
-findBindableNames arg env used (IMustUnify fc r pat)
-    = findBindableNames arg env used pat
-findBindableNames arg env used (IAlternative fc u alts)
-    = concatMap (findBindableNames arg env used) alts
--- We've skipped case, let and local - rather than guess where the
--- name should be bound, leave it to the programmer
-findBindableNames arg env used tm = []
 
 -- Rename the IBindVars in a term. Anything which appears in the list 'renames'
 -- should be renamed, to something which is *not* in the list 'used'
@@ -55,6 +15,16 @@ export
 renameIBinds : (renames : List String) -> 
                (used : List String) -> 
                RawImp annot -> RawImp annot
+renameIBinds rs us (IPi fc c p (Just (UN n)) ty sc)
+    = if n `elem` rs 
+         then let n' = getUnique (rs ++ us) n
+                  sc' = substNames (map UN (filter (/= n) us)) 
+                                   [(UN n, IVar fc (UN n'))] sc in
+              IPi fc c p (Just (UN n')) (renameIBinds rs us ty) 
+                         -- No need to rename from here!
+                         (renameIBinds rs (n' :: us) sc')
+         else IPi fc c p (Just (UN n)) (renameIBinds rs us ty) 
+                         (renameIBinds rs us sc)
 renameIBinds rs us (IPi fc c p n ty sc)
     = IPi fc c p n (renameIBinds rs us ty) (renameIBinds rs us sc)
 renameIBinds rs us (ILam fc c p n ty sc)

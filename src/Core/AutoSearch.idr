@@ -19,6 +19,7 @@ mkTmArgs : {auto c : Ref Ctxt Defs} ->
 mkTmArgs loc env (Bind n (Pi c info ty) sc)
     = do argName <- genName "sa"
          addNamedHole loc argName False env ty
+         setInvertible loc argName
          let arg = mkConstantApp argName env
          (rest, restTy) <- mkTmArgs loc env (subst arg sc)
          pure ((argName, arg) :: rest, restTy)
@@ -32,6 +33,7 @@ mkArgs loc env (NBind n (Pi c info ty) sc)
     = do gam <- get Ctxt
          argName <- genName "sa"
          addNamedHole loc argName False env (quote (noGam gam) env ty)
+         setInvertible loc argName
          let arg = mkConstantApp argName env
          (rest, restTy) <- mkArgs loc env (sc (MkClosure defaultOpts [] env Erased))
          pure ((argName, arg) :: rest, restTy)

@@ -16,7 +16,10 @@ import Idris.Elab.Implementation
 import Idris.Elab.Interface
 
 import Parser.RawImp
+
 import TTImp.TTImp
+import TTImp.Utils
+
 import Utils.Shunting
 
 import Control.Monad.State
@@ -387,7 +390,8 @@ mutual
            put Syn (record { infixes $= insert n (fix, prec) } syn)
            pure []
   desugarDecl ps (PNamespace fc ns decls)
-      = pure [INamespace fc ns (concat !(traverse (desugarDecl ps) decls))]
+      = do ds <- traverse (desugarDecl ps) decls
+           pure [INamespace fc ns (concat ds)]
   desugarDecl ps (PDirective fc d) 
       = case d of
              Logging i => pure [ILog i]

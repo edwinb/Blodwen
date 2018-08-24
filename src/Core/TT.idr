@@ -149,6 +149,12 @@ Eq PiInfo where
   (==) AutoImplicit AutoImplicit = True
   (==) _ _ = False
 
+export
+Show PiInfo where
+  show Implicit = "Implicit"
+  show Explicit = "Explicit"
+  show AutoImplicit = "AutoImplicit"
+
 -- Multiplicities on binders, for checking linear and erased types
 -- TODO: This doesn't actually do anything yet, but I wanted to add it to
 -- the representation early so that there's less to change in the data types
