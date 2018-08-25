@@ -266,7 +266,8 @@ mutual
            -- Check all of the implicits we collected have been used
            est <- get EST
            log 10 $ "Used: " ++ show (implicitsUsed est, map fst args)
-           checkUsedImplicits loc (implicitsUsed est) (map fst args) (apply restm imps)
+           checkUsedImplicits loc (elabMode elabinfo) (implicitsUsed est) args 
+                              (apply restm imps)
            est <- get EST
            case imps of
                 [] => pure (restm, resty)
@@ -302,7 +303,8 @@ mutual
            -- Check all of the implicits we collected have been used
            est <- get EST
            log 10 $ "IUsed: " ++ show (implicitsUsed est, nm :: map fst args)
-           checkUsedImplicits loc (implicitsUsed est) (nm :: map fst args) (apply restm imps)
+           checkUsedImplicits loc (elabMode elabinfo) (implicitsUsed est) 
+                              ((nm, arg) :: args) (apply restm imps)
            case imps of
                 [] => pure (restm, resty)
                 _ => checkExp rigc process loc elabinfo env nest (apply restm imps) 

@@ -182,19 +182,23 @@ usedImp imp
 -- the current application
 export
 checkUsedImplicits : {auto e : Ref EST (EState vars)} ->
-                     annot -> 
+                     annot -> ElabMode ->
                      List (Maybe Name) -> 
-                     List (Maybe Name) -> Term vars -> Core annot ()
-checkUsedImplicits loc used [] tm = pure ()
-checkUsedImplicits loc used given tm
-    = let unused = filter (\x => not (x `elem` used)) given in
+                     List (Maybe Name, RawImp annot) -> Term vars -> Core annot ()
+checkUsedImplicits loc mode used [] tm = pure ()
+checkUsedImplicits loc mode used given tm
+    = let unused = filter (notUsed mode) given in
           case unused of
                [] => -- remove the things which were given, and are now part of
                      -- an application, from the 'implicitsUsed' list, because
                      -- we've now verified that they were used correctly.
-                     restoreImps (filter (\x => not (x `elem` given)) used)
-               (Just n :: _) => throw (InvalidImplicit loc n tm)
-               (Nothing :: _) => throw (GenericMsg loc "No auto implicit here")
+                     restoreImps (filter (\x => not (x `elem` map fst given)) used)
+               ((Just n, _) :: _) => throw (InvalidImplicit loc n tm)
+               ((Nothing, _) :: _) => throw (GenericMsg loc "No auto implicit here")
+  where
+    notUsed : ElabMode -> (Maybe Name, RawImp annot) -> Bool
+    notUsed InLHS (n, IAs _ _ (Implicit _)) = False -- added by elaborator, ignore it
+    notUsed _ (x, _) = not (x `elem` used)
 
 export
 weakenedEState : {auto e : Ref EST (EState vs)} ->
