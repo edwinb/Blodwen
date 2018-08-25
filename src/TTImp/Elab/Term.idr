@@ -21,21 +21,23 @@ import Data.List.Views
 
 -- If the expected type has an implicit pi, elaborate with leading
 -- implicit lambdas if they aren't there already. 
-insertImpLam : Env Term vars ->
+insertImpLam : {auto c : Ref Ctxt Defs} ->
+               Env Term vars ->
                (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
-               RawImp annot
-insertImpLam env tm Nothing = tm
+               Core annot (RawImp annot)
+insertImpLam env tm Nothing = pure tm
 insertImpLam env tm (Just ty) = bindLam tm ty
   where
-    bindLam : RawImp annot -> Term vars -> RawImp annot
+    bindLam : RawImp annot -> Term vars -> Core annot (RawImp annot)
     bindLam tm@(ILam _ _ Implicit _ _ _) (Bind n (Pi _ Implicit _) sc)
-        = tm
+        = pure tm
     bindLam tm (Bind n (Pi c Implicit ty) sc)
-        = let loc = getAnnot tm in
-              -- Can't use the same name, there may be a clash, so set
-              -- it to 'Nothing' and let the machine invent one
-              ILam loc c Implicit Nothing (Implicit loc) (bindLam tm sc)
-    bindLam tm sc = tm
+        = do let loc = getAnnot tm
+             -- Can't use the same name, there may be a clash.
+             n' <- genVarName ("imp_" ++ show n)
+             sc' <- bindLam tm sc
+             pure $ ILam loc c Implicit (Just n') (Implicit loc) sc'
+    bindLam tm sc = pure tm
 
 noteLHSPatVar : {auto e : Ref EST (EState vars)} ->
              ElabMode -> String -> Core annot ()
@@ -98,16 +100,16 @@ mutual
            case elabMode elabinfo of
                -- don't expand implicit lambda on LHS
                InLHS => checkImp rigc process elabinfo env nest lazyTm exp
-               _ => let tm' = insertImpLam env lazyTm exp 
-                        loc = getAnnot tm' in
-                        case forceName gam of
-                             Nothing => checkImp rigc process elabinfo env nest tm' exp
-                             Just fn =>
-                                let forcetm = IApp loc (IVar loc fn) 
-                                                       (ICoerced loc tm') in
-                                    insertForce tm'
-                                        (checkImp rigc process elabinfo env nest tm' exp)
-                                        (checkImp rigc process elabinfo env nest forcetm exp)
+               _ => do tm' <- insertImpLam env lazyTm exp 
+                       let loc = getAnnot tm'
+                       case forceName gam of
+                            Nothing => checkImp rigc process elabinfo env nest tm' exp
+                            Just fn =>
+                               let forcetm = IApp loc (IVar loc fn) 
+                                                      (ICoerced loc tm') in
+                                   insertForce tm'
+                                       (checkImp rigc process elabinfo env nest tm' exp)
+                                       (checkImp rigc process elabinfo env nest forcetm exp)
 
   -- As check, but all we know about the expected type is that it
   -- cannot be Delayed, so insert a Force if necessary
@@ -1046,7 +1048,7 @@ mutual
             ElabInfo annot -> Name -> (ty : NF vars) ->
             Core annot (Term vars) 
   makeImplicit rigc process loc env nest elabinfo bn ty
-      = case lookup (Just bn) (implicitsGiven elabinfo) of
+      = case lookup (Just bn) (lamImplicits elabinfo ++ implicitsGiven elabinfo) of
              Just rawtm => 
                do log 10 $ "Checking implicit " ++ show bn ++ " = " ++ show rawtm
                             ++ " at " ++ show rigc

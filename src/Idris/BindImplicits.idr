@@ -4,6 +4,8 @@ import Core.TT
 import TTImp.TTImp
 import TTImp.Utils
 
+import Control.Monad.State
+
 %default covering
 
 getUnique : List String -> String -> String
@@ -14,36 +16,42 @@ getUnique xs x = if x `elem` xs then getUnique xs (x ++ "'") else x
 export
 renameIBinds : (renames : List String) -> 
                (used : List String) -> 
-               RawImp annot -> RawImp annot
+               RawImp annot -> State (List (String, String)) (RawImp annot)
 renameIBinds rs us (IPi fc c p (Just (UN n)) ty sc)
     = if n `elem` rs 
          then let n' = getUnique (rs ++ us) n
                   sc' = substNames (map UN (filter (/= n) us)) 
                                    [(UN n, IVar fc (UN n'))] sc in
-              IPi fc c p (Just (UN n')) (renameIBinds rs us ty) 
-                         -- No need to rename from here!
-                         (renameIBinds rs (n' :: us) sc')
-         else IPi fc c p (Just (UN n)) (renameIBinds rs us ty) 
-                         (renameIBinds rs us sc)
+              do scr <- renameIBinds rs (n' :: us) sc'
+                 ty' <- renameIBinds rs us ty
+                 upds <- get
+                 put (with List ((n, n') :: upds))
+                 pure $ IPi fc c p (Just (UN n')) ty' scr
+         else do scr <- renameIBinds rs us sc
+                 ty' <- renameIBinds rs us ty
+                 pure $ IPi fc c p (Just (UN n)) ty' scr
 renameIBinds rs us (IPi fc c p n ty sc)
-    = IPi fc c p n (renameIBinds rs us ty) (renameIBinds rs us sc)
+    = pure $ IPi fc c p n !(renameIBinds rs us ty) !(renameIBinds rs us sc)
 renameIBinds rs us (ILam fc c p n ty sc)
-    = ILam fc c p n (renameIBinds rs us ty) (renameIBinds rs us sc)
+    = pure $ ILam fc c p n !(renameIBinds rs us ty) !(renameIBinds rs us sc)
 renameIBinds rs us (IApp fc fn arg)
-    = IApp fc (renameIBinds rs us fn) (renameIBinds rs us arg)
+    = pure $ IApp fc !(renameIBinds rs us fn) !(renameIBinds rs us arg)
 renameIBinds rs us (IImplicitApp fc fn n arg)
-    = IImplicitApp fc (renameIBinds rs us fn) n (renameIBinds rs us arg)
+    = pure $ IImplicitApp fc !(renameIBinds rs us fn) n !(renameIBinds rs us arg)
 renameIBinds rs us (IAs fc n pat)
-    = IAs fc n (renameIBinds rs us pat)
+    = pure $ IAs fc n !(renameIBinds rs us pat)
 renameIBinds rs us (IMustUnify fc r pat)
-    = IMustUnify fc r (renameIBinds rs us pat)
+    = pure $ IMustUnify fc r !(renameIBinds rs us pat)
 renameIBinds rs us (IAlternative fc u alts)
-    = IAlternative fc u (map (renameIBinds rs us) alts)
+    = pure $ IAlternative fc u !(traverse (renameIBinds rs us) alts)
 renameIBinds rs us (IBindVar fc n)
     = if n `elem` rs
-         then IBindVar fc (getUnique (rs ++ us) n)
-         else IBindVar fc n
-renameIBinds rs us tm = tm
+         then do let n' = getUnique (rs ++ us) n
+                 upds <- get
+                 put (with List ((n, n') :: upds))
+                 pure $ IBindVar fc n'
+         else pure $ IBindVar fc n
+renameIBinds rs us tm = pure $ tm
 
 export
 doBind : List (String, String) -> RawImp annot -> RawImp annot
