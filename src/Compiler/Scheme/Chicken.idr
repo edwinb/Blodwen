@@ -36,28 +36,11 @@ schFooter : String
 schFooter = ")"
 
 mutual
-  -- Need to convert the argument (a list of scheme arguments that may
-  -- have been constructed at run time) to a scheme list to be passed to apply
-  readArgs : SVars vars -> CExp vars -> Core annot String
-  readArgs vs tm = pure $ "(blodwen-read-args " ++ !(schExp chickenPrim vs tm) ++ ")"
-
   chickenPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
-  chickenPrim vs SchemeCall [ret, CPrimVal (Str fn), args, world]
-     = pure $ mkWorld ("(apply " ++ fn ++" "
-                  ++ !(readArgs vs args) ++ ")")
-  chickenPrim vs SchemeCall [ret, fn, args, world]
-     = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp chickenPrim vs fn) ++")) "
-                  ++ !(readArgs vs args) ++ ")")
   chickenPrim vs CCall [ret, fn, args, world]
       = throw (InternalError ("Can't compile C FFI calls to Chicken Scheme yet"))
-  chickenPrim vs PutStr [arg, world] 
-      = pure $ "(display " ++ !(schExp chickenPrim vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
-  chickenPrim vs GetStr [world] 
-      = pure $ mkWorld "(read-line (current-input-port))"
-  chickenPrim vs (Unknown n) args 
-      = throw (InternalError ("Can't compile unknown external primitive " ++ show n))
   chickenPrim vs prim args 
-      = throw (InternalError ("Badly formed external primitive " ++ show prim))
+      = schExtCommon chickenPrim vs prim args
 
 compileToSCM : Ref Ctxt Defs ->
                ClosedTerm -> (outfile : String) -> Core annot ()

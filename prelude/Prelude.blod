@@ -559,8 +559,8 @@ Foldable Maybe where
 
 public export
 data Either : (a : Type) -> (b : Type) -> Type where
-     Left : (1 x : a) -> Either a b
-     Right : (1 x : b) -> Either a b
+     Left : forall a, b. (1 x : a) -> Either a b
+     Right : forall a, b. (1 x : b) -> Either a b
 
 public export
 either : Lazy (a -> c) -> Lazy (b -> c) -> Either a b -> c

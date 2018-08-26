@@ -1,4 +1,6 @@
 package base
 
-modules = Data.List
+modules = Data.List,
+
+          System.File
 

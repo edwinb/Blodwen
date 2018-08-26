@@ -1,0 +1,94 @@
+module System.File
+
+public export
+data Mode = Read | WriteTruncate | Append | ReadWrite | ReadWriteTruncate | ReadAppend
+
+data FilePtr : Type where
+
+%extern prim__open : String -> String -> (1 x : %World) -> IORes (Either Int FilePtr)
+%extern prim__close : FilePtr -> (1 x : %World) -> IORes ()
+%extern prim__readLine : FilePtr -> (1 x : %World) -> IORes (Either Int String)
+%extern prim__writeLine : FilePtr -> String -> (1 x : %World) -> IORes (Either Int ())
+%extern prim__eof : FilePtr -> (1 x : %World) -> IORes Int
+
+modeStr : Mode -> String
+modeStr Read              = "r"
+modeStr WriteTruncate     = "w"
+modeStr Append            = "a"
+modeStr ReadWrite         = "r+"
+modeStr ReadWriteTruncate = "w+"
+modeStr ReadAppend        = "a+"
+
+public export
+data FileError = GenericFileError Int -- errno
+               | FileReadError
+               | FileWriteError
+               | FileNotFound
+               | PermissionDenied
+
+toFileError : Int -> FileError
+toFileError 1 = FileReadError
+toFileError 2 = FileWriteError
+toFileError 3 = FileNotFound
+toFileError 4 = PermissionDenied
+toFileError x = GenericFileError x
+
+fpure : Either Int a -> IO (Either FileError a)
+fpure (Left err) = pure (Left (toFileError err))
+fpure (Right x) = pure (Right x)
+
+export
+data File : Type where
+     FHandle : FilePtr -> File
+
+export
+openFile : String -> Mode -> IO (Either FileError File)
+openFile f m 
+    = do res <- primIO (prim__open f (modeStr m))
+         fpure (map FHandle res)
+
+export
+closeFile : File -> IO ()
+closeFile (FHandle f) = primIO (prim__close f)
+
+export
+fGetLine : (h : File) -> IO (Either FileError String)
+fGetLine (FHandle f) 
+    = do res <- primIO (prim__readLine f)
+         fpure res
+
+export
+fPutStr : (h : File) -> String -> IO (Either FileError ())
+fPutStr (FHandle f) str
+    = do res <- primIO (prim__writeLine f str)
+         fpure res
+
+export
+fPutStrLn : (h : File) -> String -> IO (Either FileError ())
+fPutStrLn f str = fPutStr f (str ++ "\n") 
+
+export
+fEOF : (h : File) -> IO Bool
+fEOF (FHandle f)
+    = do res <- primIO (prim__eof f)
+         pure (res /= 0)
+
+export
+readFile : String -> IO (Either FileError String)
+readFile file
+  = do Right h <- openFile file Read
+          | Left err => pure (Left err)
+       content <- read "" h
+       closeFile h
+       pure content
+  where
+    read : String -> File -> IO (Either FileError String)
+    read acc h
+        = do eof <- fEOF h
+             if eof
+                then pure (Right acc)
+                else
+                  do Right str <- fGetLine h
+                        | Left err => pure (Left err)
+                     read (acc ++ str) h
+

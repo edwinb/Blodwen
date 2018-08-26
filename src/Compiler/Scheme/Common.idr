@@ -118,7 +118,9 @@ schOp (Cast IntType CharType) [x] = op "integer->char" [x]
 schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show to ++ "\")"
 
 public export
-data ExtPrim = CCall | SchemeCall | PutStr | GetStr | Unknown Name
+data ExtPrim = CCall | SchemeCall | PutStr | GetStr 
+             | FileOpen | FileClose | FileReadLine | FileWriteLine | FileEOF
+             | Unknown Name
 
 export
 Show ExtPrim where
@@ -126,6 +128,11 @@ Show ExtPrim where
   show SchemeCall = "SchemeCall"
   show PutStr = "PutStr"
   show GetStr = "GetStr"
+  show FileOpen = "FileOpen"
+  show FileClose = "FileClose"
+  show FileReadLine = "FileReadLine"
+  show FileWriteLine = "FileWriteLine"
+  show FileEOF = "FileEOF"
   show (Unknown n) = "Unknown " ++ show n
 
 toPrim : Name -> ExtPrim
@@ -133,7 +140,13 @@ toPrim pn@(NS _ n)
     = cond [(n == UN "prim__schemeCall", SchemeCall),
             (n == UN "prim__cCall", CCall),
             (n == UN "prim__putStr", PutStr),
-            (n == UN "prim__getStr", GetStr)]
+            (n == UN "prim__getStr", GetStr),
+            (n == UN "prim__open", FileOpen),
+            (n == UN "prim__close", FileClose),
+            (n == UN "prim__readLine", FileReadLine),
+            (n == UN "prim__writeLine", FileWriteLine),
+            (n == UN "prim__eof", FileEOF)
+            ]
            (Unknown pn)
 toPrim pn = Unknown pn
 
@@ -219,8 +232,49 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
                       ++ showSep " " !(traverse (schConstAlt vs) alts)
                       ++ schCaseDef defc ++ ")"
     schExp vs (CPrimVal c) = pure $ schConstant c
-    schExp vs CErased = pure "9999"
+    schExp vs CErased = pure "'()"
     schExp vs (CCrash msg) = pure $ "(error " ++ show msg ++ ")"
+
+  -- Need to convert the argument (a list of scheme arguments that may
+  -- have been constructed at run time) to a scheme list to be passed to apply
+  readArgs : SVars vars -> CExp vars -> Core annot String
+  readArgs vs tm = pure $ "(blodwen-read-args " ++ !(schExp vs tm) ++ ")"
+
+  fileOp : String -> String
+  fileOp op = "(blodwen-file-op (lambda () " ++ op ++ "))"
+
+  -- External primitives which are common to the scheme codegens (they can be
+  -- overridden)
+  export
+  schExtCommon : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
+  schExtCommon vs SchemeCall [ret, CPrimVal (Str fn), args, world]
+     = pure $ mkWorld ("(apply " ++ fn ++" "
+                  ++ !(readArgs vs args) ++ ")")
+  schExtCommon vs SchemeCall [ret, fn, args, world]
+       = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp vs fn) ++")) "
+                    ++ !(readArgs vs args) ++ ")")
+  schExtCommon vs PutStr [arg, world] 
+      = pure $ "(display " ++ !(schExp vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
+  schExtCommon vs GetStr [world] 
+      = pure $ mkWorld "(blodwen-get-line (current-input-port))"
+  schExtCommon vs FileOpen [file, mode, world]
+      = pure $ mkWorld $ fileOp $ "(blodwen-open " 
+                                      ++ !(schExp vs file) ++ " "
+                                      ++ !(schExp vs mode) ++ ")"
+  schExtCommon vs FileClose [file, world]
+      = pure $ "(blodwen-close-port " ++ !(schExp vs file) ++ ") " ++ mkWorld (schConstructor 0 [])
+  schExtCommon vs FileReadLine [file, world]
+      = pure $ mkWorld $ fileOp $ "(blodwen-get-line " ++ !(schExp vs file) ++ ")"
+  schExtCommon vs FileWriteLine [file, str, world]
+      = pure $ mkWorld $ fileOp $ "(blodwen-putstring " 
+                                        ++ !(schExp vs file) ++ " "
+                                        ++ !(schExp vs str) ++ ")"
+  schExtCommon vs FileEOF [file, world]
+      = pure $ mkWorld $ "(blodwen-eof " ++ !(schExp vs file) ++ ")"
+  schExtCommon vs (Unknown n) args 
+      = throw (InternalError ("Can't compile unknown external primitive " ++ show n))
+  schExtCommon vs prim args 
+      = throw (InternalError ("Badly formed external primitive " ++ show prim))
 
   schArglist : SVars ns -> String
   schArglist [] = ""
@@ -235,7 +289,7 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
   schDef n (MkError exp)
      = pure $ "(define (" ++ schName n ++ " . any-args) " ++ !(schExp [] exp) ++ ")\n"
   schDef n (MkCon t a) = pure "" -- Nothing to compile here
-
+  
 -- Convert the name to scheme code
 -- (There may be no code generated, for example if it's a constructor)
 export

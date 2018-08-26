@@ -37,28 +37,11 @@ schFooter : String
 schFooter = ")"
 
 mutual
-  -- Need to convert the argument (a list of scheme arguments that may
-  -- have been constructed at run time) to a scheme list to be passed to apply
-  readArgs : SVars vars -> CExp vars -> Core annot String
-  readArgs vs tm = pure $ "(blodwen-read-args " ++ !(schExp racketPrim vs tm) ++ ")"
-
   racketPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
-  racketPrim vs SchemeCall [ret, CPrimVal (Str fn), args, world]
-     = pure $ mkWorld ("(apply " ++ fn ++" "
-                  ++ !(readArgs vs args) ++ ")")
-  racketPrim vs SchemeCall [ret, fn, args, world]
-     = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp racketPrim vs fn) ++")) "
-                  ++ !(readArgs vs args) ++ ")")
   racketPrim vs CCall [ret, fn, args, world]
       = throw (InternalError ("Can't compile C FFI calls to Racket yet"))
-  racketPrim vs PutStr [arg, world] 
-      = pure $ "(display " ++ !(schExp racketPrim vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
-  racketPrim vs GetStr [world] 
-      = pure $ mkWorld "(read-line (current-input-port))"
-  racketPrim vs (Unknown n) args 
-      = throw (InternalError ("Can't compile unknown external primitive " ++ show n))
   racketPrim vs prim args 
-      = throw (InternalError ("Badly formed external primitive " ++ show prim))
+      = schExtCommon racketPrim vs prim args
 
 compileToRKT : Ref Ctxt Defs ->
                ClosedTerm -> (outfile : String) -> Core annot ()

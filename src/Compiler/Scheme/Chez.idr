@@ -40,6 +40,7 @@ findLibs = mapMaybe (isLib . trim)
 schHeader : String -> List String -> String
 schHeader chez libs
   = "#!" ++ chez ++ " --script\n\n" ++
+    "(import (chezscheme))\n" ++
     "(case (machine-type)\n" ++
     "  [(i3le ti3le a6le ta6le) (load-shared-object \"libc.so.6\")]\n" ++
     "  [(i3osx ti3osx a6osx ta6osx) (load-shared-object \"libc.dylib\")]\n" ++
@@ -51,11 +52,6 @@ schFooter : String
 schFooter = ")"
   
 mutual
-  -- Need to convert the argument (a list of scheme arguments that may
-  -- have been constructed at run time) to a scheme list to be passed to apply
-  readArgs : SVars vars -> CExp vars -> Core annot String
-  readArgs vs tm = pure $ "(blodwen-read-args " ++ !(schExp chezExtPrim vs tm) ++ ")"
-
   tySpec : CExp vars -> Core annot String
   tySpec (CPrimVal IntType) = pure "int"
   tySpec (CPrimVal StringType) = pure "string"
@@ -76,12 +72,6 @@ mutual
   getFArgs arg = throw (InternalError ("Badly formed c call argument list " ++ show arg))
 
   chezExtPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
-  chezExtPrim vs SchemeCall [ret, CPrimVal (Str fn), args, world]
-     = pure $ mkWorld ("(apply " ++ fn ++" "
-                  ++ !(readArgs vs args) ++ ")")
-  chezExtPrim vs SchemeCall [ret, fn, args, world]
-     = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp chezExtPrim vs fn) ++")) "
-                  ++ !(readArgs vs args) ++ ")")
   chezExtPrim vs CCall [ret, CPrimVal (Str fn), fargs, world]
       = do args <- getFArgs fargs
            argTypes <- traverse tySpec (map fst args)
@@ -93,14 +83,10 @@ mutual
   chezExtPrim vs CCall [ret, fn, args, world]
       = pure "(error \"bad ffi call\")"
       -- throw (InternalError ("C FFI calls must be to statically known functions (" ++ show fn ++ ")"))
-  chezExtPrim vs PutStr [arg, world] 
-      = pure $ "(display " ++ !(schExp chezExtPrim vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
   chezExtPrim vs GetStr [world] 
       = pure $ mkWorld "(get-line (current-input-port))"
-  chezExtPrim vs (Unknown n) args 
-      = throw (InternalError ("Can't compile unknown external primitive " ++ show n))
   chezExtPrim vs prim args 
-      = throw (InternalError ("Badly formed external primitive " ++ show prim))
+      = schExtCommon chezExtPrim vs prim args
 
 compileToSS : Ref Ctxt Defs ->
               ClosedTerm -> (outfile : String) -> Core annot ()
