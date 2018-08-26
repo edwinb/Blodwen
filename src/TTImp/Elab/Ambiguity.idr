@@ -62,18 +62,37 @@ expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
         = buildAlt (IApp loc' f a) as
     buildAlt f ((loc', Just i, a) :: as) 
         = buildAlt (IImplicitApp loc' f i a) as
+      
+    isPrimAppF : (Defs -> Maybe Name) -> Name -> RawImp annot -> Bool
+    isPrimAppF pname n (IPrimVal _ _)
+        = case pname defs of
+               Nothing => False
+               Just n' => dropNS n == n'
+    isPrimAppF pname _ _ = False
+
+    isPrimApp : Name -> RawImp annot -> Bool
+    isPrimApp fn arg
+        = isPrimAppF fromIntegerName fn arg
+        || isPrimAppF fromStringName fn arg
+        || isPrimAppF fromCharName fn arg
 
     -- If it's not a constructor application, dot it
-    wrapDot : ElabMode -> Name -> Def -> RawImp annot -> RawImp annot
-    wrapDot _ _ (DCon _ _ _) tm = tm
-    wrapDot InLHS n' _ tm 
+    wrapDot : ElabMode -> Name -> List (RawImp annot) -> 
+              Def -> RawImp annot -> RawImp annot
+    wrapDot _ _ _ (DCon _ _ _) tm = tm
+    wrapDot InLHS n' [arg] _ tm 
+       = if n' == defining estate || isPrimApp n' arg
+            then tm
+            else IMustUnify fc "Not a constructor application or primitive" tm
+    wrapDot InLHS n' _ _ tm 
        = if n' == defining estate
             then tm
             else IMustUnify fc "Not a constructor application or primitive" tm
-    wrapDot _ _ _ tm = tm
+    wrapDot _ _ _ _ tm = tm
 
     mkTerm : Name -> GlobalDef -> RawImp annot
-    mkTerm n def = wrapDot mode n (definition def) (buildAlt (IVar fc n) args)
+    mkTerm n def = wrapDot mode n (map (snd . snd) args)
+                           (definition def) (buildAlt (IVar fc n) args)
 
     notLHS : ElabMode -> Bool
     notLHS InLHS = False

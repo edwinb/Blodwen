@@ -1,0 +1,7 @@
+module Data.List
+
+public export
+take : Nat -> List a -> List a
+take Z xs = []
+take (S k) [] = []
+take (S k) (x :: xs) = x :: take k xs

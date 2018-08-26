@@ -331,10 +331,10 @@ mutual
                                   InLHS => InLHS
                                   _ => InTerm) Normal
            defs <- get Ctxt
-           let alts' = pruneByType defs (nf defs env expected) alts
            delayOnFailure loc env expected ambiguous $
             (\delayed =>
                do gam <- get Ctxt
+                  let alts' = pruneByType defs (nf defs env expected) alts
                   log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
                           "\nDefault " ++ show def ++
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
@@ -354,10 +354,13 @@ mutual
                                  pure (mkConstantApp t env))
                              pure mexpected
            defs <- get Ctxt
-           let alts' = pruneByType defs (nf defs env expected) alts
+           solveConstraints (case elabMode elabinfo of
+                                  InLHS => InLHS
+                                  _ => InTerm) Normal
            delayOnFailure loc env expected ambiguous $
             (\delayed =>
                do gam <- get Ctxt
+                  let alts' = pruneByType defs (nf defs env expected) alts
                   log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
                   let tryall = case uniq of
@@ -753,8 +756,9 @@ mutual
       canBindName n vs
          = if n `elem` vs then Nothing else Just n
 
-      addEnv : Env Term vs -> SubVars vs' vs -> List Name -> List (RawImp annot)
-      addEnv [] sub used = []
+      addEnv : Env Term vs -> SubVars vs' vs -> List Name -> 
+               (List (RawImp annot), List Name)
+      addEnv [] sub used = ([], used)
       -- Skip the let bindings, they were let bound in the case function type
       addEnv (Let _ _ _ :: bs) SubRefl used = addEnv bs SubRefl used
       addEnv (Let _ _ _ :: bs) (DropCons p) used = addEnv bs p used
@@ -763,9 +767,10 @@ mutual
       addEnv (b :: bs) (KeepCons p) used
           = addEnv bs p used
       addEnv {vs = v :: vs} (b :: bs) (DropCons p) used
-          = case canBindName v (vs ++ used) of
-                 Just n => IAs loc n (Implicit loc) :: addEnv bs p used
-                 _ => Implicit loc :: addEnv bs p used
+          = let (rest, used') = addEnv bs p used in
+                case canBindName v used' of
+                     Just n => (IAs loc n (Implicit loc) :: rest, n :: used')
+                     _ => (Implicit loc :: rest, used')
 
       -- Names used in the pattern we're matching on, so don't bind them
       -- in the generated case block
@@ -778,10 +783,10 @@ mutual
       updateClause : Name -> Env Term vars -> SubVars vs' vars ->
                      ImpClause annot -> ImpClause annot
       updateClause casen env sub (PatClause loc' lhs rhs)
-          = let args = addEnv env sub (usedIn lhs) in
+          = let args = fst (addEnv env sub (usedIn lhs)) in
                 PatClause loc' (apply (IVar loc casen) (reverse (lhs :: args))) rhs
       updateClause casen env sub (ImpossibleClause loc' lhs)
-          = let args = addEnv env sub (usedIn lhs) in
+          = let args = fst (addEnv env sub (usedIn lhs)) in
                 ImpossibleClause loc' (apply (IVar loc casen) (reverse (lhs :: args)))
   
   checkLocal : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
