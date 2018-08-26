@@ -2,9 +2,9 @@ PREFIX = ${HOME}/.blodwen
 export BLODWEN_PATH = ${CURDIR}/prelude/build
 export BLODWEN_DATA = ${CURDIR}/support
 
-.PHONY: ttimp blodwen prelude test
+.PHONY: ttimp blodwen prelude test base
 
-all: ttimp blodwen prelude test
+all: ttimp blodwen prelude base test
 
 ttimp:
 	idris --build ttimp.ipkg
@@ -18,6 +18,9 @@ src/BlodwenPaths.idr:
 prelude:
 	make -C prelude BLODWEN=../blodwen
 
+base: prelude
+	make -C base BLODWEN=../blodwen
+
 test:
 	idris --build test.ipkg
 	make -C tests
@@ -28,6 +31,7 @@ install:
 	mkdir -p ${PREFIX}/blodwen/support/chicken
 	mkdir -p ${PREFIX}/blodwen/support/racket
 	make -C prelude install BLODWEN=../blodwen
+	make -C base install BLODWEN=../blodwen
 
 	install blodwen ${PREFIX}/bin
 	install support/chez/* ${PREFIX}/blodwen/support/chez
