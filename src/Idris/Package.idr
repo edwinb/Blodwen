@@ -246,10 +246,11 @@ processPackage cmd file
              | Left err => throw (ParseFail err)
          pkg <- addFields fs (initPkgDesc pname)
          case cmd of
-              Build => do build pkg
+              Build => do [] <- build pkg
+                             | errs => coreLift (exit 1)
                           pure ()
               Install => do [] <- build pkg
-                               | errs => pure ()
+                               | errs => coreLift (exit 1)
                             install pkg
               REPL => runRepl pkg
 

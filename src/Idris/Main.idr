@@ -89,9 +89,16 @@ stMain opts
                     Just f => updateErrorLine !(buildDeps f)
 
                doRepl <- postOptions opts
-               when doRepl $ 
+               if doRepl then
                     do putStrLnQ "Welcome to Blodwen. Good luck."
                        repl {c} {u}
+                  else
+                    -- exit with an error code if there was an error, otherwise
+                    -- just exit
+                    do ropts <- get ROpts
+                       case errorLine ropts of
+                            Nothing => pure ()
+                            Just _ => coreLift $ exit 1
 
 -- Run any options (such as --version or --help) which imply printing a
 -- message then exiting. Returns wheter the program should continue
