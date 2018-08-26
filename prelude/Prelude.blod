@@ -553,6 +553,44 @@ Foldable Maybe where
   foldr _ z Nothing  = z
   foldr f z (Just x) = f x z
 
+------------
+-- EITHER --
+------------
+
+public export
+data Either : (a : Type) -> (b : Type) -> Type where
+     Left : (1 x : a) -> Either a b
+     Right : (1 x : b) -> Either a b
+
+public export
+either : Lazy (a -> c) -> Lazy (b -> c) -> Either a b -> c
+either l r (Left x) = l x
+either l r (Right x) = r x
+
+public export
+(Eq a, Eq b) => Eq (Either a b) where
+  Left x == Left x' = x == x'
+  Right x == Right x' = x == x'
+  _ == _ = False
+
+public export
+Functor (Either e) where
+  map f (Left x) = Left x
+  map f (Right x) = Right (f x)
+
+public export
+Applicative (Either e) where
+    pure = Right
+
+    (Left a) <*> _          = Left a
+    (Right f) <*> (Right r) = Right (f r)
+    (Right _) <*> (Left l)  = Left l
+
+public export
+Monad (Either e) where
+    (Left n) >>= _ = Left n
+    (Right r) >>= f = f r
+
 -----------
 -- LISTS --
 -----------
