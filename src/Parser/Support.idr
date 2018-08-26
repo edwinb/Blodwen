@@ -71,6 +71,11 @@ location
     = do tok <- peek
          pure (line tok, col tok)
 
+column : EmptyRule Int
+column
+    = do (line, col) <- location
+         pure col
+
 hex : Char -> Maybe Int
 hex '0' = Just 0
 hex '1' = Just 1
@@ -282,7 +287,13 @@ identPart
 export
 namespace_ : Rule (List String)
 namespace_ 
-    = do ns <- sepBy1 (symbol ".") identPart
+    = do ns <- sepBy1 (do col <- column
+                          symbol "."
+                          col' <- column
+                          if (col' - col == 1)
+                             then pure ()
+                             else fail "No whitepace allowed after namespace separator") 
+                    identPart
          pure (reverse ns) -- innermost first, so reverse
 
 export
@@ -323,11 +334,6 @@ export
 init : IndentInfo
 -- init = MkIndent [0] False
 init = 0 -- MkIndent [0] False
-
-column : EmptyRule Int
-column
-    = do (line, col) <- location
-         pure col
 
 -- -- Fail if this is the end of a block entry or end of file
 export

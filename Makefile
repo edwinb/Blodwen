@@ -2,7 +2,7 @@ PREFIX = ${HOME}/.blodwen
 export BLODWEN_PATH = ${CURDIR}/prelude/build
 export BLODWEN_DATA = ${CURDIR}/support
 
-.PHONY: ttimp blodwen prelude test base
+.PHONY: ttimp blodwen prelude test base lib_clean
 
 all: ttimp blodwen prelude base test
 
@@ -20,6 +20,12 @@ prelude:
 
 base: prelude
 	make -C base BLODWEN=../blodwen
+
+libs : prelude base
+
+lib_clean:
+	make -C prelude clean
+	make -C base clean
 
 test:
 	idris --build test.ipkg
