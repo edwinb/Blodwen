@@ -71,6 +71,7 @@ location
     = do tok <- peek
          pure (line tok, col tok)
 
+export
 column : EmptyRule Int
 column
     = do (line, col) <- location
@@ -459,6 +460,19 @@ block item
          pure ps
   <|> do col <- column
          blockEntries (AtPos col) item
+
+export
+blockAfter : Int -> (IndentInfo -> Rule ty) -> EmptyRule (List ty)
+blockAfter mincol item
+    = do symbol "{"
+         commit
+         ps <- blockEntries AnyIndent item
+         symbol "}"
+         pure ps
+  <|> do col <- column
+         if col <= mincol
+            then pure []
+            else blockEntries (AtPos col) item
 
 export
 nonEmptyBlock : (IndentInfo -> Rule ty) -> Rule (List ty)

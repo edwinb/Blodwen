@@ -631,9 +631,9 @@ dataOpt
          ns <- some name
          pure (SearchBy ns)
 
-dataBody : FileName -> FilePos -> Name -> IndentInfo -> PTerm -> 
+dataBody : FileName -> Int -> FilePos -> Name -> IndentInfo -> PTerm -> 
            EmptyRule PDataDecl
-dataBody fname start n indents ty
+dataBody fname mincol start n indents ty
     = do atEnd indents
          end <- location
          pure (MkPLater (MkFC fname start end) n ty)
@@ -642,24 +642,25 @@ dataBody fname start n indents ty
                                dopts <- sepBy1 (symbol ",") dataOpt
                                symbol "]"
                                pure dopts)
-         cs <- block (tyDecl fname)
+         cs <- blockAfter mincol (tyDecl fname)
          end <- location
          pure (MkPData (MkFC fname start end) n ty opts cs)
 
-gadtData : FileName -> FilePos -> Name -> IndentInfo -> Rule PDataDecl
-gadtData fname start n indents
+gadtData : FileName -> Int -> FilePos -> Name -> IndentInfo -> Rule PDataDecl
+gadtData fname mincol start n indents
     = do symbol ":"
          commit
          ty <- expr EqOK fname indents
-         dataBody fname start n indents ty
+         dataBody fname mincol start n indents ty
 
 dataDeclBody : FileName -> IndentInfo -> Rule PDataDecl
 dataDeclBody fname indents
     = do start <- location
+         col <- column
          keyword "data"
          n <- name
          simpleData fname start n indents 
-           <|> gadtData fname start n indents
+           <|> gadtData fname col start n indents
 
 dataDecl : FileName -> IndentInfo -> Rule PDecl
 dataDecl fname indents
@@ -796,6 +797,7 @@ ifaceDecl : FileName -> IndentInfo -> Rule PDecl
 ifaceDecl fname indents
     = do start <- location
          vis <- visibility
+         col <- column
          keyword "interface"
          commit
          cons <- constraints fname indents
@@ -807,7 +809,7 @@ ifaceDecl fname indents
          dc <- option Nothing (do exactIdent "constructor"
                                   n <- name
                                   pure (Just n))
-         body <- assert_total (block (topDecl fname))
+         body <- assert_total (blockAfter col (topDecl fname))
          end <- location
          pure (PInterface (MkFC fname start end) 
                       vis cons n params det dc (collectDefs (concat body)))
@@ -816,6 +818,7 @@ implDecl : FileName -> IndentInfo -> Rule PDecl
 implDecl fname indents
     = do start <- location
          vis <- visibility
+         col <- column
          option () (keyword "implementation")
          iname <- option Nothing (do symbol "["
                                      iname <- name
@@ -825,7 +828,7 @@ implDecl fname indents
          n <- name
          params <- many (simpleExpr fname indents)
          keyword "where"
-         body <- assert_total (block (topDecl fname))
+         body <- assert_total (blockAfter col (topDecl fname))
          end <- location
          pure (PImplementation (MkFC fname start end)
                          vis cons n params iname (collectDefs (concat body)))
