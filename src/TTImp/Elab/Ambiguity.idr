@@ -160,4 +160,8 @@ couldBe defs ty _ = True -- target is not a concrete type, so could be possible
 
 export
 pruneByType : Defs -> NF vars -> List (RawImp annot) -> List (RawImp annot)
-pruneByType defs target = filter (couldBe defs target)
+pruneByType defs target alts
+    = let res = filter (couldBe defs target) alts in
+          if isNil res
+             then alts -- if none of them work, better to show all the errors
+             else res

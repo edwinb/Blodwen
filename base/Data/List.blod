@@ -75,3 +75,11 @@ partition p (x::xs) =
       (x::lefts, rights)
     else
       (lefts, x::rights)
+
+reverseOnto : List a -> List a -> List a
+reverseOnto acc [] = acc
+reverseOnto acc (x::xs) = reverseOnto (x::acc) xs
+
+export
+reverse : List a -> List a
+reverse = reverseOnto []
