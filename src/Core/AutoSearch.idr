@@ -161,9 +161,17 @@ searchNames loc defaults depth trying env ty defining []
          throw (CantSolveGoal loc env (quote gam env ty))
 searchNames loc defaults depth trying env ty defining (n :: ns)
     = do gam <- get Ctxt
-         log 5 $ "Searching " ++ show (n :: ns) ++ " for " ++ show (quote gam env ty)
+         let visns = filter (visible (gamma gam) (currentNS gam)) (n :: ns)
+         log 5 $ "Searching " ++ show visns ++ " for " ++ show (quote gam env ty)
          exactlyOne loc env ty 
-            (map (searchName loc defaults depth trying env ty defining) (n :: ns))
+            (map (searchName loc defaults depth trying env ty defining) visns)
+  where
+    visible : Gamma -> List String -> Name -> Bool
+    visible gam nspace n
+        = case lookupGlobalExact n gam of
+               Nothing => False
+               Just gdef => visibleIn nspace n (visibility gdef)
+
 
 searchLocalWith : {auto c : Ref Ctxt Defs} ->
                   {auto u : Ref UST (UState annot)} ->
