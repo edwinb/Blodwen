@@ -1,6 +1,7 @@
 module System.File
 
 import Data.List
+import Data.Strings
 
 public export
 data Mode = Read | WriteTruncate | Append | ReadWrite | ReadWriteTruncate | ReadAppend
@@ -75,16 +76,6 @@ fEOF (FHandle f)
     = do res <- primIO (prim__eof f)
          pure (res /= 0)
 
--- TODO: Make a string builder, with a linear string...
--- This works quickly because when string-append builds the result, it allocates
--- enough room in advance so there's only one allocation, rather than lots!
-appendAll : List String -> String
-appendAll xs = unsafePerformIO (schemeCall String "string-append" (toFArgs xs))
-  where
-    toFArgs : List String -> FArgList
-    toFArgs [] = []
-    toFArgs (x :: xs) = x :: toFArgs xs
-
 export
 readFile : String -> IO (Either FileError String)
 readFile file
@@ -94,7 +85,7 @@ readFile file
           | Left err => do closeFile h
                            pure (Left err)
        closeFile h
-       pure (Right (appendAll content))
+       pure (Right (fastAppend content))
   where
     read : List String -> File -> IO (Either FileError (List String))
     read acc h

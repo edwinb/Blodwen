@@ -1,6 +1,7 @@
 package base
 
 modules = Data.List,
+          Data.Strings,
 
           System.File
 

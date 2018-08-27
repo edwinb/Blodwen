@@ -1,0 +1,23 @@
+module Data.Strings
+
+import Data.List
+
+-- This works quickly because when string-append builds the result, it allocates
+-- enough room in advance so there's only one allocation, rather than lots!
+export
+fastAppend : List String -> String
+fastAppend xs = unsafePerformIO (schemeCall String "string-append" (toFArgs xs))
+  where
+    toFArgs : List String -> FArgList
+    toFArgs [] = []
+    toFArgs (x :: xs) = x :: toFArgs xs
+
+words' : List Char -> List (List Char)
+words' s = case dropWhile isSpace s of
+            [] => []
+            s' => let (w, s'') = break isSpace s'
+                  in w :: words' s''
+
+export
+words : String -> List String
+words s = map pack (words' (unpack s))

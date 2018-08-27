@@ -691,6 +691,14 @@ unpack str
            Nothing => []
            Just (x, xs) => x :: unpack xs
 
+public export
+Semigroup String where
+  (<+>) = (++)
+
+public export
+Monoid String where
+  neutral = ""
+
 ----------------
 -- CHARACTERS --
 ----------------
