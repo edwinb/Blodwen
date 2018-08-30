@@ -23,7 +23,6 @@ As such, it should contain:
 - Functor, Applicative, Monad and related functions
 - Foldable
 - [TODO: Enum for range syntax]
-- [TODO: Alternative for Monad comprehensions]
 - Console IO
 
 Everything else should be in the base libraries, and imported as required.
@@ -48,6 +47,7 @@ infixr 7 ::, ++
 
 -- Functor/Applicative/Monad/Algebra operators
 infixl 1 >>=
+infixr 2 <|>
 infixl 3 <*>
 infixr 4 <$>
 infixl 6 <+>
@@ -408,6 +408,11 @@ interface Functor f => Applicative f where
   (<*>) : f (a -> b) -> f a -> f b
 
 public export
+interface Applicative f => Alternative f where
+    empty : f a
+    (<|>) : f a -> f a -> f a
+
+public export
 interface Applicative m => Monad m where
   (>>=) : m a -> (a -> m b) -> m b
   join : m (m a) -> m a
@@ -415,6 +420,15 @@ interface Applicative m => Monad m where
   -- default implementations
   (>>=) x f = join (f <$> x)
   join x = x >>= id
+
+public export
+guard : Alternative f => Bool -> f ()
+guard a = if a then pure () else empty
+
+public export
+when : Applicative f => Bool -> Lazy (f ()) -> f ()
+when True f = f
+when False f = pure ()
 
 ---------------------------
 -- FOLDABLE, TRAVERSABLE --
@@ -545,6 +559,13 @@ Applicative Maybe where
   _      <*> _        = Nothing
 
 public export
+Alternative Maybe where
+    empty = Nothing
+
+    (Just x) <|> _ = Just x
+    Nothing  <|> v = v
+
+public export
 Monad Maybe where
   Nothing  >>= k = Nothing
   (Just x) >>= k = k x
@@ -644,6 +665,11 @@ public export
 Applicative List where
   pure x = [x]
   fs <*> vs = concatMap (\f => map f vs) fs
+
+public export
+Alternative List where
+    empty = []
+    (<|>) = (++)
 
 public export
 Monad List where
