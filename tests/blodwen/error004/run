@@ -1,0 +1,4 @@
+$1 --check error1.blod
+$1 --check error2.blod
+
+rm -rf build

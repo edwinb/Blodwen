@@ -120,6 +120,7 @@ fnameModified fname
          pure t
 
 buildMod : {auto c : Ref Ctxt Defs} ->
+           {auto s : Ref Syn SyntaxInfo} ->
            FC -> Nat -> Nat -> BuildMod -> Core FC (List (Error FC))
 -- Build from source if any of the dependencies, or the associated source
 -- file, have a modification time which is newer than the module's ttc
@@ -140,7 +141,7 @@ buildMod loc num len mod
                     Nothing => True
                     Just t => any (\x => x > t) (srcTime :: map snd depTimes)
         u <- newRef UST initUState
-        s <- newRef Syn initSyntax
+        put Syn initSyntax
 
         let showMod = showSep "." (reverse (buildNS mod))
 
@@ -148,8 +149,8 @@ buildMod loc num len mod
            then do putStrLnQ $ show num ++ "/" ++ show len ++
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
-                   [] <- process {u} {s} src
-                      | errs => do printAll {s} errs
+                   [] <- process {u} src
+                      | errs => do printAll errs
                                    pure errs
                    pure []
            else pure []
@@ -159,6 +160,7 @@ buildMod loc num len mod
     printAll xs = coreLift $ putStrLn $ showSep "\n" !(traverse display xs)
 
 buildMods : {auto c : Ref Ctxt Defs} ->
+            {auto s : Ref Syn SyntaxInfo} ->
             FC -> Nat -> Nat -> List BuildMod -> Core FC (List (Error FC))
 buildMods fc num len [] = pure []
 buildMods fc num len (m :: ms)
@@ -184,6 +186,7 @@ buildDeps fname
 
 export
 buildAll : {auto c : Ref Ctxt Defs} ->
+           {auto s : Ref Syn SyntaxInfo} ->
            (allFiles : List String) -> Core FC (List (Error FC))
 buildAll allFiles
     = do mods <- traverse (getBuildMods toplevelFC) allFiles

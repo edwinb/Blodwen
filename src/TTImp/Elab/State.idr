@@ -630,6 +630,10 @@ convert loc elabmode env x y
                        solveConstraints umode Normal
                     pure vs)
             (\err => do gam <- get Ctxt 
+                        -- Try to solve any remaining constraints to see if it helps
+                        -- the error message
+                        catch (solveConstraints umode Normal)
+                              (\err => pure ())
                         throw (WhenUnifying loc env
                                             (normaliseHoles gam env (quote (noGam gam) env x))
                                             (normaliseHoles gam env (quote (noGam gam) env y))
@@ -723,18 +727,18 @@ handleClause elab1 elab2
 export
 successful : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-             ElabMode -> List (Core annot a) ->
-             Core annot (List (Either (Error annot)
+             ElabMode -> List (Maybe Name, Core annot a) ->
+             Core annot (List (Either (Maybe Name, Error annot)
                                       (a, AllState vars annot)))
 successful elabmode [] = pure []
-successful elabmode (elab :: elabs)
+successful elabmode ((tm, elab) :: elabs)
     = do solveConstraints (case elabmode of
                                 InLHS => InLHS
                                 _ => InTerm) Normal
          init_st <- getAllState
          Right res <- tryError elab
                | Left err => do rest <- successful elabmode elabs
-                                pure (Left err :: rest)
+                                pure (Left (tm, err) :: rest)
 
          elabState <- getAllState -- save state at end of successful elab
          -- reinitialise state for next elabs
@@ -746,9 +750,9 @@ export
 exactlyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
              annot -> Env Term vars -> ElabMode ->
-             List (Core annot (Term vars, Term vars)) ->
+             List (Maybe Name, Core annot (Term vars, Term vars)) ->
              Core annot (Term vars, Term vars)
-exactlyOne loc env elabmode [elab] = elab
+exactlyOne loc env elabmode [(tm, elab)] = elab
 exactlyOne {vars} loc env elabmode all
     = do elabs <- successful elabmode all
          case rights elabs of
@@ -759,7 +763,7 @@ exactlyOne {vars} loc env elabmode all
   where
     -- If they've all failed, collect all the errors
     -- If more than one succeeded, report the ambiguity
-    altError : List (Error annot) -> List ((Term vars, Term vars), AllState vars annot) ->
+    altError : List (Maybe Name, Error annot) -> List ((Term vars, Term vars), AllState vars annot) ->
                Error annot
     altError ls [] = AllFailed ls
     altError ls rs = AmbiguousElab loc env (map (\x => fst (fst x)) rs)
@@ -768,11 +772,11 @@ export
 anyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
          annot -> ElabMode ->
-         List (Core annot (Term vars, Term vars)) ->
+         List (Maybe Name, Core annot (Term vars, Term vars)) ->
          Core annot (Term vars, Term vars)
 anyOne loc elabmode [] = throw (GenericMsg loc "All elaborators failed")
-anyOne loc elabmode [elab] = elab
-anyOne loc elabmode (e :: es) 
+anyOne loc elabmode [(tm, elab)] = elab
+anyOne loc elabmode ((tm, e) :: es) 
     = try (do solveConstraints (case elabmode of
                                      InLHS => InLHS
                                      _ => InTerm) Normal

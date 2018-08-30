@@ -1101,6 +1101,25 @@ solveConstraints mode smode
          when (length hs' < length hs) $ solveConstraints mode smode
          pure ()
 
+-- Replace any 'BySearch' with 'Hole', so that we don't keep searching 
+-- fruitlessly while elaborating the rest of a source file
+export
+giveUpSearch : {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState annot)} ->
+               Core annot ()
+giveUpSearch
+    = do hs <- getHoleInfo
+         traverse searchToHole hs
+         pure ()
+  where
+    searchToHole : (annot, Name) -> Core annot ()
+    searchToHole (_, hole)
+        = do gam <- get Ctxt
+             case lookupDefExact hole (gamma gam) of
+                  Just (BySearch _ _) =>
+                         updateDef hole (const (Just (Hole 0 False False)))
+                  _ => pure ()
+
 export
 checkDots : {auto u : Ref UST (UState annot)} ->
             {auto c : Ref Ctxt Defs} ->

@@ -19,10 +19,11 @@ As such, it should contain:
 - Char and String manipulation
 - Show, Eq, Ord, and implementations for all types in the prelude
 - Interfaces and functions for basic proof (cong, Uninhabited, etc)
-- [Possibly Enum for range syntax?]
 - Semigroup, Monoid
 - Functor, Applicative, Monad and related functions
 - Foldable
+- [TODO: Enum for range syntax]
+- [TODO: Alternative for Monad comprehensions]
 - Console IO
 
 Everything else should be in the base libraries, and imported as required.

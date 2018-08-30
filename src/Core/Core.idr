@@ -35,7 +35,7 @@ data Error annot
     | AmbiguousName annot (List Name)
     | AmbiguousElab annot (Env Term vars) (List (Term vars))
     | AmbiguousSearch annot (Env Term vars) (List (Term vars))
-    | AllFailed (List (Error annot))
+    | AllFailed (List (Maybe Name, Error annot))
     | InvalidImplicit annot (Env Term vars) Name (Term vars)
     | CantSolveGoal annot (Env Term vars) (Term vars)
     | DeterminingArg annot Name (Env Term vars) (Term vars)
@@ -194,7 +194,7 @@ getAnnot (LinearMisuse loc y z w) = Just loc
 getAnnot (AmbiguousName loc xs) = Just loc
 getAnnot (AmbiguousElab loc _ xs) = Just loc
 getAnnot (AmbiguousSearch loc _ xs) = Just loc
-getAnnot (AllFailed (x :: xs)) = getAnnot x
+getAnnot (AllFailed ((_, x) :: xs)) = getAnnot x
 getAnnot (AllFailed []) = Nothing
 getAnnot (InvalidImplicit loc _ y tm) = Just loc
 getAnnot (CantSolveGoal loc env tm) = Just loc

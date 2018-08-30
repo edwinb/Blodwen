@@ -68,6 +68,7 @@ updateREPLOpts
 stMain : List CLOpt -> Core FC ()
 stMain opts
     = do c <- newRef Ctxt initCtxt
+         s <- newRef Syn initSyntax
          addPrimitives
 
          updatePaths
@@ -80,7 +81,6 @@ stMain opts
                let fname = findInput opts
 
                u <- newRef UST initUState
-               s <- newRef Syn initSyntax
                o <- newRef ROpts (REPL.defaultOpts fname)
 
                updateREPLOpts

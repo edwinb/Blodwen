@@ -162,6 +162,7 @@ processOptions (Just (fc, opts))
          preOptions clopts 
 
 build : {auto c : Ref Ctxt Defs} ->
+        {auto s : Ref Syn SyntaxInfo} ->
         PkgDesc -> Core FC (List (Error FC))
 build pkg
     = do defs <- get Ctxt
@@ -237,6 +238,7 @@ runRepl pkg
          throw (InternalError "Not implemented")
 
 processPackage : {auto c : Ref Ctxt Defs} ->
+                 {auto s : Ref Syn SyntaxInfo} ->
                  PkgCommand -> String -> Core FC ()
 processPackage cmd file 
     = do Right (pname, fs) <- coreLift $ parseFile file 
@@ -265,6 +267,7 @@ rejectPackageOpts [] = pure False
 -- it's not
 export
 processPackageOpts : {auto c : Ref Ctxt Defs} ->
+                     {auto s : Ref Syn SyntaxInfo} ->
                      List CLOpt -> Core FC Bool
 processPackageOpts [Package cmd f] 
     = do processPackage cmd f

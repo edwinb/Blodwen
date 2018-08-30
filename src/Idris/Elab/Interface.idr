@@ -183,9 +183,9 @@ getDefault : ImpDecl FC -> Maybe (FC, List FnOpt, Name, List (ImpClause FC))
 getDefault (IDef fc n cs) = Just (fc, [], n, cs)
 getDefault _ = Nothing
 
-mkCon : Name -> Name
-mkCon (NS ns (UN n)) = NS ns (DN ("Constructor of " ++ n) (MN ("__mk" ++ n) 0))
-mkCon n = DN ("Constructor of " ++ show n) (MN ("__mk" ++ show n) 0)
+mkCon : FC -> Name -> Name
+mkCon loc (NS ns (UN n)) = NS ns (DN (n ++ " at " ++ show loc) (MN ("__mk" ++ n) 0))
+mkCon loc n = DN (show n ++ " at " ++ show loc) (MN ("__mk" ++ show n) 0)
 
 updateIfaceSyn : {auto s : Ref Syn SyntaxInfo} ->
                  Name -> Name -> List Name -> List (RawImp FC) ->
@@ -211,7 +211,7 @@ elabInterface : {auto c : Ref Ctxt Defs} ->
                 List (ImpDecl FC) ->
                 Core FC ()
 elabInterface {vars} fc vis env nest constraints iname params dets mcon body
-    = do let conName_in = maybe (mkCon iname) id mcon
+    = do let conName_in = maybe (mkCon fc iname) id mcon
          -- Machine generated names need to be qualified when looking them up
          conName <- inCurrentNS conName_in
          let meth_sigs = mapMaybe getSig body -- (FC, List FnOpt, Name, RawImp FC)

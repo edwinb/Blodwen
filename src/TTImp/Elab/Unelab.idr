@@ -32,25 +32,28 @@ mutual
   unelabTy loc env (Ref nt n)
       = do defs <- get Ctxt
            case lookupTyExact n (gamma defs) of
-                Nothing => pure (Implicit loc,
+                Nothing => pure (IHole loc (nameRoot n),
                                  Erased) -- should never happen on a well typed term!
-                                    -- may happen in error messages for ambiguous terms
+                                    -- may happen in error messages where we haven't saved
+                                    -- holes in the context
                 Just ty => pure (IVar loc n, embed ty)
   unelabTy loc env (Bind x b sc)
       = do (sc', scty) <- unelabTy loc (b :: env) sc
            unelabBinder loc env x b sc sc' scty
   unelabTy loc env (App fn arg)
       = do (fn', fnty) <- unelabTy loc env fn
-           (arg', argty) <- unelabTy loc env arg
-           defs <- get Ctxt
-           case nf defs env fnty of
-                NBind x (Pi rig Explicit ty) sc
-                  => pure (IApp loc fn' arg', 
-                           quote defs env (sc (toClosure defaultOpts env arg)))
-                NBind x (Pi rig p ty) sc
-                  => pure (IImplicitApp loc fn' (Just x) arg', 
-                           quote defs env (sc (toClosure defaultOpts env arg)))
-                _ => pure (IApp loc fn' arg', Erased)
+           case fn' of
+               IHole _ _ => pure (fn', Erased)
+               _ => do (arg', argty) <- unelabTy loc env arg
+                       defs <- get Ctxt
+                       case nf defs env fnty of
+                            NBind x (Pi rig Explicit ty) sc
+                              => pure (IApp loc fn' arg', 
+                                       quote defs env (sc (toClosure defaultOpts env arg)))
+                            NBind x (Pi rig p ty) sc
+                              => pure (IImplicitApp loc fn' (Just x) arg', 
+                                       quote defs env (sc (toClosure defaultOpts env arg)))
+                            _ => pure (IApp loc fn' arg', Erased)
   unelabTy loc env (PrimVal c) = pure (IPrimVal loc c, Erased)
   unelabTy loc env Erased = pure (Implicit loc, Erased)
   unelabTy loc env TType = pure (IType loc, TType)

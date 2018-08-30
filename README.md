@@ -25,9 +25,10 @@ Good luck :).
 Things still missing
 --------------------
 
-+ Writing error messages as Blodwen expressions, not TT
 + Some high level syntax, notably 'with', 'rewrite', dependent pairs,
   numeric ranges, comprehensions
 + Cumulativity and totality checking
++ Codata (or rather, you can have it, but there's no productivity check...)
 + Any kind of interactive editing/IDE mode
++ Documentation strings
 + The rest of this "Things still missing" list

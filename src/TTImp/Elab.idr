@@ -168,6 +168,7 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
                        Term vars) -- type
 elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
     = do resetHoles
+         giveUpSearch -- reset from previous elaboration, if any
          e <- newRef EST (initEStateSub defining env' sub)
          let rigc = getRigNeeded elabmode
          (chktm_in, ty) <- check {e} rigc process (initElabInfo impmode elabmode) env nest tm tyin

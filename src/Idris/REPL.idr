@@ -15,6 +15,7 @@ import Core.TT
 import Core.Unify
 
 import Idris.Desugar
+import Idris.Error
 import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
@@ -289,7 +290,7 @@ processCatch cmd
                            put UST u'
                            put Syn s'
                            put ROpts o'
-                           coreLift (putStrLn (show err))
+                           coreLift (putStrLn !(perror err))
                            opts <- get ROpts
                            pure True)
 

@@ -20,6 +20,15 @@ pshow env tm
          itm <- resugar env (normaliseHoles defs env tm)
          pure (show itm)
 
+pshowNoNorm : {auto c : Ref Ctxt Defs} ->
+        {auto s : Ref Syn SyntaxInfo} ->
+        Env Term vars -> Term vars -> Core FC String
+pshowNoNorm env tm 
+    = do defs <- get Ctxt
+         itm <- resugar env tm
+         pure (show itm)
+
+export
 perror : {auto c : Ref Ctxt Defs} ->
          {auto s : Ref Syn SyntaxInfo} ->
          Error FC -> Core FC String
@@ -74,10 +83,24 @@ perror (AmbiguousElab fc env ts)
          pure res
 perror (AmbiguousSearch fc env ts)
     = pure $ "Multiple solutions found in search. Possible correct results:\n\t" ++
-           showSep "\n\t" !(traverse (pshow env) ts)
+           showSep "\n\t" !(traverse (pshowNoNorm env) ts)
 perror (AllFailed ts)
-    = pure $ "Sorry, I can't find any elaboration which works. All errors:\n" ++
-           showSep "\n" !(traverse perror ts)
+    = case allUndefined ts of
+           Just e => perror e
+           _ => pure $ "Sorry, I can't find any elaboration which works. All errors:\n" ++
+                     showSep "\n" !(traverse pAlterror ts)
+  where
+    pAlterror : (Maybe Name, Error FC) -> Core FC String
+    pAlterror (Just n, err)
+       = pure $ "If " ++ show n ++ ": " ++ !(perror err) ++ "\n"
+    pAlterror (Nothing, err)
+       = pure $ "Possible error:\n\t" ++ !(perror err)
+
+    allUndefined : List (Maybe Name, Error FC) -> Maybe (Error FC)
+    allUndefined [] = Nothing
+    allUndefined [(_, UndefinedName loc e)] = Just (UndefinedName loc e)
+    allUndefined ((_, UndefinedName _ e) :: es) = allUndefined es
+    allUndefined _ = Nothing
 perror (InvalidImplicit _ env n tm)
     = pure $ show n ++ " is not a valid implicit argument in " ++ !(pshow env tm)
 perror (CantSolveGoal _ env g)
@@ -137,13 +160,17 @@ perror (CyclicImports ns)
 perror (InternalError str) = pure $ "INTERNAL ERROR: " ++ str
 
 perror (InType fc n err)
-    = pure $ "While processing type of " ++ show n ++ " at " ++ show fc ++ ":\n" ++ !(perror err)
+    = pure $ "While processing type of " ++ show (sugarName n) ++ 
+             " at " ++ show fc ++ ":\n" ++ !(perror err)
 perror (InCon fc n err)
-    = pure $ "While processing constructor " ++ show n ++ " at " ++ show fc ++ ":\n" ++ !(perror err)
+    = pure $ "While processing constructor " ++ show (sugarName n) ++ 
+             " at " ++ show fc ++ ":\n" ++ !(perror err)
 perror (InLHS fc n err)
-    = pure $ "While processing left hand side of " ++ show n ++ " at " ++ show fc ++ ":\n" ++ !(perror err)
+    = pure $ "While processing left hand side of " ++ show (sugarName n) ++ 
+             " at " ++ show fc ++ ":\n" ++ !(perror err)
 perror (InRHS fc n err)
-    = pure $ "While processing right hand side of " ++ show n ++ " at " ++ show fc ++ ":\n" ++ !(perror err)
+    = pure $ "While processing right hand side of " ++ show (sugarName n) ++ 
+             " at " ++ show fc ++ ":\n" ++ !(perror err)
 
 export
 display : {auto c : Ref Ctxt Defs} ->

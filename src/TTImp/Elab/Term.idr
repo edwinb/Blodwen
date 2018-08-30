@@ -67,6 +67,12 @@ ambiguous (InRHS _ _ err) = ambiguous err
 ambiguous (WhenUnifying _ _ _ _ err) = ambiguous err
 ambiguous _ = False
 
+getName : RawImp annot -> Maybe Name
+getName (IVar _ n) = Just n
+getName (IApp _ f _) = getName f
+getName (IImplicitApp _ f _ _) = getName f
+getName _ = Nothing
+
 mutual
   export
   check : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -341,13 +347,13 @@ mutual
                   if delayed -- use the default if there's still ambiguity
                      then try (exactlyOne loc env (elabMode elabinfo) 
                                  (map (\t => 
-                                   checkImp rigc process elabinfo env nest t 
-                                       (Just expected)) alts'))
+                                   (getName t, checkImp rigc process elabinfo env nest t
+                                       (Just expected))) alts'))
                               (checkImp rigc process elabinfo env nest def
                                      (Just expected))
                      else exactlyOne loc env (elabMode elabinfo) (map (\t => 
-                             checkImp rigc process elabinfo env nest t 
-                                 (Just expected)) alts'))
+                             (getName t, checkImp rigc process elabinfo env nest t 
+                                 (Just expected))) alts'))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
       = do expected <- maybe (do t <- addHole loc env TType
                                  log 5 $ "Added hole for ambiguous expression type " ++ show t
@@ -367,8 +373,8 @@ mutual
                                     FirstSuccess => anyOne loc
                                     _ => exactlyOne loc env
                   tryall (elabMode elabinfo)
-                         (map (\t => checkImp rigc process elabinfo env nest t 
-                                         (Just expected)) alts'))
+                         (map (\t => (getName t, checkImp rigc process elabinfo env nest t 
+                                         (Just expected))) alts'))
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected
@@ -538,7 +544,7 @@ mutual
                               resolveRef fullname def gam (embed ty)
                          ns => exactlyOne loc env (elabMode elabinfo)
                                     (map (\ (n, def, ty) =>
-                                       resolveRef n def gam (embed ty)) ns)
+                                       (Just n, resolveRef n def gam (embed ty))) ns)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
       rigSafe Rig1 RigW = throw (LinearMisuse loc x Rig1 RigW)

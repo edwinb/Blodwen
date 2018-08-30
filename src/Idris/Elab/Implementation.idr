@@ -18,9 +18,8 @@ import TTImp.Utils
 
 import Control.Monad.State
 
-mkImpl : Name -> List (RawImp FC) -> Name
-mkImpl n ps = DN ("Implementation of " ++ show n ++ " " ++
-                    showSep " " (map show ps))
+mkImpl : FC -> Name -> List (RawImp FC) -> Name
+mkImpl fc n ps = DN (show n ++ " implementation at " ++ show fc)
                  (MN ("__Impl_" ++ show n ++ "_" ++
                   showSep "_" (map show ps)) 0)
 
@@ -66,7 +65,7 @@ elabImplementation : {auto c : Ref Ctxt Defs} ->
                      Core FC ()
 -- TODO: Refactor all these steps into separate functions
 elabImplementation {vars} fc vis env nest cons iname ps impln body_in
-    = do let impName_in = maybe (mkImpl iname ps) id impln
+    = do let impName_in = maybe (mkImpl fc iname ps) id impln
          impName <- inCurrentNS impName_in
          syn <- get Syn
          cndata <- case lookupCtxtName iname (ifaces syn) of
