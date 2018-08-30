@@ -140,7 +140,7 @@ exactlyOne loc env ty all
                                         pure res
               [] => do gam <- get Ctxt
                        throw (CantSolveGoal loc env (quote gam env ty))
-              rs => throw (AmbiguousSearch loc (map fst rs))
+              rs => throw (AmbiguousSearch loc env (map fst rs))
 
 anyOne : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
@@ -335,7 +335,7 @@ searchType loc defaults depth trying env defining ty@(NTCon n t ar args)
            else throw (CantSolveGoal loc env (quote gam env ty))
   where
     ambig : Error annot -> Bool
-    ambig (AmbiguousSearch _ _) = True
+    ambig (AmbiguousSearch _ _ _) = True
     ambig _ = False
 searchType loc defaults depth trying env defining (NPrimVal IntType)
     = pure (PrimVal (I 0))

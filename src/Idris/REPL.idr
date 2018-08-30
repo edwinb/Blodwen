@@ -115,6 +115,9 @@ setOpt : {auto c : Ref Ctxt Defs} ->
 setOpt (ShowImplicits t) 
     = do pp <- getPPrint
          setPPrint (record { showImplicits = t } pp)
+setOpt (ShowNamespace t) 
+    = do pp <- getPPrint
+         setPPrint (record { fullNamespace = t } pp)
 setOpt (ShowTypes t) 
     = do opts <- get ROpts
          put ROpts (record { showTypes = t } opts)

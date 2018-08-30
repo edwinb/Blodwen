@@ -33,25 +33,25 @@ data Error annot
     | LinearUsed annot Nat Name
     | LinearMisuse annot Name RigCount RigCount
     | AmbiguousName annot (List Name)
-    | AmbiguousElab annot (List (Term vars))
-    | AmbiguousSearch annot (List (Term vars))
+    | AmbiguousElab annot (Env Term vars) (List (Term vars))
+    | AmbiguousSearch annot (Env Term vars) (List (Term vars))
     | AllFailed (List (Error annot))
-    | InvalidImplicit annot Name (Term vars)
+    | InvalidImplicit annot (Env Term vars) Name (Term vars)
     | CantSolveGoal annot (Env Term vars) (Term vars)
     | DeterminingArg annot Name (Env Term vars) (Term vars)
     | UnsolvedHoles (List (annot, Name))
-    | CantInferArgType annot Name Name (Term vars)
-    | SolvedNamedHole annot Name
+    | CantInferArgType annot (Env Term vars) Name Name (Term vars)
+    | SolvedNamedHole annot (Env Term vars) Name (Term vars)
     | VisibilityError annot Visibility Name Visibility Name
     | NonLinearPattern annot Name
     | BadPattern annot Name
     | NoDeclaration annot Name
     | AlreadyDefined annot Name
-    | NotFunctionType annot (Term vars)
+    | NotFunctionType annot (Env Term vars) (Term vars)
     | CaseCompile annot Name CaseError 
-    | BadDotPattern annot String (Term vars) (Term vars)
+    | BadDotPattern annot (Env Term vars) String (Term vars) (Term vars)
     | BadImplicit annot String
-    | BadRunElab annot (Term vars)
+    | BadRunElab annot (Env Term vars) (Term vars)
     | GenericMsg annot String
     | TTCError TTCErrorMsg
     | FileErr String FileError
@@ -94,11 +94,11 @@ Show annot => Show (Error annot) where
   show (InvisibleName fc (NS ns x)) 
        = show fc ++ ":Name " ++ show x ++ " is inaccessible since " ++
          showSep "." (reverse ns) ++ " is not explicitly imported"
+  show (InvisibleName fc x) = show fc ++ ":Name " ++ show x ++ " is inaccessible"
   show (BadTypeConType fc n) 
        = show fc ++ ":Return type of " ++ show n ++ " must be Type"
   show (BadDataConType fc n fam) 
        = show fc ++ ":Return type of " ++ show n ++ " must be in " ++ show fam
-  show (InvisibleName fc x) = show fc ++ ":Name " ++ show x ++ " is inaccessible since "
   show (LinearUsed fc count n)
       = show fc ++ ":There are " ++ show count ++ " uses of linear name " ++ show n
   show (LinearMisuse fc n exp ctx)
@@ -116,10 +116,10 @@ Show annot => Show (Error annot) where
        showRel RigW = "non-linear"
 
   show (AmbiguousName fc ns) = show fc ++ ":Ambiguous name " ++ show ns
-  show (AmbiguousElab fc ts) = show fc ++ ":Ambiguous elaboration " ++ show ts
-  show (AmbiguousSearch fc ts) = show fc ++ ":Ambiguous search " ++ show ts
+  show (AmbiguousElab fc env ts) = show fc ++ ":Ambiguous elaboration " ++ show ts
+  show (AmbiguousSearch fc env ts) = show fc ++ ":Ambiguous search " ++ show ts
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
-  show (InvalidImplicit fc n tm) 
+  show (InvalidImplicit fc env n tm) 
       = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm
   show (CantSolveGoal fc env g) 
       = show fc ++ ":Can't solve goal " ++ assert_total (show g)
@@ -127,10 +127,10 @@ Show annot => Show (Error annot) where
       = show fc ++ ":Can't solve goal " ++ assert_total (show g) ++ 
                 " since argument " ++ show n ++ " can't be inferred"
   show (UnsolvedHoles hs) = "Unsolved holes " ++ show hs
-  show (CantInferArgType fc n h ty)
+  show (CantInferArgType fc env n h ty)
       = show fc ++ ":Can't infer type for " ++ show n ++
                    " (got " ++ show ty ++ " with hole " ++ show h ++ ")"
-  show (SolvedNamedHole fc h) = show fc ++ ":Named hole " ++ show h ++ " is solved by unification"
+  show (SolvedNamedHole fc _ h _) = show fc ++ ":Named hole " ++ show h ++ " is solved by unification"
   show (VisibilityError fc vx x vy y)
       = show fc ++ ":" ++ show vx ++ " " ++ show x ++ " cannot refer to "
                        ++ show vy ++ " " ++ show y
@@ -138,19 +138,19 @@ Show annot => Show (Error annot) where
   show (BadPattern fc n) = show fc ++ ":Pattern not allowed here: " ++ show n
   show (NoDeclaration fc x) = show fc ++ ":No type declaration for " ++ show x
   show (AlreadyDefined fc x) = show fc ++ ":" ++ show x ++ " is already defined"
-  show (NotFunctionType fc tm) = show fc ++ ":Not a function type: " ++ show tm
+  show (NotFunctionType fc env tm) = show fc ++ ":Not a function type: " ++ show tm
   show (CaseCompile fc n DifferingArgNumbers) 
       = show fc ++ ":Patterns for " ++ show n ++ " have different numbers of arguments"
   show (CaseCompile fc n DifferingTypes) 
       = show fc ++ ":Patterns for " ++ show n ++ " require matching on different types"
   show (CaseCompile fc n UnknownType) 
       = show fc ++ ":Can't infer type to match in " ++ show n
-  show (BadDotPattern fc reason x y)
+  show (BadDotPattern fc env reason x y)
       = show fc ++ ":Can't match on " ++ show x ++ 
            (if reason /= "" then " (" ++ reason ++ ")" else "") ++
            " - it elaborates to " ++ show y
   show (BadImplicit fc str) = show fc ++ ":" ++ str ++ " can't be bound here"
-  show (BadRunElab fc script) = show fc ++ ":Bad elaborator script " ++ show script
+  show (BadRunElab fc env script) = show fc ++ ":Bad elaborator script " ++ show script
   show (GenericMsg fc str) = show fc ++ ":" ++ str
   show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
@@ -192,27 +192,27 @@ getAnnot (BadDataConType loc y z) = Just loc
 getAnnot (LinearUsed loc k y) = Just loc
 getAnnot (LinearMisuse loc y z w) = Just loc
 getAnnot (AmbiguousName loc xs) = Just loc
-getAnnot (AmbiguousElab loc xs) = Just loc
-getAnnot (AmbiguousSearch loc xs) = Just loc
+getAnnot (AmbiguousElab loc _ xs) = Just loc
+getAnnot (AmbiguousSearch loc _ xs) = Just loc
 getAnnot (AllFailed (x :: xs)) = getAnnot x
 getAnnot (AllFailed []) = Nothing
-getAnnot (InvalidImplicit loc y tm) = Just loc
+getAnnot (InvalidImplicit loc _ y tm) = Just loc
 getAnnot (CantSolveGoal loc env tm) = Just loc
 getAnnot (DeterminingArg loc y env tm) = Just loc
 getAnnot (UnsolvedHoles ((loc, _) :: xs)) = Just loc
 getAnnot (UnsolvedHoles []) = Nothing
-getAnnot (CantInferArgType loc y z tm) = Just loc
-getAnnot (SolvedNamedHole loc y) = Just loc
+getAnnot (CantInferArgType loc _ y z tm) = Just loc
+getAnnot (SolvedNamedHole loc _ _ y) = Just loc
 getAnnot (VisibilityError loc y z w s) = Just loc
 getAnnot (NonLinearPattern loc y) = Just loc
 getAnnot (BadPattern loc y) = Just loc
 getAnnot (NoDeclaration loc y) = Just loc
 getAnnot (AlreadyDefined loc y) = Just loc
-getAnnot (NotFunctionType loc tm) = Just loc
+getAnnot (NotFunctionType loc _ tm) = Just loc
 getAnnot (CaseCompile loc y z) = Just loc
-getAnnot (BadDotPattern loc y tm z) = Just loc
+getAnnot (BadDotPattern loc _ y tm z) = Just loc
 getAnnot (BadImplicit loc y) = Just loc
-getAnnot (BadRunElab loc tm) = Just loc
+getAnnot (BadRunElab loc _ tm) = Just loc
 getAnnot (GenericMsg loc y) = Just loc
 getAnnot (TTCError x) = Nothing
 getAnnot (FileErr x y) = Nothing

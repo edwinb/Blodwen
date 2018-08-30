@@ -32,8 +32,9 @@ mutual
   unelabTy loc env (Ref nt n)
       = do defs <- get Ctxt
            case lookupTyExact n (gamma defs) of
-                Nothing => pure (IVar loc (UN ("BADNAME[" ++ show n ++"]")), 
-                                 Erased) -- should never happen!
+                Nothing => pure (Implicit loc,
+                                 Erased) -- should never happen on a well typed term!
+                                    -- may happen in error messages for ambiguous terms
                 Just ty => pure (IVar loc n, embed ty)
   unelabTy loc env (Bind x b sc)
       = do (sc', scty) <- unelabTy loc (b :: env) sc

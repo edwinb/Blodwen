@@ -244,6 +244,7 @@ data REPLEval : Type where
 public export
 data REPLOpt : Type where
      ShowImplicits : Bool -> REPLOpt
+     ShowNamespace : Bool -> REPLOpt
      ShowTypes : Bool -> REPLOpt
      EvalMode : REPLEval -> REPLOpt
      Editor : String -> REPLOpt
@@ -323,13 +324,13 @@ Show PTerm where
   show (PLocal _ ds sc) -- We'll never see this when displaying a normal form...
       = "let { << definitions >>  } in " ++ show sc
   show (PApp _ f a) = show f ++ " " ++ show a
-  show (PImplicitApp _ f Nothing (PRef _ a)) 
+  show (PImplicitApp _ f Nothing a) 
       = show f ++ " @{" ++ show a ++ "}"
   show (PImplicitApp _ f (Just n) (PRef _ a)) 
       = if n == a
            then show f ++ " {" ++ show n ++ "}"
            else show f ++ " {" ++ show n ++ " = " ++ show a ++ "}"
-  show (PImplicitApp _ f n a) 
+  show (PImplicitApp _ f (Just n) a) 
       = show f ++ " {" ++ show n ++ " = " ++ show a ++ "}"
   show (PSearch _ d) = "%search"
   show (PQuote _ tm) = "`(" ++ show tm ++ ")"

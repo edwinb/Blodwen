@@ -10,6 +10,7 @@ import Core.InitPrimitives
 import Core.UnifyState
 
 import Idris.Desugar
+import Idris.Error
 import Idris.Parser
 import Idris.ProcessIdr
 import Idris.Syntax
@@ -147,8 +148,15 @@ buildMod loc num len mod
            then do putStrLnQ $ show num ++ "/" ++ show len ++
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
-                   process {u} {s} src
+                   [] <- process {u} {s} src
+                      | errs => do printAll {s} errs
+                                   pure errs
+                   pure []
            else pure []
+  where
+    printAll : {auto s : Ref Syn SyntaxInfo} ->
+               List (Error FC) -> Core FC ()
+    printAll xs = coreLift $ putStrLn $ showSep "\n" !(traverse display xs)
 
 buildMods : {auto c : Ref Ctxt Defs} ->
             FC -> Nat -> Nat -> List BuildMod -> Core FC (List (Error FC))
@@ -156,16 +164,12 @@ buildMods fc num len [] = pure []
 buildMods fc num len (m :: ms)
     = case !(buildMod fc num len m) of
            [] => buildMods fc (1 + num) len ms
-           errs => do printAll errs
-                      pure errs
-  where
-    printAll : List (Error FC) -> Core FC ()
-    printAll xs = coreLift $ putStrLn $ showSep "\n" (map show xs)
+           errs => pure errs
 
 export
 buildDeps : {auto c : Ref Ctxt Defs} ->
-            {auto u : Ref UST (UState FC)} ->
             {auto s : Ref Syn SyntaxInfo} ->
+            {auto u : Ref UST (UState FC)} ->
             (mainFile : String) -> Core FC (List (Error FC))
 buildDeps fname
     = do mods <- getBuildMods toplevelFC fname

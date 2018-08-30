@@ -227,7 +227,7 @@ elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
                     _ => do linearCheck (getAnnot tm) rigc False env ptm'
                             pure ptm'
          
-         checkArgTypes (getAnnot tm) ptm' -- Check no unsolved holes in argument types
+         checkArgTypes (getAnnot tm) env ptm' -- Check no unsolved holes in argument types
          clearPatVars
          -- If there are remaining holes, we need to save them to the ttc
          -- since they haven't been normalised away yet, and they may be

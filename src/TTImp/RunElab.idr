@@ -24,7 +24,7 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
          elabCon defs n args
   where
     failWith : Defs -> Core annot a
-    failWith defs = throw (BadRunElab loc (quote (noGam defs) env tm))
+    failWith defs = throw (BadRunElab loc env (quote (noGam defs) env tm))
 
     doReify : Reify a => NF vars -> Core annot a
     doReify tm 
@@ -74,7 +74,7 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
     elabCon defs n args = failWith defs
 elabScript loc elab env nest tm 
     = do defs <- get Ctxt
-         throw (BadRunElab loc (quote (noGam defs) env tm))
+         throw (BadRunElab loc env (quote (noGam defs) env tm))
 
 export
 processReflect : {auto c : Ref Ctxt Defs} ->

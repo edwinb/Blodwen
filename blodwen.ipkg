@@ -3,6 +3,7 @@ package blodwen
 modules = Idris.BindImplicits,
           Idris.CommandLine,
           Idris.Desugar,
+          Idris.Error,
           Idris.ModTree,
           Idris.SetOptions,
           Idris.Syntax,

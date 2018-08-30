@@ -211,15 +211,17 @@ patternEnv env args
 -- this wasn't valid for pattern unification
 instantiate : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
-              annot ->
-              (metavar : Name) -> SubVars newvars vars -> Term newvars ->
+              annot -> Env Term vars -> 
+              (metavar : Name) -> SubVars newvars vars -> 
+              Term vars -> -- original, just for error message
+              Term newvars -> -- shrunk environment
               Core annot ()
-instantiate loc metavar smvs tm {newvars}
+instantiate loc env metavar smvs otm tm {newvars}
      = do gam <- get Ctxt
           -- If the name is user defined, it means we've solved a ?hole by
           -- unification, which is not what we want!
           when (isUserName metavar) $
-               throw (SolvedNamedHole loc metavar)
+               throw (SolvedNamedHole loc env metavar otm)
           case lookupDefTyExact metavar (gamma gam) of
                Nothing => ufail loc $ "No such metavariable " ++ show metavar
                Just (_, ty) => 
@@ -629,7 +631,8 @@ mutual
                    -- tells us that 'newvars' are the subset of 'vars'
                    -- being applied to the metavariable, and so 'tm' must
                    -- only use those variables for success
-                   case shrinkTerm (normaliseHoles gam env (quote (noGam gam) env tm)) submv of
+                   let otm = normaliseHoles gam env (quote (noGam gam) env tm)
+                   case shrinkTerm otm submv of
                         Nothing => do
                            log 10 $ "Postponing constraint " ++
                                       show (quote (noGam gam) env (NApp (NRef nt var) args))
@@ -660,7 +663,7 @@ mutual
                                                      (quote (noGam gam) env (NApp (NRef nt var) args)))
                                                  (normaliseHoles gam env
                                                      (quote (noGam gam) env tm)))
-                                      else do instantiate loc var submv tm'
+                                      else do instantiate loc env var submv otm tm'
                                               pure []
            -- Not in the pattern fragment
            Nothing => do log 10 $ "Not in pattern fragment"
@@ -1120,7 +1123,7 @@ checkDots
              dumpConstraints 2 False
              if isNil cs && not (isHoleNF (gamma gam) n)
                 then pure ()
-                else throw (BadDotPattern loc reason 
+                else throw (BadDotPattern loc env reason 
                                 (normaliseHoles gam' env x) 
                                 (normaliseHoles gam' env y))
     checkConstraint gam _ = pure ()

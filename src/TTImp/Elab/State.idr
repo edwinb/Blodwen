@@ -182,18 +182,18 @@ usedImp imp
 -- the current application
 export
 checkUsedImplicits : {auto e : Ref EST (EState vars)} ->
-                     annot -> ElabMode ->
+                     annot -> Env Term vars -> ElabMode ->
                      List (Maybe Name) -> 
                      List (Maybe Name, RawImp annot) -> Term vars -> Core annot ()
-checkUsedImplicits loc mode used [] tm = pure ()
-checkUsedImplicits loc mode used given tm
+checkUsedImplicits loc env mode used [] tm = pure ()
+checkUsedImplicits loc env mode used given tm
     = let unused = filter (notUsed mode) given in
           case unused of
                [] => -- remove the things which were given, and are now part of
                      -- an application, from the 'implicitsUsed' list, because
                      -- we've now verified that they were used correctly.
                      restoreImps (filter (\x => not (x `elem` map fst given)) used)
-               ((Just n, _) :: _) => throw (InvalidImplicit loc n tm)
+               ((Just n, _) :: _) => throw (InvalidImplicit loc env n tm)
                ((Nothing, _) :: _) => throw (GenericMsg loc "No auto implicit here")
   where
     notUsed : ElabMode -> (Maybe Name, RawImp annot) -> Bool
@@ -745,11 +745,11 @@ successful elabmode (elab :: elabs)
 export
 exactlyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-             annot -> ElabMode ->
+             annot -> Env Term vars -> ElabMode ->
              List (Core annot (Term vars, Term vars)) ->
              Core annot (Term vars, Term vars)
-exactlyOne loc elabmode [elab] = elab
-exactlyOne loc elabmode all
+exactlyOne loc env elabmode [elab] = elab
+exactlyOne {vars} loc env elabmode all
     = do elabs <- successful elabmode all
          case rights elabs of
               [(res, state)] =>
@@ -762,7 +762,7 @@ exactlyOne loc elabmode all
     altError : List (Error annot) -> List ((Term vars, Term vars), AllState vars annot) ->
                Error annot
     altError ls [] = AllFailed ls
-    altError ls rs = AmbiguousElab loc (map (\x => fst (fst x)) rs)
+    altError ls rs = AmbiguousElab loc env (map (\x => fst (fst x)) rs)
 
 export
 anyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->

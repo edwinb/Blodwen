@@ -999,6 +999,8 @@ setOption : Bool -> Rule REPLOpt
 setOption set
     = do exactIdent "showimplicits"
          pure (ShowImplicits set)
+  <|> do exactIdent "shownamespace"
+         pure (ShowNamespace set)
   <|> do exactIdent "showtypes"
          pure (ShowTypes set)
   <|> if set then setVarOption else fail "Invalid option"

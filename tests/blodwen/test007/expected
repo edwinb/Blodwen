@@ -1,4 +1,6 @@
 1/1: Building noinfer (noinfer.blod)
-Unsolved holes [(noinfer.blod:1:7--1:9, Main.{h:1})]
+noinfer.blod:1:7--1:9:Unsolved holes:
+Main.{h:1} introduced at noinfer.blod:1:7--1:9
+
 Welcome to Blodwen. Good luck.
 Main> Bye for now!

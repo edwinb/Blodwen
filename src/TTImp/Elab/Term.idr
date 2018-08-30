@@ -57,7 +57,7 @@ bindRig Rig0 = Rig0
 bindRig _ = Rig1
       
 ambiguous : Error annot -> Bool
-ambiguous (AmbiguousElab _ _) = True
+ambiguous (AmbiguousElab _ _ _) = True
 ambiguous (AmbiguousName _ _) = True
 ambiguous (AllFailed _) = True
 ambiguous (InType _ _ err) = ambiguous err
@@ -266,7 +266,7 @@ mutual
            -- Check all of the implicits we collected have been used
            est <- get EST
            log 10 $ "Used: " ++ show (implicitsUsed est, map fst args)
-           checkUsedImplicits loc (elabMode elabinfo) (implicitsUsed est) args 
+           checkUsedImplicits loc env (elabMode elabinfo) (implicitsUsed est) args 
                               (apply restm imps)
            est <- get EST
            case imps of
@@ -303,7 +303,7 @@ mutual
            -- Check all of the implicits we collected have been used
            est <- get EST
            log 10 $ "IUsed: " ++ show (implicitsUsed est, nm :: map fst args)
-           checkUsedImplicits loc (elabMode elabinfo) (implicitsUsed est) 
+           checkUsedImplicits loc env (elabMode elabinfo) (implicitsUsed est) 
                               ((nm, arg) :: args) (apply restm imps)
            case imps of
                 [] => pure (restm, resty)
@@ -339,13 +339,13 @@ mutual
                           "\nDefault " ++ show def ++
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
                   if delayed -- use the default if there's still ambiguity
-                     then try (exactlyOne loc (elabMode elabinfo) 
+                     then try (exactlyOne loc env (elabMode elabinfo) 
                                  (map (\t => 
                                    checkImp rigc process elabinfo env nest t 
                                        (Just expected)) alts'))
                               (checkImp rigc process elabinfo env nest def
                                      (Just expected))
-                     else exactlyOne loc (elabMode elabinfo) (map (\t => 
+                     else exactlyOne loc env (elabMode elabinfo) (map (\t => 
                              checkImp rigc process elabinfo env nest t 
                                  (Just expected)) alts'))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
@@ -364,11 +364,11 @@ mutual
                   log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
                   let tryall = case uniq of
-                                    FirstSuccess => anyOne
-                                    _ => exactlyOne
-                  tryall loc (elabMode elabinfo)
-                             (map (\t => checkImp rigc process elabinfo env nest t 
-                                             (Just expected)) alts'))
+                                    FirstSuccess => anyOne loc
+                                    _ => exactlyOne loc env
+                  tryall (elabMode elabinfo)
+                         (map (\t => checkImp rigc process elabinfo env nest t 
+                                         (Just expected)) alts'))
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected
@@ -536,7 +536,7 @@ mutual
                          [] => throw $ UndefinedName loc x
                          [(fullname, def, ty)] => 
                               resolveRef fullname def gam (embed ty)
-                         ns => exactlyOne loc (elabMode elabinfo)
+                         ns => exactlyOne loc env (elabMode elabinfo)
                                     (map (\ (n, def, ty) =>
                                        resolveRef n def gam (embed ty)) ns)
     where

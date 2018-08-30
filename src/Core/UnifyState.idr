@@ -259,22 +259,22 @@ checkDelayedHoles
 -- can't infer the argument type.
 export
 checkArgTypes : {auto c : Ref Ctxt Defs} ->
-                annot -> Term vars -> Core annot ()
-checkArgTypes loc (Bind n (Pi _ _ ty) sc)
+                annot -> Env Term vars -> Term vars -> Core annot ()
+checkArgTypes loc env (Bind n (Pi c p ty) sc)
     = do let ns = toList (getRefs ty)
          defs <- get Ctxt
          traverse (checkDefinedName defs) ns
-         checkArgTypes loc sc
+         checkArgTypes loc (Pi c p ty :: env) sc
   where
     badarg : Name -> Core annot ()
-    badarg h = throw (CantInferArgType loc n h ty)
+    badarg h = throw (CantInferArgType loc env n h ty)
 
     checkDefinedName : Defs -> Name -> Core annot ()
     checkDefinedName defs h
         = case lookupDefExact h (gamma defs) of
                Just ImpBind => badarg h
                _ => pure ()
-checkArgTypes loc tm = pure ()
+checkArgTypes loc env tm = pure ()
 
 -- Make a new constant by applying a term to everything in the current
 -- environment (except the lets, which aren't in the constant's type)

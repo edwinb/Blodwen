@@ -48,7 +48,7 @@ parameters (loc : annot, gam : Defs)
                            doConvert loc gam env (quote gam env ty) aty
                            let sc' = scdone (toClosure defaultOpts env a')
                            pure (App f' a', quote gam env sc')
-                  _ => error (NotFunctionType loc fty)
+                  _ => error (NotFunctionType loc env fty)
     chk env (RPrimVal x) = pure $ chkConstant x
     chk env RType = pure (TType, TType)
 

@@ -52,6 +52,12 @@ showImplicits
     = do pp <- getPPrint
          pure (showImplicits pp)
 
+fullNamespace : {auto c : Ref Ctxt Defs} ->
+                Core annot Bool
+fullNamespace
+    = do pp <- getPPrint
+         pure (fullNamespace pp)
+
 unbracket : PTerm -> PTerm
 unbracket (PBracketed _ tm) = tm
 unbracket tm = tm
@@ -73,15 +79,23 @@ sugarApp tm@(PApp fc (PApp _ (PRef _ (UN "::")) x) xs)
            _ => tm
 sugarApp tm = tm
 
+export
+sugarName : Name -> Name
+sugarName (MN n _) = UN n
+sugarName (PV n _) = sugarName n
+sugarName x = x
+
 mutual
   toPTerm : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             (prec : Nat) -> RawImp annot -> Core FC PTerm
   toPTerm p (IVar _ (MN n _))
       = pure (sugarApp (PRef emptyFC (UN n)))
+  toPTerm p (IVar _ (PV n _))
+      = pure (sugarApp (PRef emptyFC n))
   toPTerm p (IVar _ n) 
-      = do imp <- showImplicits
-           pure (sugarApp (PRef emptyFC (if imp then n else dropNS n)))
+      = do ns <- fullNamespace
+           pure (sugarApp (PRef emptyFC (if ns then n else dropNS n)))
   toPTerm p (IPi _ rig Implicit n arg ret)
       = do imp <- showImplicits
            if imp
