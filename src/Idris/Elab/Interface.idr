@@ -156,7 +156,8 @@ getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, co
     = let ity = apply (IVar fc iname) (map (IVar fc) params)
           fty = IPi fc RigW Explicit Nothing ity con
           ty_imp = bindTypeNames vars fty 
-          hintname = MN ("__" ++ show iname ++ "_" ++ show con) 0
+          hintname = DN ("Constraint " ++ show con)
+                        (MN ("__" ++ show iname ++ "_" ++ show con) 0)
           tydecl = IClaim fc vis [Inline, Hint False] (MkImpTy fc hintname ty_imp)
           conapp = apply (IVar fc cname)
                       (map (IBindVar fc) (map bindName constraints) ++
@@ -183,8 +184,8 @@ getDefault (IDef fc n cs) = Just (fc, [], n, cs)
 getDefault _ = Nothing
 
 mkCon : Name -> Name
-mkCon (NS ns (UN n)) = NS ns (MN ("__mk" ++ n) 0)
-mkCon n = MN ("__mk" ++ show n) 0
+mkCon (NS ns (UN n)) = NS ns (DN ("Constructor of " ++ n) (MN ("__mk" ++ n) 0))
+mkCon n = DN ("Constructor of " ++ show n) (MN ("__mk" ++ show n) 0)
 
 updateIfaceSyn : {auto s : Ref Syn SyntaxInfo} ->
                  Name -> Name -> List Name -> List (RawImp FC) ->

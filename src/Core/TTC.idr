@@ -63,8 +63,12 @@ mutual
         = do tag 4
              toBuf b x
              toBuf b y
-    toBuf b (GN x) 
+    toBuf b (DN x y) 
         = do tag 5
+             toBuf b x
+             toBuf b y
+    toBuf b (GN x) 
+        = do tag 6
              toBuf b x
 
     fromBuf s b 
@@ -84,6 +88,9 @@ mutual
                        y <- fromBuf s b
                        pure (PV x y)
                5 => do x <- fromBuf s b
+                       y <- fromBuf s b
+                       pure (DN x y)
+               6 => do x <- fromBuf s b
                        pure (GN x)
                _ => throw (TTCError (Corrupt "Name"))
 

@@ -15,6 +15,7 @@ mutual
                   -- namespaces are in reverse order (innermost name first)
             | HN String Int -- machine generated metavariable name
             | PV Name Name -- implicitly bound pattern variable name, and the parent function
+            | DN String Name -- display name, explicitly saying how it should be pretty printed
             | GN GenName -- various kinds of generated names
 
 gnameTag : GenName -> Int
@@ -28,7 +29,8 @@ nameTag (MN _ _) = 1
 nameTag (NS _ _) = 2
 nameTag (HN _ _) = 3
 nameTag (PV _ _) = 4
-nameTag (GN _) = 5
+nameTag (DN _ _) = 5
+nameTag (GN _) = 6
 
 mutual
   export
@@ -44,6 +46,7 @@ mutual
   nameRoot (NS xs x) = nameRoot x
   nameRoot (HN x y) = x
   nameRoot (PV x y) = nameRoot x
+  nameRoot (DN x y) = nameRoot y
   nameRoot (GN x) = gnameRoot x
 
   export
@@ -53,6 +56,7 @@ mutual
   userNameRoot (NS xs x) = userNameRoot x
   userNameRoot (HN x y) = Nothing
   userNameRoot (PV x y) = Nothing
+  userNameRoot (DN x y) = Nothing
   userNameRoot (GN x) = Nothing
 
 export
@@ -86,6 +90,7 @@ mutual
     show (NS ns n) = showSep "." (reverse ns) ++ "." ++ show n
     show (HN str int) = "?" ++ str ++ "_" ++ show int
     show (PV n d) = "{P:" ++ show n ++ ":" ++ show d ++ "}"
+    show (DN n d) = "{D:" ++ n ++ ":" ++ show d ++ "}"
     show (GN gn) = show gn
 
 mutual
@@ -104,6 +109,7 @@ mutual
     (==) (NS xs x) (NS xs' x') = x == x' && xs == xs'
     (==) (HN x y) (HN x' y') = y == y' && x == x'
     (==) (PV x y) (PV x' y') = x == x' && y == y'
+    (==) (DN x y) (DN x' y') = x == x' && y == y'
     (==) (GN x) (GN y) = x == y
     (==) _ _ = False
 
@@ -159,6 +165,11 @@ mutual
       nameEq (PV y t) (PV y t) | (Just Refl) | (Just Refl) = Just Refl
       nameEq (PV y t) (PV y t') | (Just Refl) | Nothing = Nothing
     nameEq (PV x t) (PV y t') | Nothing = Nothing
+  nameEq (DN x t) (DN y t') with (decEq x y)
+    nameEq (DN y t) (DN y t') | (Yes Refl) with (nameEq t t')
+      nameEq (DN y t) (DN y t) | (Yes Refl) | (Just Refl) = Just Refl
+      nameEq (DN y t) (DN y t') | (Yes Refl) | Nothing = Nothing
+    nameEq (DN x t) (DN y t') | (No contra) = Nothing
   nameEq (GN x) (GN y) with (gnameEq x y)
     nameEq (GN x) (GN y) | Nothing = Nothing
     nameEq (GN x) (GN x) | (Just Refl) = Just Refl
@@ -197,6 +208,10 @@ mutual
                EQ => compare x x'
                t => t
     compare (PV x y) (PV x' y')
+        = case compare y y' of
+               EQ => compare x x'
+               t => t
+    compare (DN x y) (DN x' y')
         = case compare y y' of
                EQ => compare x x'
                t => t

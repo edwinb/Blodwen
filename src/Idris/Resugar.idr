@@ -83,6 +83,7 @@ export
 sugarName : Name -> Name
 sugarName (MN n _) = UN n
 sugarName (PV n _) = sugarName n
+sugarName (DN n _) = UN n
 sugarName x = x
 
 mutual
@@ -93,6 +94,8 @@ mutual
       = pure (sugarApp (PRef emptyFC (UN n)))
   toPTerm p (IVar _ (PV n _))
       = pure (sugarApp (PRef emptyFC n))
+  toPTerm p (IVar _ (DN n _))
+      = pure (sugarApp (PRef emptyFC (UN n)))
   toPTerm p (IVar _ n) 
       = do ns <- fullNamespace
            pure (sugarApp (PRef emptyFC (if ns then n else dropNS n)))

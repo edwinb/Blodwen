@@ -5,5 +5,5 @@ Can't match on x (Non linear pattern variable)
 It elaborates to: x
 1/1: Building dots3 (dots3.blod)
 dots3.blod:5:9--5:14:While processing left hand side of Main.addBaz at dots3.blod:5:1--6:1:
-Can't match on {+_Num__Int:0} x y (Not a constructor application or primitive)
+Can't match on x + y (Not a constructor application or primitive)
 It elaborates to: prim__add_Int x z

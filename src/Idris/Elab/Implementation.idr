@@ -19,8 +19,10 @@ import TTImp.Utils
 import Control.Monad.State
 
 mkImpl : Name -> List (RawImp FC) -> Name
-mkImpl n ps = MN ("__Impl_" ++ show n ++ "_" ++
-                  showSep "_" (map show ps)) 0
+mkImpl n ps = DN ("Implementation of " ++ show n ++ " " ++
+                    showSep " " (map show ps))
+                 (MN ("__Impl_" ++ show n ++ "_" ++
+                  showSep "_" (map show ps)) 0)
 
 bindConstraints : FC -> PiInfo -> 
                   List (Maybe Name, RawImp FC) -> RawImp FC -> RawImp FC
@@ -212,9 +214,10 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
 
     methName : Name -> Name
     methName (NS _ n) = methName n
-    methName n = MN (show n ++ "_" ++ show iname ++ "_" ++
+    methName n = DN (show n)
+                    (MN (show n ++ "_" ++ show iname ++ "_" ++
                      maybe "" show impln ++ "_" ++
-                     showSep "_" (map show ps)) 0
+                     showSep "_" (map show ps)) 0)
     
     applyCon : Name -> Name -> Core FC (Name, RawImp FC)
     applyCon impl n = do mn <- inCurrentNS (methName n)

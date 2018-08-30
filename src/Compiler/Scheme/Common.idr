@@ -26,6 +26,7 @@ mutual
   schName (NS ns n) = showSep "-" ns ++ "-" ++ schName n
   schName (HN n i) = schString n ++ "--" ++ show i
   schName (PV n d) = "pat--" ++ schName n
+  schName (DN _ n) = schName n
   schName (GN g) = schGName g
 
   schGName : GenName -> String
