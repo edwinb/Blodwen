@@ -5,10 +5,5 @@ range bottom top
 
 pythag : Integer -> List (Integer, Integer, Integer)
 pythag top
-   = -- [(x, y, z) | z <- [1..top], y <- [1..z], x <- [1..y],
-     --              x * x + y * y == z * z]
-     do z <- range 1 top
-        y <- range 1 z
-        x <- range 1 y
-        guard (x * x + y * y == z * z)
-        pure (x, y, z)
+   = [(x, y, z) | z <- range 1 top, y <- range 1 z, x <- range 1 y,
+                  x * x + y * y == z * z]

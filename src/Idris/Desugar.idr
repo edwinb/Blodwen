@@ -193,7 +193,16 @@ mutual
       = pure $ ICase fc !(desugar side ps x) (Implicit fc)
                    [PatClause fc (IVar fc (UN "True")) !(desugar side ps t),
                     PatClause fc (IVar fc (UN "False")) !(desugar side ps e)]
-  
+  desugar side ps (PComprehension fc ret conds)
+      = desugar side ps (PDoBlock fc (map guard conds ++ [toPure ret]))
+    where
+      guard : PDo -> PDo
+      guard (DoExp fc tm) = DoExp fc (PApp fc (PRef fc (UN "guard")) tm)
+      guard d = d
+
+      toPure : PTerm -> PDo
+      toPure tm = DoExp fc (PApp fc (PRef fc (UN "pure")) tm)
+
   expandList : {auto s : Ref Syn SyntaxInfo} ->
                {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->

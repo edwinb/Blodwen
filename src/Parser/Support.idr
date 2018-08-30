@@ -370,6 +370,8 @@ checkValid EndOfBlock c = fail "End of block"
 
 -- Any token which indicates the end of a statement/block
 isTerminator : Token -> Bool
+isTerminator (Symbol ",") = True
+isTerminator (Symbol "]") = True
 isTerminator (Symbol ";") = True
 isTerminator (Symbol "}") = True
 isTerminator (Symbol ")") = True

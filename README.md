@@ -12,10 +12,12 @@ what exists of it so far:
 + `make install`
 
 You'll need to set your `PATH` to `$PREFIX/bin`
+You may also want to set `IDRIS_CC` to `clang`, since this seems to build
+the generated C significantly faster.
 
 Note: If you edit `blodwen.ipkg` to use the `opts` with optimisation set
 (`--cg-opt -O2`) you'll find it runs about twice as fast, at the cost of
-taking a couple of minutes to generate code.
+taking a couple of minutes to generate the `blodwen` executable.
 
 I make no promises how well this works yet, or even if it'll work at all. 
 Good luck :).
@@ -26,7 +28,7 @@ Things still missing
 --------------------
 
 + Some high level syntax, notably 'with', 'rewrite', dependent pairs,
-  numeric ranges, comprehensions
+  numeric ranges 
 + Cumulativity and totality checking
 + Codata (or rather, you can have it, but there's no productivity check...)
 + Any kind of interactive editing/IDE mode

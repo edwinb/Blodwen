@@ -171,10 +171,17 @@ mutual
 
   listExpr : FileName -> FilePos -> IndentInfo -> Rule PTerm
   listExpr fname start indents
-      = do xs <- sepBy (symbol ",") (expr EqOK fname indents)
+      = do ret <- expr EqOK fname indents
+           symbol "|"
+           conds <- sepBy1 (symbol ",") (doAct fname indents)
+           symbol "]"
+           end <- location
+           pure (PComprehension (MkFC fname start end) ret (concat conds))
+    <|> do xs <- sepBy (symbol ",") (expr EqOK fname indents)
            symbol "]"
            end <- location
            pure (PList (MkFC fname start end) xs)
+           
 
   -- A pair, dependent pair, or just a single expression
   tuple : FileName -> FilePos -> IndentInfo -> PTerm -> Rule PTerm
