@@ -121,6 +121,7 @@ schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show
 public export
 data ExtPrim = CCall | SchemeCall | PutStr | GetStr 
              | FileOpen | FileClose | FileReadLine | FileWriteLine | FileEOF
+             | NewIORef | ReadIORef | WriteIORef
              | Unknown Name
 
 export
@@ -134,6 +135,9 @@ Show ExtPrim where
   show FileReadLine = "FileReadLine"
   show FileWriteLine = "FileWriteLine"
   show FileEOF = "FileEOF"
+  show NewIORef = "NewIORef"
+  show ReadIORef = "ReadIORef"
+  show WriteIORef = "WriteIORef"
   show (Unknown n) = "Unknown " ++ show n
 
 toPrim : Name -> ExtPrim
@@ -146,7 +150,10 @@ toPrim pn@(NS _ n)
             (n == UN "prim__close", FileClose),
             (n == UN "prim__readLine", FileReadLine),
             (n == UN "prim__writeLine", FileWriteLine),
-            (n == UN "prim__eof", FileEOF)
+            (n == UN "prim__eof", FileEOF),
+            (n == UN "prim__newIORef", NewIORef),
+            (n == UN "prim__readIORef", ReadIORef),
+            (n == UN "prim__writeIORef", WriteIORef)
             ]
            (Unknown pn)
 toPrim pn = Unknown pn
@@ -272,10 +279,19 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
                                         ++ !(schExp vs str) ++ ")"
   schExtCommon vs FileEOF [file, world]
       = pure $ mkWorld $ "(blodwen-eof " ++ !(schExp vs file) ++ ")"
+  schExtCommon vs NewIORef [_, val, world]
+      = pure $ mkWorld $ "(box " ++ !(schExp vs val) ++ ")"
+  schExtCommon vs ReadIORef [_, ref, world]
+      = pure $ mkWorld $ "(unbox " ++ !(schExp vs ref) ++ ")"
+  schExtCommon vs WriteIORef [_, ref, val, world]
+      = pure $ mkWorld $ "(set-box! " 
+                           ++ !(schExp vs ref) ++ " " 
+                           ++ !(schExp vs val) ++ ")"
   schExtCommon vs (Unknown n) args 
       = throw (InternalError ("Can't compile unknown external primitive " ++ show n))
   schExtCommon vs prim args 
-      = throw (InternalError ("Badly formed external primitive " ++ show prim))
+      = throw (InternalError ("Badly formed external primitive " ++ show prim
+                                ++ " " ++ show args))
 
   schArglist : SVars ns -> String
   schArglist [] = ""

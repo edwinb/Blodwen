@@ -8,6 +8,7 @@ import Compiler.Scheme.Common
 import Core.Context
 import Core.Directory
 import Core.Name
+import Core.Options
 import Core.TT
 
 import Data.List
@@ -27,9 +28,9 @@ findCSI = pure "/usr/bin/env csi"
 findCSC : IO String
 findCSC = pure "/usr/bin/env csc"
 
-schHeader : String
-schHeader
-  = "(use numbers)\n\n" ++
+schHeader : List String -> String
+schHeader ds
+  = "(use numbers)\n" ++ unlines ds ++ "\n" ++
     "(let ()\n"
 
 schFooter : String
@@ -45,13 +46,14 @@ mutual
 compileToSCM : Ref Ctxt Defs ->
                ClosedTerm -> (outfile : String) -> Core annot ()
 compileToSCM c tm outfile
-    = do ns <- findUsedNames tm
+    = do ds <- getDirectives Chicken
+         ns <- findUsedNames tm
          defs <- get Ctxt
          compdefs <- traverse (getScheme chickenPrim defs) ns
          let code = concat compdefs
          main <- schExp chickenPrim [] !(compileExp tm)
          support <- readDataFile "chicken/support.scm"
-         let scm = schHeader ++ support ++ code ++ main ++ schFooter
+         let scm = schHeader ds ++ support ++ code ++ main ++ schFooter
          Right () <- coreLift $ writeFile outfile scm
             | Left err => throw (FileErr outfile err)
          coreLift $ chmod outfile 0o755
