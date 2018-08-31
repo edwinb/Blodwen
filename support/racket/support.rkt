@@ -67,11 +67,21 @@
       1
       0))
 
+(define blodwen-thread-data (make-thread-cell #f))
+
 (define (blodwen-thread p)
     (thread (lambda () (p (vector 0)))))
+
+(define (blodwen-get-thread-data)
+  (thread-cell-ref blodwen-thread-data))
+
+(define (blodwen-set-thread-data a)
+  (thread-cell-set! blodwen-thread-data a))
 
 (define (blodwen-mutex) (make-semaphore 1))
 (define (blodwen-lock m) (semaphore-post m))
 (define (blodwen-unlock m) (semaphore-wait m))
 (define (blodwen-thisthread) (current-thread))
+
+(define (blodwen-sleep s) (sleep s))
 
