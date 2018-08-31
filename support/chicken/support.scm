@@ -69,3 +69,27 @@
   (if (eof-object? (peek-char p))
       1
       0))
+
+(define (blodwen-thread p)
+    (thread-start! (make-thread (lambda () (p (vector 0))))))
+
+(define (blodwen-set-thread-data p)
+    (thread-specific-set! (current-thread) p))
+
+(define (blodwen-get-thread-data)
+    (thread-specific (current-thread)))
+
+(define (blodwen-mutex) (make-mutex))
+(define (blodwen-lock m) (mutex-lock! m))
+(define (blodwen-unlock m) (mutex-unlock! m))
+(define (blodwen-thisthread) (current-thread))
+
+(define (blodwen-condition) (make-condition-variable))
+(define (blodwen-condition-wait c m) 
+  (mutex-unlock! m c)
+  (mutex-lock! m)) ;; lock again, for consistency with other CGs
+(define (blodwen-condition-wait-timeout c m t) (mutex-unlock! m c t))
+(define (blodwen-condition-signal c) (condition-variable-signal! c))
+(define (blodwen-condition-broadcast c) (condition-variable-broadcast! c))
+
+(define (blodwen-sleep s) (sleep s))

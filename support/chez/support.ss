@@ -80,3 +80,28 @@
     (if (port-eof? p)
         1
         0))
+
+(define blodwen-thread-data (make-thread-parameter #f))
+
+(define (blodwen-thread p)
+    (fork-thread (lambda () (p (vector 0)))))
+
+(define (blodwen-get-thread-data)
+  (blodwen-thread-data))
+
+(define (blodwen-set-thread-data a)
+  (blodwen-thread-data a))
+
+(define (blodwen-mutex) (make-mutex))
+(define (blodwen-lock m) (mutex-acquire m))
+(define (blodwen-unlock m) (mutex-release m))
+(define (blodwen-thisthread) (get-thread-id))
+
+(define (blodwen-condition) (make-condition))
+(define (blodwen-condition-wait c m) (condition-wait c m))
+(define (blodwen-condition-wait-timeout c m t) (condition-wait c m t))
+(define (blodwen-condition-signal c) (condition-signal c))
+(define (blodwen-condition-broadcast c) (condition-broadcast c))
+
+(define (blodwen-sleep s) (sleep (make-time 'time-duration 0 s)))
+

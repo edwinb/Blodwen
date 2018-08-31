@@ -66,3 +66,12 @@
   (if (eof-object? (peek-char p))
       1
       0))
+
+(define (blodwen-thread p)
+    (thread (lambda () (p (vector 0)))))
+
+(define (blodwen-mutex) (make-semaphore 1))
+(define (blodwen-lock m) (semaphore-post m))
+(define (blodwen-unlock m) (semaphore-wait m))
+(define (blodwen-thisthread) (current-thread))
+

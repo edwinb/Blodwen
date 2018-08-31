@@ -4,5 +4,7 @@ modules = Data.IORef,
           Data.List,
           Data.Strings,
 
+          System,
+          System.Concurrency.Raw,
           System.File
 

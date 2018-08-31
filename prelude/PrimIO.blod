@@ -28,6 +28,9 @@ public export
 data Ptr : Type where
 
 public export
+data ThreadID : Type where
+
+public export
 data FArgList : Type where
      Nil : FArgList
      (::) : {a : Type} -> a -> FArgList -> FArgList
@@ -60,6 +63,10 @@ putStrLn str = putStr (prim__strAppend str "\n")
 export
 getLine : IO String
 getLine = primIO prim__getStr
+
+export
+fork : IO () -> IO ThreadID
+fork (MkIO act) = schemeCall ThreadID "blodwen-thread" [act]
 
 unsafeCreateWorld : (1 f : (1 x : %World) -> a) -> a
 unsafeCreateWorld f = f %MkWorld
