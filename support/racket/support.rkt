@@ -83,5 +83,17 @@
 (define (blodwen-unlock m) (semaphore-wait m))
 (define (blodwen-thisthread) (current-thread))
 
+(define (blodwen-condition) (make-channel))
+(define (blodwen-condition-wait c m)
+  (blodwen-unlock m) ;; consistency with interface for posix condition variables
+  (sync c)
+  (blodwen-lock m))
+(define (blodwen-condition-wait-timeout c m t)
+  (blodwen-unlock m) ;; consistency with interface for posix condition variables
+  (sync/timeout t c)
+  (blodwen-lock m))
+(define (blodwen-condition-signal c)
+  (channel-put c 'ready))
+
 (define (blodwen-sleep s) (sleep s))
 
