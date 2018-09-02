@@ -8,6 +8,7 @@ import Utils.Binary
 public export
 record LazyNames where
   constructor MkLazy
+  active : Bool
   delayType : Name
   delay : Name
   force : Name
@@ -36,7 +37,7 @@ TTC annot LazyNames where
       = do ty <- fromBuf s b
            d <- fromBuf s b
            f <- fromBuf s b
-           pure (MkLazy ty d f)
+           pure (MkLazy True ty d f)
 
 export
 TTC annot PairNames where
@@ -168,7 +169,7 @@ mergeOptions ttcopts opts
 export
 setLazy : (delayType : Name) -> (delay : Name) -> (force : Name) ->
           Options -> Options
-setLazy ty d f = record { laziness = Just (MkLazy ty d f) }
+setLazy ty d f = record { laziness = Just (MkLazy True ty d f) }
 
 export
 setPair : (pairType : Name) -> (fstn : Name) -> (sndn : Name) ->

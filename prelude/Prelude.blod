@@ -681,6 +681,32 @@ elem x [] = False
 elem x (y :: ys) = if x == y then True else elem x ys
 
 -------------
+-- STREAMS --
+-------------
+
+namespace Stream
+  public export
+  data Stream : Type -> Type where
+       (::) : a -> Inf (Stream a) -> Stream a
+
+public export
+Functor Stream where
+  map f (x :: xs) = f x :: map f xs
+
+public export
+head : Stream a -> a
+head (x :: xs) = x
+
+public export
+tail : Stream a -> Stream a
+tail (x :: xs) = xs
+
+public export
+take : Nat -> Stream a -> List a
+take Z xs = []
+take (S k) (x :: xs) = x :: take k xs
+
+-------------
 -- STRINGS --
 -------------
 

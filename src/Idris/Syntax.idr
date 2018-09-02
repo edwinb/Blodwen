@@ -182,6 +182,7 @@ mutual
   data Directive : Type where
        Logging : Nat -> Directive
        LazyNames : Name -> Name -> Name -> Directive
+       LazyOn : Bool -> Directive
        PairNames : Name -> Name -> Name -> Directive
        PrimInteger : Name -> Directive
        PrimString : Name -> Directive

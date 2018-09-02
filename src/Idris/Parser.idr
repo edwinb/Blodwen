@@ -684,6 +684,13 @@ stripBraces str = pack (drop '{' (reverse (drop '}' (reverse (unpack str)))))
     drop c [] = []
     drop c (c' :: xs) = if c == c' then drop c xs else c' :: xs
 
+onoff : Rule Bool
+onoff 
+   = do exactIdent "on" 
+        pure True
+ <|> do exactIdent "off"
+        pure False
+
 directive : FileName -> IndentInfo -> Rule Directive
 directive fname indents
     = do exactIdent "logging"
@@ -696,6 +703,10 @@ directive fname indents
          f <- name
          atEnd indents
          pure (LazyNames ty d f)
+  <|> do exactIdent "auto_lazy"
+         b <- onoff
+         atEnd indents
+         pure (LazyOn b)
   <|> do exactIdent "pair"
          ty <- name
          f <- name

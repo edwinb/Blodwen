@@ -157,13 +157,7 @@ mutual
   
 
   delayError : Defs -> Error annot -> Bool
-  delayError defs (CantConvert _ env x y) 
-      = headDelay (nf defs env x) || headDelay (nf defs env y)
-    where
-      headDelay : NF vars -> Bool
-      headDelay (NTCon n _ _ _) = isDelayType n defs
-      headDelay _ = False
-  delayError defs (WhenUnifying _ _ x y err) = delayError defs err
+  delayError defs ForceNeeded = True
   delayError defs (InType _ _ err) = delayError defs err
   delayError defs (InCon _ _ err) = delayError defs err
   delayError defs (InLHS _ _ err) = delayError defs err
@@ -1165,8 +1159,10 @@ mutual
                    (sc (toClosure defaultOpts env tm)) (tm :: imps)
   getImps rigc process loc env nest elabinfo ty imps = pure (ty, reverse imps)
 
-  --- When converting, add implicits until we've applied enough for the
-  --- expected type
+  -- When converting, add implicits until we've applied enough for the
+  -- expected type.
+  -- Also, if the type we've got is a Delay, and the type we expect isn't,
+  -- note that we need a force (we'll handle the error in 'insertForce')
   convertImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                 {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
                 Reflect annot =>
@@ -1184,6 +1180,18 @@ mutual
       = do tm <- makeAutoImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            convertImps rigc process loc env nest elabinfo 
                        (sc (toClosure defaultOpts env tm)) exp (tm :: imps)
+  convertImps rigc process loc env nest elabinfo got@(NTCon n _ _ args) exp@(NTCon n' _ _ args') imps
+      = do defs <- get Ctxt
+           if isDelayType n defs 
+              then if isDelayType n' defs
+                      then pure (got, reverse imps)
+                      else throw ForceNeeded
+              else pure (got, reverse imps)
+  convertImps rigc process loc env nest elabinfo got@(NTCon n _ _ args) exp imps
+      = do defs <- get Ctxt
+           if isDelayType n defs 
+              then throw ForceNeeded
+              else pure (got, reverse imps)
   convertImps rigc process loc env nest elabinfo got exp imps = pure (got, reverse imps)
 
   checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->

@@ -513,33 +513,37 @@ isDelayType : Name -> Defs -> Bool
 isDelayType n defs
     = case laziness (options defs) of
            Nothing => False
-           Just l => n == delayType l
+           Just l => active l && n == delayType l
 
 export
 isDelay : Name -> Defs -> Bool
 isDelay n defs
     = case laziness (options defs) of
            Nothing => False
-           Just l => n == delay l
+           Just l => active l && n == delay l
 
 export
 isForce : Name -> Defs -> Bool
 isForce n defs
     = case laziness (options defs) of
            Nothing => False
-           Just l => n == force l
+           Just l => active l && n == force l
 
 export
 delayName : Defs -> Maybe Name
 delayName defs
     = do l <- laziness (options defs)
-         pure (delay l)
+         if active l
+            then pure (delay l)
+            else Nothing
 
 export
 forceName : Defs -> Maybe Name
 forceName defs
     = do l <- laziness (options defs)
-         pure (force l)
+         if active l
+            then pure (force l)
+            else Nothing
 
 export
 isPairType : Name -> Defs -> Bool
@@ -620,6 +624,25 @@ setLazy loc ty d f
          d' <- checkUnambig loc d
          f' <- checkUnambig loc f
          put Ctxt (record { options $= setLazy ty' d' f' } defs)
+
+export
+lazyActive : {auto c : Ref Ctxt Defs} ->
+             Bool -> Core annot ()
+lazyActive a
+    = do defs <- get Ctxt
+         let l = laziness (options defs)
+         maybe (pure ())
+               (\lns => 
+                    do let l' = record { active = a } lns
+                       put Ctxt (record { options->laziness = Just l' }
+                                        defs)) l
+
+export
+isLazyActive : {auto c : Ref Ctxt Defs} ->
+               Core annot Bool
+isLazyActive
+    = do defs <- get Ctxt
+         pure (maybe False active (laziness (options defs)))
 
 export
 setPair : {auto c : Ref Ctxt Defs} ->

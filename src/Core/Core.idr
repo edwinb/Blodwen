@@ -58,6 +58,7 @@ data Error annot
     | ParseFail ParseError
     | ModuleNotFound annot (List String)
     | CyclicImports (List (List String))
+    | ForceNeeded
     | InternalError String
 
     | InType annot Name (Error annot)
@@ -162,6 +163,7 @@ Show annot => Show (Error annot) where
     where
       showMod : List String -> String
       showMod ns = showSep "." (reverse ns)
+  show ForceNeeded = "Internal error when resolving implicit laziness"
   show (InternalError str) = "INTERNAL ERROR: " ++ str
 
   show (InType fc n err)
@@ -219,6 +221,7 @@ getAnnot (FileErr x y) = Nothing
 getAnnot (ParseFail x) = Nothing
 getAnnot (ModuleNotFound loc xs) = Just loc
 getAnnot (CyclicImports xs) = Nothing
+getAnnot ForceNeeded = Nothing
 getAnnot (InternalError x) = Nothing
 getAnnot (InType x y err) = getAnnot err
 getAnnot (InCon x y err) = getAnnot err

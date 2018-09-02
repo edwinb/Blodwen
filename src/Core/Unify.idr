@@ -499,14 +499,18 @@ mutual
                 -- hole application into a pattern form
                 case (reverse args, reverse args') of
                      (h :: hargs, f :: fargs) =>
-                        do log 10 $ "Continuing with " ++
+                        tryUnify
+                          (do log 10 $ "Continuing with " ++
                                  show (quote (noGam gam) env (NApp (NRef nt var) (reverse hargs)))
                                    ++ " =?= " ++
                                  show (quote (noGam gam) env (con (reverse fargs)))
-                           unify mode loc env h f
-                           unify mode loc env 
-                                 (NApp (NRef nt var) (reverse hargs))
-                                 (con (reverse fargs))
+                              unify mode loc env h f
+                              unify mode loc env 
+                                    (NApp (NRef nt var) (reverse hargs))
+                                    (con (reverse fargs)))
+                          (postpone loc env
+                                (NApp (NRef nt var) args)
+                                (con args'))
                      _ =>
                         do log 10 $ "Postponing hole application " ++
                                  show (quote (noGam gam) env (NApp (NRef nt var) args)) ++ " =?= " ++

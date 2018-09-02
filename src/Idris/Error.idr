@@ -157,6 +157,7 @@ perror (CyclicImports ns)
   where
     showMod : List String -> String
     showMod ns = showSep "." (reverse ns)
+perror ForceNeeded = pure "Internal error when resolving implicit laziness"
 perror (InternalError str) = pure $ "INTERNAL ERROR: " ++ str
 
 perror (InType fc n err)

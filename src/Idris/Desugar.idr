@@ -405,6 +405,7 @@ mutual
       = case d of
              Logging i => pure [ILog i]
              LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]
+             LazyOn a => pure [IPragma (\env, nest => lazyActive a)]
              PairNames ty f s => pure [IPragma (\env, nest => setPair fc ty f s)]
              PrimInteger n => pure [IPragma (\env, next => setFromInteger fc n)]
              PrimString n => pure [IPragma (\env, next => setFromString fc n)]
