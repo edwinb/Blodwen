@@ -1,0 +1,3 @@
+:exec printLn test
+:exec printLn test2
+:q

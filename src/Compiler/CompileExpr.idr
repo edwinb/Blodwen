@@ -129,7 +129,22 @@ mutual
   getDef defs n (DefaultCase sc :: ns) = Just (toCExpTree defs n sc)
   getDef defs n (_ :: ns) = getDef defs n ns
 
+  -- Turn a case analysis on a Delay into an application of Force. We let
+  -- bind the arguments, which will be inlined later. There's no point in
+  -- doing anything more fiddly now!
+  forceIn : Defs -> Name -> CExp vars -> (cargs : List Name) ->
+            CExp (cargs ++ vars) -> CExp vars
+  forceIn defs n exp [] tree = tree
+  forceIn defs n exp [dexp] tree = CLet dexp (CForce exp) tree
+  forceIn defs n exp (d :: ds) tree 
+      = forceIn defs n exp ds (CLet d CErased tree)
+
   toCExpTree : Defs -> Name -> CaseTree vars -> CExp vars
+  toCExpTree defs n (Case x scTy [ConCase cn t args sc])
+      = if isDelay cn defs
+           then forceIn defs n (CLocal x) args (toCExpTree defs n sc)
+           else CConCase (CLocal x) (conCases defs n [ConCase cn t args sc])
+                         Nothing
   toCExpTree defs n (Case x scTy alts@(ConCase _ _ _ _ :: _)) 
       = CConCase (CLocal x) (conCases defs n alts) (getDef defs n alts)
   toCExpTree defs n (Case x scTy alts@(ConstCase _ _ :: _)) 

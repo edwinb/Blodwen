@@ -1,0 +1,13 @@
+count : Int -> Stream Int
+count x = x :: count (1 + x)
+
+-- Match twice to make sure the Delay on the left is moved to a Force
+-- on the right
+smap : (a -> b) -> Stream a -> Stream b
+smap f (x :: y :: xs) = f x :: f y :: smap f xs
+
+test : List Int
+test = take 10 (smap (*2) (count 1))
+
+test2 : List Int
+test2 = take 10 (map (*2) (count 1))
