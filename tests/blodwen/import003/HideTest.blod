@@ -1,0 +1,10 @@
+module HideTest
+
+import public HideBind
+
+-- Shouldn't work since we removed >>= for Monad in general
+main : IO ()
+main
+    = do x <- getLine
+         putStrLn "Foo"
+

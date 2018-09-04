@@ -1,0 +1,14 @@
+1/2: Building HideBind (HideBind.blod)
+2/2: Building HideTest (HideTest.blod)
+HideTest.blod:8:15--9:10:While processing right hand side of HideTest.main at HideTest.blod:7:1--11:1:
+When unifying IO String and Maybe ?a
+Mismatch between:
+	IO String
+and
+	Maybe ?a
+Welcome to Blodwen. Good luck.
+HideTest> Bye for now!
+1/2: Building HideBind2 (HideBind2.blod)
+2/2: Building HideTest2 (HideTest2.blod)
+Welcome to Blodwen. Good luck.
+HideTest2> Bye for now!

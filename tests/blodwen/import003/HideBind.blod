@@ -1,0 +1,9 @@
+module HideBind
+
+%hide_export (>>=)
+
+export
+(>>=) : Maybe a -> (a -> Maybe b) -> Maybe b
+Nothing >>= k = Nothing
+Just x >>= k = k x
+

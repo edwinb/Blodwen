@@ -403,6 +403,7 @@ mutual
            pure [INamespace fc ns (concat ds)]
   desugarDecl ps (PDirective fc d) 
       = case d of
+             Hide e n => pure [IPragma (\env, nest => hide fc e n)]
              Logging i => pure [ILog i]
              LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]
              LazyOn a => pure [IPragma (\env, nest => lazyActive a)]

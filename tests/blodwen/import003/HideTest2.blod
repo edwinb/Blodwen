@@ -1,0 +1,9 @@
+module HideTest2
+
+import public HideBind2
+
+main : IO ()
+main
+    = do x <- getLine
+         putStrLn "Foo"
+

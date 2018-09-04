@@ -52,7 +52,7 @@ readModule : {auto c : Ref Ctxt Defs} ->
              Core FC ()
 readModule loc vis reexp imp as
     = do fname <- nsToPath loc imp
-         Just (syn, more) <- readFromTTC {extra = SyntaxInfo} loc fname imp as
+         Just (syn, more) <- readFromTTC {extra = SyntaxInfo} loc vis fname imp as
               | Nothing => when vis (setVisible imp) -- already loaded, just set visibility
          addImported (imp, reexp, as)
          extendAs imp as syn
@@ -92,7 +92,7 @@ readAsMain : {auto c : Ref Ctxt Defs} ->
              (fname : String) -> Core FC ()
 readAsMain fname
     = do Just (syn, more) <- readFromTTC {extra = SyntaxInfo} 
-                                         toplevelFC fname [] []
+                                         toplevelFC True fname [] []
               | Nothing => pure ()
          replNS <- getNS
          extendAs replNS replNS syn
@@ -135,6 +135,10 @@ processMod mod
                 -- (also that we only build child dependencies if rebuilding
                 -- changes the interface - will need to store a hash in .ttc!)
                 traverse readImport imps
+                -- Before we process the source, make sure the "hide_everywhere"
+                -- names are set to private
+                defs <- get Ctxt
+                traverse (\x => setVisibility emptyFC x Private) (hiddenNames defs)
                 setNS ns
                 processDecls (decls mod))
             (\err => pure [err])

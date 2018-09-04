@@ -338,6 +338,7 @@ record Defs where
                   -- at the end to resolve defaults 'False'
       typeHints : Context (List (Name, Bool)) -- type name hints
       openHints : List Name -- global hints just for this module; prioritised
+      hiddenNames : List Name -- names which should be considered hidden (treated 'private')
       cgdirectives : List (CG, String)
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
@@ -360,6 +361,7 @@ TTC annot Defs where
            toBuf b (laziness (options val))
            toBuf b (pairnames (options val))
            toBuf b (primnames (options val))
+           toBuf b (hiddenNames val)
            toBuf b (cgdirectives val)
   fromBuf s b 
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
@@ -368,13 +370,14 @@ TTC annot Defs where
            lazy <- fromBuf s b
            pair <- fromBuf s b
            prim <- fromBuf s b
+           hides <- fromBuf s b
            ds <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) modNS 
                             (record { laziness = lazy,
                                       pairnames = pair,
                                       primnames = prim
                                     } defaults)
-                            empty imported [] [] empty [] ds 100 0 0)
+                            empty imported [] [] empty [] hides ds 100 0 0)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -383,7 +386,7 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty [] [] 100 0 0
+initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty [] [] [] 100 0 0
 
 export
 getSave : Defs -> List Name
@@ -1291,6 +1294,21 @@ setVisibility loc n vis
               Just def => 
                    addDef n (record { visibility = vis } def)
 
+-- Set a name as Private that was previously visible (and, if 'everywhere' is
+-- set, hide in any modules imported by this one)
+export
+hide : {auto x : Ref Ctxt Defs} ->
+       annot -> (everywhere : Bool) -> Name -> Core annot ()
+hide loc everywhere n
+    = do ctxt <- getCtxt
+         case lookupGlobalName n ctxt of
+              [] => throw (UndefinedName loc n)
+              [(nsn, _)] => do setVisibility loc nsn Private
+                               defs <- get Ctxt
+                               when everywhere $
+                                  put Ctxt (record { hiddenNames $= (nsn ::) } defs)
+              res => throw (AmbiguousName loc (map fst res))
+
 export
 getVisibility : {auto x : Ref Ctxt Defs} ->
                 annot -> Name -> Core annot Visibility
@@ -1364,11 +1382,15 @@ processFlags loc (n, def)
 -- New options override current ones
 export
 extend : {auto c : Ref Ctxt Defs} ->
-         annot -> Defs -> Core annot ()
-extend loc new
+         annot -> Bool -> Defs -> Core annot ()
+extend loc reexp new
     = do ctxt <- get Ctxt
+         -- Only pass on the hidden names if imported directly
+         let hidden = if reexp then nub (hiddenNames ctxt ++ hiddenNames new)
+                               else hiddenNames ctxt
          put Ctxt (record { gamma $= mergeContext (gamma new),
                             options $= mergeOptions (options new),
+                            hiddenNames = hidden,
                             cgdirectives $= (++ cgdirectives new)
                           } ctxt)
          -- Process any flags that need processing in the newly added
@@ -1379,14 +1401,18 @@ extend loc new
 -- TODO: Need to do the actual renaming in mergeContextAs and before processFlags!
 export
 extendAs : {auto c : Ref Ctxt Defs} ->
-           annot -> List String -> List String -> 
+           annot -> Bool -> List String -> List String -> 
            Defs -> Core annot ()
-extendAs loc modNS importAs new
+extendAs loc reexp modNS importAs new
     = if modNS == importAs 
-         then extend loc new
+         then extend loc reexp new
          else do ctxt <- get Ctxt
+                 -- Only pass on the hidden names if imported directly
+                 let hidden = if reexp then nub (hiddenNames ctxt ++ hiddenNames new)
+                                       else hiddenNames ctxt
                  put Ctxt (record { gamma $= mergeContextAs modNS importAs (gamma new),
                                     options $= mergeOptions (options new),
+                                    hiddenNames = hidden,
                                     cgdirectives $= (++ cgdirectives new)
                                   } ctxt)
                  -- Process any flags that need processing in the newly added

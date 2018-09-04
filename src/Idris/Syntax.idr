@@ -180,6 +180,7 @@ mutual
 
   public export
   data Directive : Type where
+       Hide : Bool -> Name -> Directive
        Logging : Nat -> Directive
        LazyNames : Name -> Name -> Name -> Directive
        LazyOn : Bool -> Directive

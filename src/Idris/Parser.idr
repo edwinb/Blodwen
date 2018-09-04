@@ -693,7 +693,15 @@ onoff
 
 directive : FileName -> IndentInfo -> Rule Directive
 directive fname indents
-    = do exactIdent "logging"
+    = do exactIdent "hide"
+         n <- name
+         atEnd indents
+         pure (Hide False n)
+  <|> do exactIdent "hide_export"
+         n <- name
+         atEnd indents
+         pure (Hide True n)
+  <|> do exactIdent "logging"
          lvl <- intLit
          atEnd indents
          pure (Logging (cast lvl))

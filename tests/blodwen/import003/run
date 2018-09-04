@@ -1,0 +1,4 @@
+echo ':q' | $1 HideTest.blod
+echo ':q' | $1 HideTest2.blod
+
+rm -rf build
