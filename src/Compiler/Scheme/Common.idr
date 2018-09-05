@@ -265,10 +265,11 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
       = pure $ "(display " ++ !(schExp vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
   schExtCommon vs GetStr [world] 
       = pure $ mkWorld "(blodwen-get-line (current-input-port))"
-  schExtCommon vs FileOpen [file, mode, world]
+  schExtCommon vs FileOpen [file, mode, bin, world]
       = pure $ mkWorld $ fileOp $ "(blodwen-open " 
                                       ++ !(schExp vs file) ++ " "
-                                      ++ !(schExp vs mode) ++ ")"
+                                      ++ !(schExp vs mode) ++ " "
+                                      ++ !(schExp vs bin) ++ ")"
   schExtCommon vs FileClose [file, world]
       = pure $ "(blodwen-close-port " ++ !(schExp vs file) ++ ") " ++ mkWorld (schConstructor 0 [])
   schExtCommon vs FileReadLine [file, world]

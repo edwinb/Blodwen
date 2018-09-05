@@ -6,9 +6,11 @@ import Data.Strings
 public export
 data Mode = Read | WriteTruncate | Append | ReadWrite | ReadWriteTruncate | ReadAppend
 
+public export
 data FilePtr : Type where
 
-%extern prim__open : String -> String -> (1 x : %World) -> IORes (Either Int FilePtr)
+%extern prim__open : String -> String -> Int ->
+                     (1 x : %World) -> IORes (Either Int FilePtr)
 %extern prim__close : FilePtr -> (1 x : %World) -> IORes ()
 %extern prim__readLine : FilePtr -> (1 x : %World) -> IORes (Either Int String)
 %extern prim__writeLine : FilePtr -> String -> (1 x : %World) -> IORes (Either Int ())
@@ -40,18 +42,32 @@ fpure : Either Int a -> IO (Either FileError a)
 fpure (Left err) = pure (Left (toFileError err))
 fpure (Right x) = pure (Right x)
 
-export
-data File : Type where
-     FHandle : FilePtr -> File
+public export
+data FileT : Bool -> Type where
+     FHandle : FilePtr -> FileT bin
+
+public export
+File : Type
+File = FileT False
+
+public export
+BinaryFile : Type
+BinaryFile = FileT True
 
 export
 openFile : String -> Mode -> IO (Either FileError File)
 openFile f m 
-    = do res <- primIO (prim__open f (modeStr m))
+    = do res <- primIO (prim__open f (modeStr m) 0)
          fpure (map FHandle res)
 
 export
-closeFile : File -> IO ()
+openBinaryFile : String -> Mode -> IO (Either FileError BinaryFile)
+openBinaryFile f m 
+    = do res <- primIO (prim__open f (modeStr m) 1)
+         fpure (map FHandle res)
+
+export
+closeFile : FileT t -> IO ()
 closeFile (FHandle f) = primIO (prim__close f)
 
 export

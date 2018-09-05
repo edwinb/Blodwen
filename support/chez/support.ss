@@ -53,8 +53,8 @@
     (if (port? p) (put-string p s) void)
     0)
 
-(define (blodwen-open file mode)
-    (define tc (make-transcoder (utf-8-codec)))
+(define (blodwen-open file mode bin)
+    (define tc (if (= bin 1) #f (make-transcoder (utf-8-codec))))
     (define bm (buffer-mode line))
     (case mode 
         (("r") (open-file-input-port file (file-options) bm tc))
