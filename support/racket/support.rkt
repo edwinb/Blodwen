@@ -27,7 +27,8 @@
   (lambda (x)
     (vector 1 #f #f x)))
 
-;; Much of the following adapted from idris-chez, thanks to Niklas Larsson
+;; Files : Much of the following adapted from idris-chez, thanks to Niklas
+;; Larsson
 
 ;; All the file operations are implemented as primitives which return 
 ;; Either Int x, where the Int is an error code
@@ -66,6 +67,8 @@
   (if (eof-object? (peek-char p))
       1
       0))
+
+;; Threads
 
 (define blodwen-thread-data (make-thread-cell #f))
 

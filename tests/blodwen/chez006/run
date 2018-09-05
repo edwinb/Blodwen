@@ -1,0 +1,2 @@
+$1 buffer.blod < input
+rm -rf build test.buf

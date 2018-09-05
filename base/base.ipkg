@@ -1,6 +1,7 @@
 package base
 
-modules = Data.IORef,
+modules = Data.Buffer,
+          Data.IORef,
           Data.List,
           Data.Strings,
 
