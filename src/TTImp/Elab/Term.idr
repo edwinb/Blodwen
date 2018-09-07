@@ -633,8 +633,9 @@ mutual
            -- we can use the nested names which might use that environment) and the
            -- part of the environment which is not the outer environment (so that we
            -- can dependent pattern match on parts of it). "smaller" is the outer
-           -- environment, taken from the elaboration state.
-           let smaller = subEnv est
+           -- environment, taken from the elaboration state, also removing
+           -- things we can't match on and nothing depends on
+           let (svars ** smaller) = shrinkEnv (subEnv est) [] env
            
            caseretty <- case expected of
                              Just ty => pure ty
@@ -649,6 +650,7 @@ mutual
 
            log 10 $ "Env: " ++ show vars
            log 10 $ "Outer env: " ++ show (outerEnv est)
+           log 10 $ "Shrunk env: " ++ show svars
            log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
            addDef casen (newDef casefnty Private None)
@@ -666,6 +668,57 @@ mutual
            pure (App (applyToOthers (mkConstantAppFull casen env) env smaller) 
                      scrtm, caseretty)
     where
+      dropHere : List (x ** Elem x (v :: vs)) -> List (x ** Elem x vs)
+      dropHere [] = []
+      dropHere ((_ ** Here) :: vs) = dropHere vs
+      dropHere ((_ ** There p) :: vs) = (_ ** p) :: dropHere vs
+
+      -- Extend the list of variables we need in the environment so far.
+      -- For the sake of tidiness, we should probably also remove duplicates
+      -- (but this isn't a huge performence hit as it is...)
+      extendNeeded : Binder (Term vs) -> 
+                     Env Term vs -> List (x ** Elem x vs) ->
+                     List (x ** Elem x vs)
+      extendNeeded (Let c ty val) env needed
+          = findUsedLocs env ty ++ findUsedLocs env val ++ needed
+      extendNeeded (PLet c ty val) env needed
+          = findUsedLocs env ty ++ findUsedLocs env val ++ needed
+      extendNeeded b env needed
+          = findUsedLocs env (binderType b) ++ needed
+
+      isNeeded : Elem x vs -> List (y ** Elem y vs) -> Bool
+      isNeeded x [] = False
+      isNeeded x ((_ ** y) :: xs) = sameVar x y || isNeeded x xs
+
+      -- Shrink the environment so that any generated lambdas are not
+      -- included.
+      -- Here, 'Keep' means keep it in the outer environment, i.e. not needed
+      -- for the case block. So, if it's already in the SubVars set, keep it,
+      -- if it's not in the SubVars, keep it if it's a non-user name and
+      -- doesn't appear in any types later in the environment
+      -- (Yes, this is the opposite of what might seem natural, but we're
+      -- starting from the 'outerEnv' which is the fragment of the environment
+      -- used for the outer scope)
+      shrinkEnv : SubVars outer vs -> List (x ** Elem x vs) ->
+                  Env Term vs ->
+                  (outer' ** SubVars outer' vs)
+      shrinkEnv SubRefl needed env = (_ ** SubRefl) -- keep them all
+      -- usable name, so drop from the outer environment
+      shrinkEnv {vs = UN _ :: _} (DropCons p) needed (b :: env) 
+          = let (_ ** p') = shrinkEnv p (extendNeeded b env (dropHere needed)) env in
+                (_ ** DropCons p')
+      shrinkEnv (DropCons p) needed (b :: env)
+          = let (_ ** p') = shrinkEnv p (extendNeeded b env (dropHere needed)) env in
+                if isNeeded Here needed || notLam b
+                   then (_ ** DropCons p') else (_ ** KeepCons p')
+        where
+          notLam : Binder t -> Bool
+          notLam (Lam _ _ _) = False
+          notLam _ = True
+      shrinkEnv (KeepCons p) needed (b :: env) 
+          = let (_ ** p') = shrinkEnv p (extendNeeded b env (dropHere needed)) env in
+                (_ ** KeepCons p') -- still keep it
+
       -- Is every occurence of the given variable name in a parameter
       -- position? 'ppos' says whether we are checking at a parameter
       -- position.

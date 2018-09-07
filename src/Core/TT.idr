@@ -868,6 +868,7 @@ mkShrink {vars = []} xs = (_ ** SubRefl)
 mkShrink {vars = v :: vs} xs = mkShrinkSub _ xs
 
 mutual
+  export
   findUsedLocs : Env Term vars -> Term vars -> List (x ** Elem x vars)
   findUsedLocs env (Local r y) 
 	  = (_ ** y) :: assert_total (findUsedInBinder env (getBinder y env))

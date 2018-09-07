@@ -342,12 +342,20 @@ abandonIfCycle tm (ty :: tys)
             then throw (InternalError "Cycle in search")
             else abandonIfCycle tm tys
 
+-- No need to normalise the binders - this is the slow part of normalisation
+-- in any case when we recalculate their de Bruijn index, so if we can avoid
+-- it, it's a big win
+normaliseScope : Defs -> Env Term vars -> Term vars -> Term vars
+normaliseScope defs env (Bind n b sc) 
+    = Bind n b (normaliseScope defs (b :: env) sc)
+normaliseScope defs env tm = normaliseHoles defs env tm
+
 searchHole : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Bool -> Nat -> List ClosedTerm ->
              Name -> Name -> Defs -> GlobalDef -> Core annot ClosedTerm
 searchHole loc defaults depth trying defining n gam glob
-    = do let searchty = normaliseHoles gam [] (type glob)
+    = do let searchty = normaliseScope gam [] (type glob)
          abandonIfCycle searchty trying
          let nty = nf gam [] searchty
          log 2 $ "Running search: " ++ show n ++ " in " ++ show defining ++
