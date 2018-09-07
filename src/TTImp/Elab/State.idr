@@ -443,81 +443,87 @@ substPLet rig n tm ty sctm scty
     = (Bind n (PLet rig tm ty) sctm, Bind n (PLet rig tm ty) scty)
 
 -- Bind implicit arguments, returning the new term and its updated type
-bindImplVars : Int -> 
-               ImplicitMode ->
+bindImplVars : ImplicitMode ->
                Defs ->
                Env Term vars ->
                List (Name, Term vars) ->
                List (Name, RigCount) ->
                Term vars -> Term vars -> (Term vars, Term vars)
-bindImplVars i NONE gam env args asvs scope scty = (scope, scty)
-bindImplVars i mode gam env [] asvs scope scty = (scope, scty)
-bindImplVars i mode gam env ((n, ty) :: imps) asvs scope scty
-    = let (scope', ty') = bindImplVars (i + 1) mode gam env imps asvs scope scty
-          tmpN = MN "unb" i
-          repNameTm = repName (Ref Bound tmpN) scope' 
-          repNameTy = repName (Ref Bound tmpN) ty'
-          n' = dropNS n in
-          case mode of
-               PATTERN =>
-                  case lookupDefExact n (gamma gam) of
-                       Just (PMDef _ _ _ _) =>
-                          -- if n is an accessible pattern variable, bind it,
-                          -- otherwise reduce it
-                          case n of
-                               PV _ _ =>
-                                  -- Need to apply 'n' to the surrounding environment in these cases!
-                                  -- otherwise it won't work in nested defs...
-                                  let tm = normalise gam env (applyTo (Ref Func n) env) 
-                                      rig = maybe RigW id (lookup n asvs) in
-                                      substPLet rig n' tm ty 
-                                          (refToLocal Nothing tmpN n' repNameTm)
-                                          (refToLocal Nothing tmpN n' repNameTy)
-
-                               _ => (subst (normalise gam env (applyTo (Ref Func n) env))
-                                           (refToLocal Nothing tmpN n repNameTm),
-                                     subst (normalise gam env (applyTo (Ref Func n) env))
-                                           (refToLocal Nothing tmpN n repNameTy))
-                       _ =>
-                          (Bind n' (PVar RigW ty) (refToLocal Nothing tmpN n' repNameTm), 
-                           Bind n' (PVTy RigW ty) (refToLocal Nothing tmpN n' repNameTy))
-               -- unless explicitly given, unbound implicits are Rig0
-               PI rig =>
-                  case lookupDefExact n (gamma gam) of
-                     Just (PMDef _ _ _ _) =>
-                        (subst (normalise gam env (applyTo (Ref Func n) env))
-                               (refToLocal Nothing tmpN n repNameTm),
-                         subst (normalise gam env (applyTo (Ref Func n) env))
-                               (refToLocal Nothing tmpN n repNameTy))
-                     _ => (Bind n' (Pi rig Implicit ty) (refToLocal Nothing tmpN n' repNameTm), ty')
-               _ => (Bind n' (Pi RigW Implicit ty) 
-                          (refToLocal Nothing tmpN n' repNameTm), ty')
+bindImplVars NONE gam env args asvs scope scty = (scope, scty)
+bindImplVars mode gam env imps asvs scope scty = doBinds 0 env imps scope scty
   where
     -- Replace the name applied to the given number of arguments 
     -- with another term
-    repName : (new : Term vars) -> Term vars -> Term vars
-    repName new (Local r p) = Local r p
-    repName new (Ref nt fn)
-        = case nameEq n fn of
+    repName : Name -> (new : Term vars) -> Term vars -> Term vars
+    repName old new (Local r p) = Local r p
+    repName old new (Ref nt fn)
+        = case nameEq old fn of
                Nothing => Ref nt fn
                Just Refl => new
-    repName new (Bind y b tm) 
-        = Bind y (assert_total (map (repName new) b)) 
-                 (repName (weaken new) tm)
-    repName new (App fn arg) 
-        = case getFn fn of
-               Ref nt fn' =>
-                   if n == fn'
+    repName old new (Bind y b tm) 
+        = Bind y (assert_total (map (repName old new) b)) 
+                 (repName old (weaken new) tm)
+    repName old new (App fn arg) 
+        = case getFnArgs (App fn arg) of
+               (Ref nt fn', args) =>
+                   if old == fn'
                       then let locs = case lookupDefExact fn' (gamma gam) of
                                            Just (Hole i _ _) => i
                                            _ => 0
                                         in
-                               apply new (map (repName new) (drop locs (getArgs (App fn arg))))
-                      else App (repName new fn) (repName new arg)
-               _ => App (repName new fn) (repName new arg)
-    repName new (PrimVal y) = PrimVal y
-    repName new Erased = Erased
-    repName new TType = TType
+                               apply new (map (repName old new) (drop locs args))
+                      else apply (Ref nt fn')
+                                 (map (repName old new) args)
+               (fn', args) => apply (repName old new fn') 
+                                    (map (repName old new) args)
+    repName old new (PrimVal y) = PrimVal y
+    repName old new Erased = Erased
+    repName old new TType = TType
+    
+    doBinds : Int -> Env Term vars -> List (Name, Term vars) ->
+              Term vars -> Term vars -> (Term vars, Term vars)
+    doBinds i env [] scope scty = (scope, scty)
+    doBinds i env ((n, ty) :: imps) scope scty
+      = let (scope', ty') = doBinds (i + 1) env imps scope scty
+            tmpN = MN "unb" i
+            repNameTm = repName n (Ref Bound tmpN) scope' 
+            repNameTy = repName n (Ref Bound tmpN) ty'
+
+            n' = dropNS n in
+            case mode of
+                 PATTERN =>
+                    case lookupDefExact n (gamma gam) of
+                         Just (PMDef _ _ _ _) =>
+                            -- if n is an accessible pattern variable, bind it,
+                            -- otherwise reduce it
+                            case n of
+                                 PV _ _ =>
+                                    -- Need to apply 'n' to the surrounding environment in these cases!
+                                    -- otherwise it won't work in nested defs...
+                                    let tm = normalise gam env (applyTo (Ref Func n) env) 
+                                        rig = maybe RigW id (lookup n asvs) in
+                                        substPLet rig n' tm ty 
+                                            (refToLocal Nothing tmpN n' repNameTm)
+                                            (refToLocal Nothing tmpN n' repNameTy)
+
+                                 _ => let tm = normalise gam env (applyTo (Ref Func n) env) in
+                                      (subst tm
+                                             (refToLocal Nothing tmpN n repNameTm),
+                                       subst tm
+                                             (refToLocal Nothing tmpN n repNameTy))
+                         _ =>
+                            (Bind n' (PVar RigW ty) (refToLocal Nothing tmpN n' repNameTm), 
+                             Bind n' (PVTy RigW ty) (refToLocal Nothing tmpN n' repNameTy))
+                 -- unless explicitly given, unbound implicits are Rig0
+                 PI rig =>
+                    case lookupDefExact n (gamma gam) of
+                       Just (PMDef _ _ _ _) =>
+                          let tm = normalise gam env (applyTo (Ref Func n) env) in
+                              (subst tm (refToLocal Nothing tmpN n repNameTm),
+                               subst tm (refToLocal Nothing tmpN n repNameTy))
+                       _ => (Bind n' (Pi rig Implicit ty) (refToLocal Nothing tmpN n' repNameTm), ty')
+                 _ => (Bind n' (Pi RigW Implicit ty) 
+                            (refToLocal Nothing tmpN n' repNameTm), ty')
 
 swapElemH : Elem p (x :: y :: ys) -> Elem p (y :: x :: ys)
 swapElemH Here = There Here
@@ -577,7 +583,7 @@ bindImplicits : ImplicitMode ->
                 List (Name, RigCount) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
 bindImplicits {vars} mode gam env hs asvs tm ty 
-   = liftImps mode $ bindImplVars 0 mode gam env (map nHoles hs) asvs
+   = liftImps mode $ bindImplVars mode gam env (map nHoles hs) asvs
                              (normaliseHoles gam env tm)
                              (normaliseHoles gam env ty)
   where

@@ -15,7 +15,6 @@ IFace1>  0 a : Type
    pi : ((DecEq a), (Eq (p t)))
  0 a : Type
  0 p : a -> Type
-   pi : ((DecEq a), (Eq (p t)))
    l : a
    r : p l
    r' : p l

@@ -753,8 +753,9 @@ mutual
 
 
       canBindName : Name -> List Name -> Maybe Name
-      canBindName n vs
+      canBindName n@(UN _) vs
          = if n `elem` vs then Nothing else Just n
+      canBindName _ vs = Nothing
 
       addEnv : Env Term vs -> SubVars vs' vs -> List Name -> 
                (List (RawImp annot), List Name)

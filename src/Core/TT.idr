@@ -997,8 +997,11 @@ unapply tm = ArgsList {f = tm} {args = []}
 
 export
 getFnArgs : (tm : Term vars) -> (Term vars, List (Term vars))
-getFnArgs tm with (unapply tm)
-  getFnArgs (apply f args) | ArgsList = (f, args)
+getFnArgs tm = getFA [] tm
+  where
+    getFA : List (Term vars) -> Term vars -> (Term vars, List (Term vars))
+    getFA args (App f a) = getFA (a :: args) f
+    getFA args tm = (tm, args)
 
 export
 getFn : (tm : Term vars) -> Term vars

@@ -225,7 +225,7 @@ instantiate loc env metavar smvs otm tm {newvars}
           case lookupDefTyExact metavar (gamma gam) of
                Nothing => ufail loc $ "No such metavariable " ++ show metavar
                Just (_, ty) => 
-                    case mkRHS [] newvars CompatPre ty 
+                    case mkRHS [] newvars (snocList newvars) CompatPre ty 
                              (rewrite appendNilRightNeutral newvars in tm) of
                          Nothing => ufail loc $ "Can't make solution for " ++ show metavar
                          Just rhs => 
@@ -237,16 +237,16 @@ instantiate loc env metavar smvs otm tm {newvars}
                                removeHoleName metavar
   where
     mkRHS : (got : List Name) -> (newvars : List Name) ->
+            SnocList newvars ->
             CompatibleVars got rest ->
             Term rest -> Term (newvars ++ got) -> Maybe (Term rest)
-    mkRHS got ns cvs ty tm with (snocList ns)
-      mkRHS got [] cvs ty tm | Empty = Just (renameVars cvs tm)
-      mkRHS got (ns ++ [n]) cvs (Bind x (Pi c _ ty) sc) tm | (Snoc rec) 
-           = do sc' <- mkRHS (n :: got) ns (CompatExt cvs) sc 
-                           (rewrite appendAssociative ns [n] got in tm)
-                pure (Bind x (Lam c Explicit ty) sc')
+    mkRHS got [] Empty cvs ty tm = Just (renameVars cvs tm)
+    mkRHS got (ns ++ [n]) (Snoc rec) cvs (Bind x (Pi c _ ty) sc) tm 
+         = do sc' <- mkRHS (n :: got) ns rec (CompatExt cvs) sc 
+                         (rewrite appendAssociative ns [n] got in tm)
+              pure (Bind x (Lam c Explicit ty) sc')
       -- Run out of variables to bind
-      mkRHS got (ns ++ [n]) cvs ty tm | (Snoc rec) = Nothing
+    mkRHS got (ns ++ [n]) (Snoc rec) cvs ty tm = Nothing
 
 export
 implicitBind : {auto c : Ref Ctxt Defs} ->
