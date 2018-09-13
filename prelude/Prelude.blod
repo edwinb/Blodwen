@@ -102,9 +102,17 @@ interface Uninhabited t where
 public export
 void : Void -> a
 
+export
+Uninhabited Void where
+  uninhabited = id
+
 public export
 absurd : Uninhabited t => (h : t) -> a
 absurd h = void (uninhabited h)
+
+public export
+Not : Type -> Type
+Not x = x -> Void
 
 --------------
 -- BOOLEANS --
@@ -574,6 +582,15 @@ public export
 Foldable Maybe where
   foldr _ z Nothing  = z
   foldr f z (Just x) = f x z
+
+---------
+-- DEC --
+---------
+
+public export
+data Dec : Type -> Type where
+  Yes : (prf : prop) -> Dec prop
+  No  : (contra : prop -> Void) -> Dec prop
 
 ------------
 -- EITHER --
