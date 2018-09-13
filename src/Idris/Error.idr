@@ -129,6 +129,11 @@ perror (NoDeclaration _ n) = pure $ "No type declaration for " ++ show n
 perror (AlreadyDefined _ n) = pure $ show n ++ " is already defined"
 perror (NotFunctionType _ env tm)
     = pure $ !(pshow env tm) ++ " is not a function type"
+perror (RewriteNoChange _ env rule ty)
+    = pure $ "Rewriting by " ++ !(pshow env rule) ++ 
+             " did not change type " ++ !(pshow env ty)
+perror (NotRewriteRule fc env rule)
+    = pure $ !(pshow env rule) ++ " is not a rewrite rule type"
 perror (CaseCompile _ n DifferingArgNumbers)
     = pure $ "Patterns for " ++ show n ++ " have differing numbers of arguments"
 perror (CaseCompile _ n DifferingTypes)

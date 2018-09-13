@@ -57,6 +57,7 @@ modules = Compiler.Common,
 
           TTImp.Elab,
           TTImp.Elab.Ambiguity,
+          TTImp.Elab.Rewrite,
           TTImp.Elab.State,
           TTImp.Elab.Term,
           TTImp.Elab.Unelab,

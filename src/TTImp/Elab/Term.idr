@@ -3,6 +3,7 @@ module TTImp.Elab.Term
 import TTImp.TTImp
 import public TTImp.Elab.State
 import TTImp.Elab.Ambiguity
+import TTImp.Elab.Rewrite
 import TTImp.Reflect
 
 import Core.AutoSearch
@@ -369,6 +370,37 @@ mutual
                   tryall (elabMode elabinfo)
                          (map (\t => (getName t, checkImp rigc process elabinfo env nest t 
                                          (Just expected))) alts'))
+  checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) Nothing
+      = throw (GenericMsg loc "Can't infer a type for rewrite")
+  checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) (Just expected)
+      = do (rulev, rulet) <- check rigc process elabinfo env nest rule Nothing
+           (lemma, pred) <- elabRewrite loc env expected rulet
+
+           rname <- genVarName "rule"
+           pname <- genVarName "pred"
+
+           let pbind = Let RigW pred Erased
+           let rbind = Let RigW (weaken rulev) (weaken rulet)
+
+           let env' = rbind :: pbind :: env
+
+           -- Nothing we do in this last part will affect the EState,
+           -- we're only doing the application this way to make sure the
+           -- implicits for the rewriting lemma are in the right place. But,
+           -- we still need the right type for the EState, so weaken it once
+           -- for each of the let bindings above.
+           e' <- weakenedEState
+           e'' <- weakenedEState {e = e'}
+
+           (rwtm, rwty) <- check {e = e''} {vars = rname :: pname :: vars}
+                                rigc process elabinfo env' (weaken (weaken nest))
+                             (apply (IVar loc lemma) [IVar loc pname,
+                                                      IVar loc rname, 
+                                                      tm]) 
+                             (Just (weakenNs [rname, pname] expected))
+
+           pure (Bind pname pbind (Bind rname rbind rwtm), 
+                 Bind pname pbind (Bind rname rbind rwty))
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected

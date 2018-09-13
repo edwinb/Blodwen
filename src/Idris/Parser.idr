@@ -215,6 +215,7 @@ mutual
            pure (PAs (MkFC fname start end) (UN x) expr)
     <|> atom fname
     <|> binder fname indents
+    <|> rewrite_ fname indents
     <|> do start <- location
            symbol ".("
            commit
@@ -456,6 +457,16 @@ mutual
            end <- location
            pure (PIfThenElse (MkFC fname start end) x t e)
 
+  rewrite_ : FileName -> IndentInfo -> Rule PTerm
+  rewrite_ fname indents
+      = do start <- location
+           keyword "rewrite"
+           rule <- expr EqOK fname indents
+           keyword "in"
+           tm <- expr EqOK fname indents
+           end <- location
+           pure (PRewrite (MkFC fname start end) rule tm)
+  
   doBlock : FileName -> IndentInfo -> Rule PTerm
   doBlock fname indents
       = do start <- location
@@ -496,6 +507,12 @@ mutual
            end <- location
            atEnd indents
            pure [DoLetLocal (MkFC fname start end) (concat res)]
+    <|> do start <- location
+           keyword "rewrite"
+           rule <- expr EqOK fname indents
+           atEnd indents
+           end <- location
+           pure [DoRewrite (MkFC fname start end) rule]
     <|> do start <- location
            e <- expr NoEq fname indents
            (do atEnd indents
@@ -721,6 +738,10 @@ directive fname indents
          s <- name
          atEnd indents
          pure (PairNames ty f s)
+  <|> do keyword "rewrite"
+         eq <- name
+         rw <- name
+         pure (RewriteName eq rw)
   <|> do exactIdent "integerLit"
          n <- name
          pure (PrimInteger n)

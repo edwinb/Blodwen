@@ -21,6 +21,12 @@ record PairNames where
   sndName : Name
 
 public export
+record RewriteNames where
+  constructor MkRewriteNs
+  equalType : Name
+  rewriteName : Name
+
+public export
 record PrimNames where
   constructor MkPrimNs
   fromIntegerName : Maybe Name
@@ -50,6 +56,16 @@ TTC annot PairNames where
            d <- fromBuf s b
            f <- fromBuf s b
            pure (MkPairNs ty d f)
+
+export
+TTC annot RewriteNames where
+  toBuf b l
+      = do toBuf b (equalType l)
+           toBuf b (rewriteName l)
+  fromBuf s b
+      = do ty <- fromBuf s b
+           l <- fromBuf s b
+           pure (MkRewriteNs ty l)
 
 export
 TTC annot PrimNames where
@@ -128,6 +144,7 @@ record Options where
   session : Session
   laziness : Maybe LazyNames
   pairnames : Maybe PairNames
+  rewritenames : Maybe RewriteNames
   primnames : PrimNames
 
 defaultDirs : Dirs
@@ -142,13 +159,14 @@ defaultSession = MkSessionOpts False False Chez
 export
 defaults : Options
 defaults = MkOptions defaultDirs defaultPPrint defaultSession 
-                     Nothing Nothing (MkPrimNs Nothing Nothing Nothing)
+                     Nothing Nothing Nothing (MkPrimNs Nothing Nothing Nothing)
 
 -- Reset the options which are set by source files
 export
 clearNames : Options -> Options
 clearNames = record { laziness = Nothing,
                       pairnames = Nothing,
+                      rewritenames = Nothing,
                       primnames = MkPrimNs Nothing Nothing Nothing
                     } 
 
@@ -159,6 +177,7 @@ mergeOptions : (ttcopts : Options) -> Options -> Options
 mergeOptions ttcopts opts
   = record { laziness = laziness ttcopts <+> laziness opts,
              pairnames = pairnames ttcopts <+> pairnames opts,
+             rewritenames = rewritenames ttcopts <+> rewritenames opts,
              primnames = mergePrims (primnames ttcopts) (primnames opts)
            } opts
   where
@@ -175,6 +194,10 @@ export
 setPair : (pairType : Name) -> (fstn : Name) -> (sndn : Name) ->
           Options -> Options
 setPair ty f s = record { pairnames = Just (MkPairNs ty f s) }
+
+export
+setRewrite : (eq : Name) -> (rwlemma : Name) -> Options -> Options
+setRewrite eq rw = record { rewritenames = Just (MkRewriteNs eq rw) }
 
 export
 setFromInteger : Name -> Options -> Options

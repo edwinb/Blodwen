@@ -48,6 +48,8 @@ data Error annot
     | NoDeclaration annot Name
     | AlreadyDefined annot Name
     | NotFunctionType annot (Env Term vars) (Term vars)
+    | RewriteNoChange annot (Env Term vars) (Term vars) (Term vars)
+    | NotRewriteRule annot (Env Term vars) (Term vars)
     | CaseCompile annot Name CaseError 
     | BadDotPattern annot (Env Term vars) String (Term vars) (Term vars)
     | BadImplicit annot String
@@ -140,6 +142,10 @@ Show annot => Show (Error annot) where
   show (NoDeclaration fc x) = show fc ++ ":No type declaration for " ++ show x
   show (AlreadyDefined fc x) = show fc ++ ":" ++ show x ++ " is already defined"
   show (NotFunctionType fc env tm) = show fc ++ ":Not a function type: " ++ show tm
+  show (RewriteNoChange fc env rule ty)
+      = show fc ++ ":Rewriting by " ++ show rule ++ " did not change type " ++ show ty
+  show (NotRewriteRule fc env rule)
+      = show fc ++ ":" ++ show rule ++ " is not a rewrite rule type"
   show (CaseCompile fc n DifferingArgNumbers) 
       = show fc ++ ":Patterns for " ++ show n ++ " have different numbers of arguments"
   show (CaseCompile fc n DifferingTypes) 
@@ -211,6 +217,8 @@ getAnnot (BadPattern loc y) = Just loc
 getAnnot (NoDeclaration loc y) = Just loc
 getAnnot (AlreadyDefined loc y) = Just loc
 getAnnot (NotFunctionType loc _ tm) = Just loc
+getAnnot (RewriteNoChange loc _ tm ty) = Just loc
+getAnnot (NotRewriteRule loc _ ty) = Just loc
 getAnnot (CaseCompile loc y z) = Just loc
 getAnnot (BadDotPattern loc _ y tm z) = Just loc
 getAnnot (BadImplicit loc y) = Just loc

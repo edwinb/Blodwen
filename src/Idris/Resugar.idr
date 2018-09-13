@@ -150,6 +150,9 @@ mutual
 
   toPTerm p (ISearch _ d) = pure (PSearch emptyFC d)
   toPTerm p (IAlternative _ _ _) = pure (PImplicit emptyFC)
+  toPTerm p (IRewrite _ rule tm) 
+      = pure (PRewrite emptyFC !(toPTerm startPrec rule)
+                               !(toPTerm startPrec tm))
   toPTerm p (ICoerced _ tm) = toPTerm p tm
   toPTerm p (IPrimVal _ c) = pure (PPrimVal emptyFC c)
   toPTerm p (IQuote _ tm) = pure (PQuote emptyFC !(toPTerm startPrec tm))

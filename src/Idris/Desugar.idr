@@ -202,6 +202,8 @@ mutual
 
       toPure : PTerm -> PDo
       toPure tm = DoExp fc (PApp fc (PRef fc (UN "pure")) tm)
+  desugar side ps (PRewrite fc rule tm)
+      = pure $ IRewrite fc !(desugar side ps rule) !(desugar side ps tm)
 
   expandList : {auto s : Ref Syn SyntaxInfo} ->
                {auto c : Ref Ctxt Defs} ->
@@ -271,6 +273,10 @@ mutual
       = do rest' <- expandDo side ps topfc rest
            decls' <- traverse (desugarDecl ps) decls
            pure $ ILocal fc (concat decls') rest'
+  expandDo side ps topfc (DoRewrite fc rule :: rest)
+      = do rest' <- expandDo side ps topfc rest
+           rule' <- desugar side ps rule
+           pure $ IRewrite fc rule' rest'
 
   desugarTree : {auto s : Ref Syn SyntaxInfo} ->
                 {auto c : Ref Ctxt Defs} ->
@@ -415,6 +421,7 @@ mutual
              LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]
              LazyOn a => pure [IPragma (\env, nest => lazyActive a)]
              PairNames ty f s => pure [IPragma (\env, nest => setPair fc ty f s)]
+             RewriteName eq rw => pure [IPragma (\env, next => setRewrite fc eq rw)]
              PrimInteger n => pure [IPragma (\env, next => setFromInteger fc n)]
              PrimString n => pure [IPragma (\env, next => setFromString fc n)]
              PrimChar n => pure [IPragma (\env, next => setFromChar fc n)]

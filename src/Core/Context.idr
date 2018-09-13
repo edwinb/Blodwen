@@ -360,6 +360,7 @@ TTC annot Defs where
            toBuf b (imported val)
            toBuf b (laziness (options val))
            toBuf b (pairnames (options val))
+           toBuf b (rewritenames (options val))
            toBuf b (primnames (options val))
            toBuf b (hiddenNames val)
            toBuf b (cgdirectives val)
@@ -369,12 +370,14 @@ TTC annot Defs where
            imported <- fromBuf s b
            lazy <- fromBuf s b
            pair <- fromBuf s b
+           rw <- fromBuf s b
            prim <- fromBuf s b
            hides <- fromBuf s b
            ds <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) modNS 
                             (record { laziness = lazy,
                                       pairnames = pair,
+                                      rewritenames = rw,
                                       primnames = prim
                                     } defaults)
                             empty imported [] [] empty [] hides ds 100 0 0)
@@ -568,6 +571,19 @@ sndName defs
          pure (sndName l)
 
 export
+getRewrite : Defs -> Maybe Name
+getRewrite defs
+    = do r <- rewritenames (options defs)
+         pure (rewriteName r)
+
+export
+isEqualTy : Name -> Defs -> Bool
+isEqualTy n defs
+    = case rewritenames (options defs) of
+           Nothing => False
+           Just r => n == equalType r
+
+export
 fromIntegerName : Defs -> Maybe Name
 fromIntegerName defs
     = fromIntegerName (primnames (options defs))
@@ -657,6 +673,15 @@ setPair loc ty f s
          f' <- checkUnambig loc f
          s' <- checkUnambig loc s
          put Ctxt (record { options $= setPair ty' f' s' } defs)
+
+export
+setRewrite : {auto c : Ref Ctxt Defs} ->
+             annot -> (eq : Name) -> (rwlemma : Name) -> Core annot ()
+setRewrite loc eq rw
+    = do defs <- get Ctxt
+         rw' <- checkUnambig loc rw
+         eq' <- checkUnambig loc eq
+         put Ctxt (record { options $= setRewrite eq' rw' } defs)
 
 -- Don't check for ambiguity here; they're all meant to be overloadable
 export

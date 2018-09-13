@@ -91,7 +91,7 @@ mkDirective str = CGDirective (trim (substr 3 (length str) str))
 keywords : List String
 keywords = ["data", "module", "where", "let", "in", "do", "record",
             "auto", "implicit", "namespace", "impossible", "case", "of",
-            "if", "then", "else", "forall",
+            "if", "then", "else", "forall", "rewrite",
             "using", "interface", "implementation", "open", "import",
             "public", "export", "private",
             "infixl", "infixr", "infix", "prefix",

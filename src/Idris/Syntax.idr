@@ -134,8 +134,10 @@ mutual
        PUnit : FC -> PTerm
        PIfThenElse : FC -> PTerm -> PTerm -> PTerm -> PTerm
        PComprehension : FC -> PTerm -> List PDo -> PTerm
+       PRewrite : FC -> PTerm -> PTerm -> PTerm
 
-       -- TODO: Dependent pairs, ranges, idiom brackets (?), rewrites
+       -- TODO: Dependent pairs, ranges, idiom brackets (?), 
+       -- 'with' disambiguation
 
   public export
   data PDo : Type where
@@ -145,6 +147,7 @@ mutual
        DoLet : FC -> Name -> RigCount -> PTerm -> PDo
        DoLetPat : FC -> PTerm -> PTerm -> List PClause -> PDo
        DoLetLocal : FC -> List PDecl -> PDo
+       DoRewrite : FC -> PTerm -> PDo
 
   export
   getLoc : PDo -> FC
@@ -154,6 +157,7 @@ mutual
   getLoc (DoLet fc _ _ _) = fc
   getLoc (DoLetPat fc _ _ _) = fc
   getLoc (DoLetLocal fc _) = fc
+  getLoc (DoRewrite fc _) = fc
 
   export
   papply : FC -> PTerm -> List PTerm -> PTerm
@@ -185,6 +189,7 @@ mutual
        LazyNames : Name -> Name -> Name -> Directive
        LazyOn : Bool -> Directive
        PairNames : Name -> Name -> Name -> Directive
+       RewriteName : Name -> Name -> Directive
        PrimInteger : Name -> Directive
        PrimString : Name -> Directive
        PrimChar : Name -> Directive
@@ -303,6 +308,8 @@ mutual
   showDo (DoLetLocal _ ds)
       -- We'll never see this when displaying a normal form...
       = "let { << definitions >>  }"
+  showDo (DoRewrite _ rule)
+      = "rewrite " ++ show rule
 
   export
   Show PTerm where
@@ -388,6 +395,8 @@ mutual
         deGuard tm@(DoExp fc (PApp _ (PRef _ n) arg))
             = if dropNS n == UN "guard" then DoExp fc arg else tm
         deGuard tm = tm
+    show (PRewrite _ rule tm)
+        = "rewrite " ++ show rule ++ " in " ++ show tm
 
 public export
 record IFaceInfo where

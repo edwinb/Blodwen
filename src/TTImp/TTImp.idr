@@ -61,6 +61,7 @@ mutual
        ISearch : annot -> (depth : Nat) -> RawImp annot
        IAlternative : annot -> AltType annot -> 
                       List (RawImp annot) -> RawImp annot
+       IRewrite : annot -> RawImp annot -> RawImp annot -> RawImp annot
        ICoerced : annot -> RawImp annot -> RawImp annot
        IPrimVal : annot -> Constant -> RawImp annot
        IQuote : annot -> RawImp annot -> RawImp annot
@@ -253,6 +254,7 @@ getAnnot (IApp x _ _) = x
 getAnnot (IImplicitApp x _ _ _) = x
 getAnnot (ISearch x _) = x
 getAnnot (IAlternative x _ _) = x
+getAnnot (IRewrite x _ _) = x
 getAnnot (ICoerced x _) = x
 getAnnot (IPrimVal x _) = x
 getAnnot (IQuote x _) = x
@@ -313,6 +315,8 @@ mutual
         = "%search"
     show (IAlternative _ u alts) 
         = "(|" ++ showSep "," (map show alts) ++ "|)"
+    show (IRewrite _ rule tm)
+        = "(%rewrite (" ++ show rule ++ ") (" ++ show tm ++ "))"
     show (ICoerced _ tm) = show tm
     show (IPrimVal _ y) = show y
     show (IQuote _ y) = "`(" ++ show y ++ ")"
@@ -617,31 +621,33 @@ mutual
         = do tag 8; toBuf b fc; toBuf b depth
     toBuf b (IAlternative fc y xs) 
         = do tag 9; toBuf b fc; toBuf b y; toBuf b xs
+    toBuf b (IRewrite fc x y) 
+        = do tag 10; toBuf b fc; toBuf b x; toBuf b y
     toBuf b (ICoerced fc y) 
-        = do tag 10; toBuf b fc; toBuf b y
-    toBuf b (IPrimVal fc y)
         = do tag 11; toBuf b fc; toBuf b y
-    toBuf b (IQuote fc y)
+    toBuf b (IPrimVal fc y)
         = do tag 12; toBuf b fc; toBuf b y
-    toBuf b (IUnquote fc y)
+    toBuf b (IQuote fc y)
         = do tag 13; toBuf b fc; toBuf b y
-    toBuf b (IHole fc y)
+    toBuf b (IUnquote fc y)
         = do tag 14; toBuf b fc; toBuf b y
+    toBuf b (IHole fc y)
+        = do tag 15; toBuf b fc; toBuf b y
     toBuf b (IType fc)
-        = do tag 15; toBuf b fc
+        = do tag 16; toBuf b fc
     toBuf b (IBindVar fc y)
-        = do tag 16; toBuf b fc; toBuf b y
-    toBuf b (IBindHere fc y)
         = do tag 17; toBuf b fc; toBuf b y
+    toBuf b (IBindHere fc y)
+        = do tag 18; toBuf b fc; toBuf b y
     toBuf b (IAs fc y pattern)
-        = do tag 18; toBuf b fc; toBuf b y; toBuf b pattern
+        = do tag 19; toBuf b fc; toBuf b y; toBuf b pattern
     toBuf b (IMustUnify fc r pattern)
         -- No need to record 'r', it's for type errors only
-        = do tag 19; toBuf b fc; toBuf b pattern
+        = do tag 20; toBuf b fc; toBuf b pattern
     toBuf b (Implicit fc)
-        = do tag 20; toBuf b fc
-    toBuf b (Infer fc)
         = do tag 21; toBuf b fc
+    toBuf b (Infer fc)
+        = do tag 22; toBuf b fc
 
     fromBuf s b
         = case !getTag of
@@ -678,31 +684,33 @@ mutual
                9 => do fc <- fromBuf s b; y <- fromBuf s b
                        xs <- fromBuf s b
                        pure (IAlternative fc y xs)
-               10 => do fc <- fromBuf s b; y <- fromBuf s b
-                        pure (ICoerced fc y)
+               10 => do fc <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b
+                        pure (IRewrite fc x y)
                11 => do fc <- fromBuf s b; y <- fromBuf s b
-                        pure (IPrimVal fc y)
+                        pure (ICoerced fc y)
                12 => do fc <- fromBuf s b; y <- fromBuf s b
-                        pure (IQuote fc y)
+                        pure (IPrimVal fc y)
                13 => do fc <- fromBuf s b; y <- fromBuf s b
-                        pure (IUnquote fc y)
+                        pure (IQuote fc y)
                14 => do fc <- fromBuf s b; y <- fromBuf s b
+                        pure (IUnquote fc y)
+               15 => do fc <- fromBuf s b; y <- fromBuf s b
                         pure (IHole fc y)
-               15 => do fc <- fromBuf s b
+               16 => do fc <- fromBuf s b
                         pure (IType fc)
-               16 => do fc <- fromBuf s b; y <- fromBuf s b
-                        pure (IBindVar fc y)
                17 => do fc <- fromBuf s b; y <- fromBuf s b
-                        pure (IBindHere fc y)
+                        pure (IBindVar fc y)
                18 => do fc <- fromBuf s b; y <- fromBuf s b
+                        pure (IBindHere fc y)
+               19 => do fc <- fromBuf s b; y <- fromBuf s b
                         pattern <- fromBuf s b
                         pure (IAs fc y pattern)
-               19 => do fc <- fromBuf s b
+               20 => do fc <- fromBuf s b
                         pattern <- fromBuf s b
                         pure (IMustUnify fc "" pattern)
-               20 => do fc <- fromBuf s b
-                        pure (Implicit fc)
                21 => do fc <- fromBuf s b
+                        pure (Implicit fc)
+               22 => do fc <- fromBuf s b
                         pure (Infer fc)
                _ => corrupt "RawImp"
   
