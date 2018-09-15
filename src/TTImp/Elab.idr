@@ -210,13 +210,16 @@ elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
                  " in " ++ show chktm
          est <- get EST
          let (restm, resty) = bindImplicits impmode gam env fullImps 
-                                            (asVariables est) chktm ty
+                                            (asVariables est) 
+                                            chktm -- holes normalised already
+                                            (normaliseHoles gam env ty)
          traverse implicitBind (map fst fullImps)
          -- Give implicit bindings their proper names, as UNs not PVs
          gam <- get Ctxt
-         let ptm' = renameImplicits (gamma gam) (normaliseHoles gam env restm)
+         let ptm' = renameImplicits (gamma gam) restm
          let pty' = renameImplicits (gamma gam) resty
          log 5 $ "Elaboration result " ++ show ptm'
+         log 5 $ "Elaboration result type " ++ show pty'
 
          normaliseHoleTypes
          clearSolvedHoles
@@ -245,6 +248,7 @@ elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
          case elabmode of
               InLHS => let vs = findPLetRenames ptm' in
                            do log 5 $ "Renamed PLets " ++ show (doPLetRenames vs [] ptm')
+                              log 5 $ "Renamed PLets type " ++ show (doPLetRenames vs [] pty')
                               let ret = doPLetRenames vs [] ptm'
                               pure (ret, ret,
                                     doPLetRenames vs [] pty')
