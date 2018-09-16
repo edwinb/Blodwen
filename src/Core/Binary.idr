@@ -22,7 +22,7 @@ import Data.Buffer
 -- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 ttcVersion : Int
-ttcVersion = 13
+ttcVersion = 14
 
 checkTTCVersion : Int -> Int -> Core annot ()
 checkTTCVersion ver exp
@@ -70,6 +70,7 @@ processFlags n (GlobalHint t :: fs) defs
 processFlags n (TypeHint ty d :: fs) defs
   = processFlags n fs (addToTypeHints ty n d defs)
 processFlags n (Inline :: fs) defs = processFlags n fs defs
+processFlags n (Invertible :: fs) defs = processFlags n fs defs
 
 -- For every name (from 'toSave' in defs), add its definition and any
 -- information from its flags to the new set of Defs that we'll write out

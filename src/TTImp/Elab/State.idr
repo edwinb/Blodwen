@@ -776,12 +776,15 @@ exactlyOne {vars} loc env elabmode all
                       pure res
               rs => throw (altError (lefts elabs) rs)
   where
+    normRes : ((Term vars, Term vars), AllState vars annot) -> Term vars
+    normRes ((tm, _), thisst) = (normaliseHoles (fst thisst) env tm)
+
     -- If they've all failed, collect all the errors
     -- If more than one succeeded, report the ambiguity
     altError : List (Maybe Name, Error annot) -> List ((Term vars, Term vars), AllState vars annot) ->
                Error annot
     altError ls [] = AllFailed ls
-    altError ls rs = AmbiguousElab loc env (map (\x => fst (fst x)) rs)
+    altError ls rs = AmbiguousElab loc env (map normRes rs)
 
 export
 anyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->

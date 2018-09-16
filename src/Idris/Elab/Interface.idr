@@ -63,8 +63,8 @@ getMethDecl : {auto c : Ref Ctxt Defs} ->
               {auto i : Ref ImpST (ImpState FC)} ->
               Env Term vars -> NestedNames vars ->
               (params : List (Name, RawImp FC)) ->
-              (FC, List FnOpt, n, RawImp FC) -> (n, RawImp FC)
-getMethDecl {vars} env nest params (fc, opts, n, ty)
+              (FC, List FnOpt, n, (Bool, RawImp FC)) -> (n, RawImp FC)
+getMethDecl {vars} env nest params (fc, opts, n, (d, ty))
     = let ty_imp = bindTypeNames (map fst params ++ vars) ty in
           (n, stripParams (map fst params) ty_imp)
   where
@@ -97,14 +97,16 @@ getMethToplevel : {auto c : Ref Ctxt Defs} ->
                   (constraints : List (Maybe Name)) ->
                   (allmeths : List Name) ->
                   (params : List Name) ->
-                  (FC, List FnOpt, Name, RawImp FC) -> List (ImpDecl FC)
-getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, opts, n, ty)
+                  (FC, List FnOpt, Name, (Bool, RawImp FC)) -> 
+                  List (ImpDecl FC)
+getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, opts, n, (d, ty))
     = let ity = apply (IVar fc iname) (map (IVar fc) params) 
           -- Make the constraint application explicit for any method names
           -- which appear in other method types
           ty_constr = substNames vars (map applyCon allmeths) ty
           ty_imp = bindTypeNames vars (bindIFace fc ity ty_constr)
-          tydecl = IClaim fc vis [Inline] (MkImpTy fc n ty_imp) 
+          tydecl = IClaim fc vis (if d then [Inline, Invertible]
+                                       else [Inline]) (MkImpTy fc n ty_imp) 
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
                        map (IBindVar fc) (map bindName allmeths))
@@ -175,8 +177,9 @@ getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, co
     constName : Name -> Name
     constName n = UN (bindName n)
 
-getSig : ImpDecl FC -> Maybe (FC, List FnOpt, Name, RawImp FC)
-getSig (IClaim _ _ opts (MkImpTy fc n ty)) = Just (fc, opts, n, ty)
+getSig : ImpDecl FC -> Maybe (FC, List FnOpt, Name, (Bool, RawImp FC))
+getSig (IClaim _ _ opts (MkImpTy fc n ty)) = Just (fc, opts, n, (False, ty))
+getSig (IData _ _ (MkImpLater fc n ty)) = Just (fc, [Invertible], n, (True, ty))
 getSig _ = Nothing
 
 getDefault : ImpDecl FC -> Maybe (FC, List FnOpt, Name, List (ImpClause FC))
@@ -189,7 +192,7 @@ mkCon loc n = DN (show n ++ " at " ++ show loc) (MN ("__mk" ++ show n) 0)
 
 updateIfaceSyn : {auto s : Ref Syn SyntaxInfo} ->
                  Name -> Name -> List Name -> List (RawImp FC) ->
-                 List (Name, RawImp FC) -> List (Name, List (ImpClause FC)) ->
+                 List (Name, (Bool, RawImp FC)) -> List (Name, List (ImpClause FC)) ->
                  Core FC ()
 updateIfaceSyn iname cn ps cs ms ds
     = do syn <- get Syn
@@ -238,22 +241,26 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
 
     -- Elaborate the data declaration part of the interface
     elabAsData : (conName : Name) ->
-                 List (FC, List FnOpt, Name, RawImp FC) ->
+                 List (FC, List FnOpt, Name, (Bool, RawImp FC)) ->
                  Core FC ()
     elabAsData conName meth_sigs
         = do -- set up the implicit arguments correctly in the method
              -- signatures and constraint hints
              let meths = map (getMethDecl env nest params) meth_sigs
              let consts = map (getMethDecl env nest params) 
-                              (map (\c => (fc, [], c)) constraints)
+                              (map (\c => (fc, [], c))
+                                 (map notData constraints))
              let dt = mkIfaceData fc vis env consts iname conName params 
                                   dets meths
              log 10 $ "Methods: " ++ show meths
              processDecls env nest [dt]
              log 5 $ "Made interface data type " ++ show dt
+      where
+        notData : (n, t) -> (n, (Bool, t))
+        notData (x, y) = (x, (False, y))
 
     elabMethods : (conName : Name) -> List Name -> 
-                  List (FC, List FnOpt, Name, RawImp FC) ->
+                  List (FC, List FnOpt, Name, (Bool, RawImp FC)) ->
                   Core FC ()
     elabMethods conName meth_names meth_sigs
         = do -- Methods have same visibility as data declaration
@@ -268,15 +275,16 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
     -- Check that a default definition is correct. We just discard it here once
     -- we know it's okay, since we'll need to re-elaborate it for each
     -- instance, to specialise it
-    elabDefault : List (Name, RawImp FC) ->
-                  (FC, List FnOpt, Name, List (ImpClause FC)) -> Core FC (Name, List (ImpClause FC))
+    elabDefault : List (Name, (Bool, RawImp FC)) ->
+                  (FC, List FnOpt, Name, List (ImpClause FC)) -> 
+                  Core FC (Name, List (ImpClause FC))
     elabDefault tydecls (fc, opts, n, cs) 
         = do orig <- get Ctxt
              let dn_in = UN ("Default implementation of " ++ show n)
              dn <- inCurrentNS dn_in
 
              dty <- case lookup n tydecls of
-                         Just t => pure t
+                         Just (_, t) => pure t
                          Nothing => throw (GenericMsg fc ("No method named " ++ show n ++ " in interface " ++ show iname))
              log 5 $ "Default method " ++ show dn ++ " : " ++ show dty
                   

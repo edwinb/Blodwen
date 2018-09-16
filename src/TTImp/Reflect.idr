@@ -55,6 +55,8 @@ Reify FnOpt where
            pure (GlobalHint t')
   reify defs (NDCon (NS ["Reflect"] (UN "ExternFn")) _ _ [])
       = pure ExternFn
+  reify defs (NDCon (NS ["Reflect"] (UN "Invertible")) _ _ [])
+      = pure Invertible
   reify defs _ = Nothing
 
 export
@@ -67,6 +69,7 @@ Reflect FnOpt where
       = do t' <- reflect defs env t
            appCon defs (NS ["Reflect"] (UN "GlobalHint")) [t']
   reflect defs env ExternFn = getCon defs (NS ["Reflect"] (UN "ExternFn"))
+  reflect defs env Invertible = getCon defs (NS ["Reflect"] (UN "Invertible"))
 
 export
 Reify annot => Reify (ImpTy annot) where

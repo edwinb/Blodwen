@@ -122,6 +122,8 @@ mutual
        -- used as a hint if all else fails (i.e. a default)
        GlobalHint : Bool -> FnOpt
        ExternFn : FnOpt
+       -- assume safe to cancel arguments in unification
+       Invertible : FnOpt
 
   export
   Show FnOpt where
@@ -129,6 +131,7 @@ mutual
     show (Hint t) = "%hint " ++ show t
     show (GlobalHint t) = "%globalhint " ++ show t
     show ExternFn = "%extern"
+    show Invertible = "%invertible"
 
   export
   Eq FnOpt where
@@ -136,6 +139,7 @@ mutual
     (Hint x) == (Hint y) = x == y
     (GlobalHint x) == (GlobalHint y) = x == y
     ExternFn == ExternFn = True
+    Invertible == Invertible = True
     _ == _ = False
 
   public export
@@ -790,6 +794,7 @@ mutual
     toBuf b (Hint t) = do tag 1; toBuf b t
     toBuf b (GlobalHint t) = do tag 2; toBuf b t
     toBuf b ExternFn = tag 3
+    toBuf b Invertible = tag 4
 
     fromBuf s b
         = case !getTag of
@@ -797,6 +802,7 @@ mutual
                1 => do t <- fromBuf s b; pure (Hint t)
                2 => do t <- fromBuf s b; pure (GlobalHint t)
                3 => pure ExternFn
+               4 => pure Invertible
                _ => corrupt "FnOpt"
 
 

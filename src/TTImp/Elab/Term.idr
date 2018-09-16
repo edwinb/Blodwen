@@ -378,8 +378,19 @@ mutual
                                     FirstSuccess => anyOne loc
                                     _ => exactlyOne loc env
                   tryall (elabMode elabinfo)
-                         (map (\t => (getName t, checkImp rigc process elabinfo env nest t 
-                                         (Just expected))) alts'))
+                         (map (\t => (getName t, 
+                                       do res <- checkImp rigc process elabinfo env nest t (Just expected)
+                                          -- Do it twice for interface resolution;
+                                          -- first pass gets the determining argument
+                                          -- (maybe rethink this, there should be a better
+                                          -- way that allows one pass)
+                                          solveConstraints (case elabMode elabinfo of
+                                                                 InLHS => InLHS
+                                                                 _ => InTerm) Normal
+                                          solveConstraints (case elabMode elabinfo of
+                                                                 InLHS => InLHS
+                                                                 _ => InTerm) Normal
+                                          pure res)) alts'))
   checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) Nothing
       = throw (GenericMsg loc "Can't infer a type for rewrite")
   checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) (Just expected)

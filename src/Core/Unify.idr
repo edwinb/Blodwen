@@ -420,6 +420,12 @@ mutual
              Just (Hole _ pvar _) => pvar
              _ => False
   
+  isDefInvertible : Gamma -> Name -> Bool
+  isDefInvertible gam n
+      = case lookupGlobalExact n gam of
+             Just def => Invertible `elem` flags def
+             _ => False
+  
   isHoleInv : Gamma -> Name -> Bool
   isHoleInv gam n
       = case lookupDefExact n gam of
@@ -569,7 +575,7 @@ mutual
       = unifyInvertible mode loc env nt var args Nothing (NApp (NLocal r lvar)) args'
   unifyHoleApp mode loc env nt var args tm@(NApp (NRef lnt lvar) args')
       = do gam <- get Ctxt
-           if isPatVar (gamma gam) lvar
+           if isPatVar (gamma gam) lvar || isDefInvertible (gamma gam) lvar
               then unifyInvertible mode loc env nt var args Nothing (NApp (NRef lnt lvar)) args'
               else do log 10 $ "Postponing constraint " ++
                             show (quote (noGam gam) env (NApp (NRef nt var) args))
@@ -788,7 +794,9 @@ mutual
       = do gam <- get Ctxt
            let holex = isHoleNF (gamma gam) hdx
            let holey = isHoleNF (gamma gam) hdy
-           if mode == InDot && not (holex || holey) -- you know, sometimes I wish we had guards...
+           if mode == InDot && not (holex || holey) 
+              -- you know, sometimes I wish we had guards...
+              -- refactor this with a 'cond' some time...
               then
                  do log 10 $ "In dot " ++ show (hdx, hdy)
                     if hdx == hdy
@@ -800,19 +808,21 @@ mutual
                                postpone loc env (NApp (NRef xt hdx) argsx)
                                                 (NApp (NRef yt hdy) argsy)
               else
-                if holex && holey
-                   then
-                     (if length argsx >= length argsy
-                         then unifyApp False mode loc env (NRef xt hdx) argsx 
-                                               (NApp (NRef yt hdy) argsy)
-                         else unifyApp True mode loc env (NRef yt hdy) argsy 
-                                               (NApp (NRef xt hdx) argsx))
-                   else 
-                     (if holex
-                         then unifyApp False mode loc env (NRef xt hdx) argsx
-                                               (NApp (NRef yt hdy) argsy)
-                         else unifyApp True mode loc env (NRef yt hdy) argsy 
-                                               (NApp (NRef xt hdx) argsx))
+                if isDefInvertible (gamma gam) hdx && hdx == hdy
+                   then unifyArgs mode loc env argsx argsy
+                   else if holex && holey
+                           then
+                             (if length argsx >= length argsy
+                                 then unifyApp False mode loc env (NRef xt hdx) argsx 
+                                                       (NApp (NRef yt hdy) argsy)
+                                 else unifyApp True mode loc env (NRef yt hdy) argsy 
+                                                       (NApp (NRef xt hdx) argsx))
+                           else 
+                             (if holex
+                                 then unifyApp False mode loc env (NRef xt hdx) argsx
+                                                       (NApp (NRef yt hdy) argsy)
+                                 else unifyApp True mode loc env (NRef yt hdy) argsy 
+                                                       (NApp (NRef xt hdx) argsx))
   unifyBothApps mode loc env fx ax fy ay
         = unifyApp False mode loc env fx ax (NApp fy ay)
   

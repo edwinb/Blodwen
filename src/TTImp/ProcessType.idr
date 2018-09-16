@@ -33,6 +33,8 @@ processFnOpt loc ndef (GlobalHint a)
     = addGlobalHint loc a ndef
 processFnOpt loc ndef ExternFn
     = setFlag loc ndef Inline -- if externally defined, inline when compiling
+processFnOpt loc ndef Invertible
+    = setFlag loc ndef Invertible
 
 export
 processType : {auto c : Ref Ctxt Defs} ->

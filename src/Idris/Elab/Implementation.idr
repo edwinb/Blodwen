@@ -223,9 +223,9 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
                          pure (dropNS n, IVar fc mn)
     
     topMethType : Name -> List String -> List Name -> List Name ->
-                  (Name, RawImp FC) -> 
+                  (Name, (Bool, RawImp FC)) -> 
                   Core FC (Name, Name, List (String, String), RawImp FC)
-    topMethType impName impsp pnames allmeths (mn, mty_in)
+    topMethType impName impsp pnames allmeths (mn, (d, mty_in))
         = do -- Get the specialised type by applying the method to the
              -- parameters
              n <- inCurrentNS (methName mn)

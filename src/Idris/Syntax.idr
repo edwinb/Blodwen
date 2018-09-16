@@ -404,8 +404,8 @@ record IFaceInfo where
   iconstructor : Name
   params : List Name
   parents : List (RawImp FC)
-  methods : List (Name, RawImp FC) 
-     -- ^ name and desugared type (without constraint)
+  methods : List (Name, Bool, RawImp FC) 
+     -- ^ name, whether a data method, and desugared type (without constraint)
   defaults : List (Name, List (ImpClause FC))
 
 export

@@ -244,24 +244,28 @@ data DefFlag
     = TypeHint Name Bool -- True == direct hint
     | GlobalHint Bool -- True == always search (not a default hint)
     | Inline
+    | Invertible -- assume safe to cancel arguments in unification
 
 export
 Eq DefFlag where
     (==) (TypeHint ty x) (TypeHint ty' y) = ty == ty' && x == y
     (==) (GlobalHint x) (GlobalHint y) = x == y
     (==) Inline Inline = True
+    (==) Invertible Invertible = True
     (==) _ _ = False
 
 TTC annot DefFlag where
   toBuf b (TypeHint x y) = do tag 0; toBuf b x; toBuf b y
   toBuf b (GlobalHint t) = do tag 1; toBuf b t
   toBuf b Inline = tag 2
+  toBuf b Invertible = tag 3
 
   fromBuf s b 
       = case !getTag of
              0 => do x <- fromBuf s b; y <- fromBuf s b; pure (TypeHint x y)
              1 => do t <- fromBuf s b; pure (GlobalHint t)
              2 => pure Inline
+             3 => pure Invertible
              _ => corrupt "DefFlag"
 
 -- *everything* about a definition goes here, so that we can save out the
