@@ -874,11 +874,13 @@ implDecl fname indents
          cons <- constraints fname indents
          n <- name
          params <- many (simpleExpr fname indents)
-         keyword "where"
-         body <- assert_total (blockAfter col (topDecl fname))
+         body <- optional (do keyword "where"
+                              blockAfter col (topDecl fname))
+         atEnd indents
          end <- location
          pure (PImplementation (MkFC fname start end)
-                         vis cons n params iname (collectDefs (concat body)))
+                         vis cons n params iname 
+                         (map (collectDefs . concat) body))
 
 claim : FileName -> IndentInfo -> Rule PDecl
 claim fname indents

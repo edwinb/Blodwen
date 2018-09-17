@@ -61,10 +61,10 @@ elabImplementation : {auto c : Ref Ctxt Defs} ->
                      Name ->
                      (ps : List (RawImp FC)) ->
                      (implName : Maybe Name) ->
-                     List (ImpDecl FC) ->
+                     Maybe (List (ImpDecl FC)) ->
                      Core FC ()
 -- TODO: Refactor all these steps into separate functions
-elabImplementation {vars} fc vis env nest cons iname ps impln body_in
+elabImplementation {vars} fc vis env nest cons iname ps impln mbody
     = do let impName_in = maybe (mkImpl fc iname ps) id impln
          impName <- inCurrentNS impName_in
          syn <- get Syn
@@ -95,14 +95,6 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
                  ++ "Constructor type: " ++ show (normaliseHoles defs [] conty)
          log 5 $ "Making implementation " ++ show impName
 
-         -- 0. Lookup default definitions and add them to to body
-         let (body, missing)
-               = addDefaults fc (map (dropNS . fst) (methods cdata)) 
-                                (defaults cdata) body_in
-
-         log 5 $ "Added defaults: body is " ++ show body
-         log 5 $ "Missing methods: " ++ show missing
-
          -- 1. Build the type for the implementation
          -- Make the constraints auto implicit arguments, which can be explicitly
          -- given when using named implementations
@@ -116,51 +108,60 @@ elabImplementation {vars} fc vis env nest cons iname ps impln body_in
          let impTyDecl = IClaim fc vis opts (MkImpTy fc impName impTy)
          log 5 $ "Implementation type: " ++ show impTy
          processDecl env nest impTyDecl
+         
+         -- If the body is empty, we're done for now (just declaring that
+         -- the implementation exists and define it later)
+         maybe (pure ())
+           (\body_in => do
+               -- 1.5. Lookup default definitions and add them to to body
+               let (body, missing)
+                     = addDefaults fc (map (dropNS . fst) (methods cdata)) 
+                                      (defaults cdata) body_in
 
-         -- 2. Elaborate top level function types for this interface
-         defs <- get Ctxt
-         fns <- traverse (topMethType impName impsp (params cdata)
-                                      (map fst (methods cdata))) 
-                         (methods cdata)
-         traverse (processDecl env nest) (map mkTopMethDecl fns)
-
-         -- 3. Build the record for the implementation
-         let mtops = map (Basics.fst . snd) fns
-         let con = iconstructor cdata
-         let ilhs = impsApply (IVar fc impName) 
-                              (map (\x => (UN x, IBindVar fc x)) impsp)
-         -- RHS is the constructor applied to a search for the necessary
-         -- parent constraints, then the method implementations
-         defs <- get Ctxt
-         let fldTys = getFieldArgs (normaliseHoles defs [] conty)
-         let irhs = apply (IVar fc con)
-                          (map (const (ISearch fc 500)) (parents cdata)
-                           ++ map (mkMethField impsp fldTys) fns)
-         let impFn = IDef fc impName [PatClause fc ilhs irhs]
-         log 5 $ "Implementation record: " ++ show impFn
-         traverse (processDecl env nest) [impFn]
-
-         -- 4. (TODO: Order method bodies to be in declaration order, in
-         --    case of dependencies)
-
-         -- 5. Elaborate the method bodies
-
-         -- If it's a named implementation, add it as a global hint while
-         -- elaborating the bodies
-         defs <- get Ctxt
-         let hs = openHints defs
-         maybe (pure ()) (\x => addOpenHint impName) impln
-
-         body' <- traverse (updateBody (map methNameUpdate fns)) body
-         log 10 $ "Implementation body: " ++ show body'
-         traverse (processDecl env nest) body'
-         -- Reset the open hints (remove the named implementation)
-         setOpenHints hs
-
-         -- 6. Check that every top level function type has a definition now
+               log 5 $ "Added defaults: body is " ++ show body
+               log 5 $ "Missing methods: " ++ show missing
 
 
-         pure () -- throw (InternalError "Implementations not done yet")
+               -- 2. Elaborate top level function types for this interface
+               defs <- get Ctxt
+               fns <- traverse (topMethType impName impsp (params cdata)
+                                            (map fst (methods cdata))) 
+                               (methods cdata)
+               traverse (processDecl env nest) (map mkTopMethDecl fns)
+
+               -- 3. Build the record for the implementation
+               let mtops = map (Basics.fst . snd) fns
+               let con = iconstructor cdata
+               let ilhs = impsApply (IVar fc impName) 
+                                    (map (\x => (UN x, IBindVar fc x)) impsp)
+               -- RHS is the constructor applied to a search for the necessary
+               -- parent constraints, then the method implementations
+               defs <- get Ctxt
+               let fldTys = getFieldArgs (normaliseHoles defs [] conty)
+               let irhs = apply (IVar fc con)
+                                (map (const (ISearch fc 500)) (parents cdata)
+                                 ++ map (mkMethField impsp fldTys) fns)
+               let impFn = IDef fc impName [PatClause fc ilhs irhs]
+               log 5 $ "Implementation record: " ++ show impFn
+               traverse (processDecl env nest) [impFn]
+
+               -- 4. (TODO: Order method bodies to be in declaration order, in
+               --    case of dependencies)
+
+               -- 5. Elaborate the method bodies
+
+               -- If it's a named implementation, add it as a global hint while
+               -- elaborating the bodies
+               defs <- get Ctxt
+               let hs = openHints defs
+               maybe (pure ()) (\x => addOpenHint impName) impln
+
+               body' <- traverse (updateBody (map methNameUpdate fns)) body
+               log 10 $ "Implementation body: " ++ show body'
+               traverse (processDecl env nest) body'
+               -- Reset the open hints (remove the named implementation)
+               setOpenHints hs
+               pure ()) mbody
   where
     -- For the method fields in the record, get the arguments we need to abstract
     -- over

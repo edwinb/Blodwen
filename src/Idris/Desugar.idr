@@ -398,11 +398,13 @@ mutual
            let paramsb = map (doBind bnames) params'
            let consb = map (\ (n, tm) => (n, doBind bnames tm)) cons'
 
-           body' <- traverse (desugarDecl ps) body
+           body' <- maybe (pure Nothing)
+                          (\b => do b' <- traverse (desugarDecl ps) b
+                                    pure (Just (concat b'))) body
            pure [IPragma (\env, nest =>
                              elabImplementation fc vis env nest consb
                                                 tn paramsb impname 
-                                                (concat body'))]
+                                                body')]
   desugarDecl ps (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)

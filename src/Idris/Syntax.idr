@@ -217,7 +217,7 @@ mutual
                          Name ->
                          (params : List PTerm) ->
                          (implName : Maybe Name) ->
-                         List PDecl ->
+                         Maybe (List PDecl) ->
                          PDecl
        -- TODO: PRecord
        -- TODO: PPostulate
