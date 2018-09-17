@@ -442,14 +442,11 @@ substPLet : RigCount -> (n : Name) -> (val : Term vars) -> (ty : Term vars) ->
 substPLet rig n tm ty sctm scty
     = (Bind n (PLet rig tm ty) sctm, Bind n (PLet rig tm ty) scty)
 
-normaliseScope : Defs -> Env Term vars -> Term vars -> Term vars
-normaliseScope defs env (Bind n b sc) 
-    = Bind n b (normaliseScope defs (b :: env) sc)
-normaliseScope defs env tm = normalise defs env tm
-
 normaliseHolesScope : Defs -> Env Term vars -> Term vars -> Term vars
 normaliseHolesScope defs env (Bind n b sc) 
-    = Bind n b (normaliseHolesScope defs (b :: env) sc)
+    = Bind n b (normaliseHolesScope defs 
+               -- use Lam because we don't want it reducing in the scope
+               (Lam (multiplicity b) Explicit (binderType b) :: env) sc)
 normaliseHolesScope defs env tm = normaliseHoles defs env tm
 
 -- Bind implicit arguments, returning the new term and its updated type
@@ -510,13 +507,13 @@ bindImplVars mode gam env imps asvs scope scty = doBinds 0 env imps scope scty
                                  PV _ _ =>
                                     -- Need to apply 'n' to the surrounding environment in these cases!
                                     -- otherwise it won't work in nested defs...
-                                    let tm = normaliseScope gam env (applyTo (Ref Func n) env) 
+                                    let tm = normaliseHolesScope gam env (applyTo (Ref Func n) env) 
                                         rig = maybe RigW id (lookup n asvs) in
                                         substPLet rig n' tm ty 
                                             (refToLocal Nothing tmpN n' repNameTm)
                                             (refToLocal Nothing tmpN n' repNameTy)
 
-                                 _ => let tm = normaliseScope gam env (applyTo (Ref Func n) env) in
+                                 _ => let tm = normaliseHolesScope gam env (applyTo (Ref Func n) env) in
                                       (subst tm
                                              (refToLocal Nothing tmpN n repNameTm),
                                        subst tm
@@ -528,7 +525,7 @@ bindImplVars mode gam env imps asvs scope scty = doBinds 0 env imps scope scty
                  PI rig =>
                     case lookupDefExact n (gamma gam) of
                        Just (PMDef _ _ _ _) =>
-                          let tm = normaliseScope gam env (applyTo (Ref Func n) env) in
+                          let tm = normaliseHolesScope gam env (applyTo (Ref Func n) env) in
                               (subst tm (refToLocal Nothing tmpN n repNameTm),
                                subst tm (refToLocal Nothing tmpN n repNameTy))
                        _ => (Bind n' (Pi rig Implicit ty) (refToLocal Nothing tmpN n' repNameTm), ty')
