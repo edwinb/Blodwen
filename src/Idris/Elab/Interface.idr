@@ -223,8 +223,8 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
          let defaults = mapMaybe getDefault body
 
          elabAsData conName meth_sigs
-         elabMethods conName meth_names meth_sigs
          elabConstraintHints conName meth_names
+         elabMethods conName meth_names meth_sigs
          ds <- traverse (elabDefault meth_decls) defaults
 
          ns_meths <- traverse (\mt => do n <- inCurrentNS (fst mt)
