@@ -168,11 +168,19 @@ getDelayedHoleInfo
          pure (delayedHoles ust)
 
 export
-resetHoles : {auto u : Ref UST (UState annot)} ->
-             Core annot ()
-resetHoles 
+saveHoles : {auto u : Ref UST (UState annot)} ->
+             Core annot (List (annot, Name))
+saveHoles 
     = do ust <- get UST
          put UST (record { currentHoles = [] } ust)
+         pure (currentHoles ust)
+
+export
+restoreHoles : {auto u : Ref UST (UState annot)} ->
+               List (annot, Name) -> Core annot ()
+restoreHoles hs
+    = do ust <- get UST
+         put UST (record { currentHoles = hs } ust)
 
 export
 addHoleName : {auto u : Ref UST (UState annot)} ->

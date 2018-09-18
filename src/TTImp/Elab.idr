@@ -90,7 +90,7 @@ mutual
                           then do defs <- get Ctxt
                                   let tm' = normaliseHoles defs env (Ref nt n)
                                   res <- retryDelayedIn env loc tm'
-                                  log 5 $ "Substitued delayed hole " ++ show res
+                                  log 5 $ "Substituted delayed hole " ++ show res
                                   pure res
                           else pure (Ref nt n)
                 _ => pure (Ref nt n)
@@ -167,8 +167,7 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
                        Term vars, -- checked and erased term
                        Term vars) -- type
 elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
-    = do resetHoles
-         giveUpSearch -- reset from previous elaboration, if any
+    = do oldhs <- saveHoles
          e <- newRef EST (initEStateSub defining env' sub)
          let rigc = getRigNeeded elabmode
          (chktm_in, ty) <- check {e} rigc process (initElabInfo impmode elabmode) env nest tm tyin
@@ -241,6 +240,11 @@ elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
          -- ...and we need to add their compiled forms, for any that might
          -- end up being executed
          traverse compileDef hs
+
+         -- Set current holes back to what they were, but removing any
+         -- that were solved in the last session
+         allhs <- getHoleInfo
+         restoreHoles (filter (\x => not (snd x `elem` map snd allhs)) oldhs)
 
          -- On the LHS, finish by tidying up the plets (changing things that
          -- were of the form x@_, where the _ is inferred to be a variable,

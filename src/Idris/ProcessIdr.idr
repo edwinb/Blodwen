@@ -4,7 +4,7 @@ import Core.Binary
 import Core.Context
 import Core.Directory
 import Core.Options
-import Core.UnifyState
+import Core.Unify
 
 import TTImp.ProcessTTImp
 import TTImp.Reflect
@@ -26,7 +26,8 @@ processDecl decl
     = catch (do impdecls <- desugarDecl [] decl 
                 traverse (ProcessTTImp.processDecl [] (MkNested [])) impdecls
                 pure Nothing)
-            (\err => pure (Just err))
+            (\err => do giveUpSearch -- or we'll keep trying...
+                        pure (Just err))
 
 processDecls : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
