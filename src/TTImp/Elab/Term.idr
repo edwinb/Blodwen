@@ -1035,12 +1035,7 @@ mutual
                   do bn <- genVarName "aTy"
                      -- invent names for the argument and return types
                      log 5 $ "Inventing arg type for " ++ show (fn, fnty)
-                     -- Use an empty environment for the holes in the function
-                     -- type - we'll only get some simple types inferred, but
-                     -- otherwise we end up with unsolvable constraints
-                     (expty_in, scty_in) <- inventFnType loc [] bn
-                     let expty = embed expty_in
-                     let scty = embed {more=vars} scty_in
+                     (expty, scty) <- inventFnType loc env bn
                      -- Check the argument type against the invented arg type
                      impsUsed <- saveImps
                      (argtm, argty) <- check rigc process (record { implicitsGiven = [] } elabinfo)
@@ -1096,13 +1091,14 @@ mutual
            e' <- weakenedEState
            let rigb = min rigl c
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           let env' = Lam rigb plicity pty :: env
+           let env' = Lam rigb plicity tyv :: env
            (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) env'
                                      (weaken nest') scope 
                                      (Just (renameTop n psc))
            st' <- strengthenedEState False loc env'
            put EST st'
-           checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
+           checkExp rigc process loc elabinfo env nest 
+                        (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
                         (Just (Bind bn (Pi rigb plicity pty) psc))
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope expected
