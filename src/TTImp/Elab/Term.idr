@@ -371,6 +371,8 @@ mutual
            delayOnFailure loc env expected ambiguous $
             (\delayed =>
                do gam <- get Ctxt
+                  when (not delayed && holeIn (gamma gam) mexpected) $
+                    throw (AllFailed [])
                   let alts' = pruneByType defs (nf defs env expected) alts
                   log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
                           "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
@@ -391,6 +393,17 @@ mutual
                                                                  InLHS => InLHS
                                                                  _ => InTerm) Normal
                                           pure res)) alts'))
+    where
+      holeIn : Gamma -> Maybe (Term vars) -> Bool
+      holeIn gam Nothing = False
+      holeIn gam (Just tm)
+          = case getFn tm of
+                 Ref nt n =>
+                      case lookupDefExact n gam of
+                           Just (Hole _ pvar _) => not pvar
+                           _ => False
+                 _ => False
+
   checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) Nothing
       = throw (GenericMsg loc "Can't infer a type for rewrite")
   checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) (Just expected)
