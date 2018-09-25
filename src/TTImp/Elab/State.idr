@@ -44,6 +44,9 @@ record EState (vars : List Name) where
   toBind : List (Name, (Term vars, Term vars))
                   -- implicit pattern/type variables which haven't been
                   -- bound yet.
+  bindIfUnsolved : List (Name, (vars' ** (Env Term vars', Term vars', Term vars', SubVars outer vars'))) 
+                  -- names to add as unbound implicits if they are still holes
+                  -- when unbound implicits are added
   lhsPatVars : List String
                   -- names which we've bound in elab mode InLHS (i.e. not
                   -- in a dot pattern). We keep track of this because every
@@ -88,17 +91,38 @@ data EST : Type where
 
 export
 initEStateSub : Name -> Env Term outer -> SubVars outer vars -> EState vars
-initEStateSub n env sub = MkElabState env sub [] [] [] [] [] [] [] [] n
+initEStateSub n env sub = MkElabState env sub [] [] [] [] [] [] [] [] [] n
 
 export
 initEState : Name -> Env Term vars -> EState vars
 initEState n env = initEStateSub n env SubRefl
 
 export
-updateEnv : Env Term new -> SubVars new vars -> EState vars -> EState vars
-updateEnv env sub st
+updateEnv : Env Term new -> SubVars new vars -> 
+            List (Name, (vars' ** (Env Term vars', Term vars', Term vars', SubVars new vars'))) ->
+            EState vars -> EState vars
+updateEnv env sub bif st
     = MkElabState env sub
-                  (boundNames st) (toBind st)
+                  (boundNames st) (toBind st) bif
+                  (lhsPatVars st) (allPatVars st) (asVariables st)
+                  (implicitsUsed st) (linearUsed st)
+                  (holesMade st) (defining st)
+
+export
+addBindIfUnsolved : Name -> Env Term vars -> Term vars -> Term vars ->
+                    EState vars -> EState vars
+addBindIfUnsolved hn env tm ty st
+    = MkElabState (outerEnv st) (subEnv st)
+                  (boundNames st) (toBind st) 
+                  ((hn, (_ ** (env, tm, ty, subEnv st))) :: bindIfUnsolved st)
+                  (lhsPatVars st) (allPatVars st) (asVariables st)
+                  (implicitsUsed st) (linearUsed st)
+                  (holesMade st) (defining st)
+
+clearBindIfUnsolved : EState vars -> EState vars
+clearBindIfUnsolved st
+    = MkElabState (outerEnv st) (subEnv st)
+                  (boundNames st) (toBind st) []
                   (lhsPatVars st) (allPatVars st) (asVariables st)
                   (implicitsUsed st) (linearUsed st)
                   (holesMade st) (defining st)
@@ -209,6 +233,7 @@ weakenedEState
                                        (DropCons (subEnv est))
                                        (map wknTms (boundNames est))
                                        (map wknTms (toBind est))
+                                       (bindIfUnsolved est)
                                        (lhsPatVars est)
                                        (allPatVars est)
                                        (asVariables est)
@@ -245,7 +270,8 @@ strengthenedEState {n} {vs} _ loc env
          svs <- dropSub (subEnv est)
          pure (MkElabState (outerEnv est)
                            svs
-                           bns todo (lhsPatVars est)
+                           bns todo (bindIfUnsolved est)
+                                    (lhsPatVars est)
                                     (allPatVars est)
                                     (asVariables est)
                                     (implicitsUsed est) 
@@ -314,7 +340,7 @@ embedSub sub (PrimVal x) = PrimVal x
 embedSub sub Erased = Erased
 embedSub sub TType = TType
 
--- Make a hole for a bound implicit in the outer environment
+-- Make a hole for an unbound implicit in the outer environment
 export
 mkOuterHole : {auto e : Ref EST (EState vars)} ->
               {auto c : Ref Ctxt Defs} ->
@@ -325,9 +351,8 @@ mkOuterHole {vars} loc n patvar (Just expected)
     = do est <- get EST
          let sub = subEnv est
          case shrinkTerm expected sub of
-              Nothing => 
-                  throw (GenericMsg loc ("Can't make hole for " ++ show n ++ " here "
-                            ++ show expected ++ " " ++ show vars))
+              -- Can't shrink so rely on unification with expected type later
+              Nothing => mkOuterHole loc n patvar Nothing
               Just exp' => 
                   do tm <- addBoundName loc n patvar (outerEnv est) exp'
                      pure (embedSub sub tm, embedSub sub exp')
@@ -335,17 +360,33 @@ mkOuterHole loc n patvar Nothing
     = do est <- get EST
          let sub = subEnv est
          let env = outerEnv est
-         t <- addHole loc env TType
+         t <- addHole loc env TType "impty"
          let ty = mkConstantApp t env
          tm <- addBoundName loc n patvar env ty
          pure (embedSub sub tm, embedSub sub ty)
+
+-- Make a hole for an unbound implicit in the outer environment
+export
+mkFullHole : {auto e : Ref EST (EState vars)} ->
+             {auto c : Ref Ctxt Defs} ->
+             {auto e : Ref UST (UState annot)} ->
+             annot -> Env Term vars -> Name -> Bool -> Maybe (Term vars) ->
+             Core annot (Term vars, Term vars)
+mkFullHole {vars} loc env n patvar (Just expected)
+    = do tm <- addBoundName loc n patvar env expected
+         pure (tm, expected)
+mkFullHole loc env n patvar Nothing
+    = do t <- addHole loc env TType "impty"
+         let ty = mkConstantApp t env
+         tm <- addBoundName loc n patvar env ty
+         pure (tm, ty)
 
 export
 clearToBind : {auto e : Ref EST (EState vs)} ->
               Core annot ()
 clearToBind
     = do est <- get EST
-         put EST (record { toBind = [] } est)
+         put EST (record { toBind = [] } (clearBindIfUnsolved est))
 
 export
 clearPatVars : {auto e : Ref EST (EState vs)} ->
@@ -363,6 +404,98 @@ export
 dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))
 
+getHoleType : Defs -> Env Term vars ->
+              Name -> List (Term vars) -> Maybe (Name, Term vars)
+getHoleType {vars} defs env n args
+    = do gdef <- lookupGlobalExact n (gamma defs)
+         case definition gdef of
+              Hole locs _ _ =>
+                let nty = nf defs env (embed (type gdef)) in
+                    Just (n, quote defs env (applyArgs locs nty args))
+              _ => Nothing
+  where
+    applyArgs : Nat -> NF vars -> List (Term vars) -> NF vars
+    applyArgs Z ty args = ty
+    applyArgs (S k) (NBind x (Pi _ _ _) scf) (arg :: args)
+        = applyArgs k (scf (toClosure defaultOpts env arg)) args
+    applyArgs (S k) ty _ = ty
+
+export
+convert : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+          {auto e : Ref EST (EState vars)} ->
+          annot -> ElabMode -> Env Term vars -> NF vars -> NF vars -> 
+          Core annot (List Name)
+convert loc elabmode env x y 
+    = let umode = case elabmode of
+                       InLHS => InLHS
+                       _ => InTerm in
+          catch (do gam <- get Ctxt
+                    log 10 $ "Unifying " ++ show (quote (noGam gam) env x) ++ " and " 
+                                         ++ show (quote (noGam gam) env y)
+                    hs <- getHoleNames 
+                    vs <- unify umode loc env x y
+                    hs' <- getHoleNames
+                    when (isNil vs && (length hs' < length hs)) $ 
+                       solveConstraints umode Normal
+                    pure vs)
+            (\err => do gam <- get Ctxt 
+                        -- Try to solve any remaining constraints to see if it helps
+                        -- the error message
+                        catch (solveConstraints umode Normal)
+                              (\err => pure ())
+                        throw (WhenUnifying loc env
+                                            (normaliseHoles gam env (quote (noGam gam) env x))
+                                            (normaliseHoles gam env (quote (noGam gam) env y))
+                                  err))
+
+-- For any of the 'bindIfUnsolved' - these were added as holes during
+-- elaboration, but are as yet unsolved, so create a pattern variable for
+-- them and unify.
+-- (This is only when we're in a mode that allows unbound implicits)
+bindUnsolved : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
+               {auto u : Ref UST (UState annot)} ->
+               annot -> ElabMode -> ImplicitMode -> Core annot ()
+bindUnsolved loc elabmode NONE = pure ()
+bindUnsolved {vars} loc elabmode _ 
+    = do est <- get EST
+         defs <- get Ctxt
+         let bifs = bindIfUnsolved est
+         log 10 $ "Bindable unsolved implicits: " ++ show (map fst bifs)
+         traverse (mkImplicit defs (outerEnv est) (subEnv est)) (bindIfUnsolved est)
+         pure ()
+  where
+    makeBoundVar : Name -> Env Term outer ->
+                   SubVars outer vs -> SubVars outer vars ->
+                   Term vs -> Core annot (Term vs)
+    makeBoundVar n env sub subvars expected
+        = case shrinkTerm expected sub of
+               Nothing => throw (GenericMsg loc ("Can't bind implicit of type " ++ show expected))
+               Just exp' => 
+                    do impn <- genName (nameRoot n)
+                       tm <- addBoundName loc impn False env exp'
+                       est <- get EST
+                       put EST (record { toBind $= ((impn, (embedSub subvars tm, 
+                                                            embedSub subvars exp')) ::) } est)
+                       pure (embedSub sub tm)
+
+    mkImplicit : Defs -> Env Term outer -> SubVars outer vars ->
+                 (Name, (vars' ** 
+                     (Env Term vars', Term vars', Term vars', SubVars outer vars'))) -> 
+                 Core annot ()
+    mkImplicit defs outerEnv subEnv (n, (vs ** (env, tm, exp, sub)))
+        = case lookupDefExact n (gamma defs) of
+               Just (Hole locs _ _) => 
+                    do bindtm <- makeBoundVar n outerEnv
+                                              sub subEnv
+                                              (normaliseHoles defs env exp)
+                       log 5 $ "Added unbound implicit " ++ show bindtm
+                       unify (case elabmode of
+                                   InLHS => InLHS
+                                   _ => InTerm)
+                             loc env tm bindtm
+                       pure ()
+               _ => pure ()
+
 -- 'toBind' are the names which are to be implicitly bound (pattern bindings and
 -- unbound implicits).
 -- Return the names in the order they should be bound: i.e. respecting
@@ -371,15 +504,30 @@ dropTmIn = map (\ (n, (_, t)) => (n, t))
 export
 getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
             {auto u : Ref UST (UState annot)} ->
-            Env Term vars ->
+            annot -> ElabMode -> ImplicitMode ->
+            Env Term vars -> Term vars ->
             Core annot (List (Name, Term vars))
-getToBind {vars} env
-    = do est <- get EST
-         ust <- get UST
+getToBind {vars} loc elabmode impmode env toptm
+    = do solveConstraints (case elabmode of
+                                InLHS => InLHS
+                                _ => InTerm) Normal
          gam <- get Ctxt
-         log 7 $ "To bind: " ++ show (map (norm gam) (reverse $ toBind est))
+         log 1 $ "Binding in " ++ show (normaliseHoles gam env toptm)
+      
+         bindUnsolved loc elabmode impmode
+         solveConstraints (case elabmode of
+                                InLHS => InLHS
+                                _ => InTerm) Normal
+         dumpConstraints 2 False
+
+         gam <- get Ctxt
+         est <- get EST
+         ust <- get UST
+
+         let tob = reverse $ toBind est
+
          log 10 $ "With holes " ++ show (map snd (holes ust))
-         res <- normImps gam [] (reverse $ toBind est)
+         res <- normImps gam [] tob
          let hnames = map fst res
          log 10 $ "Sorting " ++ show res
          let ret = asLast (map fst (asVariables est)) (depSort hnames res)
@@ -393,9 +541,6 @@ getToBind {vars} env
     asLast asvars ns 
         = filter (\p => not (fst p `elem` asvars)) ns ++
           filter (\p => fst p `elem` asvars) ns
-
-    norm : Defs -> (Name, Term vars, Term vars) -> (Name, Term vars)
-    norm gam (n, tm, ty) = (n, normaliseHoles gam env tm)
 
     normImps : Defs -> List Name -> List (Name, Term vars, Term vars) -> 
                Core annot (List (Name, Term vars))
@@ -624,34 +769,6 @@ renameImplicits gam (Bind n b sc)
 renameImplicits gam t = t
 
 export
-convert : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-          {auto e : Ref EST (EState vars)} ->
-          annot -> ElabMode -> Env Term vars -> NF vars -> NF vars -> 
-          Core annot (List Name)
-convert loc elabmode env x y 
-    = let umode = case elabmode of
-                       InLHS => InLHS
-                       _ => InTerm in
-          catch (do gam <- get Ctxt
-                    log 10 $ "Unifying " ++ show (quote (noGam gam) env x) ++ " and " 
-                                         ++ show (quote (noGam gam) env y)
-                    hs <- getHoleNames 
-                    vs <- unify umode loc env x y
-                    hs' <- getHoleNames
-                    when (isNil vs && (length hs' < length hs)) $ 
-                       solveConstraints umode Normal
-                    pure vs)
-            (\err => do gam <- get Ctxt 
-                        -- Try to solve any remaining constraints to see if it helps
-                        -- the error message
-                        catch (solveConstraints umode Normal)
-                              (\err => pure ())
-                        throw (WhenUnifying loc env
-                                            (normaliseHoles gam env (quote (noGam gam) env x))
-                                            (normaliseHoles gam env (quote (noGam gam) env y))
-                                  err))
-
-export
 inventFnType : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                annot -> Env Term vars -> (bname : Name) ->
                Core annot (Term vars, Term (bname :: vars))
@@ -859,7 +976,7 @@ delayElab {vars} loc env expected elab
   where
     mkExpected : Maybe (Term vars) -> Core annot (Term vars)
     mkExpected Nothing
-        = do t <- addHole loc env TType
+        = do t <- addHole loc env TType "delayty"
              pure (mkConstantApp t env)
     mkExpected (Just ty) = pure ty
 

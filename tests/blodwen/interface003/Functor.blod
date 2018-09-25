@@ -3,6 +3,10 @@ import Stuff
 interface Functor f where
     map : (a -> b) -> f a -> f b
 
+interface Functor f => Applicative f where
+  pure : a -> f a
+  (<*>) : f (a -> b) -> f a -> f b
+
 Functor List where
   map f [] = []
   map f (x :: xs) = f x :: map f xs
@@ -38,7 +42,7 @@ transpose ([] :: xss) = transpose xss
 transpose {el} ((x::xs) :: xss) 
    = (x :: (mapMaybe head' xss)) :: (transpose (xs :: (map (drop (S Z)) xss)))
 
-data Vect : _ -> Type -> Type where
+data Vect : ? -> Type -> Type where
      Nil : Vect Z a
      (::) : a -> Vect k a -> Vect (S k) a
 

@@ -67,7 +67,7 @@ rewrite__impl p Refl prf = prf
 
 %inline
 public export
-replace : forall a, x, y, p . x = y -> p x -> p y
+replace : forall x, y, p . x = y -> p x -> p y
 replace Refl prf = prf
 
 %inline

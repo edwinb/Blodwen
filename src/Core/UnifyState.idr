@@ -434,10 +434,10 @@ addNamedHole loc cn patvar env ty
 export
 addHole : {auto u : Ref UST (UState annot)} ->
           {auto c : Ref Ctxt Defs} ->       
-          annot -> Env Term vars ->
-          (ty : Term vars) -> Core annot Name
-addHole loc env ty
-    = do cn <- genName "h"
+          annot -> Env Term vars -> 
+          (ty : Term vars) -> String -> Core annot Name
+addHole loc env ty base
+    = do cn <- genName base
          addNamedHole loc cn False env ty
          pure cn
 

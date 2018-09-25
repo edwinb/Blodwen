@@ -324,7 +324,7 @@ mutual
       = do est <- get EST
            -- We won't be able to search for this until we know the type,
            -- but make a hole for it anyway and we'll come back to it
-           t <- addHole loc env TType
+           t <- addHole loc env TType "search"
            let expected = mkConstantApp t env
            n <- addSearchable loc env expected depth (defining est)
            log 5 $ "Added search (invented type) for " ++ show expected
@@ -334,7 +334,7 @@ mutual
            n <- addSearchable loc env expected depth (defining est)
            pure (mkConstantApp n env, expected)
   checkImp rigc process elabinfo env nest (IAlternative loc (UniqueDefault def) alts) mexpected
-      = do expected <- maybe (do t <- addHole loc env TType
+      = do expected <- maybe (do t <- addHole loc env TType "alt"
                                  log 5 $ "Added hole for ambiguous expression type (UniqueDefault) " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
@@ -360,7 +360,7 @@ mutual
                              (getName t, checkImp rigc process elabinfo env nest t 
                                  (Just expected))) alts'))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
-      = do expected <- maybe (do t <- addHole loc env TType
+      = do expected <- maybe (do t <- addHole loc env TType "alt"
                                  log 5 $ "Added hole for ambiguous expression type " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
@@ -483,19 +483,25 @@ mutual
       = do est <- get EST
            let oldenv = outerEnv est
            let oldsub = subEnv est
+           let oldbif = bindIfUnsolved est
            -- Set the binding environment in the elab state - unbound
            -- implicits should have access to whatever is in scope here
-           put EST (updateEnv env SubRefl est)
+           put EST (updateEnv env SubRefl [] est)
            (tmv, tmt) <- check rigc process elabinfo env nest tm expected
-           argImps <- getToBind env
+           gam <- get Ctxt
+           argImps <- getToBind loc 
+                                (elabMode elabinfo)
+                                (implicitMode elabinfo)
+                                env tmv
            clearToBind
            gam <- get Ctxt
            est <- get EST
-           put EST (updateEnv oldenv oldsub
+           put EST (updateEnv oldenv oldsub oldbif 
                        (record { boundNames = [] } est))
            let (bv, bt) = bindImplicits (implicitMode elabinfo)
                                         gam env argImps (asVariables est)
-                                        tmv TType
+                                        (normaliseHoles gam env tmv)
+                                        TType
            traverse implicitBind (map fst argImps)
            checkExp rigc process loc elabinfo env nest bv bt expected
   checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) with (elabMode elabinfo)
@@ -504,7 +510,7 @@ mutual
                                             (record { dotted = True,
                                                       elabMode = InExpr } elabinfo)
                                             env nest tm (Just expected)
-           n <- addHole loc env expected
+           n <- addHole loc env expected "dot"
            gam <- getCtxt
            let tm = mkConstantApp n env
            log 10 $ "Added hole for MustUnify " ++ show (tm, wantedTm, wantedTy)
@@ -521,7 +527,7 @@ mutual
     checkImp rigc process elabinfo env nest (IAs loc var tm) expected | elabmode
         = throw (GenericMsg loc "@-pattern not valid here")
   checkImp rigc process elabinfo env nest (IHole loc n_in) Nothing
-      = do t <- addHole loc env TType
+      = do t <- addHole loc env TType "ty"
            -- Turn lets into lambda before making the hole so that they
            -- get abstracted over in the hole (it's fine here, unlike other
            -- holes, because we're not trying to unify it so it's okay if
@@ -542,34 +548,26 @@ mutual
            put EST (record { holesMade $= (n ::) } est)
            pure (mkConstantApp n env', expected)
   checkImp rigc process elabinfo env nest (Implicit loc) Nothing
-      = do t <- addHole loc env TType
+      = do t <- addHole loc env TType "impty"
            let hty = mkConstantApp t env
-           n <- addHole loc env hty
+           n <- addHole loc env hty "_"
            log 10 $ "Added hole for implicit type " ++ show n
            pure (mkConstantApp n env, hty)
   checkImp rigc process elabinfo env nest (Implicit loc) (Just expected) 
-      = case elabMode elabinfo of
-             InExpr =>
-                do n <- addHole loc env expected
-                   log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
-                   pure (mkConstantApp n env, expected)
-             _ =>
-                do hn <- genName "_"
-                   -- Add as a pattern variable, but let it unify with other
-                   -- things, hence 'False' as an argument to addBoundName
-                   tm <- addBoundName loc hn False env expected
-                   est <- get EST
-                   put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
-                                     toBind $= ((hn, (tm, expected)) :: ) } est)
-                   pure (tm, expected)
+      = do n <- addHole loc env expected "_"
+           log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
+           est <- get EST
+           let tm = mkConstantApp n env
+           put EST (addBindIfUnsolved n env tm expected est)
+           pure (tm, expected)
   checkImp rigc process elabinfo env nest (Infer loc) Nothing
-      = do t <- addHole loc env TType
+      = do t <- addHole loc env TType "impty"
            let hty = mkConstantApp t env
-           n <- addHole loc env hty
+           n <- addHole loc env hty "_"
            log 10 $ "Added hole for implicit type " ++ show n
            pure (mkConstantApp n env, hty)
   checkImp rigc process elabinfo env nest (Infer loc) (Just expected) 
-      = do n <- addHole loc env expected
+      = do n <- addHole loc env expected "_"
            log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
            pure (mkConstantApp n env, expected)
 
@@ -709,7 +707,7 @@ mutual
            caseretty <- case expected of
                              Just ty => pure ty
                              Nothing =>
-                                do t <- addHole loc env TType
+                                do t <- addHole loc env TType "ty"
                                    log 10 $ "Invented hole for case type " ++ show t
                                    pure (mkConstantApp t env)
            let casefnty = abstractOver env $
@@ -1080,7 +1078,6 @@ mutual
            let env' : Env Term (n :: _) = Pi RigW info tyv :: env
            est <- get EST
            
-           tobind <- getToBind env
            e' <- weakenedEState 
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- Term.check {e=e'} Rig0 process elabinfo env' (weaken nest') retty (Just TType)
@@ -1186,27 +1183,15 @@ mutual
                   restoreImps impsUsed
                   pure imptm
              Nothing =>
-              -- In an expression, add a hole
-              -- In a pattern or type, treat as a variable to bind
-               case elabMode elabinfo of
-                  InExpr => 
-                     do gam <- get Ctxt
-                        hn <- genName (nameRoot bn)
-                        log 5 $ "Added implicit argument " ++ show hn
-                        addNamedHole loc hn False env (quote (noGam gam) env ty)
-                        pure (mkConstantApp hn env)
-                  _ =>
-                     do gam <- get Ctxt
-                        hn <- genName (nameRoot bn)
-                        -- Add as a pattern variable, but let it unify with other
-                        -- things, hence 'False' as an argument to addBoundName
-                        let expected_in = quote (noGam gam) env ty
-                        (tm, expected) <- mkOuterHole loc hn False (Just expected_in)
-                        log 5 $ "Added Bound implicit (makeImplicit) " ++ show (hn, (tm, expected))
-                        est <- get EST
-                        put EST (record { boundNames $= ((hn, (tm, expected)) :: ),
-                                          toBind $= ((hn, (tm, expected)) :: ) } est)
-                        pure tm
+               do gam <- get Ctxt
+                  hn <- genName (nameRoot bn)
+                  log 5 $ "Added implicit argument " ++ show hn
+                  let ty' = quote (noGam gam) env ty
+                  addNamedHole loc hn False env ty'
+                  est <- get EST
+                  let tm = mkConstantApp hn env
+                  put EST (addBindIfUnsolved hn env tm ty' est)
+                  pure tm
 
   lookupAuto : Name -> List (Maybe Name, a) -> Maybe (Maybe Name, a)
   lookupAuto n [] = Nothing
