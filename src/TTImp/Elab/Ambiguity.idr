@@ -17,7 +17,7 @@ expandAmbigName : ElabMode -> EState vars ->
                   RawImp annot -> 
                   List (annot, Maybe (Maybe Name), RawImp annot) -> 
                   RawImp annot -> 
-                  Maybe (Term vars) -> RawImp annot
+                  ExpType (Term vars) -> RawImp annot
 -- Insert implicit dots here, for things we can't match on directly
 -- (Only when mode is InLHS and it's not the name of the function we're 
 -- defining)

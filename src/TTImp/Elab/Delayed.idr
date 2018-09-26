@@ -171,7 +171,7 @@ export
 delayElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
             annot -> Env Term vars ->
-            (expected : Maybe (Term vars)) ->
+            (expected : ExpType (Term vars)) ->
             Lazy (Core annot (Term vars, Term vars)) ->
             Core annot (Term vars, Term vars)
 delayElab {vars} loc env expected elab
@@ -184,10 +184,10 @@ delayElab {vars} loc env expected elab
                              (mkClosedElab env elab) } ust)
          pure (mkConstantAppFull cn env, exp)
   where
-    mkExpected : Maybe (Term vars) -> Core annot (Term vars)
-    mkExpected Nothing
+    mkExpected : ExpType (Term vars) -> Core annot (Term vars)
+    mkExpected (FnType [] ty) = pure ty
+    mkExpected _
         = do t <- addHole loc env TType "delayty"
              pure (mkConstantApp t env)
-    mkExpected (Just ty) = pure ty
 
 

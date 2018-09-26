@@ -25,10 +25,9 @@ import Data.List.Views
 -- implicit lambdas if they aren't there already. 
 insertImpLam : {auto c : Ref Ctxt Defs} ->
                Env Term vars ->
-               (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
+               (term : RawImp annot) -> (expected : ExpType (Term vars)) ->
                Core annot (RawImp annot)
-insertImpLam env tm Nothing = pure tm
-insertImpLam env tm (Just ty) = bindLam tm ty
+insertImpLam env tm (FnType [] ty) = bindLam tm ty
   where
     bindLam : RawImp annot -> Term vars -> Core annot (RawImp annot)
     bindLam tm@(ILam _ _ Implicit _ _ _) (Bind n (Pi _ Implicit _) sc)
@@ -40,6 +39,7 @@ insertImpLam env tm (Just ty) = bindLam tm ty
              sc' <- bindLam tm sc
              pure $ ILam loc c Implicit (Just n') (Implicit loc) sc'
     bindLam tm sc = pure tm
+insertImpLam env tm _ = pure tm
 
 noteLHSPatVar : {auto e : Ref EST (EState vars)} ->
              ElabMode -> String -> Core annot ()
@@ -98,7 +98,7 @@ mutual
           NestedNames vars -> -- locally defined names (arising from nested top level
                               -- declarations)
           (term : RawImp annot) -> -- Term to elaborate
-          (expected : Maybe (Term vars)) -> -- Expected type, if available
+          (expected : ExpType (Term vars)) -> -- Expected type, if available
           Core annot (Term vars, Term vars) 
   -- If we've just inserted an implicit coercion (in practice, that's either
   -- a force or delay) then check the term with any further insertions
@@ -137,34 +137,37 @@ mutual
                RigCount ->
                Elaborator annot -> -- the elaborator for top level declarations
                                    -- used for nested definitions
+               annot ->
                ElabInfo annot -> -- elaboration parameters
                Env Term vars -> -- bound names (lambda, pi, let)
                NestedNames vars -> -- locally defined names (arising from nested top level
                                    -- declarations)
                (term : RawImp annot) -> -- Term to elaborate
+               (exp : ExpType (Term vars)) ->
                Core annot (Term vars, Term vars) 
-  checkForce rigc process elabinfo env nest tm_in
+  checkForce rigc process loc elabinfo env nest tm_in exp
       = do defs <- get Ctxt
            handle
-             (do (ctm, cty) <- check rigc process elabinfo env nest tm_in Nothing
-                 log 10 $ "Checked force " ++ show (ctm, cty)
+             (do (ctm, cty) <- check rigc process elabinfo env nest tm_in exp
+                 log 10 $ "Checked force " ++ show (ctm, cty, exp)
                  case nf defs env cty of
                       NTCon n _ _ _ =>
                           if isDelayType n defs
                              then throw (InternalError "Need force!")
                              else pure (ctm, cty)
-                      _ => pure (ctm, cty))
+                      _ => checkExp rigc process loc elabinfo env nest
+                                    ctm cty exp)
              (\err =>
                   case err of
                        InternalError _ =>
                            case forceName defs of
-                                Nothing => check rigc process elabinfo env nest tm_in Nothing
+                                Nothing => check rigc process elabinfo env nest tm_in Unknown
                                 Just fn =>
                                    let loc = getAnnot tm_in in
                                        check rigc process elabinfo env nest 
                                          (IApp loc (IVar loc fn)
                                                (ICoerced loc tm_in))
-                                         Nothing
+                                         Unknown
                        _ => throw err)
   
 
@@ -192,11 +195,11 @@ mutual
                               && delayError defs err 
                                 then forced else throw err)
 
-  insertLazy : Defs -> RawImp annot -> Maybe (NF vars) -> RawImp annot
+  insertLazy : Defs -> RawImp annot -> ExpType (NF vars) -> RawImp annot
   insertLazy defs tm@(IBindVar _ _) _ = tm
   -- If the expected type is "Delayed" and the given term doesn't elaborate
   -- then we'll try inserting a "Delay"
-  insertLazy defs tm (Just (NTCon n _ _ args))
+  insertLazy defs tm (FnType [] (NTCon n _ _ args))
       = case delayName defs of
              Nothing => tm
              Just delay =>
@@ -214,7 +217,7 @@ mutual
              Elaborator annot ->
              ElabInfo annot ->
              Env Term vars -> NestedNames vars ->
-             (term : RawImp annot) -> (expected : Maybe (Term vars)) ->
+             (term : RawImp annot) -> (expected : ExpType (Term vars)) ->
              Core annot (Term vars, Term vars) 
   checkImp rigc process elabinfo env nest (ICoerced _ tm) expected
       = checkImp rigc process elabinfo env nest tm expected
@@ -321,7 +324,11 @@ mutual
                 [] => pure (restm, resty)
                 _ => checkExp rigc process loc elabinfo env nest (apply restm imps) 
                               (quote (noGam gam) env ty) expected
-  checkImp rigc process elabinfo env nest (ISearch loc depth) Nothing
+  checkImp rigc process elabinfo env nest (ISearch loc depth) (FnType [] expected)
+      = do est <- get EST
+           n <- addSearchable loc env expected depth (defining est)
+           pure (mkConstantApp n env, expected)
+  checkImp rigc process elabinfo env nest (ISearch loc depth) _
       = do est <- get EST
            -- We won't be able to search for this until we know the type,
            -- but make a hole for it anyway and we'll come back to it
@@ -330,12 +337,8 @@ mutual
            n <- addSearchable loc env expected depth (defining est)
            log 5 $ "Added search (invented type) for " ++ show expected
            pure (mkConstantApp n env, expected)
-  checkImp rigc process elabinfo env nest (ISearch loc depth) (Just expected)
-      = do est <- get EST
-           n <- addSearchable loc env expected depth (defining est)
-           pure (mkConstantApp n env, expected)
   checkImp rigc process elabinfo env nest (IAlternative loc (UniqueDefault def) alts) mexpected
-      = do expected <- maybe (do t <- addHole loc env TType "alt"
+      = do expected <- expty (do t <- addHole loc env TType "alt"
                                  log 5 $ "Added hole for ambiguous expression type (UniqueDefault) " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
@@ -354,14 +357,14 @@ mutual
                      then try (exactlyOne loc env (elabMode elabinfo) 
                                  (map (\t => 
                                    (getName t, checkImp rigc process elabinfo env nest t
-                                       (Just expected))) alts'))
+                                       (FnType [] expected))) alts'))
                               (checkImp rigc process elabinfo env nest def
-                                     (Just expected))
+                                     (FnType [] expected))
                      else exactlyOne loc env (elabMode elabinfo) (map (\t => 
                              (getName t, checkImp rigc process elabinfo env nest t 
-                                 (Just expected))) alts'))
+                                 (FnType [] expected))) alts'))
   checkImp rigc process elabinfo env nest (IAlternative loc uniq alts) mexpected
-      = do expected <- maybe (do t <- addHole loc env TType "alt"
+      = do expected <- expty (do t <- addHole loc env TType "alt"
                                  log 5 $ "Added hole for ambiguous expression type " ++ show t
                                  pure (mkConstantApp t env))
                              pure mexpected
@@ -376,13 +379,13 @@ mutual
                     throw (AllFailed [])
                   let alts' = pruneByType defs (nf defs env expected) alts
                   log 5 $ "Ambiguous elaboration " ++ show alts' ++ 
-                          "\nTarget type " ++ show (map (normaliseHoles gam env) (Just expected))
+                          "\nTarget type " ++ show (normaliseHoles gam env expected)
                   let tryall = case uniq of
                                     FirstSuccess => anyOne loc
                                     _ => exactlyOne loc env
                   tryall (elabMode elabinfo)
                          (map (\t => (getName t, 
-                                       do res <- checkImp rigc process elabinfo env nest t (Just expected)
+                                       do res <- checkImp rigc process elabinfo env nest t (FnType [] expected)
                                           -- Do it twice for interface resolution;
                                           -- first pass gets the determining argument
                                           -- (maybe rethink this, there should be a better
@@ -395,23 +398,21 @@ mutual
                                                                  _ => InTerm) Normal
                                           pure res)) alts'))
     where
-      holeIn : Gamma -> Maybe (Term vars) -> Bool
-      holeIn gam Nothing = False
-      holeIn gam (Just tm)
+      holeIn : Gamma -> ExpType (Term vars) -> Bool
+      holeIn gam (FnType [] tm)
           = case getFn tm of
                  Ref nt n =>
                       case lookupDefExact n gam of
                            Just (Hole _ pvar _) => not pvar
                            _ => False
                  _ => False
+      holeIn gam _ = False
 
-  checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) Nothing
-      = throw (GenericMsg loc "Can't infer a type for rewrite")
-  checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) (Just expected)
+  checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) (FnType [] expected)
         -- if it fails, it may just be that the expected type is not yet
         -- resolved, so come back to it
       = delayOnFailure loc env expected rewriteErr (\delayed =>
-          do (rulev, rulet) <- check rigc process elabinfo env nest rule Nothing
+          do (rulev, rulet) <- check rigc process elabinfo env nest rule Unknown
              (lemma, pred) <- elabRewrite loc env expected rulet
 
              rname <- genVarName "rule"
@@ -435,10 +436,12 @@ mutual
                                (apply (IVar loc lemma) [IVar loc pname,
                                                         IVar loc rname, 
                                                         tm]) 
-                               (Just (weakenNs [rname, pname] expected))
+                               (FnType [] (weakenNs [rname, pname] expected))
 
              pure (Bind pname pbind (Bind rname rbind rwtm), 
                    Bind pname pbind (Bind rname rbind rwty)))
+  checkImp {vars} rigc process elabinfo env nest (IRewrite loc rule tm) _
+      = throw (GenericMsg loc "Can't infer a type for rewrite")
   checkImp rigc process elabinfo env nest (IPrimVal loc x) expected 
       = do (x', ty) <- infer loc env (RPrimVal x)
            checkExp rigc process loc elabinfo env nest x' ty expected
@@ -505,29 +508,37 @@ mutual
                                         TType
            traverse implicitBind (map fst argImps)
            checkExp rigc process loc elabinfo env nest bv bt expected
-  checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) with (elabMode elabinfo)
-    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) | InLHS
+  checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (FnType [] expected) with (elabMode elabinfo)
+    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (FnType [] expected) | InLHS
       = do (wantedTm, wantedTy) <- checkImp rigc process 
                                             (record { dotted = True,
                                                       elabMode = InExpr } elabinfo)
-                                            env nest tm (Just expected)
+                                            env nest tm (FnType [] expected)
            n <- addHole loc env expected "dot"
            gam <- getCtxt
            let tm = mkConstantApp n env
            log 10 $ "Added hole for MustUnify " ++ show (tm, wantedTm, wantedTy)
            addDot loc env n wantedTm r tm
            checkExp rigc process loc (record { elabMode = InExpr } elabinfo) 
-                    env nest tm wantedTy (Just expected)
-    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (Just expected) | elabmode
+                    env nest tm wantedTy (FnType [] expected)
+    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (FnType [] expected) | elabmode
         = throw (GenericMsg loc ("Dot pattern not valid here (not LHS)" ++ show tm))
   checkImp rigc process elabinfo env nest (IMustUnify loc r tm) expected
       = throw (GenericMsg loc ("Dot pattern not valid here (unknown type) " ++ show tm))
   checkImp rigc process elabinfo env nest (IAs loc var tm) expected with (elabMode elabinfo)
-    checkImp rigc process elabinfo env nest (IAs loc var tm) (Just expected) | InLHS
+    checkImp rigc process elabinfo env nest (IAs loc var tm) (FnType [] expected) | InLHS
       = checkAs rigc process elabinfo loc env nest var tm expected
     checkImp rigc process elabinfo env nest (IAs loc var tm) expected | elabmode
         = throw (GenericMsg loc "@-pattern not valid here")
-  checkImp rigc process elabinfo env nest (IHole loc n_in) Nothing
+  checkImp rigc process elabinfo env nest (IHole loc n_in) (FnType [] expected) 
+      = do n <- inCurrentNS (UN n_in)
+           -- Let to lambda as above
+           let env' = letToLam env
+           addNamedHole loc n False env' expected
+           est <- get EST
+           put EST (record { holesMade $= (n ::) } est)
+           pure (mkConstantApp n env', expected)
+  checkImp rigc process elabinfo env nest (IHole loc n_in) _
       = do t <- addHole loc env TType "ty"
            -- Turn lets into lambda before making the hole so that they
            -- get abstracted over in the hole (it's fine here, unlike other
@@ -540,37 +551,29 @@ mutual
            est <- get EST
            put EST (record { holesMade $= (n ::) } est)
            pure (mkConstantApp n env', hty)
-  checkImp rigc process elabinfo env nest (IHole loc n_in) (Just expected) 
-      = do n <- inCurrentNS (UN n_in)
-           -- Let to lambda as above
-           let env' = letToLam env
-           addNamedHole loc n False env' expected
-           est <- get EST
-           put EST (record { holesMade $= (n ::) } est)
-           pure (mkConstantApp n env', expected)
-  checkImp rigc process elabinfo env nest (Implicit loc) Nothing
-      = do t <- addHole loc env TType "impty"
-           let hty = mkConstantApp t env
-           n <- addHole loc env hty "_"
-           log 10 $ "Added hole for implicit type " ++ show n
-           pure (mkConstantApp n env, hty)
-  checkImp rigc process elabinfo env nest (Implicit loc) (Just expected) 
+  checkImp rigc process elabinfo env nest (Implicit loc) (FnType [] expected) 
       = do n <- addHole loc env expected "_"
            log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
            est <- get EST
            let tm = mkConstantApp n env
            put EST (addBindIfUnsolved n env tm expected est)
            pure (tm, expected)
-  checkImp rigc process elabinfo env nest (Infer loc) Nothing
+  checkImp rigc process elabinfo env nest (Implicit loc) _
       = do t <- addHole loc env TType "impty"
            let hty = mkConstantApp t env
            n <- addHole loc env hty "_"
            log 10 $ "Added hole for implicit type " ++ show n
            pure (mkConstantApp n env, hty)
-  checkImp rigc process elabinfo env nest (Infer loc) (Just expected) 
+  checkImp rigc process elabinfo env nest (Infer loc) (FnType [] expected) 
       = do n <- addHole loc env expected "_"
            log 10 $ "Added hole for implicit " ++ show (n, expected, mkConstantApp n env)
            pure (mkConstantApp n env, expected)
+  checkImp rigc process elabinfo env nest (Infer loc) _
+      = do t <- addHole loc env TType "impty"
+           let hty = mkConstantApp t env
+           n <- addHole loc env hty "_"
+           log 10 $ "Added hole for implicit type " ++ show n
+           pure (mkConstantApp n env, hty)
 
   addGivenImps : ElabInfo annot -> List (Maybe Name, RawImp annot) -> ElabInfo annot
   addGivenImps elabinfo ns = record { implicitsGiven $= (ns ++) } elabinfo
@@ -582,7 +585,7 @@ mutual
               {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
               Reflect annot =>
               RigCount -> Elaborator annot -> ElabInfo annot -> annot -> Env Term vars -> 
-              NestedNames vars -> Name -> Maybe (Term vars) ->
+              NestedNames vars -> Name -> ExpType (Term vars) ->
               Core annot (Term vars, Term vars)
   checkName {vars} rigc process elabinfo loc env nest x expected 
       = do gam <- get Ctxt
@@ -652,20 +655,22 @@ mutual
               RigCount -> Elaborator annot ->
               ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
               RawImp annot -> RawImp annot -> List (ImpClause annot) ->
-              Maybe (Term vars) ->
+              ExpType (Term vars) ->
               Core annot (Term vars, Term vars)
   checkCase {vars} {c} {u} {i} rigc process elabinfo loc env nest scr scrty_exp alts expected
-      = do (scrtyv, scrtyt) <- check Rig0 process elabinfo env nest scrty_exp (Just TType)
+      = do (scrtyv, scrtyt) <- check Rig0 process elabinfo env nest scrty_exp 
+                                     (FnType [] TType)
            log 10 $ "Expected scrutinee type: " ++ show scrtyv
            -- Try checking at the given multiplicity; if that doesn't work,
            -- try checking at Rig1 (meaning that we're using a linear variable
            -- so the scrutinee should be linear)
            (scrtm_in, scrty, caseRig) <- handle
-              (do c <- check RigW process elabinfo env nest scr (Just scrtyv)
+              (do c <- check RigW process elabinfo env nest scr (FnType [] scrtyv)
                   pure (fst c, snd c, RigW))
               (\err => case err of
                             LinearMisuse _ _ Rig1 _
-                              => do c <- check Rig1 process elabinfo env nest scr (Just scrtyv)
+                              => do c <- check Rig1 process elabinfo env nest scr 
+                                               (FnType [] scrtyv)
                                     pure (fst c, snd c, Rig1)
                             e => throw e)
 
@@ -676,7 +681,9 @@ mutual
                                        then throw err
                                        else pure scrtm_in)
 
-           log 5 $ "Case scrutinee: " ++ show caseRig ++ " " ++ show scrtm ++ " : " ++ show scrty
+           gam <- get Ctxt
+           log 2 $ "Case scrutinee: " ++ show caseRig ++ " " ++ 
+                    show scrtm ++ " : " ++ show (normaliseHoles gam env scrty)
            scrn <- genName "scr"
            est <- get EST
            casen <- genCaseName (defining est)
@@ -713,8 +720,8 @@ mutual
            let (svars ** smaller) = shrinkEnv (subEnv est) [] env
            
            caseretty <- case expected of
-                             Just ty => pure ty
-                             Nothing =>
+                             FnType [] ty => pure ty
+                             _ =>
                                 do t <- addHole loc env TType "ty"
                                    log 10 $ "Invented hole for case type " ++ show t
                                    pure (mkConstantApp t env)
@@ -925,7 +932,7 @@ mutual
                RigCount -> Elaborator annot ->
                ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
                List (ImpDecl annot) -> RawImp annot ->
-               Maybe (Term vars) ->
+               ExpType (Term vars) ->
                Core annot (Term vars, Term vars)
   checkLocal {vars} {c} {u} {i} rigc process elabinfo loc env nest nested scope expected
       = do let defNames = definedInBlock nested
@@ -992,7 +999,7 @@ mutual
   checkAs rigc process elabinfo loc env nest var tm expected
       = do est <- get EST
            let n = PV var (defining est)
-           (patTm, patTy) <- checkImp rigc process elabinfo env nest tm (Just expected)
+           (patTm, patTy) <- checkImp rigc process elabinfo env nest tm (FnType [] expected)
            notePatVar n
            est <- get EST
            case lookup n (boundNames est) of
@@ -1019,10 +1026,20 @@ mutual
              RigCount -> Elaborator annot ->
              ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
              (fn : RawImp annot) -> (arg : RawImp annot) ->
-             Maybe (Term vars) ->
+             ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkApp {vars} rigc process elabinfo loc env nest fn arg expected
-      = do (fntm, fnty) <- checkForce rigc process elabinfo env nest fn
+      = do 
+--            atyn <- addHole loc env TType "argty"
+--            argn <- genName "arg"
+--            let aty = mkConstantApp atyn env
+--            log 10 $ "Added hole for argument type " ++ show atyn
+-- 
+--            let expfn = expty Nothing
+--                           (\e => FnType [] (Bind argn (Pi RigW Explicit aty) (weaken e))) 
+--                           expected
+        
+           (fntm, fnty) <- checkForce rigc process loc elabinfo env nest fn Unknown
            gam <- get Ctxt
            when (elabMode elabinfo /= InLHS) $
              solveConstraints InTerm Normal
@@ -1043,7 +1060,8 @@ mutual
                                  ++ " at " ++ show (rigMult rigf rigc)
                      (argtm, argty) <- check (rigMult rigf rigc)
                                              process (record { implicitsGiven = [] } elabinfo)
-                                             env nest arg' (Just (quote (noGam gam) env ty))
+                                             env nest arg' 
+                                             (FnType [] (quote (noGam gam) env ty))
                      restoreImps impsUsed
                      let sc' = scdone (toClosure defaultOpts env argtm)
                      log 10 $ "Scope type " ++ show (quote (noGam gam) env sc')
@@ -1058,14 +1076,14 @@ mutual
                      -- Check the argument type against the invented arg type
                      impsUsed <- saveImps
                      (argtm, argty) <- check rigc process (record { implicitsGiven = [] } elabinfo)
-                                             env nest arg (Just expty)
+                                             env nest arg (FnType [] expty)
                      restoreImps impsUsed
                      -- Check the type of 'fn' is an actual function type
                      gam <- get Ctxt
                      (fnchk, _) <-
                          checkExp rigc process loc elabinfo env nest fntm 
                                   (Bind bn (Pi RigW Explicit expty) scty) 
-                                  (Just (quote gam env fnty))
+                                  (FnType [] (quote gam env fnty))
                      checkExp rigc process loc elabinfo env nest (App fnchk argtm)
                                   (Bind bn (Let RigW argtm argty) scty) expected
 
@@ -1076,19 +1094,20 @@ mutual
             RigCount -> Elaborator annot -> ElabInfo annot ->
             annot -> Env Term vars -> NestedNames vars -> RigCount -> PiInfo -> Name -> 
             (argty : RawImp annot) -> (retty : RawImp annot) ->
-            Maybe (Term vars) ->
+            ExpType (Term vars) ->
             Core annot (Term vars, Term vars) 
   checkPi rigc process elabinfo loc env nest rigf info n argty retty expected
       = do let impmode = implicitMode elabinfo
            let elabmode = elabMode elabinfo
-           (tyv, tyt) <- Term.check Rig0 process (record { topLevel = False } elabinfo) 
-                               env nest argty (Just TType)
+           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
+                               env nest argty (FnType [] TType)
            let env' : Env Term (n :: _) = Pi RigW info tyv :: env
            est <- get EST
            
            e' <- weakenedEState 
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- Term.check {e=e'} Rig0 process elabinfo env' (weaken nest') retty (Just TType)
+           (scopev, scopet) <- check {e=e'} Rig0 process elabinfo env' 
+                                     (weaken nest') retty (FnType [] TType)
            st' <- strengthenedEState {e=e'} False loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Pi rigf info tyv) scopev)
@@ -1101,32 +1120,37 @@ mutual
              RigCount -> Elaborator annot -> ElabInfo annot ->
              annot -> Env Term vars -> NestedNames vars -> RigCount -> PiInfo -> Name ->
              (ty : RawImp annot) -> (scope : RawImp annot) ->
-             Maybe (Term vars) ->
+             ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
-  checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope (Just (Bind bn (Pi c Explicit pty) psc))
+  checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope (FnType [] (Bind bn (Pi c Explicit pty) psc))
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
-           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
+           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
+                               env nest ty (FnType [] TType)
            e' <- weakenedEState
            let rigb = min rigl c
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            let env' = Lam rigb plicity tyv :: env
-           (scopev, scopet) <- check rigc process {e=e'} (record { topLevel = False } elabinfo) env'
+           (scopev, scopet) <- check rigc process {e=e'} 
+                                     (record { topLevel = False } elabinfo) env'
                                      (weaken nest') scope 
-                                     (Just (renameTop n psc))
+                                     (FnType [] (renameTop n psc))
            st' <- strengthenedEState False loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest 
                         (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
-                        (Just (Bind bn (Pi rigb plicity pty) psc))
+                        (FnType [] (Bind bn (Pi rigb plicity pty) psc))
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope expected
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
-           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
+           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
+                               env nest ty (FnType [] TType)
            let rigb = rigl -- rigMult rigl rigc
            let env' : Env Term (n :: _) = Lam rigb plicity tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' (weaken nest') scope Nothing
+           (scopev, scopet) <- check {e=e'} rigc process 
+                                     (record { topLevel = False } elabinfo) 
+                                     env' (weaken nest') scope Unknown
            st' <- strengthenedEState False loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
@@ -1143,26 +1167,31 @@ mutual
              (ty : RawImp annot) -> 
              (val : RawImp annot) -> 
              (scope : RawImp annot) ->
-             Maybe (Term vars) ->
+             ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkLet rigc_in process elabinfo loc env nest rigl n ty val scope expected
       = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
-           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) env nest ty (Just TType)
+           (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
+                               env nest ty (FnType [] TType)
            -- Try checking at the given multiplicity; if that doesn't work,
            -- try checking at Rig1 (meaning that we're using a linear variable
            -- so the resulting binding should be linear)
            (valv, valt, rigb) <- handle
-                (do c <- check (rigMult rigl rigc) process elabinfo env nest val (Just tyv)
+                (do c <- check (rigMult rigl rigc) process elabinfo 
+                               env nest val (FnType [] tyv)
                     pure (fst c, snd c, rigMult rigl rigc))
                 (\err => case err of
                               LinearMisuse _ _ Rig1 _
-                                => do c <- check Rig1 process (record { topLevel = False } elabinfo) env nest val (Just tyv)
+                                => do c <- check Rig1 process 
+                                                 (record { topLevel = False } elabinfo) 
+                                                 env nest val (FnType [] tyv)
                                       pure (fst c, snd c, Rig1)
                               e => throw e)
            let env' : Env Term (n :: _) = Let rigb valv tyv :: env
            e' <- weakenedEState
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
-           (scopev, scopet) <- check {e=e'} rigc process (record { topLevel = False } elabinfo) env' 
+           (scopev, scopet) <- check {e=e'} rigc process 
+                                     (record { topLevel = False } elabinfo) env' 
                                      (weaken nest') scope (map weaken expected)
            st' <- strengthenedEState (topLevel elabinfo) loc env'
            put EST st'
@@ -1187,7 +1216,7 @@ mutual
                   usedImp (Just bn)
                   impsUsed <- saveImps
                   (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
-                                             env nest rawtm (Just (quote (noGam gam) env ty))
+                                             env nest rawtm (FnType [] (quote (noGam gam) env ty))
                   restoreImps impsUsed
                   pure imptm
              Nothing =>
@@ -1221,7 +1250,7 @@ mutual
                   usedImp used
                   impsUsed <- saveImps
                   (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
-                                             env nest rawtm (Just (quote (noGam gam) env ty))
+                                             env nest rawtm (FnType [] (quote (noGam gam) env ty))
                   restoreImps impsUsed
                   pure imptm
              Nothing => 
@@ -1312,12 +1341,9 @@ mutual
              RigCount -> Elaborator annot -> annot -> ElabInfo annot -> Env Term vars ->
              NestedNames vars ->
              (term : Term vars) -> (got : Term vars) -> 
-             (exp : Maybe (Term vars)) ->
+             (exp : ExpType (Term vars)) ->
              Core annot (Term vars, Term vars) 
-  checkExp rigc process loc elabinfo env nest tm got Nothing
-      = do gam <- get Ctxt
-           pure (tm, got)
-  checkExp rigc process loc elabinfo env nest tm got (Just exp) 
+  checkExp rigc process loc elabinfo env nest tm got (FnType [] exp) 
       = do gam <- get Ctxt
            let expnf = nf gam env exp
            (got', imps) <- convertImps rigc process loc env nest elabinfo (nf gam env got) expnf []
@@ -1328,4 +1354,7 @@ mutual
                          c <- addConstant loc env (apply tm imps) exp cs
                          dumpConstraints 4 False
                          pure (mkConstantApp c env, quote (noGam gam) env got')
+  checkExp rigc process loc elabinfo env nest tm got _
+      = do gam <- get Ctxt
+           pure (tm, got)
 

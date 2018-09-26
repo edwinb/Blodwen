@@ -72,6 +72,32 @@ Elaborator annot
       Env Term vars -> NestedNames vars -> 
       ImpDecl annot -> Core annot ()
 
+-- Expected type of an expression
+public export
+data ExpType : Type -> Type where
+     Unknown : ExpType a -- expected type is unknown
+     FnType : List (Name, a) -> a -> ExpType a 
+        -- a function with given argument types. We do it this way because we
+        -- don't know multiplicities of the arguments, so we can't use unification
+        -- directly.
+        -- An expected type is considered 'known' if it's a FnType []
+
+export
+expty : Lazy b -> Lazy (a -> b) -> ExpType a -> b
+expty u fn (FnType [] t) = fn t
+expty u fn _ = u
+
+export
+Functor ExpType where
+  map f Unknown = Unknown
+  map f (FnType ns ret) = FnType (map (\x => (fst x, f (snd x))) ns) (f ret)
+
+export
+Show a => Show (ExpType a) where
+  show Unknown = "Unknown type"
+  show (FnType [] ret) = show ret
+  show (FnType args ret) = show args ++ " -> " ++ show ret
+
 public export
 record ElabInfo annot where
   constructor MkElabInfo
@@ -346,18 +372,18 @@ export
 mkOuterHole : {auto e : Ref EST (EState vars)} ->
               {auto c : Ref Ctxt Defs} ->
               {auto e : Ref UST (UState annot)} ->
-              annot -> Name -> Bool -> Maybe (Term vars) ->
+              annot -> Name -> Bool -> ExpType (Term vars) ->
               Core annot (Term vars, Term vars)
-mkOuterHole {vars} loc n patvar (Just expected)
+mkOuterHole {vars} loc n patvar (FnType [] expected)
     = do est <- get EST
          let sub = subEnv est
          case shrinkTerm expected sub of
               -- Can't shrink so rely on unification with expected type later
-              Nothing => mkOuterHole loc n patvar Nothing
+              Nothing => mkOuterHole loc n patvar Unknown
               Just exp' => 
                   do tm <- addBoundName loc n patvar (outerEnv est) exp'
                      pure (embedSub sub tm, embedSub sub exp')
-mkOuterHole loc n patvar Nothing
+mkOuterHole loc n patvar _
     = do est <- get EST
          let sub = subEnv est
          let env = outerEnv est
@@ -365,22 +391,6 @@ mkOuterHole loc n patvar Nothing
          let ty = mkConstantApp t env
          tm <- addBoundName loc n patvar env ty
          pure (embedSub sub tm, embedSub sub ty)
-
--- Make a hole for an unbound implicit in the outer environment
-export
-mkFullHole : {auto e : Ref EST (EState vars)} ->
-             {auto c : Ref Ctxt Defs} ->
-             {auto e : Ref UST (UState annot)} ->
-             annot -> Env Term vars -> Name -> Bool -> Maybe (Term vars) ->
-             Core annot (Term vars, Term vars)
-mkFullHole {vars} loc env n patvar (Just expected)
-    = do tm <- addBoundName loc n patvar env expected
-         pure (tm, expected)
-mkFullHole loc env n patvar Nothing
-    = do t <- addHole loc env TType "impty"
-         let ty = mkConstantApp t env
-         tm <- addBoundName loc n patvar env ty
-         pure (tm, ty)
 
 export
 clearToBind : {auto e : Ref EST (EState vs)} ->
