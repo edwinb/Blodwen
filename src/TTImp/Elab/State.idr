@@ -1,11 +1,12 @@
 module TTImp.Elab.State
 
-import TTImp.TTImp
 import Core.CaseTree
 import Core.Context
 import Core.TT
 import Core.Normalise
 import Core.Unify
+
+import TTImp.TTImp
 
 import Data.List
 import Data.CSet
@@ -914,69 +915,4 @@ anyOne loc elabmode ((tm, e) :: es)
                                      _ => InTerm) Normal
               e) 
           (anyOne loc elabmode es)
-
--- We run the elaborator in the given environment, but need to end up with a
--- closed term. It'll get substituted into the right place at the end of
--- elaboration, so here we're just lambda binding the names so that the
--- substitution is successful.
-total
-mkClosedElab : Env Term vars -> 
-               (Core annot (Term vars, Term vars)) ->
-               Core annot ClosedTerm
-mkClosedElab [] elab 
-    = do (tm, _) <- elab
-         pure tm
-mkClosedElab {vars = x :: vars} (b :: env) elab
-    = mkClosedElab env 
-          (do (sc', _) <- elab
-              pure (Bind x (Lam (multiplicity b) Explicit (binderType b)) sc', 
-                    Erased))
-
--- Try the given elaborator; if it fails, and the error matches the
--- predicate, make a hole and try it again later when more holes might
--- have been resolved
-export
-delayOnFailure : 
-      {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-      {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-      annot -> Env Term vars ->
-      (expected : Term vars) ->
-      (Error annot -> Bool) ->
-      (Bool -> Core annot (Term vars, Term vars)) ->
-      Core annot (Term vars, Term vars)
-delayOnFailure loc env expected pred elab 
-    = handle (elab False)
-        (\err => do if pred err 
-                        then 
-                          do (cn, dty) <- addDelayedElab loc env expected
-                             log 5 $ "Postponing elaborator for " ++ show expected
-                             log 5 $ "New hole type " ++ show cn ++ " : " ++ show dty
-                             ust <- get UST
-                             put UST (record { delayedElab $= addCtxt cn
-                                                 (mkClosedElab env (elab True)) } ust)
-                             pure (mkConstantAppFull cn env, expected)
-                        else throw err)
-
-export
-delayElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-            {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-            annot -> Env Term vars ->
-            (expected : Maybe (Term vars)) ->
-            Lazy (Core annot (Term vars, Term vars)) ->
-            Core annot (Term vars, Term vars)
-delayElab {vars} loc env expected elab
-    = do exp <- mkExpected expected
-         (cn, dty) <- addDelayedElab loc env exp
-         log 5 $ "Postponing elaborator for " ++ show exp
-         log 5 $ "New hole type " ++ show cn ++ " : " ++ show dty
-         ust <- get UST
-         put UST (record { delayedElab $= addCtxt cn
-                             (mkClosedElab env elab) } ust)
-         pure (mkConstantAppFull cn env, exp)
-  where
-    mkExpected : Maybe (Term vars) -> Core annot (Term vars)
-    mkExpected Nothing
-        = do t <- addHole loc env TType "delayty"
-             pure (mkConstantApp t env)
-    mkExpected (Just ty) = pure ty
 

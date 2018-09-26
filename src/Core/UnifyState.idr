@@ -449,7 +449,7 @@ addSearchable : {auto u : Ref UST (UState annot)} ->
                 annot -> Env Term vars ->
                 (ty : Term vars) -> Nat -> Name -> Core annot Name
 addSearchable loc env ty depth def
-    = do cn <- genName "s"
+    = do cn <- genName "search"
          let defty = mkConstantTy env ty
          let hole = newDef defty Public (BySearch depth def)
          addHoleName loc cn

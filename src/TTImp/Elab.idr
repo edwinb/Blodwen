@@ -11,6 +11,7 @@ import Core.TT
 import Core.Unify
 
 import TTImp.TTImp
+import TTImp.Elab.Delayed
 import public TTImp.Elab.State
 import public TTImp.Elab.Term
 
@@ -39,119 +40,6 @@ doPLetRenames ns drops (Bind n b sc)
            Just n' => Bind n' b (doPLetRenames ns (n' :: drops) (renameTop n' sc))
            Nothing => Bind n b (doPLetRenames ns drops sc)
 doPLetRenames ns drops sc = sc
-
--- Add whether the variable is used as a linear argument. Returns whether it
--- was added, so that we can stop as soon as it is
-addUsage : {auto e : Ref EST (EState vars)} ->
-           {auto c : Ref Ctxt Defs} ->
-           Env Term vars -> annot -> Elem x vars -> Term vars -> Core annot Bool
-addUsage env loc p (Local (Just Rig1) p')
-    = do est <- get EST
-         if sameVar p p'
-            then do put EST (record { linearUsed $= ((_ ** p) :: ) } est)
-                    pure True
-            else pure False
-addUsage {vars} {x} {e} env loc p (Bind n b sc)
-    = do added <- addUsageB p b
-         if added then pure True
-                  else do e' <- weakenedEState
-                          let env' : Env Term (n :: _) = b :: env
-                          u <- addUsage {e=e'} env' loc (There p) sc
-                          st' <- strengthenedEState {e=e'} False loc env'
-                          put {ref=e} EST st'
-                          pure u
-  where
-    addUsageB : Elem x vars -> Binder (Term vars) -> Core annot Bool
-    addUsageB p (Let c val ty) 
-        = addUsage env loc p val
-    addUsageB p (PLet c val ty) 
-        = addUsage env loc p val
-    addUsageB p _ = pure False
-
-addUsage env loc p (App f a) 
-    = do added <- addUsage env loc p f
-         if added then pure True
-                  else addUsage env loc p a
-addUsage env loc p tm = pure False
-
-mutual
-  retryDelayedIn :
-        {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-        {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-        Env Term vars -> annot -> Term vars -> Core annot (Term vars)
-  retryDelayedIn env loc (Ref nt n)
-      = do defs <- get Ctxt
-           case lookupDefExact n (gamma defs) of
-                Just Delayed => 
-                    do ok <- runDelayed loc n
-                       -- On success, substitute the result in, and go 
-                       -- around again,
-                       if ok
-                          then do defs <- get Ctxt
-                                  let tm' = normaliseHoles defs env (Ref nt n)
-                                  res <- retryDelayedIn env loc tm'
-                                  log 5 $ "Substituted delayed hole " ++ show res
-                                  pure res
-                          else pure (Ref nt n)
-                _ => pure (Ref nt n)
-  retryDelayedIn {vars} {e} env loc (Bind x b sc)
-      = do b' <- retryBinder env b
-           e' <- weakenedEState
-           let env' : Env Term (x :: _) = b :: env
-           -- We'll only need to worry about multiplicities if the binder
-           -- is linear... if it's linear, add whether it's used to the
-           -- state, then when we get to the delayed elaborators for case
-           -- blocks the usage information will be up to date
-           when (multiplicity b == Rig1) $
-                do addUsage {e=e'} env' loc Here sc
-                   pure ()
-           sc' <- retryDelayedIn {e=e'} env' loc sc
-           st' <- strengthenedEState {e=e'} False loc env'
-           put {ref=e} EST st'
-           pure (Bind x b' sc')
-    where
-      retryBinder : Env Term vars -> Binder (Term vars) -> 
-                    Core annot (Binder (Term vars))
-      retryBinder env (Lam c p ty)
-          = do ty' <- retryDelayedIn env loc ty
-               pure (Lam c p ty')
-      retryBinder env (Let c val ty)
-          = do val' <- retryDelayedIn env loc val
-               ty' <- retryDelayedIn env loc ty
-               pure (Let c val' ty')
-      retryBinder env (Pi c p ty)
-          = do ty' <- retryDelayedIn env loc ty
-               pure (Pi c p ty')
-      retryBinder env (PVar c ty)
-          = do ty' <- retryDelayedIn env loc ty
-               pure (PVar c ty')
-      retryBinder env (PLet c val ty)
-          = do val' <- retryDelayedIn env loc val
-               ty' <- retryDelayedIn env loc ty
-               pure (PLet c val' ty')
-      retryBinder env (PVTy c ty)
-          = do ty' <- retryDelayedIn env loc ty
-               pure (PVTy c ty')
-  retryDelayedIn env loc (App f a)
-      = do f' <- retryDelayedIn env loc f
-           a' <- retryDelayedIn env loc a
-           pure (App f' a')
-  retryDelayedIn env loc tm = pure tm
-
-  runDelayed :
-        {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
-        {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
-        annot -> Name -> Core annot Bool
-  runDelayed loc n
-      = do ust <- get UST
-           case lookupCtxtExact n (delayedElab ust) of
-                Nothing => pure False
-                Just elab =>
-                     do tm <- elab
-                        updateDef n (const (Just (PMDef True [] (STerm tm) (STerm tm))))
-                        log 5 $ "Resolved delayed hole " ++ show n ++ " = " ++ show tm
-                        removeHoleName n
-                        pure True
 
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->

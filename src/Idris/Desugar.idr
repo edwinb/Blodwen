@@ -182,11 +182,11 @@ mutual
   desugar side ps (PPair fc l r) 
       = do l' <- desugar side ps l
            r' <- desugar side ps r
-           pure $ IAlternative fc Unique
-                  [apply (IVar fc (UN "Pair")) [l', r'],
-                   apply (IVar fc (UN "MkPair")) [l', r']]
+           let pval = apply (IVar fc (UN "MkPair")) [l', r']
+           pure $ IAlternative fc (UniqueDefault pval)
+                  [apply (IVar fc (UN "Pair")) [l', r'], pval]
   desugar side ps (PUnit fc) 
-      = pure $ IAlternative fc Unique 
+      = pure $ IAlternative fc (UniqueDefault (IVar fc (UN "MkUnit")))
                [IVar fc (UN "Unit"), 
                 IVar fc (UN "MkUnit")]
   desugar side ps (PIfThenElse fc x t e)

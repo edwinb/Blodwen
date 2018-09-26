@@ -1,9 +1,10 @@
 module TTImp.Elab.Term
 
 import TTImp.TTImp
-import public TTImp.Elab.State
 import TTImp.Elab.Ambiguity
+import TTImp.Elab.Delayed
 import TTImp.Elab.Rewrite
+import public TTImp.Elab.State
 import TTImp.Reflect
 
 import Core.AutoSearch
@@ -659,7 +660,7 @@ mutual
            -- Try checking at the given multiplicity; if that doesn't work,
            -- try checking at Rig1 (meaning that we're using a linear variable
            -- so the scrutinee should be linear)
-           (scrtm, scrty, caseRig) <- handle
+           (scrtm_in, scrty, caseRig) <- handle
               (do c <- check RigW process elabinfo env nest scr (Just scrtyv)
                   pure (fst c, snd c, RigW))
               (\err => case err of
@@ -667,6 +668,13 @@ mutual
                               => do c <- check Rig1 process elabinfo env nest scr (Just scrtyv)
                                     pure (fst c, snd c, Rig1)
                             e => throw e)
+
+           -- If there's any delayed ambiguities in the scrutinee, try to resolve
+           -- them now
+           scrtm <- handle (retryDelayedIn env loc scrtm_in)
+                           (\err => if ambiguous err 
+                                       then throw err
+                                       else pure scrtm_in)
 
            log 5 $ "Case scrutinee: " ++ show caseRig ++ " " ++ show scrtm ++ " : " ++ show scrty
            scrn <- genName "scr"
@@ -718,13 +726,13 @@ mutual
            log 10 $ "Env: " ++ show vars
            log 10 $ "Outer env: " ++ show (outerEnv est)
            log 10 $ "Shrunk env: " ++ show svars
-           log 3 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
+           log 2 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
            addDef casen (newDef casefnty Private None)
            setFlag loc casen Inline
 
            let alts' = map (updateClause casen env smaller) alts
-           log 5 $ "Generated alts: " ++ show alts'
+           log 2 $ "Generated alts: " ++ show alts'
            log 5 $ "Nested: " ++ show (mkConstantAppFull casen pre_env)
 
            let nest' = record { names $= ((casen, (casen, 
