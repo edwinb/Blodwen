@@ -2,21 +2,21 @@ Welcome to TTImp. Good luck.
 Loading bad1.tti
 Processing as TTImp
 ():When elaborating right hand side of Main.contrived:
-():When elaborating right hand side of case-block-3-in-Main.contrived:
+():When elaborating right hand side of case-block-16-in-Main.contrived:
 ():There are 0 uses of linear name z
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
 Loading bad2.tti
 Processing as TTImp
 ():When elaborating right hand side of Main.contrived:
-():When elaborating right hand side of case-block-3-in-Main.contrived:
+():When elaborating right hand side of case-block-16-in-Main.contrived:
 ():There are 0 uses of linear name z
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
 Loading bad3.tti
 Processing as TTImp
 ():When elaborating right hand side of Main.contrived:
-():When elaborating right hand side of case-block-3-in-Main.contrived:
+():When elaborating right hand side of case-block-16-in-Main.contrived:
 ():Trying to use irrelevant name z in relevant context
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
