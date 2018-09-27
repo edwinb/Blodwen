@@ -35,9 +35,9 @@ mkIfaceData {vars} fc vis env constraints n conName ps dets meths
           retty = apply (IVar fc n) (map (IVar fc) (map fst ps))
           conty = mkTy Implicit Rig0 (map jname ps) $
                   mkTy Explicit RigW (map bhere constraints ++ map bname meths) retty
-          con = MkImpTy fc conName (bindTypeNames (map fst ps ++ vars) conty) in
+          con = MkImpTy fc conName (bindTypeNames (map fst ps ++ map fst meths ++ vars) conty) in
           IData fc vis (MkImpData fc n 
-                                  (bindTypeNames (map fst ps ++ vars)
+                                  (bindTypeNames (map fst ps ++ map fst meths ++ vars)
                                                  (mkDataTy fc ps)) 
                                   opts [con])
   where
@@ -63,9 +63,10 @@ getMethDecl : {auto c : Ref Ctxt Defs} ->
               {auto i : Ref ImpST (ImpState FC)} ->
               Env Term vars -> NestedNames vars ->
               (params : List (Name, RawImp FC)) ->
+              (mnames : List Name) ->
               (FC, List FnOpt, n, (Bool, RawImp FC)) -> (n, RawImp FC)
-getMethDecl {vars} env nest params (fc, opts, n, (d, ty))
-    = let ty_imp = bindTypeNames (map fst params ++ vars) ty in
+getMethDecl {vars} env nest params mnames (fc, opts, n, (d, ty))
+    = let ty_imp = bindTypeNames (map fst params ++ mnames ++ vars) ty in
           (n, stripParams (map fst params) ty_imp)
   where
     -- We don't want the parameters to explicitly appear in the method
@@ -157,7 +158,7 @@ getConstraintHint : {auto c : Ref Ctxt Defs} ->
 getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, con)
     = let ity = apply (IVar fc iname) (map (IVar fc) params)
           fty = IPi fc RigW Explicit Nothing ity con
-          ty_imp = bindTypeNames vars fty 
+          ty_imp = bindTypeNames (meths ++ vars) fty 
           hintname = DN ("Constraint " ++ show con)
                         (MN ("__" ++ show iname ++ "_" ++ show con) 0)
           tydecl = IClaim fc vis [Inline, Hint False] (MkImpTy fc hintname ty_imp)
@@ -222,7 +223,7 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
          let meth_names = map fst meth_decls
          let defaults = mapMaybe getDefault body
 
-         elabAsData conName meth_sigs
+         elabAsData conName meth_names meth_sigs
          elabConstraintHints conName meth_names
          elabMethods conName meth_names meth_sigs
          ds <- traverse (elabDefault meth_decls) defaults
@@ -240,16 +241,20 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
         = (UN ("__con" ++ show i), ty) :: nameCons (i + 1) rest
 
     -- Elaborate the data declaration part of the interface
-    elabAsData : (conName : Name) ->
+    elabAsData : (conName : Name) -> List Name ->
                  List (FC, List FnOpt, Name, (Bool, RawImp FC)) ->
                  Core FC ()
-    elabAsData conName meth_sigs
+    elabAsData conName meth_names meth_sigs
         = do -- set up the implicit arguments correctly in the method
              -- signatures and constraint hints
-             let meths = map (getMethDecl env nest params) meth_sigs
-             let consts = map (getMethDecl env nest params) 
+             let meths = map (getMethDecl env nest params meth_names) meth_sigs
+             log 5 $ "Method declarations: " ++ show meths
+             
+             let consts = map (getMethDecl env nest params meth_names) 
                               (map (\c => (fc, [], c))
                                  (map notData constraints))
+             log 5 $ "Constraints: " ++ show consts
+
              let dt = mkIfaceData fc vis env consts iname conName params 
                                   dets meths
              log 10 $ "Methods: " ++ show meths

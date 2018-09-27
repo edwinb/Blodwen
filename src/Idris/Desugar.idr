@@ -378,12 +378,17 @@ mutual
            params' <- traverse (\ ntm => do tm' <- desugar AnyExpr ps (snd ntm)
                                             pure (fst ntm, tm')) params
            -- Look for bindable names in all the constraints and parameters
-           let bnames = concatMap (findBindableNames True (ps ++ map fst params) []) (map snd cons') ++
-                        concatMap (findBindableNames True (ps ++ map fst params) []) (map snd params')
+           let mnames = map dropNS (definedIn body)
+           let bnames = concatMap (findBindableNames True 
+                                      (ps ++ mnames ++ map fst params) []) 
+                                  (map snd cons') ++
+                        concatMap (findBindableNames True 
+                                      (ps ++ mnames ++ map fst params) []) 
+                                  (map snd params')
            let paramsb = map (\ (n, tm) => (n, doBind bnames tm)) params'
            let consb = map (\ (n, tm) => (n, doBind bnames tm)) cons'
 
-           body' <- traverse (desugarDecl (ps ++ map fst params)) body
+           body' <- traverse (desugarDecl (ps ++ mnames ++ map fst params)) body
            pure [IPragma (\env, nest => 
                              elabInterface fc vis env nest consb
                                            tn paramsb det conname 
