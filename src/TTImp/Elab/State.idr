@@ -372,23 +372,25 @@ export
 mkOuterHole : {auto e : Ref EST (EState vars)} ->
               {auto c : Ref Ctxt Defs} ->
               {auto e : Ref UST (UState annot)} ->
-              annot -> Name -> Bool -> ExpType (Term vars) ->
+              annot -> Name -> Bool -> Env Term vars -> ExpType (Term vars) ->
               Core annot (Term vars, Term vars)
-mkOuterHole {vars} loc n patvar (FnType [] expected)
+mkOuterHole {vars} loc n patvar topenv (FnType [] expected)
     = do est <- get EST
          let sub = subEnv est
          case shrinkTerm expected sub of
               -- Can't shrink so rely on unification with expected type later
-              Nothing => mkOuterHole loc n patvar Unknown
+              Nothing => mkOuterHole loc n patvar topenv Unknown
               Just exp' => 
                   do tm <- addBoundName loc n patvar (outerEnv est) exp'
                      pure (embedSub sub tm, embedSub sub exp')
-mkOuterHole loc n patvar _
+mkOuterHole loc n patvar topenv _
     = do est <- get EST
          let sub = subEnv est
          let env = outerEnv est
          t <- addHole loc env TType "impty"
          let ty = mkConstantApp t env
+         put EST (addBindIfUnsolved t topenv (embedSub sub ty) TType est)
+
          tm <- addBoundName loc n patvar env ty
          pure (embedSub sub tm, embedSub sub ty)
 

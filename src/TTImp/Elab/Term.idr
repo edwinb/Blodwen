@@ -145,11 +145,16 @@ mutual
                (term : RawImp annot) -> -- Term to elaborate
                (exp : ExpType (Term vars)) ->
                Core annot (Term vars, Term vars) 
-  checkFnApp rigc process loc elabinfo env nest tm_in exp
+  checkFnApp {vars} rigc process loc elabinfo env nest tm_in exp
       = do defs <- get Ctxt
            handle
              (do (ctm, cty) <- check rigc process elabinfo env nest tm_in exp
                  log 10 $ "Checked fnapp " ++ show (ctm, cty, exp)
+                 let ctynf = nf defs env cty
+                 case exp of
+                      FnType args ret => 
+                           unifyFnArgs ctynf ctynf (reverse args) ret
+                      _ => pure ()
                  case nf defs env cty of
                       NTCon n _ _ _ =>
                           if isDelayType n defs
@@ -170,7 +175,29 @@ mutual
                                                (ICoerced loc tm_in))
                                          Unknown
                        _ => throw err)
-  
+    where
+      -- Try to unify the expected return type with the function's return type.
+      -- This is in an effort to specialise any of the implicit arguments we've
+      -- acquired so far, which might make disambiguation of names in the arguments
+      -- easier. If it fails, it might be due to an error elsewhere (or it might
+      -- be that there is a dependency in the type we haven't refined yet), in
+      -- which case we'll get a more precise error later.
+      unifyFnArgs : NF vars -> NF vars -> List (Name, Term vars) -> 
+                    Term vars -> Core annot ()
+      unifyFnArgs fty topty [] ret
+          = do defs <- get Ctxt
+               log 2 $ "Converting in fnapp: " ++
+                       show (quote defs env topty) ++ " and " ++
+                       show (ret)
+               pure ()
+--                try (do [] <- convert loc (elabMode elabinfo) env topty (nf defs env ret) 
+--                              | _ => throw (InternalError "No such luck")
+--                        pure ())
+--                    (pure ())
+      unifyFnArgs (NBind b (Pi c p t) scf) topty ((an, argty) :: args) ret
+          = unifyFnArgs (scf (toClosure defaultOpts env Erased)) topty 
+                        args (Bind an (Pi c p argty) (weaken ret))
+      unifyFnArgs _ _ _ _ = pure ()
 
   delayError : Defs -> Error annot -> Bool
   delayError defs ForceNeeded = True
@@ -474,10 +501,11 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
-                  do (tm, exp) <- mkOuterHole loc n True topexp
+                  do (tm, exp) <- mkOuterHole loc n True env topexp
                      log 5 $ "Added Bound implicit " ++ show (n, (tm, exp))
                      defs <- get Ctxt
                      log 10 $ show (lookupDefExact n (gamma defs))
+                     est <- get EST
                      put EST 
                          (record { boundNames $= ((n, (tm, exp)) ::),
                                    toBind $= ((n, (tm, exp)) :: ) } est)
@@ -1062,7 +1090,7 @@ mutual
                                      (_, IMustUnify _ _ _, _) => arg
                                      (InLHS, _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
-                     log 10 $ "Checking argument of type " ++ show (quote (noGam gam) env ty)
+                     log 5 $ "Checking argument of type " ++ show (quote (noGam gam) env ty)
                                  ++ " at " ++ show (rigMult rigf rigc)
                      (argtm, argty) <- check (rigMult rigf rigc)
                                              process (record { implicitsGiven = [] } elabinfo)
