@@ -129,9 +129,9 @@ mutual
                                        (checkImp rigc process elabinfo env nest tm' exp)
                                        (checkImp rigc process elabinfo env nest forcetm exp)
 
-  -- As check, but all we know about the expected type is that it
-  -- cannot be Delayed, so insert a Force if necessary
-  checkForce : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
+  -- Check a term which is a function to be applied, adding a Force if the term
+  -- has a 'Delay' type.
+  checkFnApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
                Reflect annot =>
                RigCount ->
@@ -145,16 +145,17 @@ mutual
                (term : RawImp annot) -> -- Term to elaborate
                (exp : ExpType (Term vars)) ->
                Core annot (Term vars, Term vars) 
-  checkForce rigc process loc elabinfo env nest tm_in exp
+  checkFnApp rigc process loc elabinfo env nest tm_in exp
       = do defs <- get Ctxt
            handle
              (do (ctm, cty) <- check rigc process elabinfo env nest tm_in exp
-                 log 10 $ "Checked force " ++ show (ctm, cty, exp)
+                 log 10 $ "Checked fnapp " ++ show (ctm, cty, exp)
                  case nf defs env cty of
                       NTCon n _ _ _ =>
                           if isDelayType n defs
                              then throw (InternalError "Need force!")
-                             else pure (ctm, cty)
+                             else checkExp rigc process loc elabinfo env nest
+                                           ctm cty exp
                       _ => checkExp rigc process loc elabinfo env nest
                                     ctm cty exp)
              (\err =>
@@ -413,12 +414,12 @@ mutual
         -- resolved, so come back to it
       = delayOnFailure loc env expected rewriteErr (\delayed =>
           do (rulev, rulet) <- check rigc process elabinfo env nest rule Unknown
-             (lemma, pred) <- elabRewrite loc env expected rulet
+             (lemma, pred, predty) <- elabRewrite loc env expected rulet
 
              rname <- genVarName "rule"
              pname <- genVarName "pred"
 
-             let pbind = Let RigW pred Erased
+             let pbind = Let RigW pred predty
              let rbind = Let RigW (weaken rulev) (weaken rulet)
 
              let env' = rbind :: pbind :: env
@@ -1030,16 +1031,21 @@ mutual
              Core annot (Term vars, Term vars) 
   checkApp {vars} rigc process elabinfo loc env nest fn arg expected
       = do 
---            atyn <- addHole loc env TType "argty"
---            argn <- genName "arg"
---            let aty = mkConstantApp atyn env
+--            atyn <- genVarName "arg_type"
+--            aty <- addBoundName loc atyn False env TType
+
 --            log 10 $ "Added hole for argument type " ++ show atyn
--- 
+
 --            let expfn = expty Nothing
 --                           (\e => FnType [] (Bind argn (Pi RigW Explicit aty) (weaken e))) 
 --                           expected
         
-           (fntm, fnty) <- checkForce rigc process loc elabinfo env nest fn Unknown
+           argn <- genVarName "argn"
+           (fntm, fnty) <- checkFnApp rigc process loc elabinfo env nest fn 
+                                      (case expected of
+                                            Unknown => Unknown
+                                            FnType args ret => 
+                                                FnType ((argn, Erased) :: args) ret)
            gam <- get Ctxt
            when (elabMode elabinfo /= InLHS) $
              solveConstraints InTerm Normal
@@ -1062,27 +1068,38 @@ mutual
                                              process (record { implicitsGiven = [] } elabinfo)
                                              env nest arg' 
                                              (FnType [] (quote (noGam gam) env ty))
+                     -- Check the result converts with the name we invented earlier
+--                      (argtm, argty) <- checkExp rigc process loc elabinfo env nest
+--                                                 argtm aty (FnType [] argty)
+
+                     gam <- get Ctxt
                      restoreImps impsUsed
                      let sc' = scdone (toClosure defaultOpts env argtm)
                      log 10 $ "Scope type " ++ show (quote (noGam gam) env sc')
-                     gam <- get Ctxt
                      checkExp rigc process loc elabinfo env nest (App fntm argtm)
                                   (quote gam env sc') expected
                 _ => 
                   do bn <- genVarName "aTy"
-                     -- invent names for the argument and return types
-                     log 5 $ "Inventing arg type for " ++ show (fn, fnty)
-                     (expty, scty) <- inventFnType loc env bn
+                     -- create a hole for the return type
+                     log 5 $ "Inventing return type for " ++ show (fn, fnty)
+                     atyn <- genName "arg_type"
+                     aty <- addBoundName loc atyn False env TType
+                     scn <- genName "res_type"
+                     scty_in <- addBoundName loc scn False env TType
+                     let scty = weaken {n=bn} scty_in
+
+--                      (expty, scty) <- inventFnType loc env bn
+
                      -- Check the argument type against the invented arg type
                      impsUsed <- saveImps
                      (argtm, argty) <- check rigc process (record { implicitsGiven = [] } elabinfo)
-                                             env nest arg (FnType [] expty)
+                                             env nest arg (FnType [] aty)
                      restoreImps impsUsed
                      -- Check the type of 'fn' is an actual function type
                      gam <- get Ctxt
                      (fnchk, _) <-
                          checkExp rigc process loc elabinfo env nest fntm 
-                                  (Bind bn (Pi RigW Explicit expty) scty) 
+                                  (Bind bn (Pi RigW Explicit aty) scty) 
                                   (FnType [] (quote gam env fnty))
                      checkExp rigc process loc elabinfo env nest (App fnchk argtm)
                                   (Bind bn (Let RigW argtm argty) scty) expected

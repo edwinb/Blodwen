@@ -754,14 +754,14 @@ mutual
                             show (quote (noGam gam) env tm)
                       postponeS swap loc env (NApp hd args) tm
   
-  unifyBothApps
+  doUnifyBothApps
            : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              UnifyMode -> annot -> Env Term vars ->
              NHead vars -> List (Closure vars) -> 
              NHead vars -> List (Closure vars) ->
              Core annot (List Name)
-  unifyBothApps _ loc env (NLocal rx xv) [] (NLocal ry yv) []
+  doUnifyBothApps _ loc env (NLocal rx xv) [] (NLocal ry yv) []
      = do gam <- get Ctxt
           if sameVar xv yv
             then pure []
@@ -770,7 +770,7 @@ mutual
                              (quote (noGam gam) env (NApp (NLocal ry yv) []))
   -- Locally bound things, in a term (not LHS). Since we have to unify
   -- for *all* possible values, we can safely unify the arguments.
-  unifyBothApps InTerm loc env (NLocal rx xv) argsx (NLocal ry yv) argsy
+  doUnifyBothApps InTerm loc env (NLocal rx xv) argsx (NLocal ry yv) argsy
      = do gam <- get Ctxt
           if sameVar xv yv
             then unifyArgs InTerm loc env argsx argsy
@@ -780,7 +780,7 @@ mutual
                              show (quote (noGam gam) env (NApp (NLocal ry yv) argsy))
                     postpone loc env (NApp (NLocal rx xv) argsx)
                                      (NApp (NLocal ry yv) argsy)
-  unifyBothApps _ loc env (NLocal rx xv) argsx (NLocal ry yv) argsy
+  doUnifyBothApps _ loc env (NLocal rx xv) argsx (NLocal ry yv) argsy
       = do gam <- get Ctxt
            log 10 $ "Postponing constraint (locals, LHS) " ++
                      show (quote (noGam gam) env (NApp (NLocal rx xv) argsx))
@@ -790,7 +790,7 @@ mutual
                             (NApp (NLocal ry yv) argsy)
   -- If they're both holes, solve the one with the bigger context with
   -- the other
-  unifyBothApps mode loc env (NRef xt hdx) argsx (NRef yt hdy) argsy
+  doUnifyBothApps mode loc env (NRef xt hdx) argsx (NRef yt hdy) argsy
       = do gam <- get Ctxt
            let holex = isHoleNF (gamma gam) hdx
            let holey = isHoleNF (gamma gam) hdy
@@ -812,7 +812,7 @@ mutual
                    then unifyArgs mode loc env argsx argsy
                    else if holex && holey
                            then
-                             (if length argsx >= length argsy
+                             (if localsIn gam argsx >= localsIn gam argsy
                                  then unifyApp False mode loc env (NRef xt hdx) argsx 
                                                        (NApp (NRef yt hdy) argsy)
                                  else unifyApp True mode loc env (NRef yt hdy) argsy 
@@ -823,8 +823,28 @@ mutual
                                                        (NApp (NRef yt hdy) argsy)
                                  else unifyApp True mode loc env (NRef yt hdy) argsy 
                                                        (NApp (NRef xt hdx) argsx))
-  unifyBothApps mode loc env fx ax fy ay
+    where
+      localsIn : Defs -> List (Closure vars) -> Nat
+      localsIn gam [] = 0
+      localsIn gam (c :: cs)
+          = case evalClosure gam c of
+                 NApp (NLocal _ _) _ => S (localsIn gam cs)
+                 _ => localsIn gam cs
+  doUnifyBothApps mode loc env fx ax fy ay
         = unifyApp False mode loc env fx ax (NApp fy ay)
+
+  unifyBothApps
+           : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState annot)} ->
+             UnifyMode -> annot -> Env Term vars ->
+             NHead vars -> List (Closure vars) -> 
+             NHead vars -> List (Closure vars) ->
+             Core annot (List Name)
+  unifyBothApps mode loc env fx ax fy ay
+      = do gam <- get Ctxt
+           if convert gam env (NApp fx ax) (NApp fy ay)
+              then pure []
+              else doUnifyBothApps mode loc env fx ax fy ay
   
   -- Comparing multiplicities when converting pi binders
   subRig : RigCount -> RigCount -> Bool
@@ -986,11 +1006,11 @@ mutual
 
   export
   Unify Term where
-    -- TODO: Don't just go to values, try to unify the terms directly
-    -- and avoid normalisation as far as possible
     unifyD _ _ mode loc env x y 
           = do gam <- get Ctxt
-               unify mode loc env (nf gam env x) (nf gam env y)
+               if convert gam env x y
+                  then pure []
+                  else unify mode loc env (nf gam env x) (nf gam env y)
 
 -- Try again to solve the given named constraint, and return the list
 -- of constraint names are generated when trying to solve it.

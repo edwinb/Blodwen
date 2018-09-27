@@ -65,7 +65,7 @@ elabRewrite : {auto c : Ref Ctxt Defs} ->
               annot -> Env Term vars ->
               (expected : Term vars) -> 
               (rulety : Term vars) ->
-              Core annot (Name, Term vars)
+              Core annot (Name, Term vars, Term vars)
 elabRewrite loc env expected rulety
     = do defs <- get Ctxt
          parg <- genVarName "rwarg"
@@ -76,9 +76,10 @@ elabRewrite loc env expected rulety
          let rwexp_sc = replace 0 defs env lt parg (nf defs env expected)
          let pred = Bind parg (Lam RigW Explicit Erased)
                           (refToLocal (Just RigW) parg parg rwexp_sc)
+         let predty = Bind parg (Pi RigW Explicit Erased) Erased
 
          -- if the rewritten expected type converts with the original,
          -- then the rewrite did nothing, which is an error
          when (convert defs env rwexp_sc expected) $
              throw (RewriteNoChange loc env rulety expected)
-         pure (lemn, pred)
+         pure (lemn, pred, predty)
