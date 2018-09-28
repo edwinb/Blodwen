@@ -1,0 +1,5 @@
+1/1: Building eta (eta.blod)
+eta.blod:4:26--4:28:Unsolved holes:
+Main.{_:6} introduced at eta.blod:4:26--4:28
+Main.{_:7} introduced at eta.blod:4:36--4:38
+

@@ -232,6 +232,7 @@ instantiate loc env metavar smvs otm tm {newvars}
                             do let soln = newDef ty Public 
                                                (PMDef True [] (STerm rhs) (STerm rhs))
                                log 5 $ "Instantiated: " ++ show metavar ++
+                                            " : " ++ show ty ++ 
                                             " = " ++ show rhs
                                addDef metavar soln
                                removeHoleName metavar
@@ -951,15 +952,21 @@ mutual
     -- arguments, eta expand and try again
     unifyD _ _ mode loc env tmx@(NBind x (Lam cx ix tx) scx) tmy
         = do gam <- get Ctxt
+             log 10 $ ("Eta: " ++ show (quote (noGam gam) env tmx) ++
+                               " and " ++ show (quote (noGam gam) env tmy))
              let etay = nf gam env 
                            (Bind x (Lam cx ix (quote (noGam gam) env tx))
                                    (App (weaken (quote (noGam gam) env tmy)) (Local Nothing Here)))
+             log 10 $ ("Expand: " ++ show (quote (noGam gam) env etay))
              unify mode loc env tmx etay
     unifyD _ _ mode loc env tmx tmy@(NBind y (Lam cy iy ty) scy)
         = do gam <- get Ctxt
+             log 10 $ ("Eta: " ++ show (quote (noGam gam) env tmx) ++
+                               " and " ++ show (quote (noGam gam) env tmy))
              let etax = nf gam env 
                            (Bind y (Lam cy iy (quote (noGam gam) env ty))
                                    (App (weaken (quote (noGam gam) env tmx)) (Local Nothing Here)))
+             log 10 $ ("Expand: " ++ show (quote (noGam gam) env etax))
              unify mode loc env etax tmy
     unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
         = do gam <- get Ctxt

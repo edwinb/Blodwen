@@ -1,0 +1,19 @@
+data Test : Type where
+     MkTest : Integer -> Integer -> Test
+
+-- We don't know the types and x and y in the declaration, because
+-- they have nothing to do with MkTest and the types can be different
+-- in =
+-- However: the ?s here get resolved to 'x' and 'y' when we run Refl,
+-- and that's wrong because they need to have type Integer!
+%logging 5
+eta1: MkTest = (\x : a => \y : b => MkTest ? ?)
+eta1 = Refl
+%logging 0
+
+eta2: (MkTest 1) = (\x => MkTest ? x)
+eta2 = Refl
+
+eta3: (f : a -> b) -> f = (\x => f x)
+eta3 f = Refl
+
