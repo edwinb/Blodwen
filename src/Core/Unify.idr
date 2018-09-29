@@ -2,6 +2,7 @@ module Core.Unify
 
 import Core.CaseTree
 import Core.Context
+import Core.GetType
 import Core.Normalise
 import Core.TT
 import public Core.UnifyState
@@ -414,7 +415,11 @@ mutual
       = case lookupDefExact n gam of
              Just (Hole _ pvar _) => not pvar
              _ => False
-  
+ 
+  isHoleApp : Gamma -> NF vars -> Bool
+  isHoleApp gam (NApp (NRef _ n) _) = isHoleNF gam n
+  isHoleApp _ _ = False
+
   isPatVar : Gamma -> Name -> Bool
   isPatVar gam n
       = case lookupDefExact n gam of
@@ -943,6 +948,76 @@ mutual
                         else convertError loc env 
                                      (quote (noGam gam) env x)
                                      (quote (noGam gam) env y)
+  
+  unifyNoEta
+           : {auto c : Ref Ctxt Defs} ->
+             {auto u : Ref UST (UState annot)} ->
+             UnifyMode -> annot -> Env Term vars ->
+             NF vars -> NF vars ->
+             Core annot (List Name)
+  unifyNoEta mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
+      = do gam <- get Ctxt
+           if tagx == tagy
+             then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NDCon x tagx ax xs))
+                                ++ " and " ++ show (quote (noGam gam) env (NDCon y tagy ay ys)))
+                     unifyArgs mode loc env xs ys
+             else convertError loc env 
+                       (quote (noGam gam) env (NDCon x tagx ax xs))
+                       (quote (noGam gam) env (NDCon y tagy ay ys))
+  unifyNoEta mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
+      = do gam <- get Ctxt
+           if x == y
+             then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NTCon x tagx ax xs))
+                                ++ " and " ++ show (quote (noGam gam) env (NTCon y tagy ay ys)))
+                     unifyArgs mode loc env xs ys
+             -- TODO: Type constructors are not necessarily injective.
+             -- If we don't know it's injective, need to postpone the
+             -- constraint. But before then, we need some way to decide
+             -- what's injective...
+--                then postpone loc env (quote empty env (NTCon x tagx ax xs))
+--                                      (quote empty env (NTCon y tagy ay ys))
+             else convertError loc env 
+                       (quote (noGam gam) env (NTCon x tagx ax xs))
+                       (quote (noGam gam) env (NTCon y tagy ay ys))
+  unifyNoEta mode loc env (NPrimVal x) (NPrimVal y) 
+      = if x == y 
+           then pure [] 
+           else convertError loc env (PrimVal x) (PrimVal y)
+  unifyNoEta mode loc env (NApp fx ax) (NApp fy ay)
+      = unifyBothApps mode loc env fx ax fy ay
+  unifyNoEta mode loc env (NApp hd args) y 
+      = unifyApp False mode loc env hd args y
+  unifyNoEta mode loc env y (NApp hd args)
+      = unifyApp True mode loc env hd args y
+  unifyNoEta mode loc env x NErased = pure []
+  unifyNoEta mode loc env NErased y = pure []
+  unifyNoEta mode loc env NType NType = pure []
+  unifyNoEta mode loc env x y 
+      = do gam <- get Ctxt
+           log 10 $ "Conversion check: " ++ show (quote (noGam gam) env x) 
+                              ++ " and " ++ show (quote (noGam gam) env y)
+           unifyIfEq False loc env x y
+
+  -- Try to get the type of the application inside the given term, to use in
+  -- eta expansion. If there's no application, return Nothing
+  getEtaType : {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState annot)} ->
+               annot -> Env Term vars -> Term vars ->
+               Core annot (Maybe (Term vars))
+  getEtaType loc env (Bind n b sc)
+      = do Just ty <- getEtaType loc (b :: env) sc
+               | Nothing => pure Nothing
+           gam <- get Ctxt
+           pure (shrinkTerm (quote (noGam gam) (b :: env) ty)
+                            (DropCons SubRefl))
+  getEtaType loc env (App f _)
+      = do fty <- getType loc env f
+           log 10 $ "Function type: " ++ show fty
+           gam <- get Ctxt
+           case nf gam env fty of
+                NBind _ (Pi _ _ ty) sc => pure (Just (quote (noGam gam) env ty))
+                _ => pure Nothing
+  getEtaType loc env _ = pure Nothing
 
   export
   Unify NF where
@@ -954,62 +1029,33 @@ mutual
         = do gam <- get Ctxt
              log 10 $ ("Eta: " ++ show (quote (noGam gam) env tmx) ++
                                " and " ++ show (quote (noGam gam) env tmy))
-             let etay = nf gam env 
-                           (Bind x (Lam cx ix (quote (noGam gam) env tx))
-                                   (App (weaken (quote (noGam gam) env tmy)) (Local Nothing Here)))
-             log 10 $ ("Expand: " ++ show (quote (noGam gam) env etay))
-             unify mode loc env tmx etay
+             if isHoleApp (gamma gam) tmy
+                then unifyNoEta mode loc env tmx tmy
+                else do ety <- getEtaType loc env (quote (noGam gam) env tmx)
+                        case ety of
+                             Just argty =>
+                               do let etay = nf gam env 
+                                                (Bind x (Lam cx ix argty)
+                                                        (App (weaken (quote (noGam gam) env tmy)) (Local Nothing Here)))
+                                  log 10 $ ("Expand: " ++ show (quote (noGam gam) env etay))
+                                  unify mode loc env tmx etay
+                             _ => unifyNoEta mode loc env tmx tmy
     unifyD _ _ mode loc env tmx tmy@(NBind y (Lam cy iy ty) scy)
         = do gam <- get Ctxt
              log 10 $ ("Eta: " ++ show (quote (noGam gam) env tmx) ++
                                " and " ++ show (quote (noGam gam) env tmy))
-             let etax = nf gam env 
-                           (Bind y (Lam cy iy (quote (noGam gam) env ty))
-                                   (App (weaken (quote (noGam gam) env tmx)) (Local Nothing Here)))
-             log 10 $ ("Expand: " ++ show (quote (noGam gam) env etax))
-             unify mode loc env etax tmy
-    unifyD _ _ mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
-        = do gam <- get Ctxt
-             if tagx == tagy
-               then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NDCon x tagx ax xs))
-                                  ++ " and " ++ show (quote (noGam gam) env (NDCon y tagy ay ys)))
-                       unifyArgs mode loc env xs ys
-               else convertError loc env 
-                         (quote (noGam gam) env (NDCon x tagx ax xs))
-                         (quote (noGam gam) env (NDCon y tagy ay ys))
-    unifyD _ _ mode loc env (NTCon x tagx ax xs) (NTCon y tagy ay ys)
-        = do gam <- get Ctxt
-             if x == y
-               then do log 5 ("Constructor " ++ show (quote (noGam gam) env (NTCon x tagx ax xs))
-                                  ++ " and " ++ show (quote (noGam gam) env (NTCon y tagy ay ys)))
-                       unifyArgs mode loc env xs ys
-               -- TODO: Type constructors are not necessarily injective.
-               -- If we don't know it's injective, need to postpone the
-               -- constraint. But before then, we need some way to decide
-               -- what's injective...
---                then postpone loc env (quote empty env (NTCon x tagx ax xs))
---                                      (quote empty env (NTCon y tagy ay ys))
-               else convertError loc env 
-                         (quote (noGam gam) env (NTCon x tagx ax xs))
-                         (quote (noGam gam) env (NTCon y tagy ay ys))
-    unifyD _ _ mode loc env (NPrimVal x) (NPrimVal y) 
-        = if x == y 
-             then pure [] 
-             else convertError loc env (PrimVal x) (PrimVal y)
-    unifyD _ _ mode loc env (NApp fx ax) (NApp fy ay)
-        = unifyBothApps mode loc env fx ax fy ay
-    unifyD _ _ mode loc env (NApp hd args) y 
-        = unifyApp False mode loc env hd args y
-    unifyD _ _ mode loc env y (NApp hd args)
-        = unifyApp True mode loc env hd args y
-    unifyD _ _ mode loc env x NErased = pure []
-    unifyD _ _ mode loc env NErased y = pure []
-    unifyD _ _ mode loc env NType NType = pure []
-    unifyD _ _ mode loc env x y 
-        = do gam <- get Ctxt
-             log 10 $ "Conversion check: " ++ show (quote (noGam gam) env x) 
-                                ++ " and " ++ show (quote (noGam gam) env y)
-             unifyIfEq False loc env x y
+             if isHoleApp (gamma gam) tmx
+                then unifyNoEta mode loc env tmx tmy
+                else do ety <- getEtaType loc env (quote (noGam gam) env tmy)
+                        case ety of
+                             Just argty =>
+                               do let etax = nf gam env 
+                                                (Bind y (Lam cy iy argty)
+                                                        (App (weaken (quote (noGam gam) env tmx)) (Local Nothing Here)))
+                                  log 10 $ ("Expand: " ++ show (quote (noGam gam) env etax))
+                                  unify mode loc env etax tmy
+                             _ => unifyNoEta mode loc env tmx tmy
+    unifyD _ _ mode loc env tmx tmy = unifyNoEta mode loc env tmx tmy
 
   export
   Unify Term where

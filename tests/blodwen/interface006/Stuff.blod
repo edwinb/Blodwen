@@ -93,7 +93,7 @@ snd (x, y) = y
 namespace DPair
     public export
     data DPair : (a : Type) -> (a -> Type) -> Type where
-         MkDPair : (x : a) -> p x -> DPair a p
+         MkDPair : (x : a) -> prop x -> DPair a prop
 
     fst : DPair a p -> a
     fst (MkDPair x y) = x

@@ -99,6 +99,7 @@ parameters (loc : annot, gam : Defs)
     discharge nm (PVTy c ty) bindty scope scopety 
          = (Bind nm (PVTy c ty) scope, bindty)
 
+    export
     chkConstant : Constant -> (Term vars, Term vars)
     chkConstant (I x) = (PrimVal (I x), PrimVal IntType)
     chkConstant (BI x) = (PrimVal (BI x), PrimVal IntegerType)

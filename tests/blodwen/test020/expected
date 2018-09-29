@@ -1,5 +1,12 @@
 1/1: Building eta (eta.blod)
-eta.blod:4:26--4:28:Unsolved holes:
-Main.{_:6} introduced at eta.blod:4:26--4:28
-Main.{_:7} introduced at eta.blod:4:36--4:38
+eta.blod:14:10--16:1:While processing right hand side of Main.etaBad at eta.blod:14:1--16:1:
+When unifying MkTest = MkTest and MkTest = (\x => (\y => (MkTest ({_:53} x y) ({_:54} x y))))
+Mismatch between:
+	Integer
+and
+	Nat
+eta.blod:13:32--13:32:Unsolved holes:
+Main.{_:50} introduced at eta.blod:13:32--13:32
+Main.{_:53} introduced at eta.blod:13:45--13:47
+Main.{_:54} introduced at eta.blod:13:47--13:48
 
