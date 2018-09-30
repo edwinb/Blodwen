@@ -122,14 +122,15 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               {auto i : Ref ImpST (ImpState annot)} ->
               Reflect annot =>
               Elaborator annot ->
+              Bool ->
               Name ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
               Core annot (Maybe (Clause, Clause)) -- Compile time vs run time clauses
                      -- (the run time version has had 0-multiplicities erased)
-checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
+checkClause elab incase defining env nest (ImpossibleClause loc lhs_raw)
     = handleClause
          (do lhs_raw <- lhsInCurrentNS nest lhs_raw
-             (lhs_in, _, lhsty_in) <- inferTerm elab defining env nest PATTERN InLHS lhs_raw
+             (lhs_in, _, lhsty_in) <- inferTerm elab incase defining env nest PATTERN InLHS lhs_raw
              gam <- get Ctxt
              let lhs = normaliseHoles gam env lhs_in
              let lhsty = normaliseHoles gam env lhsty_in
@@ -142,18 +143,19 @@ checkClause elab defining env nest (ImpossibleClause loc lhs_raw)
                                     then pure Nothing
                                     else throw (ValidCase loc env (Right err))
                        _ => throw (ValidCase loc env (Right err)))
-checkClause {vars} elab defining env nest (PatClause loc lhs_raw rhs_raw)
+checkClause {vars} elab incase defining env nest (PatClause loc lhs_raw rhs_raw)
     = do gam <- get Ctxt
          lhs_raw_in <- lhsInCurrentNS nest lhs_raw
          let lhs_raw = implicitsAs gam vars lhs_raw_in
          log 5 ("Checking LHS: " ++ show lhs_raw)
          (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
-              inferTerm elab defining env nest PATTERN InLHS lhs_raw
+              inferTerm elab incase defining env nest PATTERN InLHS lhs_raw
          -- Check there's no holes or constraints in the left hand side
          -- we've just checked - they must be resolved now (that's what
          -- True means)
          gam <- get Ctxt
-         wrapError (InLHS loc defining) $ checkUserHoles True
+         when (not incase) $
+           wrapError (InLHS loc defining) $ checkUserHoles True
          -- Normalise the LHS to get any functions or let bindings evaluated
          -- (this might be allowed, e.g. for 'fromInteger')
          let lhs = normalise gam env lhs_in
@@ -177,7 +179,7 @@ checkClause {vars} elab defining env nest (PatClause loc lhs_raw rhs_raw)
          log 10 ("Old env: " ++ show env)
          log 10 ("New env: " ++ show env')
          (rhs, rhs_erased) <- wrapError (InRHS loc defining) $
-                checkTerm elab defining env' env prf nest' NONE InExpr rhs_raw reqty
+                checkTerm elab incase defining env' env prf nest' NONE InExpr rhs_raw reqty
          log 5 ("Checked and erased RHS: " ++ show rhs_erased)
 
          -- only need to check body for visibility if name is
@@ -228,16 +230,17 @@ processDef : {auto c : Ref Ctxt Defs} ->
              {auto i : Ref ImpST (ImpState annot)} ->
              Reflect annot =>
              Elaborator annot ->
+             Bool ->
              Env Term vars -> NestedNames vars -> annot ->
              Name -> List (ImpClause annot) -> 
              Core annot ()
-processDef elab env nest loc n_in cs_raw
+processDef elab incase env nest loc n_in cs_raw
     = do gam <- getCtxt
          n <- inCurrentNS n_in
          case lookupDefTyExact n gam of
               Nothing => throw (NoDeclaration loc n)
               Just (None, ty) =>
-                do cs <- traverse (checkClause elab n env nest) cs_raw
+                do cs <- traverse (checkClause elab incase n env nest) cs_raw
                    (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
                    (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
                    

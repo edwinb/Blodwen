@@ -149,7 +149,7 @@ execExp : {auto c : Ref Ctxt Defs} ->
 execExp ctm
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
-         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+         (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          execute !findCG tm
          
@@ -187,7 +187,7 @@ process (Eval itm)
             _ => 
               do i <- newRef ImpST (initImpState {annot = FC})
                  ttimp <- desugar AnyExpr [] itm
-                 (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+                 (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
                                        Env.Nil (MkNested []) NONE InExpr ttimp 
                  gam <- get Ctxt
                  opts <- get ROpts
@@ -212,7 +212,7 @@ process (Check (PRef fc fn))
 process (Check itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar AnyExpr [] itm
-         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+         (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
          itm <- resugar [] (normaliseHoles gam [] tm)
@@ -250,7 +250,7 @@ process Edit
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
-         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+         (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          compile !findCG tm outfile
          pure True

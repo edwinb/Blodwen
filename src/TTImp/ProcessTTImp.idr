@@ -33,34 +33,35 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
               (Reflect annot, Reify annot) =>
+              (incase : Bool) ->
               Env Term vars ->
               NestedNames vars ->
               ImpDecl annot -> 
               Core annot ()
-processDecl env nest (IClaim loc vis fnopts ty) 
+processDecl incase env nest (IClaim loc vis fnopts ty) 
     = processType (\c, u, i => processDecl {c} {u} {i})
                   env nest vis fnopts ty
-processDecl env nest (IDef loc n cs) 
+processDecl incase env nest (IDef loc n cs) 
     = processDef (\c, u, i => processDecl {c} {u} {i})
-                 env nest loc n cs
-processDecl env nest (IData loc vis d) 
+                 incase env nest loc n cs
+processDecl incase env nest (IData loc vis d) 
     = processData (\c, u, i => processDecl {c} {u} {i})
                   env nest vis d
-processDecl env nest (INamespace loc ns ds)
+processDecl incase env nest (INamespace loc ns ds)
     = do oldns <- getNS
          extendNS (reverse ns)
-         traverse (processDecl env nest) ds
+         traverse (processDecl False env nest) ds
          setNS oldns
-processDecl env nest (IReflect loc tm)
+processDecl incase env nest (IReflect loc tm)
     = processReflect loc (\c, u, i => processDecl {c} {u} {i})
                      env nest tm
-processDecl env nest (ImplicitNames loc ns) 
+processDecl incase env nest (ImplicitNames loc ns) 
     = do traverse (\ x => addImp (fst x) (snd x)) ns
          pure ()
-processDecl env nest (IHint loc n Nothing) = addGlobalHint loc True n
-processDecl env nest (IHint loc n (Just ty)) = addHintFor loc ty n True
-processDecl env nest (IPragma p) = p env nest
-processDecl env nest (ILog lvl) = setLogLevel lvl
+processDecl incase env nest (IHint loc n Nothing) = addGlobalHint loc True n
+processDecl incase env nest (IHint loc n (Just ty)) = addHintFor loc ty n True
+processDecl incase env nest (IPragma p) = p env nest
+processDecl incase env nest (ILog lvl) = setLogLevel lvl
 
 export
 processDecls : {auto c : Ref Ctxt Defs} ->
@@ -71,7 +72,7 @@ processDecls : {auto c : Ref Ctxt Defs} ->
                Core annot ()
 processDecls env nest decls
     = do i <- newRef ImpST (initImpState {annot})
-         traverse (processDecl env nest) decls
+         traverse (processDecl False env nest) decls
          dumpConstraints 0 True
          hs <- getHoleNames
          traverse addToSave hs

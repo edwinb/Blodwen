@@ -107,7 +107,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
                          (apply (IVar fc iname) ps)
          let impTyDecl = IClaim fc vis opts (MkImpTy fc impName impTy)
          log 5 $ "Implementation type: " ++ show impTy
-         processDecl env nest impTyDecl
+         processDecl False env nest impTyDecl
          
          -- If the body is empty, we're done for now (just declaring that
          -- the implementation exists and define it later)
@@ -127,7 +127,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
                fns <- traverse (topMethType impName impsp (params cdata)
                                             (map fst (methods cdata))) 
                                (methods cdata)
-               traverse (processDecl env nest) (map mkTopMethDecl fns)
+               traverse (processDecl False env nest) (map mkTopMethDecl fns)
 
                -- 3. Build the record for the implementation
                let mtops = map (Basics.fst . snd) fns
@@ -143,7 +143,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
                                  ++ map (mkMethField impsp fldTys) fns)
                let impFn = IDef fc impName [PatClause fc ilhs irhs]
                log 5 $ "Implementation record: " ++ show impFn
-               traverse (processDecl env nest) [impFn]
+               traverse (processDecl False env nest) [impFn]
 
                -- 4. (TODO: Order method bodies to be in declaration order, in
                --    case of dependencies)
@@ -158,7 +158,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
 
                body' <- traverse (updateBody (map methNameUpdate fns)) body
                log 10 $ "Implementation body: " ++ show body'
-               traverse (processDecl env nest) body'
+               traverse (processDecl False env nest) body'
                -- Reset the open hints (remove the named implementation)
                setOpenHints hs
                pure ()) mbody

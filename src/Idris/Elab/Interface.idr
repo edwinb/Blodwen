@@ -274,7 +274,7 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                                                   meth_names
                                                   (map fst params)) meth_sigs
              log 5 $ "Top level methods: " ++ show fns
-             traverse (processDecl env nest) fns
+             traverse (processDecl False env nest) fns
              pure ()
 
     -- Check that a default definition is correct. We just discard it here once
@@ -296,10 +296,10 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
              let ity = apply (IVar fc iname) (map (IVar fc) (map fst params))
              let dty_imp = bindTypeNames vars (bindIFace fc ity dty)
              let dtydecl = IClaim fc vis [] (MkImpTy fc dn dty_imp) 
-             processDecl env nest dtydecl
+             processDecl False env nest dtydecl
 
              let cs' = map (changeName dn) cs
-             processDecl env nest (IDef fc dn cs')
+             processDecl False env nest (IDef fc dn cs')
              -- Reset the original context, we don't need to keep the definition
              put Ctxt orig
              pure (n, cs)
@@ -328,6 +328,6 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                                                        meth_names
                                                        (map fst params)) nconstraints
              log 5 $ "Constraint hints from " ++ show constraints ++ ": " ++ show chints
-             traverse (processDecl env nest) chints
+             traverse (processDecl False env nest) chints
              pure ()
 

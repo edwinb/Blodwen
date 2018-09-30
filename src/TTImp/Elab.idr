@@ -46,6 +46,7 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto i : Ref ImpST (ImpState annot)} ->
            Reflect annot =>
            Elaborator annot ->
+           Bool ->
            Name ->
            Env Term vars -> Env Term outer -> SubVars outer vars -> NestedNames vars ->
            ImplicitMode -> ElabMode ->
@@ -54,8 +55,10 @@ elabTerm : {auto c : Ref Ctxt Defs} ->
            Core annot (Term vars, -- checked term
                        Term vars, -- checked and erased term
                        Term vars) -- type
-elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
-    = do oldhs <- saveHoles
+elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm tyin
+    = do oldhs <- if not incase 
+                     then saveHoles
+                     else pure []
          e <- newRef EST (initEStateSub defining env' sub)
          let rigc = getRigNeeded elabmode
          (chktm_in, ty) <- check {e} rigc process 
@@ -76,16 +79,18 @@ elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
          chktm <- retryDelayedIn env (getAnnot tm) (normaliseHoles gam env chktm_in)
          log 10 $ "Check after delays: " ++ show chktm
 
-         -- resolve any default hints
-         solveConstraints (case elabmode of
-                                InLHS => InLHS
-                                _ => InTerm) Defaults
-         -- perhaps resolving defaults helps...
-         -- otherwise, this last go is most likely just to give us more
-         -- helpful errors.
-         solveConstraints (case elabmode of
-                                InLHS => InLHS
-                                _ => InTerm) LastChance
+         -- As long as we're not in a case block, finish off constraint solving
+         when (not incase) $
+           -- resolve any default hints
+           do solveConstraints (case elabmode of
+                                     InLHS => InLHS
+                                     _ => InTerm) Defaults
+              -- perhaps resolving defaults helps...
+              -- otherwise, this last go is most likely just to give us more
+              -- helpful errors.
+              solveConstraints (case elabmode of
+                                     InLHS => InLHS
+                                     _ => InTerm) LastChance
 
          dumpDots
          checkDots
@@ -133,7 +138,8 @@ elabTerm {vars} process defining env env' sub nest impmode elabmode tm tyin
          -- Set current holes back to what they were, but removing any
          -- that were solved in the last session
          allhs <- getHoleInfo
-         restoreHoles (filter (\x => not (snd x `elem` map snd allhs)) oldhs)
+         when (not incase) $
+            restoreHoles (filter (\x => not (snd x `elem` map snd allhs)) oldhs)
 
          -- On the LHS, finish by tidying up the plets (changing things that
          -- were of the form x@_, where the _ is inferred to be a variable,
@@ -154,13 +160,15 @@ inferTerm : {auto c : Ref Ctxt Defs} ->
             {auto i : Ref ImpST (ImpState annot)} ->
             Reflect annot =>
             Elaborator annot -> 
+            Bool ->
             Name ->
             Env Term vars -> NestedNames vars ->
             ImplicitMode -> ElabMode ->
             (term : RawImp annot) ->
             Core annot (Term vars, Term vars, Term vars) 
-inferTerm process defining env nest impmode elabmode tm 
-    = elabTerm process defining env env SubRefl nest impmode elabmode tm Unknown
+inferTerm process incase defining env nest impmode elabmode tm 
+    = elabTerm process incase defining env env SubRefl nest 
+               impmode elabmode tm Unknown
 
 export
 checkTerm : {auto c : Ref Ctxt Defs} ->
@@ -168,14 +176,15 @@ checkTerm : {auto c : Ref Ctxt Defs} ->
             {auto i : Ref ImpST (ImpState annot)} ->
             Reflect annot =>
             Elaborator annot ->
+            Bool ->
             Name ->
             Env Term vars -> Env Term outer ->
             SubVars outer vars -> NestedNames vars ->
             ImplicitMode -> ElabMode ->
             (term : RawImp annot) -> (ty : Term vars) ->
             Core annot (Term vars, Term vars) 
-checkTerm process defining env env' sub nest impmode elabmode tm ty 
-    = do (tm_elab, tm_erase, _) <- elabTerm process defining env env' sub nest 
+checkTerm process incase defining env env' sub nest impmode elabmode tm ty 
+    = do (tm_elab, tm_erase, _) <- elabTerm process incase defining env env' sub nest 
                                             impmode elabmode tm (FnType [] ty)
          pure (tm_elab, tm_erase)
 

@@ -69,6 +69,7 @@ Elaborator annot
     = {vars : List Name} ->
       Ref Ctxt Defs -> Ref UST (UState annot) ->
       Ref ImpST (ImpState annot) ->
+      (incase : Bool) ->
       Env Term vars -> NestedNames vars -> 
       ImpDecl annot -> Core annot ()
 

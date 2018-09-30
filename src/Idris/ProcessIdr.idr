@@ -24,7 +24,7 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               PDecl -> Core FC (Maybe (Error FC))
 processDecl decl
     = catch (do impdecls <- desugarDecl [] decl 
-                traverse (ProcessTTImp.processDecl [] (MkNested [])) impdecls
+                traverse (ProcessTTImp.processDecl False [] (MkNested [])) impdecls
                 pure Nothing)
             (\err => do giveUpSearch -- or we'll keep trying...
                         pure (Just err))

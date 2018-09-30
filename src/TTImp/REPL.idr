@@ -26,7 +26,7 @@ process : {auto c : Ref Ctxt Defs} ->
           ImpREPL () -> Core () Bool
 process (Eval ttimp)
     = do i <- newRef ImpST (initImpState {annot = ()})
-         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+         (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
          coreLift (putStrLn (show (normalise gam [] tm) ++ " : " ++
@@ -34,7 +34,7 @@ process (Eval ttimp)
          pure True
 process (Check ttimp)
     = do i <- newRef ImpST (initImpState {annot = ()})
-         (tm, _, ty) <- inferTerm elabTop (UN "[input]") 
+         (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          gam <- get Ctxt
          coreLift (putStrLn (show tm ++ " : " ++

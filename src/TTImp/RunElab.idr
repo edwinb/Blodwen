@@ -69,7 +69,7 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
     elabCon defs "DefineFunc" [fn, cs]
         = do fn <- doReify (evalClosure defs fn)
              cs <- doReify (evalClosure defs cs)
-             processDef elab env nest loc fn cs
+             processDef elab False env nest loc fn cs
              retUnit
     elabCon defs n args = failWith defs
 elabScript loc elab env nest tm 
@@ -86,7 +86,7 @@ processReflect : {auto c : Ref Ctxt Defs} ->
                  Env Term vars -> NestedNames vars -> RawImp annot -> 
                  Core annot ()
 processReflect loc elab env nest tm
-    = do (etm, ety) <- inferTerm elab (UN "%runElab") env nest NONE InExpr tm
+    = do (etm, ety) <- inferTerm elab False (UN "%runElab") env nest NONE InExpr tm
          defs <- get Ctxt
          res <- elabScript loc elab env nest (nf defs env etm)
          log 0 $ "Elab script ended with " ++ show (quote defs env res)

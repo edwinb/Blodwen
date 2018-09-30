@@ -774,7 +774,7 @@ mutual
            let nest' = record { names $= ((casen, (casen, 
                                     (mkConstantAppFull casen pre_env))) ::) } 
                               nest
-           process c u i pre_env nest' (IDef loc casen alts')
+           process c u i True pre_env nest' (IDef loc casen alts')
 
            pure (App (applyToOthers (mkConstantAppFull casen env) env smaller) 
                      scrtm, caseretty)
@@ -969,7 +969,7 @@ mutual
            let f = defining est
            let nest' = record { names $= ((map (applyEnv f) defNames) ++) } nest
            let env' = dropLinear env
-           traverse (process c u i env' nest') (map (updateName nest') nested)
+           traverse (process c u i False env' nest') (map (updateName nest') nested)
            check rigc process elabinfo env nest' scope expected
     where
       -- For the local definitions, don't allow access to linear things
