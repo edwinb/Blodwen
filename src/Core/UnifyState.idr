@@ -213,11 +213,15 @@ removeHoleName n
                            delayedHoles $= dropFirst (\x, y => x == snd y) n } 
                   ust)
 
+-- A hole is 'valid' - i.e. okay to leave unsolved for later - as long as it's
+-- not guarded by a unification problem (in which case, report that the unification
+-- problem is unsolved) and it doesn't depend on an implicit pattern variable
+-- (in which case, perhaps suggest binding it explicitly)
 export
-failIfGuard : {auto c : Ref Ctxt Defs} ->
-              {auto u : Ref UST (UState annot)} ->
-              (anot, Name) -> Core annot ()
-failIfGuard (loc, hole)
+checkValidHole : {auto c : Ref Ctxt Defs} ->
+                 {auto u : Ref UST (UState annot)} ->
+                 (annot, Name) -> Core annot ()
+checkValidHole (loc, hole)
     = do gam <- get Ctxt
          ust <- get UST
          case lookupDefTyExact hole (gamma gam) of
@@ -229,7 +233,16 @@ failIfGuard (loc, hole)
                        Just (MkSeqConstraint loc env (x :: xs) (y :: ys)) =>
                             throw (CantSolveEq loc env x y)
                        _ => pure ()
+              Just (_, ty) => 
+                  do traverse checkRef (toList (getRefs ty))
+                     pure ()
               _ => pure ()
+  where
+    checkRef : Name -> Core annot ()
+    checkRef (PV n f)
+        = throw (GenericMsg loc ("Hole cannot depend on an unbound implicit " ++
+                                 show n))
+    checkRef _ = pure ()
 
 -- Bool flag says whether it's an error for there to have been holes left
 -- in the last session. Usually we can leave them to the end, but it's not
@@ -241,7 +254,7 @@ checkUserHoles : {auto u : Ref UST (UState annot)} ->
                  Bool -> Core annot ()
 checkUserHoles now
     = do hs <- getCurrentHoleInfo
-         traverse failIfGuard hs
+         traverse checkValidHole hs
          let hs' = if any isUserName (map snd hs) then [] else hs
          when (not (isNil hs') && now) $ throw (UnsolvedHoles hs)
          -- Note the hole names, to ensure they are resolved

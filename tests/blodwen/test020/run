@@ -1,3 +1,4 @@
 $1 --check eta.blod
+$1 --check eta2.blod
 
 rm -rf build

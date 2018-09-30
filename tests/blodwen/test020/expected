@@ -10,3 +10,16 @@ Main.{_:50} introduced at eta.blod:13:32--13:32
 Main.{_:53} introduced at eta.blod:13:45--13:47
 Main.{_:54} introduced at eta.blod:13:47--13:48
 
+1/1: Building eta2 (eta2.blod)
+eta2.blod:1:25--1:26:While processing type of Main.test at eta2.blod:1:1--2:1:
+Hole cannot depend on an unbound implicit a
+eta2.blod:2:1--4:1:No type declaration for Main.test
+eta2.blod:5:44--6:1:While processing right hand side of Main.test2 at eta2.blod:5:1--6:1:
+When unifying S = S and S = (\x => (S ?_))
+Mismatch between:
+	Nat
+and
+	a
+eta2.blod:4:9--5:1:Unsolved holes:
+Main.{_:6} introduced at eta2.blod:4:9--5:1
+
