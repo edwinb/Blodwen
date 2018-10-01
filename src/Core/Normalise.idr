@@ -384,8 +384,10 @@ mutual
     convGen num defs env (NBind x b scope) (NBind x' b' scope') 
         = do var <- genName num "convVar"
              let c = MkClosure defaultOpts [] env (Ref Bound var)
-             convBinders num defs env b b'
-             convGen num defs env (scope c) (scope' c)
+             bok <- convBinders num defs env b b'
+             if bok
+                then convGen num defs env (scope c) (scope' c)
+                else pure False
     convGen num defs env tmx@(NBind x (Lam c ix tx) scx) tmy
         = let etay = nf defs env (Bind x (Lam c ix (quote (noGam defs) env tx))
                                    (App (weaken (quote (noGam defs) env tmy))

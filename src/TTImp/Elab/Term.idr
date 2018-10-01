@@ -189,11 +189,10 @@ mutual
                log 2 $ "Converting in fnapp: " ++
                        show (quote defs env topty) ++ " and " ++
                        show (ret)
-               pure ()
---                try (do [] <- convert loc (elabMode elabinfo) env topty (nf defs env ret) 
---                              | _ => throw (InternalError "No such luck")
---                        pure ())
---                    (pure ())
+               try (do [] <- convert loc (elabMode elabinfo) env topty (nf defs env ret) 
+                             | _ => throw (InternalError "No such luck")
+                       pure ())
+                   (pure ())
       unifyFnArgs (NBind b (Pi c p t) scf) topty ((an, argty) :: args) ret
           = unifyFnArgs (scf (toClosure defaultOpts env Erased)) topty 
                         args (Bind an (Pi c p argty) (weaken ret))
@@ -1058,17 +1057,7 @@ mutual
              ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkApp {vars} rigc process elabinfo loc env nest fn arg expected
-      = do 
---            atyn <- genVarName "arg_type"
---            aty <- addBoundName loc atyn False env TType
-
---            log 10 $ "Added hole for argument type " ++ show atyn
-
---            let expfn = expty Nothing
---                           (\e => FnType [] (Bind argn (Pi RigW Explicit aty) (weaken e))) 
---                           expected
-        
-           argn <- genVarName "argn"
+      = do argn <- genVarName "argn"
            (fntm, fnty) <- checkFnApp rigc process loc elabinfo env nest fn 
                                       (case expected of
                                             Unknown => Unknown
@@ -1267,8 +1256,8 @@ mutual
              Nothing =>
                do gam <- get Ctxt
                   hn <- genName (nameRoot bn)
-                  log 5 $ "Added implicit argument " ++ show hn
                   let ty' = quote (noGam gam) env ty
+                  log 5 $ "Added implicit argument " ++ show hn ++ " : " ++ show ty'
                   addNamedHole loc hn False env ty'
                   est <- get EST
                   let tm = mkConstantApp hn env

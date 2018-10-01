@@ -1,7 +1,7 @@
 1/1: Building vect (vect.blod)
 Welcome to Blodwen. Good luck.
 Main> Main> Cons (S Z) (Cons (S (S Z)) []) : Vect (S (S Z)) Nat
-Main> When unifying Vect (S (S Z)) Nat and Vect (S Z) Nat
+Main> When unifying Vect (S Z) Nat and Vect Z Nat
 Mismatch between:
 	S Z
 and

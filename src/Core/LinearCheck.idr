@@ -194,7 +194,7 @@ mutual
                    do (a', aty, aused) <- lcheck loc (rigMult rigf rig) erase env a
                       let sc' = scdone (toClosure defaultOpts env a')
                       let aerased = if erase && rigf == Rig0 then Erased else a'
-                      when (not (convert gam env ty (nf gam env aty))) $
+                      when (not (convert gam env (nf gam env aty) ty)) $
                          throw (CantConvert loc env (quote (noGam gam) env ty) aty)
                       pure (App f' aerased, quote (noGam gam) env sc', fused ++ aused)
                 _ => throw (InternalError ("Linearity checking failed on " ++ show f' ++ 

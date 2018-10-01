@@ -77,10 +77,13 @@ bindEnv [] tm = tm
 bindEnv (b :: env) tm 
     = bindEnv env (Bind _ b tm)
 
-cantSolve : annot -> Env Term vars -> Term vars -> Maybe ClosedTerm ->
+cantSolve : {auto c : Ref Ctxt Defs} ->
+            annot -> Env Term vars -> Term vars -> Maybe ClosedTerm ->
             Core annot a
 cantSolve loc env thisty Nothing = throw (CantSolveGoal loc (bindEnv env thisty))
-cantSolve loc env thisty (Just topty) = throw (CantSolveGoal loc (embed topty))
+cantSolve loc env thisty (Just topty) 
+   = do gam <- get Ctxt
+        throw (CantSolveGoal loc (embed (normaliseHoles gam [] topty)))
 
 -- Apply the name to arguments and see if the result unifies with the target
 -- type, then try to automatically solve any holes which were generated.

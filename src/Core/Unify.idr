@@ -958,6 +958,8 @@ mutual
              UnifyMode -> annot -> Env Term vars ->
              NF vars -> NF vars ->
              Core annot (List Name)
+  unifyNoEta mode loc env x NErased = pure []
+  unifyNoEta mode loc env NErased y = pure []
   unifyNoEta mode loc env (NDCon x tagx ax xs) (NDCon y tagy ay ys)
       = do gam <- get Ctxt
            if tagx == tagy
@@ -992,8 +994,6 @@ mutual
       = unifyApp False mode loc env hd args y
   unifyNoEta mode loc env y (NApp hd args)
       = unifyApp True mode loc env hd args y
-  unifyNoEta mode loc env x NErased = pure []
-  unifyNoEta mode loc env NErased y = pure []
   unifyNoEta mode loc env NType NType = pure []
   unifyNoEta mode loc env x y 
       = do gam <- get Ctxt
@@ -1065,7 +1065,9 @@ mutual
     unifyD _ _ mode loc env x y 
           = do gam <- get Ctxt
                if convert gam env x y
-                  then pure []
+                  then do log 10 $ "Skipped unification (convert already): "
+                                 ++ show x ++ " and " ++ show y
+                          pure []
                   else unify mode loc env (nf gam env x) (nf gam env y)
 
 -- Try again to solve the given named constraint, and return the list
