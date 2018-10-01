@@ -103,8 +103,17 @@ perror (AllFailed ts)
     allUndefined _ = Nothing
 perror (InvalidImplicit _ env n tm)
     = pure $ show n ++ " is not a valid implicit argument in " ++ !(pshow env tm)
-perror (CantSolveGoal _ env g)
-    = pure $ "Can't find an implementation for " ++ !(pshow env g)
+perror (CantSolveGoal _ g)
+    = let (_ ** (env', g')) = dropPis [] g in
+          pure $ "Can't find an implementation for " ++ !(pshow env' g')
+  where
+    -- For display, we don't want to see the full top level type; just the
+    -- return type
+    dropPis : Env Term vars -> Term vars -> 
+              (ns ** (Env Term ns, Term ns))
+    dropPis env (Bind n b@(Pi _ _ _) sc) = dropPis (b :: env) sc 
+    dropPis env tm = (_ ** (env, tm))
+
 perror (DeterminingArg _ n env g)
     = pure $ "Can't find an implementation for " ++ !(pshow env g) ++ "\n" ++
              "since I can't infer a value for argument " ++ show n

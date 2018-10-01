@@ -258,7 +258,7 @@ process (Exec ctm)
     = do execExp ctm
          pure True
 process (ProofSearch n)
-    = do tm <- search replFC False 1000 [] n (UN "(interactive)")
+    = do tm <- search replFC False 1000 [] n Nothing (UN "(interactive)")
          gam <- get Ctxt
          itm <- resugar [] (normaliseHoles gam [] tm)
          coreLift (putStrLn (show itm))

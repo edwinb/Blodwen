@@ -19,7 +19,7 @@ blodwenTests
        "test011", "test012", "test013", "test014", "test015",
        "test016", "test017", "test018", "test019", "test020",
        "test021",
-       "error001", "error002", "error003", "error004",
+       "error001", "error002", "error003", "error004", "error005",
        "chez001", "chez002", "chez003", "chez004", "chez005",
        "chez006",
        "chicken001", "chicken002",

@@ -37,7 +37,7 @@ data Error annot
     | AmbiguousSearch annot (Env Term vars) (List (Term vars))
     | AllFailed (List (Maybe Name, Error annot))
     | InvalidImplicit annot (Env Term vars) Name (Term vars)
-    | CantSolveGoal annot (Env Term vars) (Term vars)
+    | CantSolveGoal annot (Term [])
     | DeterminingArg annot Name (Env Term vars) (Term vars)
     | UnsolvedHoles (List (annot, Name))
     | CantInferArgType annot (Env Term vars) Name Name (Term vars)
@@ -124,7 +124,7 @@ Show annot => Show (Error annot) where
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
   show (InvalidImplicit fc env n tm) 
       = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm
-  show (CantSolveGoal fc env g) 
+  show (CantSolveGoal fc g) 
       = show fc ++ ":Can't solve goal " ++ assert_total (show g)
   show (DeterminingArg fc n env g)
       = show fc ++ ":Can't solve goal " ++ assert_total (show g) ++ 
@@ -205,7 +205,7 @@ getAnnot (AmbiguousSearch loc _ xs) = Just loc
 getAnnot (AllFailed ((_, x) :: xs)) = getAnnot x
 getAnnot (AllFailed []) = Nothing
 getAnnot (InvalidImplicit loc _ y tm) = Just loc
-getAnnot (CantSolveGoal loc env tm) = Just loc
+getAnnot (CantSolveGoal loc tm) = Just loc
 getAnnot (DeterminingArg loc y env tm) = Just loc
 getAnnot (UnsolvedHoles ((loc, _) :: xs)) = Just loc
 getAnnot (UnsolvedHoles []) = Nothing

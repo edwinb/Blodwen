@@ -67,7 +67,10 @@ export
 search : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
          annot -> (defaults : Bool) -> 
-         Nat -> List ClosedTerm -> Name -> Name -> Core annot ClosedTerm
+         Nat -> List ClosedTerm -> Name -> 
+         Maybe ClosedTerm -> -- top level name of thing we're searching
+         Name -> -- Hole we're searching for
+         Core annot ClosedTerm
 
 -- try one elaborator; if it fails, try another
 export
@@ -1156,9 +1159,11 @@ retryHole mode smode (loc, hole)
                        case smode of
                             LastChance =>
                                 do log 5 $ "Last chance at " ++ show hole
-                                   search loc False depth [] fn hole; pure ()
+                                   search loc False depth [] fn (Just (type def)) hole
+                                   pure ()
                             _ =>       
-                               handleUnify (do search loc (smode == Defaults) depth [] fn hole
+                               handleUnify (do search loc (smode == Defaults) depth [] fn 
+                                                      (Just (type def)) hole
                                                pure ())
                                -- if it failed due to a determining argument
                                -- being missing, we at least now know that the
