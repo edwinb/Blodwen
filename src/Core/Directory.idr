@@ -124,12 +124,13 @@ makeBuildDirectory ns
 
 -- Given a source file, return the name of the ttc file to generate
 export
-getTTCFileName : {auto c : Ref Ctxt Defs} -> String -> Core annot String
-getTTCFileName inp 
+getTTCFileName : {auto c : Ref Ctxt Defs} -> 
+                 String -> String -> Core annot String
+getTTCFileName inp ext
     = do ns <- getNS
          d <- getDirs
          let bdir = build_dir d
-         pure $ bdir ++ cast sep ++ dropExtension inp ++ ".ttc"
+         pure $ bdir ++ cast sep ++ dropExtension inp ++ ext
 
 -- Given a root executable name, return the name in the build directory
 export

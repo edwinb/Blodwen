@@ -3,6 +3,7 @@ module Idris.Elab.Implementation
 import Core.Binary
 import Core.Context
 import Core.Core
+import Core.Metadata
 import Core.TT
 import Core.Unify
 
@@ -55,6 +56,7 @@ elabImplementation : {auto c : Ref Ctxt Defs} ->
                      {auto u : Ref UST (UState FC)} ->
                      {auto i : Ref ImpST (ImpState FC)} ->
                      {auto s : Ref Syn SyntaxInfo} ->
+                     {auto m : Ref Meta (Metadata FC)} ->
                      FC -> Visibility -> 
                      Env Term vars -> NestedNames vars ->
                      (constraints : List (Maybe Name, RawImp FC)) ->

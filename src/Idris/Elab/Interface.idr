@@ -3,6 +3,7 @@ module Idris.Elab.Interface
 import Core.Binary
 import Core.Context
 import Core.Core
+import Core.Metadata
 import Core.TT
 import Core.Unify
 
@@ -61,6 +62,7 @@ mkIfaceData {vars} fc vis env constraints n conName ps dets meths
 getMethDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto i : Ref ImpST (ImpState FC)} ->
+              {auto m : Ref Meta (Metadata FC)} ->
               Env Term vars -> NestedNames vars ->
               (params : List (Name, RawImp FC)) ->
               (mnames : List Name) ->
@@ -93,6 +95,7 @@ bindIFace fc ity sc = IPi fc RigW AutoImplicit (Just (MN "__con" 0)) ity sc
 getMethToplevel : {auto c : Ref Ctxt Defs} ->
                   {auto u : Ref UST (UState FC)} ->
                   {auto i : Ref ImpST (ImpState FC)} ->
+                  {auto m : Ref Meta (Metadata FC)} ->
                   Env Term vars -> Visibility -> 
                   Name -> Name ->
                   (constraints : List (Maybe Name)) ->
@@ -149,6 +152,7 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, opts
 getConstraintHint : {auto c : Ref Ctxt Defs} ->
                     {auto u : Ref UST (UState FC)} ->
                     {auto i : Ref ImpST (ImpState FC)} ->
+                    {auto m : Ref Meta (Metadata FC)} ->
                     FC -> Env Term vars -> Visibility -> 
                     Name -> Name ->
                     (constraints : List Name) ->
@@ -205,6 +209,7 @@ elabInterface : {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
                 {auto s : Ref Syn SyntaxInfo} ->
+                {auto m : Ref Meta (Metadata FC)} ->
                 FC -> Visibility -> 
                 Env Term vars -> NestedNames vars ->
                 (constraints : List (Maybe Name, RawImp FC)) ->

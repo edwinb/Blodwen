@@ -3,6 +3,7 @@ module TTImp.ProcessType
 import Core.TT
 import Core.Unify
 import Core.Context
+import Core.Metadata
 import Core.Normalise
 import Core.Reflect
 
@@ -40,6 +41,7 @@ export
 processType : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              {auto m : Ref Meta (Metadata annot)} ->
               Reflect annot =>
               Elaborator annot ->
               Env Term vars -> NestedNames vars ->

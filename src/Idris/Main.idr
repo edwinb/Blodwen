@@ -5,6 +5,7 @@ import Core.Context
 import Core.Core
 import Core.Directory
 import Core.InitPrimitives
+import Core.Metadata
 import Core.Options
 import Core.Unify
 
@@ -69,6 +70,7 @@ stMain : List CLOpt -> Core FC ()
 stMain opts
     = do c <- newRef Ctxt initCtxt
          s <- newRef Syn initSyntax
+         m <- newRef Meta initMetadata
          addPrimitives
 
          updatePaths
@@ -91,7 +93,7 @@ stMain opts
                doRepl <- postOptions opts
                if doRepl then
                     do putStrLnQ "Welcome to Blodwen. Good luck."
-                       repl {c} {u}
+                       repl {c} {u} {m}
                   else
                     -- exit with an error code if there was an error, otherwise
                     -- just exit

@@ -33,6 +33,13 @@ record FC where
   startPos : FilePos
   endPos : FilePos
 
+-- Return whether a given file position is within the file context (assuming we're
+-- in the right file
+export
+within : FilePos -> FC -> Bool
+within (x, y) (MkFC _ start end)
+   = (x, y) >= start && (x, y) < end
+
 export
 Reify FC where
   reify defs (NDCon (NS _ (UN "MkFC")) _ _ [file, start, end])

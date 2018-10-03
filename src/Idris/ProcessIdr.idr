@@ -3,6 +3,7 @@ module Idris.ProcessIdr
 import Core.Binary
 import Core.Context
 import Core.Directory
+import Core.Metadata
 import Core.Options
 import Core.Unify
 
@@ -21,6 +22,7 @@ processDecl : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto i : Ref ImpST (ImpState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
+              {auto m : Ref Meta (Metadata FC)} ->
               PDecl -> Core FC (Maybe (Error FC))
 processDecl decl
     = catch (do impdecls <- desugarDecl [] decl 
@@ -33,6 +35,7 @@ processDecls : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto i : Ref ImpST (ImpState FC)} ->
                {auto s : Ref Syn SyntaxInfo} ->
+               {auto m : Ref Meta (Metadata FC)} ->
                List PDecl -> Core FC (List (Error FC))
 processDecls decls
     = do xs <- traverse processDecl decls
@@ -115,6 +118,7 @@ addPrelude imps
 processMod : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
              {auto s : Ref Syn SyntaxInfo} ->
+             {auto m : Ref Meta (Metadata FC)} ->
              Module -> Core FC (List (Error FC))
 processMod mod
     = catch (do i <- newRef ImpST (initImpState {annot = FC})
@@ -150,6 +154,7 @@ export
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
+          {auto m : Ref Meta (Metadata FC)} ->
           FileName -> Core FC (List (Error FC))
 process file
     = do Right res <- coreLift (readFile file)
@@ -165,7 +170,7 @@ process file
                                  then
                                    do defs <- get Ctxt
                                       makeBuildDirectory (pathToNS file)
-                                      fn <- getTTCFileName file
+                                      fn <- getTTCFileName file ".ttc"
                                       writeToTTC !(get Syn) fn
                                       pure []
                                  else pure errs)

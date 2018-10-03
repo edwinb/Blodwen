@@ -5,6 +5,7 @@ import Compiler.CompileExpr
 import Core.CaseTree
 import Core.Context
 import Core.LinearCheck
+import Core.Metadata
 import Core.Normalise
 import Core.Reflect
 import Core.TT
@@ -44,6 +45,7 @@ doPLetRenames ns drops sc = sc
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
+           {auto m : Ref Meta (Metadata annot)} ->
            Reflect annot =>
            Elaborator annot ->
            Bool ->
@@ -158,6 +160,7 @@ export
 inferTerm : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             Reflect annot =>
             Elaborator annot -> 
             Bool ->
@@ -174,6 +177,7 @@ export
 checkTerm : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             Reflect annot =>
             Elaborator annot ->
             Bool ->

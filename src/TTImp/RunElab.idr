@@ -1,6 +1,7 @@
 module TTImp.RunElab
 
 import Core.Context
+import Core.Metadata
 import Core.Normalise
 import public TTImp.Reflect
 import Core.Unify
@@ -15,6 +16,7 @@ import TTImp.TTImp
 elabScript : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              (Reflect annot, Reify annot) =>
              annot -> Elaborator annot ->
              Env Term vars -> NestedNames vars -> NF vars -> 
@@ -80,6 +82,7 @@ export
 processReflect : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
                  {auto i : Ref ImpST (ImpState annot)} ->
+                 {auto m : Ref Meta (Metadata annot)} ->
                  (Reflect annot, Reify annot) =>
                  annot ->
                  Elaborator annot ->

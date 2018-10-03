@@ -4,6 +4,7 @@ import Core.TT
 import Core.Unify
 import Core.Context
 import Core.CaseBuilder
+import Core.Metadata
 import Core.Normalise
 import Core.Reflect
 
@@ -120,6 +121,7 @@ impossibleOK _ _ _ = False
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              {auto m : Ref Meta (Metadata annot)} ->
               Reflect annot =>
               Elaborator annot ->
               Bool ->
@@ -228,6 +230,7 @@ export
 processDef : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              Reflect annot =>
              Elaborator annot ->
              Bool ->

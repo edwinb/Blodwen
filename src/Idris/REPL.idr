@@ -9,6 +9,7 @@ import Core.AutoSearch
 import Core.CompileExpr
 import Core.Context
 import Core.InitPrimitives
+import Core.Metadata
 import Core.Normalise
 import Core.Options
 import Core.TT
@@ -145,6 +146,7 @@ export
 execExp : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
+          {auto m : Ref Meta (Metadata FC)} ->
           PTerm -> Core FC ()
 execExp ctm
     = do i <- newRef ImpST (initImpState {annot = FC})
@@ -156,6 +158,7 @@ execExp ctm
 resetContext : {auto u : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto s : Ref Syn SyntaxInfo} ->
+               {auto m : Ref Meta (Metadata FC)} ->
                Core FC ()
 resetContext
     = do defs <- get Ctxt
@@ -163,6 +166,7 @@ resetContext
          addPrimitives
          put UST initUState
          put Syn initSyntax
+         put Meta initMetadata
 
 export
 updateErrorLine : {auto o : Ref ROpts REPLOpts} ->
@@ -178,6 +182,7 @@ updateErrorLine (e :: es)
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
+          {auto m : Ref Meta (Metadata FC)} ->
           {auto o : Ref ROpts REPLOpts} ->
           REPLCmd -> Core FC Bool
 process (Eval itm)
@@ -278,6 +283,7 @@ process Quit
 processCatch : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto s : Ref Syn SyntaxInfo} ->
+               {auto m : Ref Meta (Metadata FC)} ->
                {auto o : Ref ROpts REPLOpts} ->
                REPLCmd -> Core FC Bool
 processCatch cmd
@@ -311,6 +317,7 @@ export
 repl : {auto c : Ref Ctxt Defs} ->
        {auto u : Ref UST (UState FC)} ->
        {auto s : Ref Syn SyntaxInfo} ->
+       {auto m : Ref Meta (Metadata FC)} ->
        {auto o : Ref ROpts REPLOpts} ->
        Core FC ()
 repl

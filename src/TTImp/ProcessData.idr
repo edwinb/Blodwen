@@ -1,6 +1,7 @@
 module TTImp.ProcessData
 
 import Core.Context
+import Core.Metadata
 import Core.Normalise
 import Core.TT
 import Core.Reflect
@@ -47,6 +48,7 @@ checkFamily loc cn tn env nf
 checkCon : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            {auto i : Ref ImpST (ImpState annot)} ->
+           {auto m : Ref Meta (Metadata annot)} ->
            Reflect annot =>
            Elaborator annot -> 
            Env Term vars -> NestedNames vars -> Visibility -> 
@@ -84,6 +86,7 @@ export
 processData : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              {auto m : Ref Meta (Metadata annot)} ->
               Reflect annot =>
               Elaborator annot ->
               Env Term vars -> NestedNames vars -> 

@@ -2,6 +2,7 @@ module Idris.SetOptions
 
 import Core.Context
 import Core.Directory
+import Core.Metadata
 import Core.Options
 import Core.Unify
 
@@ -51,6 +52,7 @@ export
 postOptions : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
+              {auto m : Ref Meta (Metadata FC)} ->
               List CLOpt -> Core FC Bool
 postOptions [] = pure True
 postOptions (ExecFn str :: rest) 

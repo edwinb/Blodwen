@@ -2,6 +2,7 @@ module Elab.Delayed
 
 import Core.CaseTree
 import Core.Context
+import Core.Metadata
 import Core.Normalise
 import Core.TT
 import Core.Unify
@@ -149,6 +150,7 @@ export
 delayOnFailure : 
       {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
       {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+      {auto m : Ref Meta (Metadata annot)} ->
       annot -> Env Term vars ->
       (expected : Term vars) ->
       (Error annot -> Bool) ->
@@ -170,6 +172,7 @@ delayOnFailure loc env expected pred elab
 export
 delayElab : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             annot -> Env Term vars ->
             (expected : ExpType (Term vars)) ->
             Lazy (Core annot (Term vars, Term vars)) ->

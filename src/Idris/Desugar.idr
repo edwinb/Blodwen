@@ -3,6 +3,7 @@ module Idris.Desugar
 import Core.Binary
 import Core.Context
 import Core.Core
+import Core.Metadata
 import Core.Options
 import Core.TT
 import Core.Unify
@@ -90,6 +91,7 @@ mutual
             {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState FC)} ->
             {auto i : Ref ImpST (ImpState FC)} ->
+            {auto m : Ref Meta (Metadata FC)} ->
             Side -> List Name -> PTerm -> Core FC (RawImp FC)
   desugar side ps (PRef fc x) = pure $ IVar fc x
   desugar side ps (PPi fc rig p mn argTy retTy) 
@@ -209,6 +211,7 @@ mutual
                {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
                {auto i : Ref ImpST (ImpState FC)} ->
+               {auto m : Ref Meta (Metadata FC)} ->
                Side -> List Name -> FC -> List PTerm -> Core FC (RawImp FC)
   expandList side ps fc [] = pure (IVar fc (UN "Nil"))
   expandList side ps fc (x :: xs)
@@ -219,6 +222,7 @@ mutual
              {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
              {auto i : Ref ImpST (ImpState FC)} ->
+             {auto m : Ref Meta (Metadata FC)} ->
              Side -> List Name -> FC -> List PDo -> Core FC (RawImp FC)
   expandDo side ps fc [] = throw (GenericMsg fc "Do block cannot be empty")
   expandDo side ps _ [DoExp fc tm] = desugar side ps tm
@@ -282,6 +286,7 @@ mutual
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
+                {auto m : Ref Meta (Metadata FC)} ->
                 Side -> List Name -> Tree FC PTerm -> Core FC (RawImp FC)
   desugarTree side ps (Inf loc "=" l r) -- special case since '=' is special syntax
       = do l' <- desugarTree side ps l
@@ -305,6 +310,7 @@ mutual
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
+                {auto m : Ref Meta (Metadata FC)} ->
                 List Name -> PTypeDecl -> Core FC (ImpTy FC)
   desugarType ps (MkPTy fc n ty) 
       = pure $ MkImpTy fc n (bindTypeNames ps !(desugar AnyExpr ps ty))
@@ -313,6 +319,7 @@ mutual
                   {auto c : Ref Ctxt Defs} ->
                   {auto u : Ref UST (UState FC)} ->
                   {auto i : Ref ImpST (ImpState FC)} ->
+                  {auto m : Ref Meta (Metadata FC)} ->
                   List Name -> Bool -> PClause -> Core FC (ImpClause FC)
   desugarClause ps arg (MkPatClause fc lhs rhs wheres)
       = do ws <- traverse (desugarDecl ps) wheres
@@ -330,6 +337,7 @@ mutual
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
+                {auto m : Ref Meta (Metadata FC)} ->
                 List Name -> PDataDecl -> Core FC (ImpData FC)
   desugarData ps (MkPData fc n tycon opts datacons) 
       = pure $ MkImpData fc n (bindTypeNames ps !(desugar AnyExpr ps tycon))
@@ -345,6 +353,7 @@ mutual
                 {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
+                {auto m : Ref Meta (Metadata FC)} ->
                 List Name -> PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl ps (PClaim fc vis opts ty) 
       = pure [IClaim fc vis opts !(desugarType ps ty)]

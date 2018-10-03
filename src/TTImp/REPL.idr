@@ -2,6 +2,7 @@ module TTImp.REPL
 
 import Core.AutoSearch
 import Core.Context
+import Core.Metadata
 import Core.Normalise
 import Core.Reflect
 import Core.TT
@@ -23,6 +24,7 @@ showInfo (n, d) = coreLift $ putStrLn (show n ++ " ==> " ++ show d)
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState ())} ->
+          {auto m : Ref Meta (Metadata ())} ->
           ImpREPL () -> Core () Bool
 process (Eval ttimp)
     = do i <- newRef ImpST (initImpState {annot = ()})
@@ -56,6 +58,7 @@ process Quit
 
 processCatch : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState ())} ->
+               {auto m : Ref Meta (Metadata ())} ->
                ImpREPL () -> Core () Bool
 processCatch cmd
     = catch (process cmd) (\err => do coreLift (putStrLn (show err))
@@ -64,6 +67,7 @@ processCatch cmd
 export
 repl : {auto c : Ref Ctxt Defs} ->
        {auto u : Ref UST (UState ())} ->
+       {auto m : Ref Meta (Metadata ())} ->
        Core () ()
 repl
     = do coreLift (putStr "Blodwen> ")

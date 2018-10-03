@@ -10,6 +10,7 @@ import TTImp.Reflect
 import Core.AutoSearch
 import Core.CaseTree
 import Core.Context
+import Core.Metadata
 import Core.Normalise
 import Core.Reflect
 import Core.TT
@@ -89,6 +90,7 @@ mutual
   export
   check : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+          {auto m : Ref Meta (Metadata annot)} ->
           Reflect annot =>
           RigCount ->
           Elaborator annot -> -- the elaborator for top level declarations
@@ -133,6 +135,7 @@ mutual
   -- has a 'Delay' type.
   checkFnApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+               {auto m : Ref Meta (Metadata annot)} ->
                Reflect annot =>
                RigCount ->
                Elaborator annot -> -- the elaborator for top level declarations
@@ -210,6 +213,7 @@ mutual
                 {auto u : Ref UST (UState annot)} ->
                 {auto e : Ref EST (EState vars)} ->
                 {auto i : Ref ImpST (ImpState annot)} ->
+                {auto m : Ref Meta (Metadata annot)} ->
                 RawImp annot ->
                 Core annot (Term vars, Term vars) ->
                 Core annot (Term vars, Term vars) ->
@@ -239,6 +243,7 @@ mutual
 
   checkImp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              Reflect annot =>
              RigCount ->
              Elaborator annot ->
@@ -611,6 +616,7 @@ mutual
   -- a globally defined name
   checkName : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
               {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+              {auto m : Ref Meta (Metadata annot)} ->
               Reflect annot =>
               RigCount -> Elaborator annot -> ElabInfo annot -> annot -> Env Term vars -> 
               NestedNames vars -> Name -> ExpType (Term vars) ->
@@ -679,13 +685,14 @@ mutual
   checkCase : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
               {auto e : Ref EST (EState vars)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
+              {auto m : Ref Meta (Metadata annot)} ->
               Reflect annot =>
               RigCount -> Elaborator annot ->
               ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
               RawImp annot -> RawImp annot -> List (ImpClause annot) ->
               ExpType (Term vars) ->
               Core annot (Term vars, Term vars)
-  checkCase {vars} {c} {u} {i} rigc process elabinfo loc env nest scr scrty_exp alts expected
+  checkCase {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest scr scrty_exp alts expected
       = do (scrtyv, scrtyt) <- check Rig0 process elabinfo env nest scrty_exp 
                                      (FnType [] TType)
            log 10 $ "Expected scrutinee type: " ++ show scrtyv
@@ -773,7 +780,7 @@ mutual
            let nest' = record { names $= ((casen, (casen, 
                                     (mkConstantAppFull casen pre_env))) ::) } 
                               nest
-           process c u i True pre_env nest' (IDef loc casen alts')
+           process c u i m True pre_env nest' (IDef loc casen alts')
 
            pure (App (applyToOthers (mkConstantAppFull casen env) env smaller) 
                      scrtm, caseretty)
@@ -956,19 +963,20 @@ mutual
   checkLocal : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} ->
                {auto i : Ref ImpST (ImpState annot)} ->
+               {auto m : Ref Meta (Metadata annot)} ->
                Reflect annot =>
                RigCount -> Elaborator annot ->
                ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
                List (ImpDecl annot) -> RawImp annot ->
                ExpType (Term vars) ->
                Core annot (Term vars, Term vars)
-  checkLocal {vars} {c} {u} {i} rigc process elabinfo loc env nest nested scope expected
+  checkLocal {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest nested scope expected
       = do let defNames = definedInBlock nested
            est <- get EST
            let f = defining est
            let nest' = record { names $= ((map (applyEnv f) defNames) ++) } nest
            let env' = dropLinear env
-           traverse (process c u i False env' nest') (map (updateName nest') nested)
+           traverse (process c u i m False env' nest') (map (updateName nest') nested)
            check rigc process elabinfo env nest' scope expected
     where
       -- For the local definitions, don't allow access to linear things
@@ -1018,6 +1026,7 @@ mutual
   checkAs : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             Reflect annot =>
             RigCount -> Elaborator annot ->
             ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
@@ -1050,6 +1059,7 @@ mutual
   checkApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              Reflect annot =>
              RigCount -> Elaborator annot ->
              ElabInfo annot -> annot -> Env Term vars -> NestedNames vars -> 
@@ -1124,6 +1134,7 @@ mutual
   checkPi : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             Reflect annot =>
             RigCount -> Elaborator annot -> ElabInfo annot ->
             annot -> Env Term vars -> NestedNames vars -> RigCount -> PiInfo -> Name -> 
@@ -1150,6 +1161,7 @@ mutual
   checkLam : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              Reflect annot =>
              RigCount -> Elaborator annot -> ElabInfo annot ->
              annot -> Env Term vars -> NestedNames vars -> RigCount -> PiInfo -> Name ->
@@ -1194,6 +1206,7 @@ mutual
   checkLet : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              Reflect annot =>
              RigCount -> Elaborator annot ->
              ElabInfo annot -> annot -> Env Term vars -> NestedNames vars ->
@@ -1237,6 +1250,7 @@ mutual
   makeImplicit 
           : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             Reflect annot =>
             RigCount -> Elaborator annot -> annot -> Env Term vars -> NestedNames vars ->
             ElabInfo annot -> Name -> (ty : NF vars) ->
@@ -1273,6 +1287,7 @@ mutual
   makeAutoImplicit 
           : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             Reflect annot =>
             RigCount -> Elaborator annot -> annot -> Env Term vars -> NestedNames vars ->
             ElabInfo annot -> Name -> (ty : NF vars) ->
@@ -1319,6 +1334,7 @@ mutual
   -- implicits added
   getImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
             Reflect annot =>
             RigCount -> Elaborator annot -> annot -> Env Term vars -> NestedNames vars ->
             ElabInfo annot ->
@@ -1340,6 +1356,7 @@ mutual
   -- note that we need a force (we'll handle the error in 'insertForce')
   convertImps : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                 {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+                {auto m : Ref Meta (Metadata annot)} ->
                 Reflect annot =>
                 RigCount -> Elaborator annot -> annot -> Env Term vars ->
                 NestedNames vars -> ElabInfo annot ->
@@ -1371,6 +1388,7 @@ mutual
 
   checkExp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              Reflect annot =>
              RigCount -> Elaborator annot -> annot -> ElabInfo annot -> Env Term vars ->
              NestedNames vars ->

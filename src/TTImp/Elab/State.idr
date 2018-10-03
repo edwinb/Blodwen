@@ -2,8 +2,9 @@ module TTImp.Elab.State
 
 import Core.CaseTree
 import Core.Context
-import Core.TT
+import Core.Metadata
 import Core.Normalise
+import Core.TT
 import Core.Unify
 
 import TTImp.TTImp
@@ -68,7 +69,7 @@ Elaborator : Type -> Type
 Elaborator annot
     = {vars : List Name} ->
       Ref Ctxt Defs -> Ref UST (UState annot) ->
-      Ref ImpST (ImpState annot) ->
+      Ref ImpST (ImpState annot) -> Ref Meta (Metadata annot) ->
       (incase : Bool) ->
       Env Term vars -> NestedNames vars -> 
       ImpDecl annot -> Core annot ()
@@ -159,28 +160,32 @@ clearBindIfUnsolved st
 -- we need to backtrack
 export
 AllState : List Name -> Type -> Type
-AllState vars annot = (Defs, UState annot, EState vars, ImpState annot)
+AllState vars annot = (Defs, UState annot, EState vars, ImpState annot, Metadata annot)
 
 export
 getAllState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
               {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+              {auto m : Ref Meta (Metadata annot)} ->
               Core annot (AllState vars annot)
 getAllState
     = do ctxt <- get Ctxt
          ust <- get UST
          est <- get EST
          ist <- get ImpST
-         pure (ctxt, ust, est, ist)
+         mst <- get Meta
+         pure (ctxt, ust, est, ist, mst)
 
 export
 putAllState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
            {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+           {auto m : Ref Meta (Metadata annot)} ->
            AllState vars annot -> Core annot ()
-putAllState (ctxt, ust, est, ist)
+putAllState (ctxt, ust, est, ist, mst)
     = do put Ctxt ctxt
          put UST ust
          put EST est
          put ImpST ist
+         put Meta mst
 
 export
 getState : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -811,6 +816,7 @@ collectGivenImps tm = (tm, [])
 export
 tryError : {auto c : Ref Ctxt Defs} -> {auto e : Ref UST (UState annot)} ->
            {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+           {auto m : Ref Meta (Metadata annot)} ->
            Core annot a -> Core annot (Either (Error annot) a)
 tryError elab 
     = do -- store the current state of everything
@@ -825,6 +831,7 @@ tryError elab
 export
 try : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
       {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+      {auto m : Ref Meta (Metadata annot)} ->
       Core annot a ->
       Core annot a ->
       Core annot a
@@ -837,6 +844,7 @@ try elab1 elab2
 export
 handle : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+         {auto m : Ref Meta (Metadata annot)} ->
          Core annot a ->
          (Error annot -> Core annot a) ->
          Core annot a
@@ -870,6 +878,7 @@ handleClause elab1 elab2
 export
 successful : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              ElabMode -> List (Maybe Name, Core annot a) ->
              Core annot (List (Either (Maybe Name, Error annot)
                                       (a, AllState vars annot)))
@@ -892,6 +901,7 @@ successful elabmode ((tm, elab) :: elabs)
 export
 exactlyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+             {auto m : Ref Meta (Metadata annot)} ->
              annot -> Env Term vars -> ElabMode ->
              List (Maybe Name, Core annot (Term vars, Term vars)) ->
              Core annot (Term vars, Term vars)
@@ -917,6 +927,7 @@ exactlyOne {vars} loc env elabmode all
 export
 anyOne : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
          {auto e : Ref EST (EState vars)} -> {auto i : Ref ImpST (ImpState annot)} ->
+         {auto m : Ref Meta (Metadata annot)} ->
          annot -> ElabMode ->
          List (Maybe Name, Core annot (Term vars, Term vars)) ->
          Core annot (Term vars, Term vars)

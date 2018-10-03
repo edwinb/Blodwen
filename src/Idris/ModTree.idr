@@ -4,6 +4,7 @@ import Core.Binary
 import Core.Context
 import Core.Core
 import Core.Directory
+import Core.Metadata
 import Core.Options
 import Core.Primitives
 import Core.InitPrimitives
@@ -128,7 +129,7 @@ buildMod : {auto c : Ref Ctxt Defs} ->
 buildMod loc num len mod
    = do clearCtxt; addPrimitives
         let src = buildFile mod
-        mttc <- getTTCFileName src
+        mttc <- getTTCFileName src ".ttc"
         depFiles <- traverse (nsToPath loc) (imports mod)
         ttcTime <- catch (do t <- fnameModified mttc
                              pure (Just t))
@@ -141,6 +142,7 @@ buildMod loc num len mod
                     Nothing => True
                     Just t => any (\x => x > t) (srcTime :: map snd depTimes)
         u <- newRef UST initUState
+        m <- newRef Meta initMetadata
         put Syn initSyntax
 
         let showMod = showSep "." (reverse (buildNS mod))
@@ -149,7 +151,7 @@ buildMod loc num len mod
            then do putStrLnQ $ show num ++ "/" ++ show len ++
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
-                   [] <- process {u} src
+                   [] <- process {u} {m} src
                       | errs => do printAll errs
                                    pure errs
                    pure []
@@ -171,6 +173,7 @@ buildMods fc num len (m :: ms)
 export
 buildDeps : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
+            {auto m : Ref Meta (Metadata FC)} ->
             {auto u : Ref UST (UState FC)} ->
             (mainFile : String) -> Core FC (List (Error FC))
 buildDeps fname
@@ -179,7 +182,8 @@ buildDeps fname
          case ok of
               [] => do -- On success, reload the main ttc in a clean context
                        clearCtxt; addPrimitives
-                       mainttc <- getTTCFileName fname
+                       put Meta initMetadata
+                       mainttc <- getTTCFileName fname ".ttc"
                        readAsMain mainttc
                        pure []
               errs => pure errs -- Error happened, give up
