@@ -172,6 +172,8 @@ process file
                                       makeBuildDirectory (pathToNS file)
                                       fn <- getTTCFileName file ".ttc"
                                       writeToTTC !(get Syn) fn
+                                      mfn <- getTTCFileName file ".ttm"
+                                      writeToTTM mfn
                                       pure []
                                  else pure errs)
                           (\err => pure [err])

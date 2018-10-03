@@ -21,9 +21,11 @@ import Data.Buffer
 -- increment this when changing anything in the data format
 -- NOTE: TTC files are only compatible if the version number is the same,
 -- *and* the 'annot' type are the same, or there are no holes/constraints
+export
 ttcVersion : Int
-ttcVersion = 14
+ttcVersion = 15
 
+export
 checkTTCVersion : Int -> Int -> Core annot ()
 checkTTCVersion ver exp
   = if ver < exp
@@ -53,7 +55,7 @@ record TTCFile annot extra where
 
   fromBuf s b
       = do hdr <- fromBuf s b
-           when (hdr /= "TTC") $ corrupt "header"
+           when (hdr /= "TTC") $ corrupt "TTC header"
            ver <- fromBuf s b
            checkTTCVersion ver ttcVersion
            holes <- fromBuf s b

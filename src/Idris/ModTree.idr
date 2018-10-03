@@ -185,6 +185,9 @@ buildDeps fname
                        put Meta initMetadata
                        mainttc <- getTTCFileName fname ".ttc"
                        readAsMain mainttc
+                       -- Load the associated metadata for interactive editing
+                       mainttm <- getTTCFileName fname ".ttm"
+                       readFromTTM mainttm
                        pure []
               errs => pure errs -- Error happened, give up
 

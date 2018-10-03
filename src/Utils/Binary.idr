@@ -333,6 +333,18 @@ TTC annot () where
   fromBuf s b = pure ()
 
 export
+(TTC annot a, {y : a} -> TTC annot (p y)) =>
+     TTC annot (DPair a p) where
+  toBuf b (vs ** tm)
+      = do toBuf b vs
+           toBuf b tm
+
+  fromBuf s b
+      = do x <- fromBuf s b
+           p <- fromBuf s b
+           pure (x ** p)
+
+export
 TTC annot a => TTC annot (Maybe a) where
   toBuf b Nothing
      = tag 0
