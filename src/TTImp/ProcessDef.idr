@@ -194,7 +194,7 @@ checkClause {vars} elab incase defining env nest (PatClause loc lhs_raw rhs_raw)
            checkNameVisibility loc defining vis lhs
            checkNameVisibility loc defining vis rhs
 
-
+         addLHS loc env' lhspat
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
   where

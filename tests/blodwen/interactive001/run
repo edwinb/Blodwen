@@ -1,0 +1,3 @@
+$1 loctype.blod < input
+
+rm -rf build

@@ -246,11 +246,6 @@ mutual
   discharge nm (PVTy c ty) bindty scope scopety used
        = (Bind nm (PVTy c ty) scope, bindty, used)
 
-bindEnv : Env Term vars -> (tm : Term vars) -> ClosedTerm
-bindEnv [] tm = tm
-bindEnv (b :: env) tm 
-    = bindEnv env (Bind _ b tm)
-    
 checkEnvUsage : {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState annot)} ->
                 annot -> RigCount -> 

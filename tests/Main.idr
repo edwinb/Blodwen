@@ -19,20 +19,21 @@ blodwenTests
        "test011", "test012", "test013", "test014", "test015",
        "test016", "test017", "test018", "test019", "test020",
        "test021",
-       "error001", "error002", "error003", "error004", "error005",
        "chez001", "chez002", "chez003", "chez004", "chez005",
        "chez006",
        "chicken001", "chicken002",
+       "error001", "error002", "error003", "error004", "error005",
        "import001", "import002", "import003",
-       "reflect001",
-       "linear001", "linear002", "linear003", "linear004",
+       "interactive001",
        "interface001", "interface002", "interface003", "interface004",
        "interface005", "interface006", "interface007", "interface008",
        "interface009",
-       "sugar001",
        "lazy001","lazy002",
+       "linear001", "linear002", "linear003", "linear004",
+       "reflect001",
        "perf001",
-       "prelude001"]
+       "prelude001",
+       "sugar001"]
 
 chdir : String -> IO Bool
 chdir dir 

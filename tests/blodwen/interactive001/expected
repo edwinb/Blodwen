@@ -1,0 +1,12 @@
+1/1: Building loctype (loctype.blod)
+Welcome to Blodwen. Good luck.
+Main> Main.Vect : Nat -> Type -> Type
+Main>  0 m : Nat
+ 0 a : Type
+ 0 k : Nat
+   ys : Vect m a
+   xs : Vect k a
+   x : a
+-------------------------------------
+xs : Vect k a
+Main> Bye for now!

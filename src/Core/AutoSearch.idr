@@ -72,11 +72,6 @@ searchIfHole loc defaults (S depth) trying defining topty n
                  pure ()
          else pure ()
 
-bindEnv : Env Term vars -> (tm : Term vars) -> ClosedTerm
-bindEnv [] tm = tm
-bindEnv (b :: env) tm 
-    = bindEnv env (Bind _ b tm)
-
 cantSolve : {auto c : Ref Ctxt Defs} ->
             annot -> Env Term vars -> Term vars -> Maybe ClosedTerm ->
             Core annot a

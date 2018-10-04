@@ -389,6 +389,12 @@ namespace Env
   length [] = 0
   length (x :: xs) = S (length xs)
 
+export
+bindEnv : Env Term vars -> (tm : Term vars) -> ClosedTerm
+bindEnv [] tm = tm
+bindEnv (b :: env) tm 
+    = bindEnv env (Bind _ b tm)
+
 -- Also define Values here - NF represents a term in head normal form.
 -- That is - the top level constructor is known but the arguments aren't
 -- evaluted. Terms are evaluated to NF in Core.Normalise.

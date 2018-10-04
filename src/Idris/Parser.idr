@@ -1055,6 +1055,15 @@ setOption set
   <|> if set then setVarOption else fail "Invalid option"
 
 export
+editCmd : Rule EditCmd
+editCmd
+    = do exactIdent "typeat"
+         line <- intLit
+         col <- intLit
+         n <- name
+         pure (TypeAt (fromInteger line) (fromInteger col) n)
+
+export
 command : Rule REPLCmd
 command
     = do symbol ":"; exactIdent "t"
@@ -1085,5 +1094,7 @@ command
          pure Reload
   <|> do symbol ":"; exactIdent "e"
          pure Edit
+  <|> do symbol ":"; cmd <- editCmd
+         pure (Editing cmd)
   <|> do tm <- expr EqOK "(interactive)" init
          pure (Eval tm)

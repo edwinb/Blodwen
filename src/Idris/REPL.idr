@@ -68,6 +68,24 @@ isHole def
     = case definition def of
            Hole locs _ _ => Just locs
            _ => Nothing
+    
+showCount : RigCount -> String
+showCount Rig0 = " 0 "
+showCount Rig1 = " 1 "
+showCount RigW = "   "
+
+impBracket : PiInfo -> String -> String
+impBracket Explicit str = str
+impBracket _ str = "{" ++ str ++ "}"
+
+showName : Name -> Bool
+showName (UN "_") = False
+showName (MN "_" _) = False
+showName _ = True
+
+tidy : Name -> String
+tidy (MN n _) = n
+tidy n = show n
 
 showHole : {auto c : Ref Ctxt Defs} ->
            {auto s : Ref Syn SyntaxInfo} ->
@@ -78,25 +96,14 @@ showHole gam env fn (S args) (Bind x (Pi c inf ty) sc)
            coreLift $ putStrLn $
               showCount c ++ impBracket inf (tidy x ++ " : " ++ show ity)
          showHole gam (Pi c inf ty :: env) fn args sc
-  where
-    showCount : RigCount -> String
-    showCount Rig0 = " 0 "
-    showCount Rig1 = " 1 "
-    showCount RigW = "   "
-
-    impBracket : PiInfo -> String -> String
-    impBracket Explicit str = str
-    impBracket _ str = "{" ++ str ++ "}"
-
-    showName : Name -> Bool
-    showName (UN "_") = False
-    showName (MN "_" _) = False
-    showName _ = True
-
-    tidy : Name -> String
-    tidy (MN n _) = n
-    tidy n = show n
-
+showHole gam env fn (S args) (Bind x (PVar c ty) sc)
+    = do ity <- resugar env (normaliseHoles gam env ty)
+         when (showName x) $
+           coreLift $ putStrLn $
+              showCount c ++ impBracket Explicit (tidy x ++ " : " ++ show ity)
+         showHole gam (PVar c ty :: env) fn args sc
+showHole gam env fn args (Bind x (Let c val ty) sc)
+    = showHole gam env fn args (subst val sc)
 showHole gam env fn args ty
     = do coreLift $ putStrLn "-------------------------------------"
          ity <- resugar env (normaliseHoles gam env ty)
@@ -177,6 +184,21 @@ updateErrorLine []
 updateErrorLine (e :: es)
     = do opts <- get ROpts
          put ROpts (record { errorLine = map getFCLine (getAnnot e) } opts)
+
+processEdit : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState FC)} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              {auto m : Ref Meta (Metadata FC)} ->
+              {auto o : Ref ROpts REPLOpts} ->
+              EditCmd -> Core FC ()
+processEdit (TypeAt line col name)
+    = do gam <- get Ctxt
+         Just (n, num, t) <- findTypeAt (within (line-1, col-1))
+            | Nothing => case lookupGlobalName name (gamma gam) of
+                              [] => throw (UndefinedName (MkFC "(interactive)" (0,0) (0,0)) name)
+                              ts => do traverse (displayType gam) ts
+                                       pure ()
+         showHole gam [] n num t
 
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->
@@ -275,6 +297,9 @@ process (DebugInfo n)
          pure True
 process (SetOpt opt)
     = do setOpt opt
+         pure True
+process (Editing cmd)
+    = do processEdit cmd
          pure True
 process Quit 
     = do coreLift $ putStrLn "Bye for now!"

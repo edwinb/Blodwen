@@ -265,6 +265,10 @@ data REPLOpt : Type where
      CG : String -> REPLOpt
 
 public export
+data EditCmd : Type where
+     TypeAt : Int -> Int -> Name -> EditCmd
+
+public export
 data REPLCmd : Type where
      Eval : PTerm -> REPLCmd
      Check : PTerm -> REPLCmd
@@ -276,6 +280,7 @@ data REPLCmd : Type where
      ProofSearch : Name -> REPLCmd
      DebugInfo : Name -> REPLCmd
      SetOpt : REPLOpt -> REPLCmd
+     Editing : EditCmd -> REPLCmd
      Quit : REPLCmd
 
 public export

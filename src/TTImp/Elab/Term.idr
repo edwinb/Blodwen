@@ -513,8 +513,10 @@ mutual
                      put EST 
                          (record { boundNames $= ((n, (tm, exp)) ::),
                                    toBind $= ((n, (tm, exp)) :: ) } est)
+                     addNameType loc (UN str) env exp
                      checkExp rigc process loc elabinfo env nest tm exp topexp
                 Just (tm, ty) =>
+                  do addNameType loc (UN str) env ty
                      checkExp rigc process loc elabinfo env nest tm ty topexp
   checkImp rigc process elabinfo env nest (IBindHere loc tm) expected
       = do est <- get EST
@@ -632,9 +634,10 @@ mutual
                              (record { linearUsed $= ((_ ** lv) :: ) } est)
                     let varty = binderType (getBinder lv env) 
                     (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
+                    let tytm = quote (noGam gam) env ty
+                    addNameType loc (dropNS x) env tytm
                     checkExp rigc process loc elabinfo env nest 
-                         (apply (Local (Just rigb) lv) imps)
-                            (quote (noGam gam) env ty) expected
+                         (apply (Local (Just rigb) lv) imps) tytm expected
              Nothing =>
                  do nspace <- getNS
                     case lookupDefTyNameIn nspace x (gamma gam) of
@@ -678,8 +681,11 @@ mutual
                (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                if topLevel elabinfo ||
                     defOK (dotted elabinfo) (elabMode elabinfo) nt
-                  then checkExp rigc process loc elabinfo env nest (apply (Ref nt n) imps) 
-                            (quote (noGam gam) env ty) expected
+                  then do let tytm = quote (noGam gam) env ty
+                          addNameType loc (dropNS x) env tytm
+                          checkExp rigc process loc elabinfo env nest 
+                                       (apply (Ref nt n) imps) 
+                                       tytm expected
                   else throw (BadPattern loc n)
 
   checkCase : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
