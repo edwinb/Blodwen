@@ -56,16 +56,16 @@ addNameType loc n env tm
                       names $= ((loc, (n, length env, bindEnv env tm)) ::) 
                     } meta)
 
-findEntryWith : (annot -> Bool) -> List (annot, a) -> Maybe a
+findEntryWith : (annot -> Bool) -> List (annot, a) -> Maybe (annot, a)
 findEntryWith p [] = Nothing
 findEntryWith p ((l, x) :: xs)
     = if p l 
-         then Just x
+         then Just (l, x)
          else findEntryWith p xs
 
 export
 findLHSAt : {auto m : Ref Meta (Metadata annot)} ->
-            (annot -> Bool) -> Core annot (Maybe ClosedTerm)
+            (annot -> Bool) -> Core annot (Maybe (annot, ClosedTerm))
 findLHSAt p 
     = do meta <- get Meta
          pure (findEntryWith p (lhsApps meta))
@@ -75,7 +75,7 @@ findTypeAt : {auto m : Ref Meta (Metadata annot)} ->
              (annot -> Bool) -> Core annot (Maybe (Name, Nat, ClosedTerm))
 findTypeAt p
     = do meta <- get Meta
-         pure (findEntryWith p (names meta))
+         pure (map snd (findEntryWith p (names meta)))
 
 -- Normalise all the types of the names, since they might have had holes
 -- when added and the holes won't necessarily get saved

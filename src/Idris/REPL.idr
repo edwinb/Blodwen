@@ -22,6 +22,7 @@ import Idris.Parser
 import Idris.Resugar
 import Idris.Syntax
 
+import TTImp.CaseSplit
 import TTImp.Elab
 import TTImp.TTImp
 import TTImp.ProcessTTImp
@@ -199,6 +200,9 @@ processEdit (TypeAt line col name)
                               ts => do traverse (displayType gam) ts
                                        pure ()
          showHole gam [] n num t
+processEdit (CaseSplit line col name)
+    = do res <- getSplits (within (line-1, col-1)) name
+         pure ()
 
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->

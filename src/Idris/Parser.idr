@@ -1054,28 +1054,39 @@ setOption set
          pure (ShowTypes set)
   <|> if set then setVarOption else fail "Invalid option"
 
+replCmd : List String -> Rule ()
+replCmd [] = fail "Unrecognised command"
+replCmd (c :: cs)
+    = exactIdent c
+  <|> replCmd cs
+
 export
 editCmd : Rule EditCmd
 editCmd
-    = do exactIdent "typeat"
+    = do replCmd ["typeat"]
          line <- intLit
          col <- intLit
          n <- name
          pure (TypeAt (fromInteger line) (fromInteger col) n)
+  <|> do replCmd ["cs"]
+         line <- intLit
+         col <- intLit
+         n <- name
+         pure (CaseSplit (fromInteger line) (fromInteger col) n)
 
 export
 command : Rule REPLCmd
 command
-    = do symbol ":"; exactIdent "t"
+    = do symbol ":"; replCmd ["t", "type"]
          tm <- expr EqOK "(interactive)" init
          pure (Check tm)
-  <|> do symbol ":"; exactIdent "s"
+  <|> do symbol ":"; replCmd ["s", "search"]
          n <- name
          pure (ProofSearch n)
   <|> do symbol ":"; exactIdent "di"
          n <- name
          pure (DebugInfo n)
-  <|> do symbol ":"; exactIdent "q"
+  <|> do symbol ":"; replCmd ["q", "quit", "exit"]
          pure Quit
   <|> do symbol ":"; exactIdent "set"
          opt <- setOption True
@@ -1083,16 +1094,16 @@ command
   <|> do symbol ":"; exactIdent "unset"
          opt <- setOption False
          pure (SetOpt opt)
-  <|> do symbol ":"; exactIdent "c"
+  <|> do symbol ":"; replCmd ["c", "compile"]
          n <- unqualifiedName
          tm <- expr EqOK "(interactive)" init
          pure (Compile tm n)
   <|> do symbol ":"; exactIdent "exec"
          tm <- expr EqOK "(interactive)" init
          pure (Exec tm)
-  <|> do symbol ":"; exactIdent "r"
+  <|> do symbol ":"; replCmd ["r", "reload"]
          pure Reload
-  <|> do symbol ":"; exactIdent "e"
+  <|> do symbol ":"; replCmd ["e", "edit"]
          pure Edit
   <|> do symbol ":"; cmd <- editCmd
          pure (Editing cmd)

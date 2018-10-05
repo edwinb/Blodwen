@@ -30,6 +30,15 @@ mutual
   mismatch : Defs -> (Closure vars, Closure vars) -> Bool
   mismatch gam (x, y) = mismatchNF gam (evalClosure gam x) (evalClosure gam y)
 
+-- If the terms have the same type constructor at the head, and one of
+-- the argument positions has different constructors at its head, then this
+-- is an impossible case, so return True
+export
+impossibleOK : Defs -> NF vars -> NF vars -> Bool
+impossibleOK gam (NTCon xn xt xa xargs) (NTCon tn yt ya yargs)
+    = any (mismatch gam) (zip xargs yargs)
+impossibleOK _ _ _ = False
+
 -- Find names which are applied to a function in a Rig1/Rig0 position,
 -- so that we know how they should be bound on the right hand side of the
 -- pattern.
@@ -109,14 +118,6 @@ combineLinear loc ((n, count) :: cs)
     combineAll c (c' :: cs)
         = do newc <- combine c c'
              combineAll newc cs
-
--- If the terms have the same type constructor at the head, and one of
--- the argument positions has different constructors at its head, then this
--- is an impossible case, so return True
-impossibleOK : Defs -> NF vars -> NF vars -> Bool
-impossibleOK gam (NTCon xn xt xa xargs) (NTCon tn yt ya yargs)
-    = any (mismatch gam) (zip xargs yargs)
-impossibleOK _ _ _ = False
 
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
