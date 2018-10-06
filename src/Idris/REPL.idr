@@ -202,7 +202,7 @@ processEdit (TypeAt line col name)
          showHole gam [] n num t
 processEdit (CaseSplit line col name)
     = do res <- getSplits (within (line-1, col-1)) name
-         pure ()
+         coreLift $ printLn res
 
 -- Returns 'True' if the REPL should continue
 process : {auto c : Ref Ctxt Defs} ->

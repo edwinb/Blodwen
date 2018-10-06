@@ -314,7 +314,7 @@ mutual
     show (IImplicitApp _ fn Nothing arg) 
         = show fn ++ " @{" ++ show arg ++ "}"
     show (IImplicitApp _ fn (Just n) arg) 
-        = show fn ++ " {" ++ show n ++ " = " ++ show arg ++ "}"
+        = "(" ++ show fn ++ " {" ++ show n ++ " = " ++ show arg ++ "})"
     show (ISearch _ n) 
         = "%search"
     show (IAlternative _ u alts) 
