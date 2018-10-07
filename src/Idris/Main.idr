@@ -11,6 +11,7 @@ import Core.Unify
 
 import Idris.CommandLine
 import Idris.Desugar
+import Idris.IDEMode.REPL
 import Idris.ModTree
 import Idris.Package
 import Idris.Parser
@@ -92,8 +93,10 @@ stMain opts
 
                doRepl <- postOptions opts
                if doRepl then
-                    do putStrLnQ "Welcome to Blodwen. Good luck."
-                       repl {c} {u} {m}
+                    if ideMode opts
+                       then replIDE {c} {u} {m}
+                       else do putStrLnQ "Welcome to Blodwen. Good luck."
+                               repl {c} {u} {m}
                   else
                     -- exit with an error code if there was an error, otherwise
                     -- just exit

@@ -56,6 +56,7 @@ modules = Compiler.Common,
           Text.Quantity,
           Text.Token,
 
+          TTImp.CaseSplit,
           TTImp.Elab,
           TTImp.Elab.Ambiguity,
           TTImp.Elab.Delayed,

@@ -246,6 +246,13 @@ intLit
                            _ => Nothing)
 
 export
+strLit : Rule String
+strLit 
+    = terminal (\x => case tok x of
+                           StrLit s => Just s
+                           _ => Nothing)
+
+export
 symbol : String -> Rule ()
 symbol req
     = terminal (\x => case tok x of

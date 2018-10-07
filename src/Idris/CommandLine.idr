@@ -30,6 +30,7 @@ data CLOpt
   | PkgPath String
   | Package PkgCommand String
   | InputFile String
+  | IdeMode
 
 ActType : List String -> Type
 ActType [] = List CLOpt
@@ -53,6 +54,9 @@ options = [MkOpt ["--check", "-c"] [] [CheckOnly]
               (Just "Set code generator (default chez)"),
            MkOpt ["--package", "-p"] ["package"] (\f => [PkgPath f])
               (Just "Add a package as a dependency"),
+
+           MkOpt ["--ide-mode"] [] [IdeMode]
+              (Just "Run the REPL with machine-readable syntax"),
 
            MkOpt ["--prefix"] [] [ShowPrefix]
               (Just "Show installation prefix"),

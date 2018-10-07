@@ -64,4 +64,8 @@ postOptions (CheckOnly :: rest)
          pure False
 postOptions (_ :: rest) = postOptions rest
 
-
+export
+ideMode : List CLOpt -> Bool
+ideMode [] = False
+ideMode (IdeMode :: _) = True
+ideMode (_ :: xs) = ideMode xs
