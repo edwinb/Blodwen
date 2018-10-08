@@ -120,19 +120,22 @@ repl : {auto c : Ref Ctxt Defs} ->
        Core FC ()
 repl
     = do inp <- coreLift getInput
-         case parseSExp inp of
-              Left err =>
-                 do printError ("Parse error: " ++ show err)
-                    repl
-              Right sexp =>
-                 case getMsg sexp of
-                      Just (cmd, i) => 
-                         do setOutput (IDEMode i)
-                            process cmd
+         end <- coreLift $ fEOF stdin
+         if end
+            then pure ()
+            else case parseSExp inp of
+                      Left err =>
+                         do printError ("Parse error: " ++ show err)
                             repl
-                      Nothing => 
-                         do printError "Unrecognised command"
-                            repl
+                      Right sexp =>
+                         case getMsg sexp of
+                              Just (cmd, i) => 
+                                 do setOutput (IDEMode i)
+                                    process cmd
+                                    repl
+                              Nothing => 
+                                 do printError "Unrecognised command"
+                                    repl
 
 export
 replIDE : {auto c : Ref Ctxt Defs} ->

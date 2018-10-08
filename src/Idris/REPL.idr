@@ -291,7 +291,7 @@ process (Editing cmd)
     = do processEdit cmd
          pure True
 process Quit 
-    = do coreLift $ putStrLn "Bye for now!"
+    = do iputStrLn "Bye for now!"
          pure False
 
 processCatch : {auto c : Ref Ctxt Defs} ->
@@ -339,13 +339,16 @@ repl
          opts <- get ROpts
          coreLift (putStr (prompt (evalMode opts) ++ showSep "." (reverse ns) ++ "> "))
          inp <- coreLift getLine
-         case parseRepl inp of
-              Left err => do coreLift (printLn err)
-                             repl
-              Right cmd =>
-                  do if !(processCatch cmd)
-                        then repl
-                        else pure ()
+         end <- coreLift $ fEOF stdin
+         if end
+            then iputStrLn "Bye for now!"
+            else case parseRepl inp of
+                      Left err => do coreLift (printLn err)
+                                     repl
+                      Right cmd =>
+                          do if !(processCatch cmd)
+                                then repl
+                                else pure ()
   where
     prompt : REPLEval -> String
     prompt EvalTC = "[tc] "
