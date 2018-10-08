@@ -58,7 +58,7 @@ updatePaths
          addDataDir (dir_prefix (dirs (options defs)) ++ dirSep ++
                         "blodwen" ++ dirSep ++ "support")
 
-updateREPLOpts : {auto c : Ref ROpts REPLOpts} ->
+updateREPLOpts : {auto o : Ref ROpts REPLOpts} ->
                  Core annot ()
 updateREPLOpts
     = do opts <- get ROpts
@@ -75,17 +75,18 @@ stMain opts
          addPrimitives
 
          updatePaths
+         let ide = ideMode opts
+         let outmode = if ide then IDEMode 0 else REPL False
+         let fname = findInput opts
+         o <- newRef ROpts (REPLOpts.defaultOpts fname outmode)
+         
          -- If there's a --build or --install, just do that then quit
          done <- processPackageOpts opts
 
          when (not done) $
             do preOptions opts
 
-               let fname = findInput opts
-
                u <- newRef UST initUState
-               o <- newRef ROpts (REPL.defaultOpts fname)
-
                updateREPLOpts
                case fname of
                     Nothing => readPrelude
@@ -93,9 +94,9 @@ stMain opts
 
                doRepl <- postOptions opts
                if doRepl then
-                    if ideMode opts
+                    if ide
                        then replIDE {c} {u} {m}
-                       else do putStrLnQ "Welcome to Blodwen. Good luck."
+                       else do iputStrLn "Welcome to Blodwen. Good luck."
                                repl {c} {u} {m}
                   else
                     -- exit with an error code if there was an error, otherwise

@@ -78,7 +78,3 @@ send resp
          coreLift $ hex (cast (length r))
          coreLift $ putStr r
          coreLift $ fflush stdout
-
-export
-sendErr : String -> Integer -> Core annot ()
-sendErr str msg = send (sym "return", (sym "error", str), msg)

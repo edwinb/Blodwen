@@ -14,6 +14,7 @@ import Idris.Desugar
 import Idris.Error
 import Idris.Parser
 import Idris.ProcessIdr
+import Idris.REPLCommon
 import Idris.Syntax
 
 %default covering
@@ -122,6 +123,7 @@ fnameModified fname
 
 buildMod : {auto c : Ref Ctxt Defs} ->
            {auto s : Ref Syn SyntaxInfo} ->
+           {auto o : Ref ROpts REPLOpts} ->
            FC -> Nat -> Nat -> BuildMod -> Core FC (List (Error FC))
 -- Build from source if any of the dependencies, or the associated source
 -- file, have a modification time which is newer than the module's ttc
@@ -148,7 +150,7 @@ buildMod loc num len mod
         let showMod = showSep "." (reverse (buildNS mod))
 
         if needsBuilding
-           then do putStrLnQ $ show num ++ "/" ++ show len ++
+           then do iputStrLn $ show num ++ "/" ++ show len ++
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
                    [] <- process {u} {m} src
@@ -163,6 +165,7 @@ buildMod loc num len mod
 
 buildMods : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
+            {auto o : Ref ROpts REPLOpts} ->
             FC -> Nat -> Nat -> List BuildMod -> Core FC (List (Error FC))
 buildMods fc num len [] = pure []
 buildMods fc num len (m :: ms)
@@ -175,6 +178,7 @@ buildDeps : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             {auto m : Ref Meta (Metadata FC)} ->
             {auto u : Ref UST (UState FC)} ->
+            {auto o : Ref ROpts REPLOpts} ->
             (mainFile : String) -> Core FC (List (Error FC))
 buildDeps fname
     = do mods <- getBuildMods toplevelFC fname
@@ -194,6 +198,7 @@ buildDeps fname
 export
 buildAll : {auto c : Ref Ctxt Defs} ->
            {auto s : Ref Syn SyntaxInfo} ->
+           {auto o : Ref ROpts REPLOpts} ->
            (allFiles : List String) -> Core FC (List (Error FC))
 buildAll allFiles
     = do mods <- traverse (getBuildMods toplevelFC) allFiles

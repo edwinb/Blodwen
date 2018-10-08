@@ -24,10 +24,11 @@ addPkgDir p
 -- Options to be processed before type checking
 export
 preOptions : {auto c : Ref Ctxt Defs} ->
+             {auto o : Ref ROpts REPLOpts} ->
              List CLOpt -> Core annot ()
 preOptions [] = pure ()
 preOptions (Quiet :: opts)
-    = do setSession (record { quiet = True } !getSession)
+    = do setOutput (REPL True)
          preOptions opts
 preOptions (NoPrelude :: opts)
     = do setSession (record { noprelude = True } !getSession)

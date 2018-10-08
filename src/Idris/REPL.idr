@@ -20,6 +20,7 @@ import Idris.Error
 import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
+import public Idris.REPLCommon
 import Idris.Syntax
 
 import TTImp.CaseSplit
@@ -33,25 +34,6 @@ import TTImp.Reflect
 import System
 
 %default covering
-
-public export
-record REPLOpts where
-  constructor MkREPLOpts
-  showTypes : Bool
-  evalMode : REPLEval
-  mainfile : Maybe String
-  editor : String
-  errorLine : Maybe Int
-
-export
-defaultOpts : Maybe String -> REPLOpts
-defaultOpts fname = MkREPLOpts False NormaliseAll fname "vim" Nothing
-
-export
-data ROpts : Type where
-
-replFC : FC
-replFC = MkFC "(interactive)" (0, 0) (0, 0)
 
 getFCLine : FC -> Int
 getFCLine fc = fst (startPos fc)
@@ -283,7 +265,10 @@ process (Compile ctm outfile)
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
          (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
-         compile !findCG tm outfile
+         ok <- compile !findCG tm outfile
+         maybe (pure ())
+               (\fname => iputStrLn (outfile ++ " written"))
+               ok
          pure True
 process (Exec ctm)
     = do execExp ctm

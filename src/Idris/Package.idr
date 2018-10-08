@@ -8,6 +8,7 @@ import Core.Unify
 
 import Idris.CommandLine
 import Idris.ModTree
+import Idris.REPLOpts
 import Idris.SetOptions
 import Idris.Syntax
 import Parser.Lexer
@@ -154,6 +155,7 @@ addDeps pkg
          pure ()
 
 processOptions : {auto c : Ref Ctxt Defs} ->
+                 {auto o : Ref ROpts REPLOpts} ->
                  Maybe (FC, String) -> Core FC ()
 processOptions Nothing = pure ()
 processOptions (Just (fc, opts))
@@ -163,6 +165,7 @@ processOptions (Just (fc, opts))
 
 build : {auto c : Ref Ctxt Defs} ->
         {auto s : Ref Syn SyntaxInfo} ->
+        {auto o : Ref ROpts REPLOpts} ->
         PkgDesc -> Core FC (List (Error FC))
 build pkg
     = do defs <- get Ctxt
@@ -203,7 +206,9 @@ installFrom pname builddir destdir ns@(m :: dns)
 -- Install all the built modules in prefix/package/
 -- We've already built and checked for success, so if any don't exist that's
 -- an internal error.
-install : {auto c : Ref Ctxt Defs} -> PkgDesc -> Core FC ()
+install : {auto c : Ref Ctxt Defs} -> 
+          {auto o : Ref ROpts REPLOpts} ->
+          PkgDesc -> Core FC ()
 install pkg 
     = do defs <- get Ctxt
          let build = build_dir (dirs (options defs))
@@ -231,7 +236,9 @@ install pkg
 
 -- Just load the 'Main' module, if it exists, which will involve building
 -- it if necessary
-runRepl : {auto c : Ref Ctxt Defs} -> PkgDesc -> Core FC ()
+runRepl : {auto c : Ref Ctxt Defs} -> 
+          {auto o : Ref ROpts REPLOpts} ->
+          PkgDesc -> Core FC ()
 runRepl pkg 
     = do addDeps pkg 
          processOptions (options pkg)
@@ -239,6 +246,7 @@ runRepl pkg
 
 processPackage : {auto c : Ref Ctxt Defs} ->
                  {auto s : Ref Syn SyntaxInfo} ->
+                 {auto o : Ref ROpts REPLOpts} ->
                  PkgCommand -> String -> Core FC ()
 processPackage cmd file 
     = do Right (pname, fs) <- coreLift $ parseFile file 
@@ -268,6 +276,7 @@ rejectPackageOpts [] = pure False
 export
 processPackageOpts : {auto c : Ref Ctxt Defs} ->
                      {auto s : Ref Syn SyntaxInfo} ->
+                     {auto o : Ref ROpts REPLOpts} ->
                      List CLOpt -> Core FC Bool
 processPackageOpts [Package cmd f] 
     = do processPackage cmd f

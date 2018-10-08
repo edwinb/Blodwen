@@ -59,7 +59,7 @@ compileToRKT c tm outfile
          pure ()
 
 compileExpr : Ref Ctxt Defs ->
-              ClosedTerm -> (outfile : String) -> Core annot ()
+              ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
 compileExpr c tm outfile
     = do tmp <- coreLift $ tmpName
          let outn = tmp ++ ".rkt"
@@ -67,8 +67,8 @@ compileExpr c tm outfile
          raco <- coreLift findRacoExe
          ok <- coreLift $ system (raco ++ " -o " ++ outfile ++ " " ++ outn)
          if ok == 0
-            then putStrLnQ $ outfile ++ " written"
-            else pure ()
+            then pure (Just outfile)
+            else pure Nothing
 
 executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
 executeExpr c tm

@@ -20,6 +20,7 @@ import Idris.Error
 import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
+import Idris.REPLCommon
 import Idris.Syntax
 
 import Idris.IDEMode.Parser
@@ -100,29 +101,45 @@ getInput
                 do inp <- getNChars (cast num)
                    pure (pack inp)
 
+process : {auto c : Ref Ctxt Defs} ->
+          {auto u : Ref UST (UState FC)} ->
+          {auto s : Ref Syn SyntaxInfo} ->
+          {auto m : Ref Meta (Metadata FC)} ->
+          {auto o : Ref ROpts REPLOpts} ->
+          IDECommand -> Core FC ()
+process (LoadFile fname toline) 
+    = printError "Not implemented"
+process (TypeOf n pos) 
+    = printError "Not implemented"
+
 repl : {auto c : Ref Ctxt Defs} ->
        {auto u : Ref UST (UState FC)} ->
        {auto s : Ref Syn SyntaxInfo} ->
        {auto m : Ref Meta (Metadata FC)} ->
+       {auto o : Ref ROpts REPLOpts} ->
        Core FC ()
-repl 
+repl
     = do inp <- coreLift getInput
          case parseSExp inp of
               Left err =>
-                 do sendErr ("Parse error: " ++ show err) 0
+                 do printError ("Parse error: " ++ show err)
                     repl
               Right sexp =>
                  case getMsg sexp of
-                      Just (cmd, i) => do sendErr "Not implemented" i
-                                          repl
-                      Nothing => do sendErr "Unrecognised command" 0
-                                    repl
+                      Just (cmd, i) => 
+                         do setOutput (IDEMode i)
+                            process cmd
+                            repl
+                      Nothing => 
+                         do printError "Unrecognised command"
+                            repl
 
 export
 replIDE : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
           {auto m : Ref Meta (Metadata FC)} ->
+          {auto o : Ref ROpts REPLOpts} ->
           Core FC ()
 replIDE = 
     do send (version 2 0)

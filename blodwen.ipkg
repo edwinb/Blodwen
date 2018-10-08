@@ -11,6 +11,8 @@ modules = Idris.BindImplicits,
           Idris.Parser,
           Idris.ProcessIdr,
           Idris.REPL,
+          Idris.REPLCommon,
+          Idris.REPLOpts,
           Idris.Resugar,
 
           Idris.Elab.Implementation,

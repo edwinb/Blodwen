@@ -737,19 +737,6 @@ setCG cg
     = do defs <- get Ctxt
          put Ctxt (record { options->session->codegen = cg } defs)
 
--- Print, but only when not in quiet mode
-export
-putStrQ : {auto c : Ref Ctxt Defs} ->
-          String -> Core annot ()
-putStrQ str
-    = when (not (quiet !getSession)) $
-         coreLift $ putStr str
-
-export
-putStrLnQ : {auto c : Ref Ctxt Defs} ->
-            String -> Core annot ()
-putStrLnQ str = putStrQ (str ++ "\n")
-
 export
 getPPrint : {auto c : Ref Ctxt Defs} ->
             Core annot PPrinter

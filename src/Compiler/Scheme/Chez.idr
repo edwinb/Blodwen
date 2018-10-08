@@ -107,12 +107,12 @@ compileToSS c tm outfile
          pure ()
 
 compileExpr : Ref Ctxt Defs ->
-              ClosedTerm -> (outfile : String) -> Core annot ()
+              ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
 compileExpr c tm outfile
     = do let outn = outfile ++ ".ss"
          compileToSS c tm outn
          -- TODO: Compile to .so too?
-         putStrLnQ $ outn ++ " written"
+         pure (Just outn)
 
 executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
 executeExpr c tm

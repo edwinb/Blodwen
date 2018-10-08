@@ -60,7 +60,7 @@ compileToSCM c tm outfile
          pure ()
 
 compileExpr : Ref Ctxt Defs ->
-              ClosedTerm -> (outfile : String) -> Core annot ()
+              ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
 compileExpr c tm outfile
     = do tmp <- coreLift $ tmpName
          let outn = tmp ++ ".scm"
@@ -68,8 +68,8 @@ compileExpr c tm outfile
          csc <- coreLift findCSC
          ok <- coreLift $ system (csc ++ " " ++ outn ++ " -o " ++ outfile)
          if ok == 0
-            then putStrLnQ $ outfile ++ " written"
-            else pure ()
+            then pure (Just outfile)
+            else pure Nothing
 
 executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
 executeExpr c tm

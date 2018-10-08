@@ -14,13 +14,13 @@ public export
 record Codegen annot where
   constructor MkCG
   compileExpr : Ref Ctxt Defs -> 
-                ClosedTerm -> (outfile : String) -> Core annot ()
+                ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
   executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
 
 export
 compile : {auto c : Ref Ctxt Defs} ->
           Codegen annot ->
-          ClosedTerm -> (outfile : String) -> Core annot ()
+          ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
 compile {c} cg = compileExpr cg c
 
 export

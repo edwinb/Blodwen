@@ -130,7 +130,6 @@ getCG cg = lookup (toLower cg) availableCGs
 public export
 record Session where
   constructor MkSessionOpts
-  quiet : Bool
   noprelude : Bool
   codegen : CG
 
@@ -154,7 +153,7 @@ defaultPPrint : PPrinter
 defaultPPrint = MkPPOpts False False
 
 defaultSession : Session
-defaultSession = MkSessionOpts False False Chez
+defaultSession = MkSessionOpts False Chez
 
 export
 defaults : Options
