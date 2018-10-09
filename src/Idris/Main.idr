@@ -74,6 +74,7 @@ stMain opts
          m <- newRef Meta initMetadata
          addPrimitives
 
+         setWorkingDir "."
          updatePaths
          let ide = ideMode opts
          let outmode = if ide then IDEMode 0 else REPL False

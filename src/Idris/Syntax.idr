@@ -281,6 +281,7 @@ data REPLCmd : Type where
      ProofSearch : Name -> REPLCmd
      DebugInfo : Name -> REPLCmd
      SetOpt : REPLOpt -> REPLCmd
+     CD : String -> REPLCmd
      Editing : EditCmd -> REPLCmd
      Quit : REPLCmd
 

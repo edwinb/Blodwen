@@ -20,7 +20,7 @@ import Idris.Error
 import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
-import Idris.REPLCommon
+import Idris.REPL
 import Idris.Syntax
 
 import Idris.IDEMode.Parser
@@ -36,10 +36,13 @@ import Control.Catchable
 import System
 
 data IDECommand
-     = LoadFile String (Maybe Integer)
+     = Interpret String
+     | LoadFile String (Maybe Integer)
      | TypeOf String (Maybe (Integer, Integer))
 
 getIDECommand : SExp -> Maybe IDECommand
+getIDECommand (SExpList [SymbolAtom "interpret", StringAtom cmd])
+    = Just $ Interpret cmd
 getIDECommand (SExpList [SymbolAtom "load-file", StringAtom fname])
     = Just $ LoadFile fname Nothing
 getIDECommand (SExpList [SymbolAtom "load-file", StringAtom fname, IntegerAtom l])
@@ -107,18 +110,26 @@ process : {auto c : Ref Ctxt Defs} ->
           {auto m : Ref Meta (Metadata FC)} ->
           {auto o : Ref ROpts REPLOpts} ->
           IDECommand -> Core FC ()
+process (Interpret cmd)
+    = do interpret cmd
+         printResult "Done"
 process (LoadFile fname toline) 
-    = printError "Not implemented"
+    = do opts <- get ROpts
+         put ROpts (record { mainfile = Just fname } opts)
+         resetContext
+         errs <- buildDeps fname
+         updateErrorLine errs
+         when (isNil errs) $ printResult $ "Loaded " ++ fname
 process (TypeOf n pos) 
     = printError "Not implemented"
 
-repl : {auto c : Ref Ctxt Defs} ->
+loop : {auto c : Ref Ctxt Defs} ->
        {auto u : Ref UST (UState FC)} ->
        {auto s : Ref Syn SyntaxInfo} ->
        {auto m : Ref Meta (Metadata FC)} ->
        {auto o : Ref ROpts REPLOpts} ->
        Core FC ()
-repl
+loop
     = do inp <- coreLift getInput
          end <- coreLift $ fEOF stdin
          if end
@@ -126,16 +137,16 @@ repl
             else case parseSExp inp of
                       Left err =>
                          do printError ("Parse error: " ++ show err)
-                            repl
+                            loop
                       Right sexp =>
                          case getMsg sexp of
                               Just (cmd, i) => 
                                  do setOutput (IDEMode i)
                                     process cmd
-                                    repl
+                                    loop
                               Nothing => 
                                  do printError "Unrecognised command"
-                                    repl
+                                    loop
 
 export
 replIDE : {auto c : Ref Ctxt Defs} ->
@@ -146,5 +157,5 @@ replIDE : {auto c : Ref Ctxt Defs} ->
           Core FC ()
 replIDE = 
     do send (version 2 0)
-       repl
+       loop
 

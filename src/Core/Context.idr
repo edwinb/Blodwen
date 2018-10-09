@@ -769,6 +769,14 @@ setBuildDir dir
          put Ctxt (record { options->dirs->build_dir = dir } defs)
 
 export
+setWorkingDir : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
+setWorkingDir dir
+    = do defs <- get Ctxt
+         coreLift $ changeDir dir
+         cdir <- coreLift $ currentDir
+         put Ctxt (record { options->dirs->working_dir = cdir } defs)
+
+export
 setPrefix : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
 setPrefix dir
     = do defs <- get Ctxt

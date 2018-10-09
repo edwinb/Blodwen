@@ -1,5 +1,11 @@
 module Idris.REPLCommon
 
+import Core.Context
+import Core.InitPrimitives
+import Core.Metadata
+import Core.Options
+import Core.Unify
+
 import public Idris.REPLOpts
 import Idris.Syntax
 import Idris.IDEMode.Commands
@@ -36,5 +42,32 @@ export
 printError : {auto o : Ref ROpts REPLOpts} ->
              String -> Core annot ()
 printError msg = printWithStatus "error" msg
+
+getFCLine : FC -> Int
+getFCLine fc = fst (startPos fc)
+
+export
+updateErrorLine : {auto o : Ref ROpts REPLOpts} ->
+                  List (Error FC) -> Core FC ()
+updateErrorLine []
+    = do opts <- get ROpts
+         put ROpts (record { errorLine = Nothing } opts)
+updateErrorLine (e :: es)
+    = do opts <- get ROpts
+         put ROpts (record { errorLine = map getFCLine (getAnnot e) } opts)
+
+export
+resetContext : {auto u : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState FC)} ->
+               {auto s : Ref Syn SyntaxInfo} ->
+               {auto m : Ref Meta (Metadata FC)} ->
+               Core FC ()
+resetContext
+    = do defs <- get Ctxt
+         put Ctxt (record { options = clearNames (options defs) } initCtxt)
+         addPrimitives
+         put UST initUState
+         put Syn initSyntax
+         put Meta initMetadata
 
 

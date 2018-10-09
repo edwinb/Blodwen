@@ -106,10 +106,13 @@ mkBuildMods acc mod
 -- built for that main file, in the order they need to be built
 export
 getBuildMods : {auto c : Ref Ctxt Defs} ->
+               {auto o : Ref ROpts REPLOpts} ->
                annot -> (mainFile : String) -> Core annot (List BuildMod)
 getBuildMods loc fname
     = do a <- newRef AllMods []
-         t <- mkModTree {a} loc [] (pathToNS fname)
+         d <- getDirs
+
+         t <- mkModTree {a} loc [] (pathToNS (working_dir d) fname)
          pure (reverse (mkBuildMods [] t))
 
 fnameModified : String -> Core annot Integer
@@ -161,7 +164,7 @@ buildMod loc num len mod
   where
     printAll : {auto s : Ref Syn SyntaxInfo} ->
                List (Error FC) -> Core FC ()
-    printAll xs = coreLift $ putStrLn $ showSep "\n" !(traverse display xs)
+    printAll xs = printError $ showSep "\n" !(traverse display xs)
 
 buildMods : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->

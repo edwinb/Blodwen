@@ -125,7 +125,8 @@ processMod mod
                 let ns = moduleNS mod
                 when (ns /= ["Main"]) $
                    do let MkFC fname _ _ = headerloc mod
-                      when (pathToNS fname /= ns) $
+                      d <- getDirs
+                      when (pathToNS (working_dir d) fname /= ns) $
                           throw (GenericMsg (headerloc mod) 
                                    ("Module name " ++ showSep "." (reverse ns) ++
                                     " does not match file name " ++ fname))
@@ -169,7 +170,8 @@ process file
                               if isNil errs
                                  then
                                    do defs <- get Ctxt
-                                      makeBuildDirectory (pathToNS file)
+                                      d <- getDirs
+                                      makeBuildDirectory (pathToNS (working_dir d) file)
                                       fn <- getTTCFileName file ".ttc"
                                       writeToTTC !(get Syn) fn
                                       mfn <- getTTCFileName file ".ttm"

@@ -83,11 +83,24 @@ nsToSource loc ns
 -- Given a filename in the working directory, return the correct
 -- namespace for it
 export
-pathToNS : String -> List String
-pathToNS fname
-    = case span (/=sep) fname of
-           (end, "") => [dropExtension end]
-           (mod, rest) => assert_total (pathToNS (strTail rest)) ++ [mod]
+pathToNS : String -> String -> List String
+pathToNS wdir fname
+    = let wsplit = splitSep wdir
+          fsplit = splitSep fname in
+          dropWdir wsplit fsplit fsplit
+  where
+    dropWdir : List String -> List String -> List String -> List String
+    dropWdir wdir orig [] = []
+    dropWdir wdir orig (x :: xs)
+        = if wdir == xs
+             then [x]
+             else x :: dropWdir wdir orig xs
+
+    splitSep : String -> List String
+    splitSep fname 
+        = case span (/=sep) fname of
+               (end, "") => [dropExtension end]
+               (mod, rest) => assert_total (splitSep (strTail rest)) ++ [mod]
 
 -- Create subdirectories, if they don't exist
 export
@@ -129,8 +142,12 @@ getTTCFileName : {auto c : Ref Ctxt Defs} ->
 getTTCFileName inp ext
     = do ns <- getNS
          d <- getDirs
+         -- Get its namespace from the file relative to the working directory
+         -- and generate the ttc file from that
+         let ns = pathToNS (working_dir d) inp
+         let fname = showSep (cast sep) (reverse ns) ++ ext
          let bdir = build_dir d
-         pure $ bdir ++ cast sep ++ dropExtension inp ++ ext
+         pure $ bdir ++ cast sep ++ fname
 
 -- Given a root executable name, return the name in the build directory
 export

@@ -35,9 +35,6 @@ import System
 
 %default covering
 
-getFCLine : FC -> Int
-getFCLine fc = fst (startPos fc)
-
 showInfo : (Name, GlobalDef) -> Core annot ()
 showInfo (n, d) 
     = do coreLift $ putStrLn (show n ++ " ==> " ++ show (definition d))
@@ -145,29 +142,6 @@ execExp ctm
                                [] (MkNested []) NONE InExpr ttimp 
          execute !findCG tm
          
-resetContext : {auto u : Ref Ctxt Defs} ->
-               {auto u : Ref UST (UState FC)} ->
-               {auto s : Ref Syn SyntaxInfo} ->
-               {auto m : Ref Meta (Metadata FC)} ->
-               Core FC ()
-resetContext
-    = do defs <- get Ctxt
-         put Ctxt (record { options = clearNames (options defs) } initCtxt)
-         addPrimitives
-         put UST initUState
-         put Syn initSyntax
-         put Meta initMetadata
-
-export
-updateErrorLine : {auto o : Ref ROpts REPLOpts} ->
-                  List (Error FC) -> Core FC ()
-updateErrorLine []
-    = do opts <- get ROpts
-         put ROpts (record { errorLine = Nothing } opts)
-updateErrorLine (e :: es)
-    = do opts <- get ROpts
-         put ROpts (record { errorLine = map getFCLine (getAnnot e) } opts)
-
 processEdit : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
@@ -249,6 +223,9 @@ process (Load f)
          resetContext
          updateErrorLine !(buildDeps f)
          pure True
+process (CD dir)
+    = do setWorkingDir dir
+         pure True
 process Edit
     = do opts <- get ROpts
          case mainfile opts of
@@ -316,16 +293,34 @@ processCatch cmd
 
 parseRepl : String -> Either ParseError REPLCmd
 parseRepl inp
-   = if isPrefixOf ":load" inp
-        then getLoad 5 inp
-        else if isPrefixOf ":l" inp
-                then getLoad 2 inp
-                else runParser inp (do c <- command; eoi; pure c)
+    = case fnameCmd [(":load", Load), (":l", Load), (":cd", CD)] inp of
+           Nothing => runParser inp (do c <- command; eoi; pure c)
+           Just cmd => Right cmd
   where
     -- a right load of hackery - we can't tokenise the filename using the
     -- ordinary parser. There's probably a better way...
-    getLoad : Nat -> String -> Either ParseError REPLCmd
-    getLoad n str = Right (Load (trim (substr n (length str) str)))
+    getLoad : Nat -> (String -> REPLCmd) -> String -> Maybe REPLCmd
+    getLoad n cmd str = Just (cmd (trim (substr n (length str) str)))
+
+    fnameCmd : List (String, String -> REPLCmd) -> String -> Maybe REPLCmd
+    fnameCmd [] inp = Nothing
+    fnameCmd ((pre, cmd) :: rest) inp
+        = if isPrefixOf pre inp
+             then getLoad (length pre) cmd inp
+             else fnameCmd rest inp
+
+export
+interpret : {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState FC)} ->
+            {auto s : Ref Syn SyntaxInfo} ->
+            {auto m : Ref Meta (Metadata FC)} ->
+            {auto o : Ref ROpts REPLOpts} ->
+            String -> Core FC Bool
+interpret inp
+    = case parseRepl inp of
+           Left err => do printError (show err)
+                          pure True
+           Right cmd => processCatch cmd
 
 export
 repl : {auto c : Ref Ctxt Defs} ->
@@ -342,13 +337,10 @@ repl
          end <- coreLift $ fEOF stdin
          if end
             then iputStrLn "Bye for now!"
-            else case parseRepl inp of
-                      Left err => do coreLift (printLn err)
-                                     repl
-                      Right cmd =>
-                          do if !(processCatch cmd)
-                                then repl
-                                else pure ()
+            else if !(interpret inp)
+                    then repl
+                    else pure ()
+
   where
     prompt : REPLEval -> String
     prompt EvalTC = "[tc] "
