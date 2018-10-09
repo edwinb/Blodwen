@@ -12,10 +12,18 @@ data SExp = SExpList (List SExp)
           | IntegerAtom Integer
           | SymbolAtom String
 
+escape : String -> String
+escape = pack . concatMap escapeChar . unpack
+  where
+    escapeChar : Char -> List Char
+    escapeChar '\\' = ['\\', '\\']
+    escapeChar '"'  = ['\\', '\"']
+    escapeChar c    = [c]
+
 export
 Show SExp where
   show (SExpList xs) = "(" ++ showSep " " (map show xs) ++ ")"
-  show (StringAtom str) = show str
+  show (StringAtom str) = "\"" ++ escape str ++ "\""
   show (BoolAtom b) = ":" ++ show b
   show (IntegerAtom i) = show i
   show (SymbolAtom s) = ":" ++ s

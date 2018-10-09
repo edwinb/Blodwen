@@ -157,14 +157,10 @@ buildMod loc num len mod
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
                    [] <- process {u} {m} src
-                      | errs => do printAll errs
+                      | errs => do traverse emitError errs
                                    pure errs
                    pure []
            else pure []
-  where
-    printAll : {auto s : Ref Syn SyntaxInfo} ->
-               List (Error FC) -> Core FC ()
-    printAll xs = printError $ showSep "\n" !(traverse display xs)
 
 buildMods : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->

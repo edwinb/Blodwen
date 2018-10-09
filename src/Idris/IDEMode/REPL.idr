@@ -119,7 +119,9 @@ process (LoadFile fname toline)
          resetContext
          errs <- buildDeps fname
          updateErrorLine errs
-         when (isNil errs) $ printResult $ "Loaded " ++ fname
+         case errs of
+              [] => printResult $ "Loaded " ++ fname
+              _ => printError $ "Failed to load " ++ fname
 process (TypeOf n pos) 
     = printError "Not implemented"
 

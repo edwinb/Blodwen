@@ -6,9 +6,10 @@ import Core.Metadata
 import Core.Options
 import Core.Unify
 
+import Idris.Error
+import Idris.IDEMode.Commands
 import public Idris.REPLOpts
 import Idris.Syntax
-import Idris.IDEMode.Commands
 
 -- Output informational messages, unless quiet flag is set
 export
@@ -38,10 +39,37 @@ printResult : {auto o : Ref ROpts REPLOpts} ->
               String -> Core annot ()
 printResult msg = printWithStatus "ok" msg
 
+-- Return that a protocol request failed somehow
 export
 printError : {auto o : Ref ROpts REPLOpts} ->
              String -> Core annot ()
 printError msg = printWithStatus "error" msg
+
+-- Display an error message from checking a source file
+export
+emitError : {auto c : Ref Ctxt Defs} ->
+            {auto o : Ref ROpts REPLOpts} ->
+            {auto s : Ref Syn SyntaxInfo} ->
+            Error FC -> Core FC ()
+emitError err
+    = do opts <- get ROpts
+         msg <- display err
+         case idemode opts of
+              REPL _ => coreLift $ putStrLn msg
+              IDEMode i =>
+                case getAnnot err of
+                     Nothing => iputStrLn msg
+                     Just fc =>
+                        send (SExpList [SymbolAtom "warning", 
+                                SExpList [toSExp (file fc), 
+                                          toSExp (addOne (startPos fc)), 
+                                          toSExp (addOne (endPos fc)), 
+                                          toSExp msg,
+                                          SExpList []],
+                                toSExp i])
+  where
+    addOne : (Int, Int) -> (Int, Int)
+    addOne (l, c) = (l + 1, c + 1)
 
 getFCLine : FC -> Int
 getFCLine fc = fst (startPos fc)
