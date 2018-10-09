@@ -69,32 +69,35 @@ tidy n = show n
 
 showHole : {auto c : Ref Ctxt Defs} ->
            {auto s : Ref Syn SyntaxInfo} ->
-           Defs -> Env Term vars -> Name -> Nat -> Term vars -> Core FC ()
+           Defs -> Env Term vars -> Name -> Nat -> Term vars -> Core FC String
 showHole gam env fn (S args) (Bind x (Pi c inf ty) sc)
     = do ity <- resugar env (normaliseHoles gam env ty)
-         when (showName x) $
-           coreLift $ putStrLn $
-              showCount c ++ impBracket inf (tidy x ++ " : " ++ show ity)
-         showHole gam (Pi c inf ty :: env) fn args sc
+         let pre = if showName x
+                      then showCount c ++ 
+                           impBracket inf (tidy x ++ " : " ++ show ity) ++ "\n"
+                      else ""
+         pure $ pre ++ !(showHole gam (Pi c inf ty :: env) fn args sc)
 showHole gam env fn (S args) (Bind x (PVar c ty) sc)
     = do ity <- resugar env (normaliseHoles gam env ty)
-         when (showName x) $
-           coreLift $ putStrLn $
-              showCount c ++ impBracket Explicit (tidy x ++ " : " ++ show ity)
-         showHole gam (PVar c ty :: env) fn args sc
+         let pre = if showName x
+                      then showCount c ++ 
+                           impBracket Explicit (tidy x ++ " : " ++ show ity) ++ "\n"
+                      else ""
+         pure $ pre ++ !(showHole gam (PVar c ty :: env) fn args sc)
 showHole gam env fn args (Bind x (Let c val ty) sc)
     = showHole gam env fn args (subst val sc)
 showHole gam env fn args ty
-    = do coreLift $ putStrLn "-------------------------------------"
-         ity <- resugar env (normaliseHoles gam env ty)
-         coreLift $ putStrLn $ nameRoot fn ++ " : " ++ show ity
+    = do ity <- resugar env (normaliseHoles gam env ty)
+         pure $ "-------------------------------------\n" ++
+                nameRoot fn ++ " : " ++ show ity
 
 displayType : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->
-              Defs -> (Name, GlobalDef) -> Core FC ()
+              Defs -> (Name, GlobalDef) -> 
+              Core FC String
 displayType gam (n, def) 
     = maybe (do tm <- resugar [] (normaliseHoles gam [] (type def))
-                coreLift $ putStrLn $ show n ++ " : " ++ show tm)
+                pure (show n ++ " : " ++ show tm))
             (\num => showHole gam [] n num (type def))
             (isHole def)
 
@@ -153,14 +156,16 @@ processEdit (TypeAt line col name)
          Just (n, num, t) <- findTypeAt (within (line-1, col-1))
             | Nothing => case lookupGlobalName name (gamma gam) of
                               [] => throw (UndefinedName (MkFC "(interactive)" (0,0) (0,0)) name)
-                              ts => do traverse (displayType gam) ts
+                              ts => do tys <- traverse (displayType gam) ts
+                                       printResult (showSep "\n" tys)
                                        pure ()
-         showHole gam [] n num t
+         printResult !(showHole gam [] n num t)
 processEdit (CaseSplit line col name)
     = do res <- getSplits (within (line-1, col-1)) name
          coreLift $ printLn res
 
 -- Returns 'True' if the REPL should continue
+export
 process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
@@ -194,7 +199,8 @@ process (Check (PRef fc fn))
     = do defs <- get Ctxt
          case lookupGlobalName fn (gamma defs) of
               [] => throw (UndefinedName fc fn)
-              ts => do traverse (displayType defs) ts
+              ts => do tys <- traverse (displayType defs) ts
+                       printResult (showSep "\n" tys)
                        pure True
 process (Check itm)
     = do i <- newRef ImpST (initImpState {annot = FC})
@@ -288,7 +294,6 @@ processCatch cmd
                            put Syn s'
                            put ROpts o'
                            coreLift (putStrLn !(perror err))
-                           opts <- get ROpts
                            pure True)
 
 parseRepl : String -> Either ParseError REPLCmd

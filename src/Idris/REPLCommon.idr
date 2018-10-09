@@ -31,7 +31,9 @@ printWithStatus status msg
          case idemode opts of
               REPL _ => coreLift $ putStrLn msg
               IDEMode i =>
-                do let m = SExpList [SymbolAtom status, toSExp msg]
+                do let m = SExpList [SymbolAtom status, toSExp msg, 
+                                     -- highlighting; currently blank
+                                     SExpList []]
                    send (SExpList [SymbolAtom "return", m, toSExp i])
 
 export
@@ -53,7 +55,7 @@ emitError : {auto c : Ref Ctxt Defs} ->
             Error FC -> Core FC ()
 emitError err
     = do opts <- get ROpts
-         msg <- display err
+         msg <- perror err
          case idemode opts of
               REPL _ => coreLift $ putStrLn msg
               IDEMode i =>
@@ -65,6 +67,7 @@ emitError err
                                           toSExp (addOne (startPos fc)), 
                                           toSExp (addOne (endPos fc)), 
                                           toSExp msg,
+                                          -- highlighting; currently blank
                                           SExpList []],
                                 toSExp i])
   where

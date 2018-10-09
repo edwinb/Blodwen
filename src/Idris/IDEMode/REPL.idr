@@ -122,8 +122,31 @@ process (LoadFile fname toline)
          case errs of
               [] => printResult $ "Loaded " ++ fname
               _ => printError $ "Failed to load " ++ fname
-process (TypeOf n pos) 
-    = printError "Not implemented"
+process (TypeOf n Nothing) 
+    = do Idris.REPL.process (Check (PRef replFC (UN n)))
+         pure ()
+process (TypeOf n (Just (l, c)))
+    = do Idris.REPL.process (Editing (TypeAt (fromInteger l) (fromInteger c) (UN n)))
+         pure ()
+
+processCatch : {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState FC)} ->
+               {auto s : Ref Syn SyntaxInfo} ->
+               {auto m : Ref Meta (Metadata FC)} ->
+               {auto o : Ref ROpts REPLOpts} ->
+               IDECommand -> Core FC ()
+processCatch cmd
+    = do c' <- get Ctxt
+         u' <- get UST
+         s' <- get Syn
+         o' <- get ROpts
+         catch (process cmd)
+               (\err => do put Ctxt c'
+                           put UST u'
+                           put Syn s'
+                           put ROpts o'
+                           emitError err
+                           printError "Command failed")
 
 loop : {auto c : Ref Ctxt Defs} ->
        {auto u : Ref UST (UState FC)} ->
@@ -144,7 +167,7 @@ loop
                          case getMsg sexp of
                               Just (cmd, i) => 
                                  do setOutput (IDEMode i)
-                                    process cmd
+                                    processCatch cmd
                                     loop
                               Nothing => 
                                  do printError "Unrecognised command"
