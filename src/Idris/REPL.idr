@@ -17,6 +17,7 @@ import Core.Unify
 
 import Idris.Desugar
 import Idris.Error
+import Idris.IDEMode.CaseSplit
 import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
@@ -27,9 +28,9 @@ import TTImp.CaseSplit
 import TTImp.Elab
 import TTImp.TTImp
 import TTImp.ProcessTTImp
+import TTImp.Reflect
 
 import Control.Catchable
-import TTImp.Reflect
 
 import System
 
@@ -161,8 +162,13 @@ processEdit (TypeAt line col name)
                                        pure ()
          printResult !(showHole gam [] n num t)
 processEdit (CaseSplit line col name)
-    = do res <- getSplits (within (line-1, col-1)) name
-         coreLift $ printLn res
+    = do let find = if col > 0
+                       then within (line-1, col-1)
+                       else onLine (line-1)
+         OK splits <- getSplits find name
+             | SplitFail err => printError (show err)
+         lines <- updateCase splits (line-1) (col-1)
+         printResult $ showSep "\n" lines ++ "\n"
 
 -- Returns 'True' if the REPL should continue
 export

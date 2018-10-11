@@ -34,11 +34,18 @@ record FC where
   endPos : FilePos
 
 -- Return whether a given file position is within the file context (assuming we're
--- in the right file
+-- in the right file)
 export
 within : FilePos -> FC -> Bool
 within (x, y) (MkFC _ start end)
    = (x, y) >= start && (x, y) < end
+
+-- Return whether a given line is on the same line as the file context (assuming 
+-- we're in the right file)
+export
+onLine : Int -> FC -> Bool
+onLine x (MkFC _ start end)
+   = x >= fst start && x <= fst end
 
 export
 Reify FC where

@@ -18,10 +18,11 @@ modules = Idris.BindImplicits,
           Idris.Elab.Implementation,
           Idris.Elab.Interface,
 
+          Idris.IDEMode.CaseSplit,
           Idris.IDEMode.Commands,
           Idris.IDEMode.Parser,
-          Idris.IDEMode.REPL
-
+          Idris.IDEMode.REPL,
+          Idris.IDEMode.TokenLine
 
 sourcedir = src
 executable = blodwen

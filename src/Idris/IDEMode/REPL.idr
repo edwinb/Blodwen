@@ -39,6 +39,7 @@ data IDECommand
      = Interpret String
      | LoadFile String (Maybe Integer)
      | TypeOf String (Maybe (Integer, Integer))
+     | CaseSplit Integer String
 
 getIDECommand : SExp -> Maybe IDECommand
 getIDECommand (SExpList [SymbolAtom "interpret", StringAtom cmd])
@@ -52,6 +53,8 @@ getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n])
 getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n,
                          IntegerAtom l, IntegerAtom c])
     = Just $ TypeOf n (Just (l, c))
+getIDECommand (SExpList [SymbolAtom "case-split", IntegerAtom l, StringAtom n])
+    = Just $ CaseSplit l n
 getIDECommand _ = Nothing
 
 getMsg : SExp -> Maybe (IDECommand, Integer)
@@ -127,6 +130,9 @@ process (TypeOf n Nothing)
          pure ()
 process (TypeOf n (Just (l, c)))
     = do Idris.REPL.process (Editing (TypeAt (fromInteger l) (fromInteger c) (UN n)))
+         pure ()
+process (CaseSplit l n)
+    = do Idris.REPL.process (Editing (CaseSplit (fromInteger l) 0 (UN n)))
          pure ()
 
 processCatch : {auto c : Ref Ctxt Defs} ->
