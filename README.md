@@ -37,6 +37,7 @@ Summary of new features:
 + New Chez Scheme based back end which both compiles and runs faster than the
   default Idris 1 back end. (Also, optionally, Chicken Scheme and Racket can
   be used as targets).
++ Everything works faster :).
 
 A significant change in the implementation is that there is an intermediate
 language `TTImp`, which is essentially a desugared Idris, and is cleanly
@@ -71,8 +72,8 @@ play. Good luck :).
 Things still missing
 ====================
 
-+ Some high level syntax, notably 'with', 'rewrite', dependent pairs,
-  numeric ranges 
++ Some high level syntax, notably records, 'with', dependent pairs, and
+  numeric ranges
 + Cumulativity and totality checking
 + Codata (or rather, you can have it, but there's no productivity check...)
 + Parts of the ide-mode
