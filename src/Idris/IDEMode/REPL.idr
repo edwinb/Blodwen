@@ -39,7 +39,8 @@ data IDECommand
      = Interpret String
      | LoadFile String (Maybe Integer)
      | TypeOf String (Maybe (Integer, Integer))
-     | CaseSplit Integer String
+     | CaseSplit Integer Integer String
+     | AddClause Integer String
 
 getIDECommand : SExp -> Maybe IDECommand
 getIDECommand (SExpList [SymbolAtom "interpret", StringAtom cmd])
@@ -53,8 +54,13 @@ getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n])
 getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n,
                          IntegerAtom l, IntegerAtom c])
     = Just $ TypeOf n (Just (l, c))
+getIDECommand (SExpList [SymbolAtom "case-split", IntegerAtom l, IntegerAtom c, 
+                         StringAtom n])
+    = Just $ CaseSplit l c n
 getIDECommand (SExpList [SymbolAtom "case-split", IntegerAtom l, StringAtom n])
-    = Just $ CaseSplit l n
+    = Just $ CaseSplit l 0 n
+getIDECommand (SExpList [SymbolAtom "add-clause", IntegerAtom l, StringAtom n])
+    = Just $ AddClause l n
 getIDECommand _ = Nothing
 
 getMsg : SExp -> Maybe (IDECommand, Integer)
@@ -131,8 +137,11 @@ process (TypeOf n Nothing)
 process (TypeOf n (Just (l, c)))
     = do Idris.REPL.process (Editing (TypeAt (fromInteger l) (fromInteger c) (UN n)))
          pure ()
-process (CaseSplit l n)
-    = do Idris.REPL.process (Editing (CaseSplit (fromInteger l) 0 (UN n)))
+process (CaseSplit l c n)
+    = do Idris.REPL.process (Editing (CaseSplit (fromInteger l) (fromInteger c) (UN n)))
+         pure ()
+process (AddClause l n)
+    = do Idris.REPL.process (Editing (AddClause (fromInteger l) (UN n)))
          pure ()
 
 processCatch : {auto c : Ref Ctxt Defs} ->

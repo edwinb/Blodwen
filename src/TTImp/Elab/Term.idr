@@ -961,10 +961,10 @@ mutual
                      ImpClause annot -> ImpClause annot
       updateClause casen env sub (PatClause loc' lhs rhs)
           = let args = fst (addEnv env sub (usedIn lhs)) in
-                PatClause loc' (apply (IVar loc casen) (reverse (lhs :: args))) rhs
+                PatClause loc' (apply (IVar loc' casen) (reverse (lhs :: args))) rhs
       updateClause casen env sub (ImpossibleClause loc' lhs)
           = let args = fst (addEnv env sub (usedIn lhs)) in
-                ImpossibleClause loc' (apply (IVar loc casen) (reverse (lhs :: args)))
+                ImpossibleClause loc' (apply (IVar loc' casen) (reverse (lhs :: args)))
   
   checkLocal : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} ->

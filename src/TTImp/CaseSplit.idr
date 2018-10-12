@@ -40,13 +40,13 @@ public export
 data SplitError : Type where
      NoValidSplit : SplitError -- None of the splits either type check, or fail
                                -- in a way which is valid as an 'impossible' case
-     CantSplitThis : Name -> SplitError -- Request to split was not on a splittable variable
+     CantSplitThis : Name -> String -> SplitError -- Request to split was not on a splittable variable
      CantFindLHS : SplitError -- Can't find any clause to split
 
 export
 Show SplitError where
   show NoValidSplit = "No valid case splits"
-  show (CantSplitThis n) = "Can't split on " ++ show n
+  show (CantSplitThis n r) = "Can't split on " ++ show n ++ " (" ++ r ++ ")"
   show CantFindLHS = "No clause to split here"
 
 public export
@@ -61,11 +61,16 @@ Show a => Show (SplitResult a) where
 
 findTyName : Defs -> Env Term vars -> Name -> Term vars -> Maybe Name
 findTyName defs env n (Bind x (PVar c ty) sc)
-    = if n == x
-         then case nf defs env ty of
-                   NTCon tyn _ _ _ => Just tyn
-                   _ => Nothing
-         else findTyName defs (PVar c ty :: env) n sc
+      -- Take the last one, to skip anything shadowed
+    = case findTyName defs (PVar c ty :: env) n sc of
+           Nothing =>
+                if n == x
+                   then case nf defs env ty of
+                             NTCon tyn _ _ _ => Just tyn
+                             _ => Nothing
+                   else Nothing
+           res => res
+findTyName defs env n (Bind x b sc) = findTyName defs (b :: env) n sc
 findTyName _ _ _ _ = Nothing
 
 getDefining : Term vars -> Maybe Name
@@ -79,15 +84,20 @@ findCons : {auto c : Ref Ctxt Defs} ->
            Name -> Term [] -> Core annot (SplitResult (Name, Name, List Name))
 findCons n lhs
     = case getDefining lhs of
-           Nothing => pure (SplitFail (CantSplitThis n))
+           Nothing => pure (SplitFail 
+                            (CantSplitThis n "Can't find function name on LHS"))
            Just fn =>
               do defs <- get Ctxt
                  case findTyName defs [] n lhs of
-                      Nothing => pure (SplitFail (CantSplitThis n))
+                      Nothing => pure (SplitFail (CantSplitThis n 
+                                         ("Can't find name " ++ show n ++ " in LHS")))
                       Just tyn =>
                           case lookupDefExact tyn (gamma defs) of
                                Just (TCon _ _ _ _ cons) => pure (OK (fn, tyn, cons))
-                               _ => pure (SplitFail (CantSplitThis n))
+                               res => pure (SplitFail 
+                                            (CantSplitThis n 
+                                               ("Not a type constructor " ++ 
+                                                  show res)))
 
 findAllVars : Term vars -> List Name
 findAllVars (Bind x (PVar c ty) sc)
@@ -109,6 +119,7 @@ unique (str :: next) supply suff usedns
 defaultNames : List String
 defaultNames = ["x", "y", "z", "w", "v", "s", "t", "u"]
 
+export
 getArgNames : Defs -> List Name -> Env Term vars -> NF vars -> List String
 getArgNames defs allvars env (NBind x (Pi _ p ty) sc) 
     = let ns = case p of
@@ -243,7 +254,7 @@ export
 getSplits : {auto m : Ref Meta (Metadata annot)} ->
             {auto c : Ref Ctxt Defs} ->
             (Reflect annot, Reify annot) =>
-            (annot -> Bool) -> Name -> 
+            (annot -> ClosedTerm -> Bool) -> Name -> 
             Core annot (SplitResult (List (ClauseUpdate annot)))
 getSplits p n
     = do Just (loc, lhs_in) <- findLHSAt p

@@ -146,6 +146,9 @@ execExp ctm
                                [] (MkNested []) NONE InExpr ttimp 
          execute !findCG tm
          
+anyAt : (FC -> Bool) -> FC -> a -> Bool
+anyAt p loc y = p loc
+
 processEdit : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
@@ -154,7 +157,8 @@ processEdit : {auto c : Ref Ctxt Defs} ->
               EditCmd -> Core FC ()
 processEdit (TypeAt line col name)
     = do gam <- get Ctxt
-         Just (n, num, t) <- findTypeAt (within (line-1, col-1))
+         Just (n, num, t) <- findTypeAt (\p, n => within (line-1, col-1) p &&
+                                                     fst n == name)
             | Nothing => case lookupGlobalName name (gamma gam) of
                               [] => throw (UndefinedName (MkFC "(interactive)" (0,0) (0,0)) name)
                               ts => do tys <- traverse (displayType gam) ts
@@ -165,10 +169,14 @@ processEdit (CaseSplit line col name)
     = do let find = if col > 0
                        then within (line-1, col-1)
                        else onLine (line-1)
-         OK splits <- getSplits find name
+         OK splits <- getSplits (anyAt find) name
              | SplitFail err => printError (show err)
          lines <- updateCase splits (line-1) (col-1)
          printResult $ showSep "\n" lines ++ "\n"
+processEdit (AddClause line name)
+    = do Just c <- getClause line name
+             | Nothing => printError (show name ++ " not defined here")
+         printResult c
 
 -- Returns 'True' if the REPL should continue
 export

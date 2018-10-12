@@ -1,0 +1,9 @@
+1/1: Building iedit (iedit.blod)
+Welcome to Blodwen. Good luck.
+Main>            [] => ?bar_1
+           (x :: zs) => ?bar_2
+
+Main>   map f (MkFoo x) = ?baz_1
+  map f (MkBar g) = ?baz_2
+
+Main> Bye for now!

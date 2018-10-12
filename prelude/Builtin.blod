@@ -58,6 +58,8 @@ public export
 data Equal : forall a, b . a -> b -> Type where
      Refl : {0 x : a} -> Equal x x
 
+%name Equal prf
+
 %inline
 public export
 rewrite__impl : {0 x, y : a} -> (0 p : _) -> x = y -> p y -> p x

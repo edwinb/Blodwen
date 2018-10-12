@@ -21,10 +21,13 @@ record Metadata annot where
        -- The type is abstracted over the whole environment; the Nat gives
        -- the number of names which were in the environment at the time
        names : List (annot, (Name, Nat, ClosedTerm))
+       -- Mapping from annotation to the name that's declared there and
+       -- its type; the Nat is as above
+       tydecls : List (annot, (Name, Nat, ClosedTerm))
 
 export
 initMetadata : Metadata annot
-initMetadata = MkMetadata [] []
+initMetadata = MkMetadata [] [] []
 
 -- A label for metadata in the global state
 export
@@ -34,11 +37,13 @@ TTC annot annot => TTC annot (Metadata annot) where
   toBuf b m
       = do toBuf b (lhsApps m)
            toBuf b (names m)
+           toBuf b (tydecls m)
 
   fromBuf s b
       = do apps <- fromBuf s b
            ns <- fromBuf s b
-           pure (MkMetadata apps ns)
+           tys <- fromBuf s b
+           pure (MkMetadata apps ns tys)
 
 export
 addLHS : {auto m : Ref Meta (Metadata annot)} ->
@@ -56,26 +61,45 @@ addNameType loc n env tm
                       names $= ((loc, (n, length env, bindEnv env tm)) ::) 
                     } meta)
 
-findEntryWith : (annot -> Bool) -> List (annot, a) -> Maybe (annot, a)
+export
+addTyDecl : {auto m : Ref Meta (Metadata annot)} ->
+            annot -> Name -> Env Term vars -> Term vars -> Core annot ()
+addTyDecl loc n env tm
+    = do meta <- get Meta
+         put Meta (record { 
+                      tydecls $= ((loc, (n, length env, bindEnv env tm)) ::) 
+                    } meta)
+
+findEntryWith : (annot -> a -> Bool) -> List (annot, a) -> Maybe (annot, a)
 findEntryWith p [] = Nothing
 findEntryWith p ((l, x) :: xs)
-    = if p l 
+    = if p l x
          then Just (l, x)
          else findEntryWith p xs
 
 export
 findLHSAt : {auto m : Ref Meta (Metadata annot)} ->
-            (annot -> Bool) -> Core annot (Maybe (annot, ClosedTerm))
+            (annot -> ClosedTerm -> Bool) -> 
+            Core annot (Maybe (annot, ClosedTerm))
 findLHSAt p 
     = do meta <- get Meta
          pure (findEntryWith p (lhsApps meta))
 
 export
 findTypeAt : {auto m : Ref Meta (Metadata annot)} ->
-             (annot -> Bool) -> Core annot (Maybe (Name, Nat, ClosedTerm))
+             (annot -> (Name, Nat, ClosedTerm) -> Bool) -> 
+             Core annot (Maybe (Name, Nat, ClosedTerm))
 findTypeAt p
     = do meta <- get Meta
          pure (map snd (findEntryWith p (names meta)))
+
+export
+findTyDeclAt : {auto m : Ref Meta (Metadata annot)} ->
+               (annot -> (Name, Nat, ClosedTerm) -> Bool) -> 
+               Core annot (Maybe (Name, Nat, ClosedTerm))
+findTyDeclAt p
+    = do meta <- get Meta
+         pure (map snd (findEntryWith p (tydecls meta)))
 
 -- Normalise all the types of the names, since they might have had holes
 -- when added and the holes won't necessarily get saved

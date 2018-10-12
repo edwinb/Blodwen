@@ -1,6 +1,7 @@
 module Idris.IDEMode.CaseSplit
 
 import Core.Context
+import Core.Metadata
 import Core.TT
 
 import TTImp.CaseSplit
@@ -168,3 +169,37 @@ updateCase splits line col
     getBad : ClauseUpdate FC -> Maybe (RawImp FC)
     getBad (Impossible lhs) = Just lhs
     getBad _ = Nothing
+
+getEnvArgNames : Defs -> Nat -> NF [] -> List String
+getEnvArgNames defs Z sc = getArgNames defs [] [] sc
+getEnvArgNames defs (S k) (NBind n (Pi _ _ _) sc)
+    = getEnvArgNames defs k (sc (MkClosure defaultOpts [] [] Erased))
+getEnvArgNames defs n ty = []
+
+mutual
+  fnGenName : GenName -> String
+  fnGenName (Nested _ n) = fnName n
+  fnGenName (CaseBlock n _) = fnName n
+  fnGenName (WithBlock n _) = fnName n
+
+  fnName : Name -> String
+  fnName (UN n) 
+      = if any (not . identChar) (unpack n)
+           then "op"
+           else n
+  fnName (NS _ n) = fnName n
+  fnName (DN s _) = s
+  fnName (GN g) = fnGenName g
+  fnName n = show n
+
+export
+getClause : {auto c : Ref Ctxt Defs} ->
+            {auto m : Ref Meta (Metadata FC)} ->
+            Int -> Name -> Core FC (Maybe String)
+getClause l n
+    = do defs <- get Ctxt
+         Just (n, envlen, ty) <- findTyDeclAt (\p, n => onLine (l-1) p)
+             | Nothing => pure Nothing
+         let argns = getEnvArgNames defs envlen (nf defs [] ty)
+         pure (Just (fnName n ++ " " ++ showSep " " argns ++ 
+                  " = ?" ++ fnName n ++ "_rhs"))

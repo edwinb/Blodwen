@@ -72,6 +72,9 @@ processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
                       else None
          addDef n (newDef (abstractFullEnvType env ty) vis def)
 
+         -- Add to the interactive editing metadata
+         addTyDecl loc n env ty
+
          log 1 $ "Setting options for " ++ show n ++ ": " ++ show fnopts
          traverse (processFnOpt loc n) fnopts
          addToSave n

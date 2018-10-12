@@ -75,6 +75,10 @@ showSep : String -> List String -> String
 showSep sep [] = ""
 showSep sep [x] = x
 showSep sep (x :: xs) = x ++ sep ++ showSep sep xs
+  
+export
+identChar : Char -> Bool
+identChar x = isAlphaNum x || x == '_' || x == '\''
 
 mutual
   export
@@ -85,7 +89,10 @@ mutual
 
   export
   Show Name where
-    show (UN str) = str
+    show (UN str) 
+        = if any (not . identChar) (unpack str)
+             then "(" ++ str ++ ")"
+             else str
     show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
     show (NS ns n) = showSep "." (reverse ns) ++ "." ++ show n
     show (HN str int) = "?" ++ str ++ "_" ++ show int

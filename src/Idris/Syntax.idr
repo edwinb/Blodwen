@@ -276,6 +276,7 @@ public export
 data EditCmd : Type where
      TypeAt : Int -> Int -> Name -> EditCmd
      CaseSplit : Int -> Int -> Name -> EditCmd
+     AddClause : Int -> Name -> EditCmd
 
 public export
 data REPLCmd : Type where
