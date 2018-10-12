@@ -3,6 +3,7 @@ module TTImp.CaseSplit
 import Core.Context
 import Core.Metadata
 import Core.Normalise
+import Core.Options
 import Core.Reflect
 import Core.TT
 import Core.UnifyState
@@ -93,29 +94,42 @@ findAllVars (Bind x (PVar c ty) sc)
     = x :: findAllVars sc
 findAllVars _ = []
 
-unique : String -> Int -> List Name -> String
-unique str suff usedns
+unique : List String -> List String -> Int -> List Name -> String
+unique [] supply suff usedns = unique supply supply (suff + 1) usedns
+unique (str :: next) supply suff usedns
     = let var = mkVarN str suff in
           if UN var `elem` usedns
-             then unique str (suff + 1) usedns
+             then unique next supply suff usedns
              else var
   where
     mkVarN : String -> Int -> String
     mkVarN x 0 = x
     mkVarN x i = x ++ show i
 
-getArgNames : List Name -> Env Term vars -> NF vars -> List String
-getArgNames allvars env (NBind x (Pi _ p ty) sc) 
-    = let argns = getArgNames allvars env 
-                              (sc (MkClosure defaultOpts [] env Erased)) in
-          case p of
-               Explicit => getName x (allvars ++ map UN argns) :: argns
-               _ => argns
+defaultNames : List String
+defaultNames = ["x", "y", "z", "w", "v", "s", "t", "u"]
+
+getArgNames : Defs -> List Name -> Env Term vars -> NF vars -> List String
+getArgNames defs allvars env (NBind x (Pi _ p ty) sc) 
+    = let ns = case p of
+                   Explicit => let defnames = findNames ty in
+                                   [getName x defnames allvars]
+                   _ => [] in
+          ns ++ getArgNames defs (map UN ns ++ allvars) env 
+                            (sc (MkClosure defaultOpts [] env Erased))
   where
-    getName : Name -> List Name -> String
-    getName (UN n) used = unique n 0 used
-    getName _ used = unique "x" 0 used
-getArgNames allvars env val = []
+    findNames : NF vars -> List String
+    findNames (NBind x (Pi _ _ _) _) = ["f", "g"]
+    findNames (NTCon n _ _ _)
+        = case lookup n (namedirectives (options defs)) of
+               Nothing => defaultNames
+               Just ns => ns
+    findNames ty = defaultNames
+
+    getName : Name -> List String -> List Name -> String
+    getName (UN n) defs used = unique [n] [n] 0 used
+    getName _ defs used = unique defs defs 0 used
+getArgNames defs allvars env val = []
 
 expandCon : {auto c : Ref Ctxt Defs} ->
             annot -> List Name -> Name -> Core annot (RawImp annot)
@@ -125,7 +139,8 @@ expandCon loc usedvars con
               Nothing => throw (UndefinedName loc con)
               Just ty => pure (apply (IVar loc con) 
                                   (map (IBindVar loc)
-                                       (getArgNames usedvars [] (nf defs [] ty))))
+                                       (getArgNames defs usedvars [] 
+                                                    (nf defs [] ty))))
 
 -- Return a new LHS to check, replacing 'var' with an application of 'con'
 -- Also replace any variables with '_' to allow elaboration to
@@ -138,7 +153,7 @@ newLHS : {auto c : Ref Ctxt Defs} ->
 newLHS fc allvars var con (IVar loc n)
     = if n `elem` allvars
          then if n == var
-                 then expandCon loc allvars con
+                 then expandCon loc (filter (/= n) allvars) con
                  else pure $ Implicit loc
          else pure $ IVar loc n
 newLHS fc allvars var con (IApp loc f a)

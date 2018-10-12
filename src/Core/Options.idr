@@ -146,6 +146,7 @@ record Options where
   pairnames : Maybe PairNames
   rewritenames : Maybe RewriteNames
   primnames : PrimNames
+  namedirectives : List (Name, List String)
 
 defaultDirs : Dirs
 defaultDirs = MkDirs "." "build" "/usr/local" ["."] []
@@ -159,7 +160,9 @@ defaultSession = MkSessionOpts False Chez
 export
 defaults : Options
 defaults = MkOptions defaultDirs defaultPPrint defaultSession 
-                     Nothing Nothing Nothing (MkPrimNs Nothing Nothing Nothing)
+                     Nothing Nothing Nothing 
+                     (MkPrimNs Nothing Nothing Nothing)
+                     []
 
 -- Reset the options which are set by source files
 export
@@ -167,7 +170,8 @@ clearNames : Options -> Options
 clearNames = record { laziness = Nothing,
                       pairnames = Nothing,
                       rewritenames = Nothing,
-                      primnames = MkPrimNs Nothing Nothing Nothing
+                      primnames = MkPrimNs Nothing Nothing Nothing,
+                      namedirectives = []
                     } 
 
 -- Some relevant options get stored in TTC; merge in the options from
@@ -178,7 +182,8 @@ mergeOptions ttcopts opts
   = record { laziness = laziness ttcopts <+> laziness opts,
              pairnames = pairnames ttcopts <+> pairnames opts,
              rewritenames = rewritenames ttcopts <+> rewritenames opts,
-             primnames = mergePrims (primnames ttcopts) (primnames opts)
+             primnames = mergePrims (primnames ttcopts) (primnames opts),
+             namedirectives = namedirectives ttcopts ++ namedirectives opts
            } opts
   where
     mergePrims : PrimNames -> PrimNames -> PrimNames
@@ -210,3 +215,7 @@ setFromString n = record { primnames->fromStringName = Just n }
 export
 setFromChar : Name -> Options -> Options
 setFromChar n = record { primnames->fromCharName = Just n }
+
+export
+addNameDirective : (Name, List String) -> Options -> Options
+addNameDirective nd = record { namedirectives $= (nd ::) }

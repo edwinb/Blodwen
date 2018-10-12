@@ -208,6 +208,7 @@ mutual
        PrimString : Name -> Directive
        PrimChar : Name -> Directive
        CGAction : String -> String -> Directive
+       Names : Name -> List String -> Directive
        StartExpr : PTerm -> Directive
 
   public export

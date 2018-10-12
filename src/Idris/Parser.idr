@@ -751,6 +751,10 @@ directive fname indents
   <|> do exactIdent "charLit"
          n <- name
          pure (PrimChar n)
+  <|> do exactIdent "name"
+         n <- name
+         ns <- sepBy1 (symbol ",") unqualifiedName
+         pure (Names n ns)
   <|> do exactIdent "start"
          e <- expr EqOK fname indents
          pure (StartExpr e)

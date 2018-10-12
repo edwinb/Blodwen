@@ -487,6 +487,8 @@ product = foldr (*) 1
 public export
 data Nat = Z | S Nat
 
+%name Nat k, j, i
+
 public export
 Num Nat where
   Z + y = y
@@ -636,6 +638,8 @@ Monad (Either e) where
 
 public export
 data List a = Nil | (::) a (List a)
+
+%name List xs, ys, zs
 
 public export
 Eq a => Eq (List a) where

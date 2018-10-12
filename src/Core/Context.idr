@@ -366,9 +366,10 @@ TTC annot Defs where
            toBuf b (pairnames (options val))
            toBuf b (rewritenames (options val))
            toBuf b (primnames (options val))
+           toBuf b (namedirectives (options val))
            toBuf b (hiddenNames val)
            toBuf b (cgdirectives val)
-  fromBuf s b 
+  fromBuf s b
       = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
            modNS <- fromBuf s b
            imported <- fromBuf s b
@@ -376,13 +377,15 @@ TTC annot Defs where
            pair <- fromBuf s b
            rw <- fromBuf s b
            prim <- fromBuf s b
+           ndirs <- fromBuf s b
            hides <- fromBuf s b
            ds <- fromBuf s b
            pure (MkAllDefs (insertFrom ns empty) modNS 
                             (record { laziness = lazy,
                                       pairnames = pair,
                                       rewritenames = rw,
-                                      primnames = prim
+                                      primnames = prim,
+                                      namedirectives = ndirs
                                     } defaults)
                             empty imported [] [] empty [] hides ds 100 0 0)
     where
@@ -708,6 +711,14 @@ setFromChar : {auto c : Ref Ctxt Defs} ->
 setFromChar loc n
     = do defs <- get Ctxt
          put Ctxt (record { options $= setFromChar n } defs)
+
+export
+addNameDirective : {auto c : Ref Ctxt Defs} ->
+                   annot -> Name -> List String -> Core annot ()
+addNameDirective loc n ns
+    = do defs <- get Ctxt
+         n' <- checkUnambig loc n
+         put Ctxt (record { options $= addNameDirective (n', ns) } defs)
 
 export
 setPPrint : {auto c : Ref Ctxt Defs} ->

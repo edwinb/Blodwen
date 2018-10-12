@@ -23,7 +23,7 @@ import Data.Buffer
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 export
 ttcVersion : Int
-ttcVersion = 15
+ttcVersion = 16
 
 export
 checkTTCVersion : Int -> Int -> Core annot ()
