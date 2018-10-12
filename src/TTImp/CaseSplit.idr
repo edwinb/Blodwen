@@ -156,29 +156,35 @@ record Updates annot where
   namemap : List (Name, Name)
   updates : List (Name, RawImp annot)
 
-findUpdates : RawImp annot -> RawImp annot -> State (Updates annot) ()
-findUpdates (IVar _ n) (IVar loc n')
-    = do u <- get
-         case lookup n' (namemap u) of
-              Nothing => put (record { namemap $= ((n', n) ::) } u)
-              Just nm => put (record { updates $= ((n, IVar loc nm) ::) } u)
-findUpdates (IVar loc n) tm
+recordUpdate : annot -> Name -> RawImp annot -> State (Updates annot) ()
+recordUpdate loc n tm
     = do u <- get
          let nupdates = map (\x => (fst x, IVar loc (snd x))) (namemap u)
          put (record { updates $= ((n, substNames [] nupdates tm) ::) } u)
-findUpdates (IApp _ f a) (IApp _ f' a')
-    = do findUpdates f f'
-         findUpdates a a'
-findUpdates (IImplicitApp _ f _ a) (IImplicitApp _ f' _ a')
-    = do findUpdates f f'
-         findUpdates a a'
-findUpdates (IImplicitApp _ f _ a) f' = findUpdates f f'
-findUpdates f (IImplicitApp _ f' _ a) = findUpdates f f'
-findUpdates _ _ = pure ()
 
-getUpdates : RawImp annot -> RawImp annot -> List (Name, RawImp annot)
-getUpdates orig new
-    = updates $ execState (findUpdates orig new) (MkUpdates [] [])
+findUpdates : Defs -> RawImp annot -> RawImp annot -> State (Updates annot) ()
+findUpdates defs (IVar loc n) (IVar _ n')
+    = case lookupTyExact n' (gamma defs) of
+           Just _ => recordUpdate loc n (IVar loc n')
+           Nothing =>
+              do u <- get
+                 case lookup n' (namemap u) of
+                      Nothing => put (record { namemap $= ((n', n) ::) } u)
+                      Just nm => put (record { updates $= ((n, IVar loc nm) ::) } u)
+findUpdates defs (IVar loc n) tm = recordUpdate loc n tm
+findUpdates defs (IApp _ f a) (IApp _ f' a')
+    = do findUpdates defs f f'
+         findUpdates defs a a'
+findUpdates defs (IImplicitApp _ f _ a) (IImplicitApp _ f' _ a')
+    = do findUpdates defs f f'
+         findUpdates defs a a'
+findUpdates defs (IImplicitApp _ f _ a) f' = findUpdates defs f f'
+findUpdates defs f (IImplicitApp _ f' _ a) = findUpdates defs f f'
+findUpdates _ _ _ = pure ()
+
+getUpdates : Defs -> RawImp annot -> RawImp annot -> List (Name, RawImp annot)
+getUpdates defs orig new
+    = updates $ execState (findUpdates defs orig new) (MkUpdates [] [])
 
 mkCase : {auto c : Ref Ctxt Defs} ->
          (Reflect annot, Reify annot) =>
@@ -197,7 +203,7 @@ mkCase {c} fn orig lhs_raw
                put Ctxt defs -- reset the context, we don't want any updates
 
                lhs' <- unelab (getAnnot lhs_raw) [] lhs
-               pure (Valid lhs' (getUpdates orig lhs')))
+               pure (Valid lhs' (getUpdates defs orig lhs')))
            (\err => case err of
                          WhenUnifying _ env l r err
                             => do gam <- get Ctxt

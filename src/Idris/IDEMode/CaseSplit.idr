@@ -75,6 +75,23 @@ uniqueName defs used n
 doUpdates : Defs -> List (String, String) -> List SourcePart -> 
             State (List String) (List SourcePart)
 doUpdates defs ups [] = pure []
+doUpdates defs ups (LBrace :: xs)
+    = case dropSpace xs of
+           Name n :: RBrace :: rest =>
+                pure (LBrace :: Name n :: 
+                      Whitespace " " :: Equal :: Whitespace " " ::
+                      !(doUpdates defs ups (Name n :: RBrace :: rest)))
+           Name n :: Equal :: rest =>
+                pure (LBrace :: Name n ::
+                      Whitespace " " :: Equal :: Whitespace " " ::
+                      !(doUpdates defs ups rest))
+           _ => pure (LBrace :: !(doUpdates defs ups xs))
+  where
+    dropSpace : List SourcePart -> List SourcePart
+    dropSpace [] = []
+    dropSpace (RBrace :: xs) = RBrace :: xs
+    dropSpace (Whitespace _ :: xs) = dropSpace xs
+    dropSpace (x :: xs) = x :: dropSpace xs
 doUpdates defs ups (Name n :: xs)
     = case lookup n ups of
            Nothing => pure (Name n :: !(doUpdates defs ups xs))
