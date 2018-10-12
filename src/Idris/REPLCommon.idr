@@ -55,21 +55,23 @@ emitError : {auto c : Ref Ctxt Defs} ->
             Error FC -> Core FC ()
 emitError err
     = do opts <- get ROpts
-         msg <- perror err
          case idemode opts of
-              REPL _ => coreLift $ putStrLn msg
+              REPL _ => 
+                  do msg <- display err
+                     coreLift $ putStrLn msg
               IDEMode i =>
-                case getAnnot err of
-                     Nothing => iputStrLn msg
-                     Just fc =>
-                        send (SExpList [SymbolAtom "warning", 
-                                SExpList [toSExp (file fc), 
-                                          toSExp (addOne (startPos fc)), 
-                                          toSExp (addOne (endPos fc)), 
-                                          toSExp msg,
-                                          -- highlighting; currently blank
-                                          SExpList []],
-                                toSExp i])
+                  do msg <- perror err
+                     case getAnnot err of
+                          Nothing => iputStrLn msg
+                          Just fc =>
+                            send (SExpList [SymbolAtom "warning", 
+                                    SExpList [toSExp (file fc), 
+                                              toSExp (addOne (startPos fc)), 
+                                              toSExp (addOne (endPos fc)), 
+                                              toSExp msg,
+                                              -- highlighting; currently blank
+                                              SExpList []],
+                                    toSExp i])
   where
     addOne : (Int, Int) -> (Int, Int)
     addOne (l, c) = (l + 1, c + 1)

@@ -33,10 +33,11 @@ stMain
          coreLift $ putStrLn $ "Loading " ++ fname
          u <- newRef UST initUState
          m <- newRef Meta initMetadata
+         d <- getDirs
          case span (/= '.') fname of
               (_, ".tt") => do coreLift $ putStrLn "Processing as TT"
                                ProcessTT.process fname
-                               makeBuildDirectory (pathToNS fname)
+                               makeBuildDirectory (pathToNS (working_dir d) fname)
                                writeToTTC () !(getTTCFileName fname ".ttc")
               (_, ".ttc") => do coreLift $ putStrLn "Processing as TTC"
                                 readFromTTC {extra = ()} () True fname [] []
@@ -44,7 +45,7 @@ stMain
               _ => do coreLift $ putStrLn "Processing as TTImp"
                       ok <- ProcessTTImp.process fname
                       when ok $
-                         do makeBuildDirectory (pathToNS fname)
+                         do makeBuildDirectory (pathToNS (working_dir d) fname)
                             writeToTTC () !(getTTCFileName fname ".ttc")
          repl {c} {u} {m}
 
