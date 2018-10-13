@@ -89,10 +89,7 @@ mutual
 
   export
   Show Name where
-    show (UN str) 
-        = if any (not . identChar) (unpack str)
-             then "(" ++ str ++ ")"
-             else str
+    show (UN str) = str
     show (MN str int) = "{" ++ str ++ ":" ++ show int ++ "}"
     show (NS ns n) = showSep "." (reverse ns) ++ "." ++ show n
     show (HN str int) = "?" ++ str ++ "_" ++ show int

@@ -221,11 +221,10 @@ mkCase {c} fn orig lhs_raw
          m <- newRef Meta initMetadata
          defs <- get Ctxt
          handleClause
-           (do (lhs_in, _, _) <- inferTerm {c} {u} {i} {m}
-                                           (\c, u, i, m => processDecl {c} {u} {i} {m})
-                                           False fn [] (MkNested [])
-                                           PATTERN InLHS lhs_raw
-               let lhs = normaliseHoles defs [] lhs_in
+           (do (lhs, _, _) <- inferTerm {c} {u} {i} {m}
+                                        (\c, u, i, m => processDecl {c} {u} {i} {m})
+                                        False fn [] (MkNested [])
+                                        PATTERN InLHS lhs_raw
                put Ctxt defs -- reset the context, we don't want any updates
 
                lhs' <- unelab (getAnnot lhs_raw) [] lhs
@@ -268,7 +267,6 @@ getSplits p n
         
          rawlhs <- unelab loc [] lhs
          trycases <- traverse (\c => newLHS loc usedns n c rawlhs) cons
-
          cases <- traverse (mkCase fn rawlhs) trycases
 
          pure (combine cases [])

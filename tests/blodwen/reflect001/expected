@@ -2,7 +2,7 @@
 2/2: Building Reflect (Reflect.blod)
 LOG 0: Doing things
 LOG 0: Elab script ended with (Prelude.S (Prelude.S (Prelude.S Prelude.Z)))
-LOG 0: Elab script ended with (Reflect.NS (Prelude.(::) "Reflect" Prelude.Nil) (Reflect.MN "whatever" 150))
+LOG 0: Elab script ended with (Reflect.NS (Prelude.:: "Reflect" Prelude.Nil) (Reflect.MN "whatever" 150))
 LOG 0: Elab script ended with Prelude.MkUnit
 Welcome to Blodwen. Good luck.
 Reflect> Bye for now!

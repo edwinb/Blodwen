@@ -62,19 +62,19 @@ infixr 0 $
 -- UTILITY FUNCTIONS --
 -----------------------
 
-public export
+public export %inline
 the : (0 a : Type) -> a -> a
 the _ x = x
 
-public export
+public export %inline
 id : a -> a
 id x = x
 
-public export
+public export %inline
 const : a -> b -> a
 const x = \value => x
 
-public export
+public export %inline
 (.) : (b -> c) -> (a -> b) -> a -> c
 (.) f g = \x => f (g x)
 

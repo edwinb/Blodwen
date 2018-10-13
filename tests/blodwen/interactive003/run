@@ -1,3 +1,4 @@
 $1 iedit.blod < input
+$1 iedit2.blod < input2
 
 rm -rf build

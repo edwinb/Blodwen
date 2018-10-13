@@ -74,9 +74,9 @@ parameters (defs : Defs, opts : EvalOpts)
                _ => NApp (NRef nt n) stk
                    
     evalDef : Env Term free -> LocalEnv free vars -> Stack free ->
-              NameType -> Name -> Def -> (inline : Bool) -> NF free
-    evalDef env loc stk nt fn (PMDef h args tree _) inline
-        = if h || not (holesOnly opts) || inline then
+              NameType -> Name -> Def -> NF free
+    evalDef env loc stk nt fn (PMDef h args tree _)
+        = if h || not (holesOnly opts) then
              case extendFromStack args loc stk of
                   Nothing => NApp (NRef nt fn) stk
                   Just (loc', stk') => 
@@ -86,10 +86,10 @@ parameters (defs : Defs, opts : EvalOpts)
              else NApp (NRef nt fn) stk
     -- Don't check 'holesOnly' here - effectively, this gives us constant
     -- folding f the stack happens to be appropriate
-    evalDef env loc stk nt fn (Builtin op) _ = evalOp (getOp op) nt fn stk
-    evalDef env loc stk nt fn (DCon tag arity _) _ = NDCon fn tag arity stk
-    evalDef env loc stk nt fn (TCon tag arity _ _ _) _ = NTCon fn tag arity stk
-    evalDef env loc stk nt fn _ _ = NApp (NRef nt fn) stk
+    evalDef env loc stk nt fn (Builtin op) = evalOp (getOp op) nt fn stk
+    evalDef env loc stk nt fn (DCon tag arity _) = NDCon fn tag arity stk
+    evalDef env loc stk nt fn (TCon tag arity _ _ _) = NTCon fn tag arity stk
+    evalDef env loc stk nt fn _ = NApp (NRef nt fn) stk
 
     -- Only evaluate the name if its definition is visible in the current 
     -- namespace
@@ -100,8 +100,7 @@ parameters (defs : Defs, opts : EvalOpts)
                Just def => 
                     if evalAll opts ||
                          reducibleIn (currentNS defs) fn (visibility def)
-                       then evalDef env loc stk nt fn 
-                                    (definition def) (Inline `elem` flags def)
+                       then evalDef env loc stk nt fn (definition def)
                        else toRef (definition def) stk
                _ => NApp (NRef nt fn) stk
       where
