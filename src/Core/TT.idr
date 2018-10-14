@@ -560,10 +560,23 @@ export
 weakenBinder : Weaken tm => Binder (tm vars) -> Binder (tm (n :: vars))
 weakenBinder = map weaken
 
+-- Weaken by all the names at once at the end, to save multiple traversals
+-- in big environments
+export
+getBinderUnder : Weaken tm => 
+                 (ns : List Name) -> 
+                 Elem x vars -> Env tm vars -> 
+								 Binder (tm (ns ++ vars))
+getBinderUnder {vars = v :: vs} ns Here (b :: env) 
+    = rewrite appendAssociative ns [v] vs in
+							map (weakenNs (ns ++ [v])) b
+getBinderUnder {vars = v :: vs} ns (There later) (b :: env) 
+    = rewrite appendAssociative ns [v] vs in
+							getBinderUnder (ns ++ [v]) later env
+
 export
 getBinder : Weaken tm => Elem x vars -> Env tm vars -> Binder (tm vars)
-getBinder Here (b :: env) = map weaken b
-getBinder (There later) (b :: env) = map weaken (getBinder later env)
+getBinder el env = getBinderUnder [] el env
 
 -- Some syntax manipulation
 
@@ -846,6 +859,10 @@ dropHere [] = []
 dropHere ((_ ** Here) :: xs) = dropHere xs
 dropHere ((_ ** There p) :: xs) = (_ ** p) :: dropHere xs
 
+weakenVars : List (x ** Elem x xs) -> List (x ** Elem x (n :: xs))
+weakenVars [] = []
+weakenVars ((_ ** p) :: xs) = (_ ** There p) :: weakenVars xs
+
 -- This is kind of ugly - we're building a proof that some variables are
 -- a subset of the larger set of variables, if those variables are in the
 -- list of membership proofs.
@@ -872,25 +889,41 @@ mkShrink : List (x ** Elem x vars) ->
            (newvars ** SubVars newvars vars)
 mkShrink {vars = []} xs = (_ ** SubRefl)
 mkShrink {vars = v :: vs} xs = mkShrinkSub _ xs
+      
+merge : {vs : List Name} ->
+				List (x ** Elem x vs) -> List (x ** Elem x vs) -> List (x ** Elem x vs)
+merge [] xs = xs
+merge ((_ ** v) :: vs) xs
+		= merge vs ((_ ** v) :: filter (\p => not (sameVar v (DPair.snd p))) xs)
 
 mutual
-  export
-  findUsedLocs : Env Term vars -> Term vars -> List (x ** Elem x vars)
-  findUsedLocs env (Local r y) 
-	  = (_ ** y) :: assert_total (findUsedInBinder env (getBinder y env))
-  findUsedLocs env (Bind x b tm) 
-    = assert_total (findUsedInBinder env b) ++ 
-          dropHere (findUsedLocs (b :: env) tm)
-  findUsedLocs env (App tm x) = findUsedLocs env tm ++ findUsedLocs env x
-  findUsedLocs env _ = []
+  findUsed : Env Term vars -> List (x ** Elem x vars) ->
+                 Term vars -> List (x ** Elem x vars)
+  findUsed env used (Local r y) 
+    = if any (\p => sameVar y (DPair.snd p)) used
+         then used
+         else	assert_total (findUsedInBinder env ((_ ** y) :: used)
+                                             (getBinder y env))
+  findUsed env used (Bind x b tm) 
+    = assert_total $
+        dropHere (findUsed (b :: env)
+                     (weakenVars (findUsedInBinder env used b))
+                     tm)
+  findUsed env used (App fn arg) 
+    = findUsed env (findUsed env used fn) arg
+  findUsed env used _ = used
   
-  findUsedInBinder : Env Term vars -> Binder (Term vars) -> 
-                     List (x ** Elem x vars)
-  findUsedInBinder env (Let _ val ty) 
-    = findUsedLocs env val ++ findUsedLocs env ty
-  findUsedInBinder env (PLet _ val ty)
-    = findUsedLocs env val ++ findUsedLocs env ty
-  findUsedInBinder env b = findUsedLocs env (binderType b)
+  findUsedInBinder : Env Term vars -> List (x ** Elem x vars) ->
+										 Binder (Term vars) -> List (x ** Elem x vars)
+  findUsedInBinder env used (Let _ val ty) 
+    = findUsed env (findUsed env used val) ty
+  findUsedInBinder env used (PLet _ val ty)
+    = findUsed env (findUsed env used val) ty
+  findUsedInBinder env used b = findUsed env used (binderType b)
+
+export
+findUsedLocs : Env Term vars -> Term vars -> List (x ** Elem x vars)
+findUsedLocs env tm = findUsed env [] tm
 
 -- Find the smallest subset of the environment which is needed to type check
 -- the given term

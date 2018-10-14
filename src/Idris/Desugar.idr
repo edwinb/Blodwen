@@ -233,14 +233,8 @@ mutual
       = do tm' <- desugar side ps tm
            rest' <- expandDo side ps topfc rest
            gam <- get Ctxt
-           -- If 'const' exists, use it, to reduce the size of the environment
-           -- (this avoids it making a mess in displays, needlessly extending
-           -- the environment for searches, etc)
-           case lookupTyName (UN "const") (gamma gam) of
-                [] => pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
-                                  (ILam fc RigW Explicit Nothing (Implicit fc) rest')
-                _ => pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
-                                 (IApp fc (IVar fc (UN "const")) rest')
+           pure $ IApp fc (IApp fc (IVar fc (UN ">>=")) tm')
+                          (ILam fc RigW Explicit Nothing (Implicit fc) rest')
   expandDo side ps topfc (DoBind fc n tm :: rest)
       = do tm' <- desugar side ps tm
            rest' <- expandDo side ps topfc rest
