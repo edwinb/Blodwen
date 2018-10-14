@@ -426,7 +426,10 @@ mutual
 
   export
   Convert Term where
-    convGen num defs env x y = convGen num defs env (nf defs env x) (nf defs env y)
+    convGen num defs env x y 
+        = if x == y 
+             then pure True
+             else convGen num defs env (nf defs env x) (nf defs env y)
 
   export
   Convert Closure where

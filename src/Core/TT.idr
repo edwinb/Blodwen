@@ -366,6 +366,31 @@ sameVar p1 p2 = case sameElem p1 p2 of
                      Yes prf => True
                      No contra => False
 
+export
+Eq a => Eq (Binder a) where
+  (Lam c p ty) == (Lam c' p' ty') = c == c' && p == p' && ty == ty'
+  (Let c v ty) == (Let c' v' ty') = c == c' && v == v' && ty == ty'
+  (Pi c p ty) == (Pi c' p' ty') = c == c' && p == p' && ty == ty'
+  (PVar c ty) == (PVar c' ty') = c == c' && ty == ty'
+  (PLet c v ty) == (PLet c' v' ty') = c == c' && v == v' && ty == ty'
+  (PVTy c ty) == (PVTy c' ty') = c == c' && ty == ty'
+  _ == _ = False
+
+export
+Eq (Term vars) where
+  (Local c p) == (Local c' p')      = c == c' && sameVar p p'
+  (Ref _ fn) == (Ref _ fn')         = fn == fn'
+  (Bind x b sc) == (Bind x' b' sc') 
+      -- We could set this up a bit differently and not need the 'believe_me'
+      -- if we passed through a proof that context lengths were equal.
+      -- Maybe someone will tidy it up one day. I promise it's safe :).
+	    = assert_total (b == b') && sc == believe_me sc'
+  (App f a) == (App f' a')          = f == f' && a == a'
+  (PrimVal c) == (PrimVal c')       = c == c'
+  Erased == Erased                  = True
+  TType == TType                    = True
+  _ == _                            = False
+
 %name TT.Binder b, b' 
 %name TT.Term tm 
 

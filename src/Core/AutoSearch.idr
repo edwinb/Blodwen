@@ -87,11 +87,12 @@ searchName : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              annot -> Bool -> Nat -> List ClosedTerm ->
              Env Term vars -> Term vars -> Maybe ClosedTerm ->
-             Name -> Name -> Core annot (Term vars)
-searchName loc defaults depth trying env ty topty defining con
+             Name -> (Name, GlobalDef) -> Core annot (Term vars)
+searchName loc defaults depth trying env ty topty defining (con, condef)
     = do gam <- get Ctxt
-         case lookupDefTyExact con (gamma gam) of
-              Just (DCon tag arity _, cty)
+         let cty = type condef
+         case definition condef of
+              DCon tag arity _
                   => do let nty = normalise gam [] cty
                         (args, appTy) <- mkTmArgs loc env (embed nty)
                         [] <- unify InTerm loc env ty appTy
@@ -102,18 +103,16 @@ searchName loc defaults depth trying env ty topty defining con
                         -- haven't been solved by unification
                         traverse (searchIfHole loc defaults depth trying defining topty) (map fst args)
                         pure candidate
-              Just (_, cty)
-                  => do let nty = normalise gam [] cty
-                        ctxt <- get Ctxt
-                        (args, appTy) <- mkTmArgs loc env (embed nty)
-                        [] <- unify InTerm loc env ty appTy
-                              | _ => cantSolve loc env (quote gam env ty) topty
-                        let candidate = apply (Ref Func con) (map snd args)
-                        -- Go through the arguments and solve them, if they
-                        -- haven't been solved by unification
-                        traverse (searchIfHole loc defaults depth trying defining topty) (map fst args)
-                        pure candidate
-              _ => cantSolve loc env ty topty
+              _ => do let nty = normalise gam [] cty
+                      ctxt <- get Ctxt
+                      (args, appTy) <- mkTmArgs loc env (embed nty)
+                      [] <- unify InTerm loc env ty appTy
+                            | _ => cantSolve loc env (quote gam env ty) topty
+                      let candidate = apply (Ref Func con) (map snd args)
+                      -- Go through the arguments and solve them, if they
+                      -- haven't been solved by unification
+                      traverse (searchIfHole loc defaults depth trying defining topty) (map fst args)
+                      pure candidate
 
 successful : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -172,16 +171,17 @@ searchNames loc defaults depth trying env ty topty defining []
          cantSolve loc env ty topty
 searchNames loc defaults depth trying env ty topty defining (n :: ns)
     = do gam <- get Ctxt
-         let visns = filter (visible (gamma gam) (currentNS gam)) (n :: ns)
-         log 5 $ "Searching " ++ show visns ++ " for " ++ show ty
+         let visns = mapMaybe (visible (gamma gam) (currentNS gam)) (n :: ns)
+         log 5 $ "Searching " ++ show (map fst visns) ++ " for " ++ show ty
          exactlyOne loc env ty topty
             (map (searchName loc defaults depth trying env ty topty defining) visns)
   where
-    visible : Gamma -> List String -> Name -> Bool
+    visible : Gamma -> List String -> Name -> Maybe (Name, GlobalDef)
     visible gam nspace n
-        = case lookupGlobalExact n gam of
-               Nothing => False
-               Just gdef => visibleIn nspace n (visibility gdef)
+        = do def <- lookupGlobalExact n gam
+             if visibleIn nspace n (visibility def)
+                then Just (n, def)
+                else Nothing
 
 
 searchLocalWith : {auto c : Ref Ctxt Defs} ->
@@ -373,7 +373,6 @@ searchHole : {auto c : Ref Ctxt Defs} ->
 searchHole loc defaults depth trying defining n topty gam glob
     = do let searchty = normaliseScope gam [] (type glob)
          abandonIfCycle searchty trying
-         let nty = nf gam [] searchty
          log 2 $ "Running search: " ++ show n ++ " in " ++ show defining ++
                  " for " ++ show searchty ++ " defaults " ++ show defaults
          dumpConstraints 5 True

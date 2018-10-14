@@ -37,6 +37,3 @@ main
 
          ds <- bufferData buf2
          printLn ds
-
-
-
