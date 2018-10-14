@@ -78,7 +78,7 @@ cantSolve : {auto c : Ref Ctxt Defs} ->
 cantSolve loc env thisty Nothing = throw (CantSolveGoal loc (bindEnv env thisty))
 cantSolve loc env thisty (Just topty) 
    = do gam <- get Ctxt
-        throw (CantSolveGoal loc (embed (normaliseHoles gam [] topty)))
+        throw (CantSolveGoal loc (embed topty))
 
 -- Apply the name to arguments and see if the result unifies with the target
 -- type, then try to automatically solve any holes which were generated.
