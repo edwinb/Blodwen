@@ -52,9 +52,18 @@ parameters (defs : Defs, opts : EvalOpts)
     evalLocal : Env Term free -> LocalEnv free vars -> Stack free -> 
                 Maybe RigCount -> Elem x (vars ++ free) -> NF free
     evalLocal {vars = []} env loc stk r p 
-        = case getBinder p env of
-               Let _ val ty => eval env [] stk val
-               b => NApp (NLocal r p) stk
+        = if isLet p env
+             -- getBinder does a lot of work to weaken the types as
+             -- necessary, so only do it if we really need to
+             then case getBinder p env of
+                       Let _ val ty => eval env [] stk val
+                       b => NApp (NLocal r p) stk
+             else NApp (NLocal r p) stk
+      where
+        isLet : Elem x vars -> Env tm vars -> Bool
+        isLet Here (Let _ _ _ :: env) = True
+        isLet Here _ = False
+        isLet (There p) (b :: env) = isLet p env
     evalLocal {vars = (x :: xs)} 
               env ((MkClosure _ loc' env' tm') :: locs) stk r Here 
         = eval env' loc' stk tm'
