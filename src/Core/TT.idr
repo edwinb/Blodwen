@@ -528,11 +528,21 @@ insertNames ns TType = TType
 
 export
 elemExtend : Elem x xs -> Elem x (xs ++ ys)
+-- What Could Possibly Go Wrong?
+-- This relies on the runtime representation of the term being the same
+-- after embedding! It is just an identity function at run time, though, and
+-- we don't need its definition at compile time, so let's do it...
+elemExtend p = believe_me p
+{- Original definition:
 elemExtend Here = Here
 elemExtend (There later) = There (elemExtend later)
+-}
 
 export
 embed : Term vars -> Term (vars ++ more)
+-- As above, it's an identity function at run time
+embed tm = believe_me tm
+{- Original definition:
 embed (Local r prf) = Local r (elemExtend prf)
 embed (Ref x fn) = Ref x fn
 embed (Bind x b tm) = Bind x (assert_total (map embed b)) (embed tm)
@@ -540,6 +550,7 @@ embed (App f a) = App (embed f) (embed a)
 embed (PrimVal x) = PrimVal x
 embed Erased = Erased
 embed TType = TType
+-}
 
 public export
 interface Weaken (tm : List Name -> Type) where
