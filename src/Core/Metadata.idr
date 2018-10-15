@@ -24,10 +24,17 @@ record Metadata annot where
        -- Mapping from annotation to the name that's declared there and
        -- its type; the Nat is as above
        tydecls : List (annot, (Name, Nat, ClosedTerm))
+       -- Current lhs, if applicable, and a mapping from hole names to the
+       -- lhs they're under. This is for expression search, to ensure that
+       -- recursive calls have a smaller value as an argument.
+       -- Also use this to get the name of the function being defined (i.e.
+       -- to know what the recursive call is, if applicable)
+       currentLHS : Maybe ClosedTerm
+       holeLHS : List (Name, ClosedTerm)
 
 export
 initMetadata : Metadata annot
-initMetadata = MkMetadata [] [] []
+initMetadata = MkMetadata [] [] [] Nothing []
 
 -- A label for metadata in the global state
 export
@@ -38,12 +45,14 @@ TTC annot annot => TTC annot (Metadata annot) where
       = do toBuf b (lhsApps m)
            toBuf b (names m)
            toBuf b (tydecls m)
+           toBuf b (holeLHS m)
 
   fromBuf s b
       = do apps <- fromBuf s b
            ns <- fromBuf s b
            tys <- fromBuf s b
-           pure (MkMetadata apps ns tys)
+           hlhs <- fromBuf s b
+           pure (MkMetadata apps ns tys Nothing hlhs)
 
 export
 addLHS : {auto m : Ref Meta (Metadata annot)} ->
@@ -69,6 +78,29 @@ addTyDecl loc n env tm
          put Meta (record { 
                       tydecls $= ((loc, (n, length env, bindEnv env tm)) ::) 
                     } meta)
+
+export
+setHoleLHS : {auto m : Ref Meta (Metadata annot)} ->
+             ClosedTerm -> Core annot ()
+setHoleLHS tm
+    = do meta <- get Meta
+         put Meta (record { currentLHS = Just tm } meta)
+
+export
+clearHoleLHS : {auto m : Ref Meta (Metadata annot)} ->
+               Core annot ()
+clearHoleLHS
+    = do meta <- get Meta
+         put Meta (record { currentLHS = Nothing } meta)
+
+export
+withCurrentLHS : {auto m : Ref Meta (Metadata annot)} ->
+                 Name -> Core annot ()
+withCurrentLHS n
+    = do meta <- get Meta
+         maybe (pure ())
+               (\lhs => put Meta (record { holeLHS $= ((n, lhs) ::) } meta))
+               (currentLHS meta)
 
 findEntryWith : (annot -> a -> Bool) -> List (annot, a) -> Maybe (annot, a)
 findEntryWith p [] = Nothing

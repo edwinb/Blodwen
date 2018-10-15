@@ -181,8 +181,11 @@ checkClause {vars} elab incase defining env nest (PatClause loc lhs_raw rhs_raw)
          log 5 ("Checking RHS: " ++ show rhs_raw)
          log 10 ("Old env: " ++ show env)
          log 10 ("New env: " ++ show env')
+
+         setHoleLHS (bindEnv env lhs')
          (rhs, rhs_erased) <- wrapError (InRHS loc defining) $
                 checkTerm elab incase defining env' env prf nest' NONE InExpr rhs_raw reqty
+         clearHoleLHS
          log 5 ("Checked and erased RHS: " ++ show rhs_erased)
 
          -- only need to check body for visibility if name is

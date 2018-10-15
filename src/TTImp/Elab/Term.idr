@@ -570,6 +570,8 @@ mutual
            -- Let to lambda as above
            let env' = letToLam env
            addNamedHole loc n False env' expected
+           -- Record the lhs for this hole in the metadata
+           withCurrentLHS n
            est <- get EST
            put EST (record { holesMade $= (n ::) } est)
            pure (mkConstantApp n env', expected)
@@ -583,6 +585,8 @@ mutual
            let hty = mkConstantApp t env'
            n <- inCurrentNS (UN n_in)
            addNamedHole loc n False env' hty
+           -- Record the lhs for this hole in the metadata
+           withCurrentLHS n
            est <- get EST
            put EST (record { holesMade $= (n ::) } est)
            pure (mkConstantApp n env', hty)
