@@ -107,7 +107,7 @@ lookup : HasType i xs t -> Env xs -> t
 
 Implicit arguments
 ------------------
-When we encounter an implicit argument ('_' in the raw syntax, or added when
+When we encounter an implicit argument ('\_' in the raw syntax, or added when
 we elaborate an application and see that there is an implicit needed) we
 make a new hole which is a fresh name applied to the current environment,
 and return that as the elaborated term. If there's enough information elsewhere
@@ -129,9 +129,9 @@ require. It also tries to resolve anything defined by proof search.
 
 Additional type inference
 -------------------------
-A '?' in a type means "infer this part of the type".  This is distinct from "_"
+A '?' in a type means "infer this part of the type".  This is distinct from "\_"
 in types, which means "I don't care what this is". The distinction is in what
-happens when inference fails.  If inference fails for "_", we implicitly bind a
+happens when inference fails.  If inference fails for "\_", we implicitly bind a
 new name (just like pattern matching on the lhs - i.e. it means match
 anything). If inference fails for "?", we leave it as a hole and try to fill it
 in later. As a result, we can say:
@@ -146,11 +146,11 @@ foo = [1,2,3,4]
 foo : Vect Int _
 foo = [1,2,3,4]
 ```
-...we'll get an error, because the '_' has been bound as a new name.
+...we'll get an error, because the '\_' has been bound as a new name.
 
-So the meaning of "_" is now consistent on the lhs and in types (i.e. it
+So the meaning of "\_" is now consistent on the lhs and in types (i.e. it
 means infer a value and bind a variable on failure to infer anything). In
-practice, using "_" will get you the old Idris behaviour, but "?" might get
+practice, using "\_" will get you the old Idris behaviour, but "?" might get
 you a bit more type inference.
 
 Auto Implicits
@@ -215,7 +215,7 @@ function definitions. We keep track of the names being defined in a nested
 block of declarations, and ensure that they are lifted to top level definitions
 in TT by applying them to every name in scope.
 
-Since we don't know how many times a loca definition will be applied, in general,
+Since we don't know how many times a local definition will be applied, in general,
 anything bound with multiplicity 1 is passed to the local definition with
 multiplicity 0, so if you want to use it in a local definition, you need to
 pass it explicitly.
