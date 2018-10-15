@@ -50,12 +50,20 @@ nameIsHole loc n
 -- Search recursively, but only if the given name wasn't solved by unification
 searchIfHole : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState annot)} ->
-               annot -> Bool -> Nat -> List ClosedTerm ->
+               annot -> Bool -> Bool -> Nat -> List ClosedTerm ->
                Name -> Maybe ClosedTerm -> Name -> Core annot ()
-searchIfHole loc defaults Z trying defining topty n = throw (InternalError "Search depth limit reached")
-searchIfHole loc defaults (S depth) trying defining topty n
+searchIfHole loc defaults updatety Z trying defining topty n 
+    = throw (InternalError "Search depth limit reached")
+searchIfHole loc defaults updatety (S depth) trying defining topty n
     = if !(nameIsHole loc n) 
-         then do search loc defaults depth trying defining topty n
+         then do gam <- get Ctxt
+                 let topty' 
+                    = if updatety 
+                         then case lookupTyExact n (gamma gam) of
+                                   Nothing => topty
+                                   Just t' => Just (normalise gam [] t')
+                         else topty
+                 search loc defaults depth trying defining topty' n
                  pure ()
          else pure ()
 
@@ -66,6 +74,13 @@ cantSolve loc env thisty Nothing = throw (CantSolveGoal loc (bindEnv env thisty)
 cantSolve loc env thisty (Just topty) 
    = do gam <- get Ctxt
         throw (CantSolveGoal loc (embed topty))
+
+isPairNF : Env Term vars -> NF vars -> Defs -> Bool
+isPairNF env (NTCon n _ _ _) defs
+    = isPairType n defs
+isPairNF env (NBind b (Pi _ _ _) sc) defs
+    = isPairNF env (sc (toClosure defaultOpts env Erased)) defs
+isPairNF _ _ _ = False
 
 -- Apply the name to arguments and see if the result unifies with the target
 -- type, then try to automatically solve any holes which were generated.
@@ -86,9 +101,15 @@ searchName loc defaults depth trying env ty topty defining (con, condef)
                               | _ => cantSolve loc env (quote gam env ty) topty
                         let candidate = apply (Ref (DataCon tag arity) con)
                                               (map snd args)
+                        gam <- get Ctxt
+                        -- if it's a pair, we'll update the reported top type
+                        -- for the sake of error messages, so check here
+                        let ispair = isPairNF env nty gam
                         -- Go through the arguments and solve them, if they
                         -- haven't been solved by unification
-                        traverse (searchIfHole loc defaults depth trying defining topty) (map fst args)
+                        traverse (searchIfHole loc defaults ispair 
+                                               depth trying defining topty) 
+                                 (map fst args)
                         pure candidate
               _ => do let nty = nf gam env (embed cty)
                       ctxt <- get Ctxt
@@ -98,7 +119,9 @@ searchName loc defaults depth trying env ty topty defining (con, condef)
                       let candidate = apply (Ref Func con) (map snd args)
                       -- Go through the arguments and solve them, if they
                       -- haven't been solved by unification
-                      traverse (searchIfHole loc defaults depth trying defining topty) (map fst args)
+                      traverse (searchIfHole loc defaults False 
+                                             depth trying defining topty) 
+                               (map fst args)
                       pure candidate
 
 successful : {auto c : Ref Ctxt Defs} ->
@@ -244,7 +267,9 @@ searchLocalWith {vars} loc defaults depth trying env ((p, pty) :: rest) ty topty
                   log 1 $ "Success for " ++ show (quote gam env ty) ++
                           " with " ++ show (normalise gam env candidate) ++
                           " " ++ show (quote gam env appTy)
-                  traverse (searchIfHole loc defaults depth trying defining topty) (map fst args)
+                  traverse (searchIfHole loc defaults False 
+                                         depth trying defining topty) 
+                           (map fst args)
                   pure candidate
                 else cantSolve loc env (quote gam env ty) topty
              
@@ -369,10 +394,10 @@ searchType loc defaults depth trying env defining topty ty
                                  (handleUnify 
                                    (handleUnify 
                                      (searchNames loc defaults depth trying env ty topty defining opens)
-                                     (\err => if ambig err
+                                     (\err => if ambig err || (isNil cons && isNil chasers)
                                                  then throw err
                                                  else searchNames loc defaults depth trying env ty topty defining cons))
-                                     (\err => if ambig err
+                                     (\err => if ambig err || isNil chasers
                                                  then throw err
                                                  else searchNames loc defaults depth trying env ty topty defining chasers))
                      else cantSolve loc env ty topty

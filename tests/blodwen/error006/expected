@@ -1,0 +1,5 @@
+1/1: Building iferr2 (iferr2.blod)
+iferr2.blod:15:10--15:19:While processing right hand side of Main.test at iferr2.blod:15:1--17:1:
+Can't find an implementation for Eq Foo
+iferr2.blod:23:9--23:18:While processing right hand side of Main.test2 at iferr2.blod:23:1--25:1:
+Can't find an implementation for Show Foo
