@@ -68,7 +68,7 @@ sexp
   <|> do symbol ":"; x <- unqualifiedName 
          pure (SymbolAtom x)
   <|> do symbol "("
-         xs <- some sexp
+         xs <- many sexp
          symbol ")"
          pure (SExpList xs)
 

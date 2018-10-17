@@ -1286,13 +1286,14 @@ mutual
   makeImplicit rigc process loc env nest elabinfo bn ty
       = case lookup (Just bn) (lamImplicits elabinfo ++ implicitsGiven elabinfo) of
              Just rawtm => 
-               do log 10 $ "Checking implicit " ++ show bn ++ " = " ++ show rawtm
+               do gam <- get Ctxt
+                  log 10 $ "Checking implicit " ++ show bn ++ " = " ++ show rawtm
                             ++ " at " ++ show rigc
-                  gam <- get Ctxt
+                            ++ " type " ++ show (quote (noGam gam) env ty)
                   usedImp (Just bn)
                   impsUsed <- saveImps
-                  (imptm, impty) <- checkImp rigc process (record { implicitsGiven = [] } elabinfo)
-                                             env nest rawtm (FnType [] (quote (noGam gam) env ty))
+                  (imptm, impty) <- check rigc process (record { implicitsGiven = [] } elabinfo)
+                                          env nest rawtm (FnType [] (quote (noGam gam) env ty))
                   restoreImps impsUsed
                   pure imptm
              Nothing =>
