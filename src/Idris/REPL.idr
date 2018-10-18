@@ -26,6 +26,7 @@ import Idris.Syntax
 
 import TTImp.CaseSplit
 import TTImp.Elab
+import TTImp.ExprSearch
 import TTImp.TTImp
 import TTImp.ProcessTTImp
 import TTImp.Reflect
@@ -177,6 +178,29 @@ processEdit (AddClause line name)
     = do Just c <- getClause line name
              | Nothing => printError (show name ++ " not defined here")
          printResult c
+processEdit (ExprSearch line name hints all)
+    = do tms <- exprSearch replFC name []
+         gam <- get Ctxt
+         let restms = map (normaliseHoles gam []) tms
+         let locs 
+               = case lookupDefName name (gamma gam) of
+                      [(n, Hole l _ _)] => l
+                      _ => 0
+         itms <- the (Core _ (List PTerm)) $
+                   traverse (\tm => 
+                              do let (_ ** (env, tm')) = dropLams locs [] tm
+                                 resugar env tm') restms
+         if all
+            then printResult $ showSep "\n" (map show itms)
+            else case itms of
+                      [] => printError "No search results"
+                      (x :: xs) => printResult (show x)
+  where
+    dropLams : Nat -> Env Term vars -> Term vars -> 
+               (vars' ** (Env Term vars', Term vars'))
+    dropLams Z env tm = (_ ** (env, tm))
+    dropLams (S k) env (Bind _ b sc) = dropLams k (b :: env) sc 
+    dropLams _ env tm = (_ ** (env, tm))
 
 -- Returns 'True' if the REPL should continue
 export

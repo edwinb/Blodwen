@@ -1,6 +1,6 @@
 1/1: Building eta (eta.blod)
 eta.blod:14:10--16:1:While processing right hand side of Main.etaBad at eta.blod:14:1--16:1:
-When unifying ?x = ?x and MkTest = (\x => (\y => (MkTest ({_:66} x y) ({_:67} x y))))
+When unifying ?x = ?x and MkTest = (\x => (\y => (MkTest ?_ ?_)))
 Mismatch between:
 	Integer
 and

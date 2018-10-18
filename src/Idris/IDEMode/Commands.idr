@@ -12,6 +12,64 @@ data SExp = SExpList (List SExp)
           | IntegerAtom Integer
           | SymbolAtom String
 
+public export
+data IDECommand
+     = Interpret String
+     | LoadFile String (Maybe Integer)
+     | TypeOf String (Maybe (Integer, Integer))
+     | CaseSplit Integer Integer String
+     | AddClause Integer String
+     | ExprSearch Integer String (List String) Bool
+    
+readHints : List SExp -> Maybe (List String)
+readHints [] = Just []
+readHints (StringAtom s :: rest)
+    = do rest' <- readHints rest
+         pure (s :: rest')
+readHints _ = Nothing
+
+export
+getIDECommand : SExp -> Maybe IDECommand
+getIDECommand (SExpList [SymbolAtom "interpret", StringAtom cmd])
+    = Just $ Interpret cmd
+getIDECommand (SExpList [SymbolAtom "load-file", StringAtom fname])
+    = Just $ LoadFile fname Nothing
+getIDECommand (SExpList [SymbolAtom "load-file", StringAtom fname, IntegerAtom l])
+    = Just $ LoadFile fname (Just l)
+getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n])
+    = Just $ TypeOf n Nothing
+getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n,
+                         IntegerAtom l, IntegerAtom c])
+    = Just $ TypeOf n (Just (l, c))
+getIDECommand (SExpList [SymbolAtom "case-split", IntegerAtom l, IntegerAtom c, 
+                         StringAtom n])
+    = Just $ CaseSplit l c n
+getIDECommand (SExpList [SymbolAtom "case-split", IntegerAtom l, StringAtom n])
+    = Just $ CaseSplit l 0 n
+getIDECommand (SExpList [SymbolAtom "add-clause", IntegerAtom l, StringAtom n])
+    = Just $ AddClause l n
+getIDECommand (SExpList [SymbolAtom "proof-search", IntegerAtom l, StringAtom n])
+    = Just $ ExprSearch l n [] False
+getIDECommand (SExpList [SymbolAtom "proof-search", IntegerAtom l, StringAtom n, SExpList hs])
+    = case readHints hs of
+           Just hs' => Just $ ExprSearch l n hs' False
+           _ => Nothing
+getIDECommand (SExpList [SymbolAtom "proof-search", IntegerAtom l, StringAtom n, SExpList hs, SymbolAtom mode])
+    = case readHints hs of
+           Just hs' => Just $ ExprSearch l n hs' (getMode mode)
+           _ => Nothing
+  where
+    getMode : String -> Bool
+    getMode m = m == "all"
+getIDECommand _ = Nothing
+
+export
+getMsg : SExp -> Maybe (IDECommand, Integer)
+getMsg (SExpList [cmdexp, IntegerAtom num])
+   = do cmd <- getIDECommand cmdexp
+        pure (cmd, num)
+getMsg _ = Nothing
+
 escape : String -> String
 escape = pack . concatMap escapeChar . unpack
   where

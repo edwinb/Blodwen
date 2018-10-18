@@ -35,40 +35,6 @@ import TTImp.Reflect
 import Control.Catchable
 import System
 
-data IDECommand
-     = Interpret String
-     | LoadFile String (Maybe Integer)
-     | TypeOf String (Maybe (Integer, Integer))
-     | CaseSplit Integer Integer String
-     | AddClause Integer String
-
-getIDECommand : SExp -> Maybe IDECommand
-getIDECommand (SExpList [SymbolAtom "interpret", StringAtom cmd])
-    = Just $ Interpret cmd
-getIDECommand (SExpList [SymbolAtom "load-file", StringAtom fname])
-    = Just $ LoadFile fname Nothing
-getIDECommand (SExpList [SymbolAtom "load-file", StringAtom fname, IntegerAtom l])
-    = Just $ LoadFile fname (Just l)
-getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n])
-    = Just $ TypeOf n Nothing
-getIDECommand (SExpList [SymbolAtom "type-of", StringAtom n,
-                         IntegerAtom l, IntegerAtom c])
-    = Just $ TypeOf n (Just (l, c))
-getIDECommand (SExpList [SymbolAtom "case-split", IntegerAtom l, IntegerAtom c, 
-                         StringAtom n])
-    = Just $ CaseSplit l c n
-getIDECommand (SExpList [SymbolAtom "case-split", IntegerAtom l, StringAtom n])
-    = Just $ CaseSplit l 0 n
-getIDECommand (SExpList [SymbolAtom "add-clause", IntegerAtom l, StringAtom n])
-    = Just $ AddClause l n
-getIDECommand _ = Nothing
-
-getMsg : SExp -> Maybe (IDECommand, Integer)
-getMsg (SExpList [cmdexp, IntegerAtom num])
-   = do cmd <- getIDECommand cmdexp
-        pure (cmd, num)
-getMsg _ = Nothing
-
 getNChars : Nat -> IO (List Char)
 getNChars Z = pure []
 getNChars (S k)
@@ -142,6 +108,10 @@ process (CaseSplit l c n)
          pure ()
 process (AddClause l n)
     = do Idris.REPL.process (Editing (AddClause (fromInteger l) (UN n)))
+         pure ()
+process (ExprSearch l n hs all)
+    = do Idris.REPL.process (Editing (ExprSearch (fromInteger l) (UN n) 
+                                                 (map UN hs) all))
          pure ()
 
 processCatch : {auto c : Ref Ctxt Defs} ->

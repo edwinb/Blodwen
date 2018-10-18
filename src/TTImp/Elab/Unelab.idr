@@ -31,12 +31,13 @@ mutual
       = pure (IVar loc x, binderType (getBinder el env))
   unelabTy loc env (Ref nt n)
       = do defs <- get Ctxt
-           case lookupTyExact n (gamma defs) of
+           case lookupDefTyExact n (gamma defs) of
                 Nothing => pure (IHole loc (nameRoot n),
                                  Erased) -- should never happen on a well typed term!
                                     -- may happen in error messages where we haven't saved
                                     -- holes in the context
-                Just ty => pure (IVar loc n, embed ty)
+                Just (Hole _ False _, ty) => pure (IHole loc (nameRoot n), embed ty)
+                Just (_, ty) => pure (IVar loc n, embed ty)
   unelabTy loc env (Bind x b sc)
       = do (sc', scty) <- unelabTy loc (b :: env) sc
            unelabBinder loc env x b sc sc' scty
