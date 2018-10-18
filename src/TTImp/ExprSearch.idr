@@ -182,7 +182,7 @@ getSuccessful {vars} loc mkHole env ty topty defining all
               [] => -- If no successful search, make a hole
                 if mkHole
                    then do defs <- get Ctxt
-                           let base = maybe "search"
+                           let base = maybe "arg"
                                             (\r => nameRoot (recname r) ++ "_rhs")
                                             defining
                            let hn = uniqueName defs (map nameRoot vars) base
@@ -231,20 +231,52 @@ tryRecursive loc depth env ty topty (Just rdata)
               Just def =>
                 do tms <- searchName loc depth env (nf gam env ty) topty Nothing
                                      (recname rdata, def)
+                   gam <- get Ctxt
+                   let tms = map (normaliseHoles gam env) tms
                    log 10 $ show tms
                    pure (filter (structDiff (lhsapp rdata)) tms)
   where
-    -- Reject if the recursive call is the same in structure as the lhs
-    structDiff : Term vs -> Term vs' -> Bool
-    structDiff (Local _ _) (Local _ _) = False
-    structDiff (Ref _ fn) (Ref _ fn') = fn /= fn'
-    structDiff (Bind _ _ _) (Bind _ _ _) = False
-    structDiff (App f a) (App f' a') = structDiff f f' || structDiff a a'
-    structDiff (PrimVal c) (PrimVal c') = c /= c'
-    structDiff Erased _ = False
-    structDiff _ Erased = False
-    structDiff TType TType = False
-    structDiff _ _ = True
+    mutual
+      -- A fairly simple superficialy syntactic check to make sure that
+      -- the recursive call is structurally different from the lhs
+      -- (Essentially, meaning that there's a constructor application in
+      -- one where there's a local in another, or that constructor applications
+      -- differ somewhere)
+      argDiff : Term vs -> Term vs' -> Bool
+      argDiff (Local _ _) (Local _ _) = False
+      argDiff (Ref _ fn) (Ref _ fn') = fn /= fn'
+      argDiff (Bind _ _ _) (Bind _ _ _) = False
+      argDiff (App f a) (App f' a') 
+         = structDiff f f' || structDiff a a'
+      argDiff (PrimVal c) (PrimVal c') = c /= c'
+      argDiff Erased _ = False
+      argDiff _ Erased = False
+      argDiff TType TType = False
+      argDiff _ _ = True
+      
+      appsDiff : Term vs -> Term vs' -> List (Term vs) -> List (Term vs') ->
+                 Bool
+      appsDiff (Ref (DataCon _ _) f) (Ref (DataCon _ _) f') args args'
+         = if f == f' then or (map Delay (zipWith argDiff args args'))
+                      else True
+      appsDiff (Ref (TyCon _ _) f) (Ref (TyCon _ _) f') args args'
+         = if f == f' then or (map Delay (zipWith argDiff args args'))
+                      else True
+      appsDiff (Ref _ f) (Ref _ f') args args'
+         = if f == f' && length args == length args'
+              then or (map Delay (zipWith argDiff args args'))
+              else False -- can't be sure
+      appsDiff (Ref (DataCon _ _) f) (Local _ _) _ _ = True
+      appsDiff (Local _ _) (Ref (DataCon _ _) f) _ _ = True
+      appsDiff f f' [] [] = argDiff f f'
+      appsDiff _ _ _ _ = False -- can't be sure...
+
+      -- Reject if the recursive call is the same in structure as the lhs
+      structDiff : Term vs -> Term vs' -> Bool
+      structDiff tm tm'
+         = let (f, args) = getFnArgs tm
+               (f', args') = getFnArgs tm' in
+               appsDiff f f' args args'
 
 -- A local is usable if it contains no holes in an argument position
 usableLocal : {auto c : Ref Ctxt Defs} ->
