@@ -1,9 +1,9 @@
 1/2: Building Stuff (Stuff.blod)
 2/2: Building Functor (Functor.blod)
 Welcome to Blodwen. Good luck.
-Main> [(S (S (S Z))), (S (S (S (S Z))))]
-Main> [(S (S (S Z))), (S (S (S (S Z))))]
+Main> [S (S (S Z)), S (S (S (S Z)))]
+Main> [S (S (S Z)), S (S (S (S Z)))]
 Main> OCons (S (S (S Z))) (OCons (S (S (S (S Z)))) ONil)
-Main> [([1, 4]), ([2, 5]), ([3, 6])]
-Main> MkD ([(S Z), (S Z), (S Z), (S (S Z))])
+Main> [[1, 4], [2, 5], [3, 6]]
+Main> MkD [S Z, S Z, S Z, S (S Z)]
 Main> Bye for now!

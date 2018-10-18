@@ -1081,6 +1081,10 @@ editCmd
          line <- intLit
          n <- name
          pure (ExprSearch (fromInteger line) n [] False)
+  <|> do replCmd ["psall"]
+         line <- intLit
+         n <- name
+         pure (ExprSearch (fromInteger line) n [] True)
 
 export
 command : Rule REPLCmd

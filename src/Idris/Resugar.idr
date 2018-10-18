@@ -17,22 +17,35 @@ import Data.StringMap
 -- type check (in fact it probably won't due to tidying up names for
 -- readability).
 
+unbracketApp : PTerm -> PTerm
+unbracketApp (PBracketed _ tm@(PApp _ _ _)) = tm
+unbracketApp tm = tm
+
+-- TODO: Deal with precedences
 mkOp : {auto s : Ref Syn SyntaxInfo} ->
        PTerm -> Core FC PTerm
 mkOp tm@(PApp fc (PApp _ (PRef _ n) x) y)
     = do syn <- get Syn
          case StringMap.lookup (nameRoot n) (infixes syn) of
               Nothing => pure tm
-              Just _ => pure (POp fc (nameRoot n) x y)
+              Just _ => pure (POp fc (nameRoot n) (unbracketApp x) (unbracketApp y))
 mkOp tm = pure tm
 
 bracket : {auto s : Ref Syn SyntaxInfo} ->
           (outer : Nat) -> (inner : Nat) -> PTerm -> Core FC PTerm
 bracket outer inner tm
     = do tm' <- mkOp tm
-         if outer > inner 
+         if outer > inner && needed tm'
             then pure (PBracketed emptyFC tm')
             else pure tm'
+  where
+    needed : PTerm -> Bool
+    needed (PBracketed _ _) = False
+    needed (PPair _ _ _) = False
+    needed (PUnit _) = False
+    needed (PComprehension _ _ _) = False
+    needed (PList _ _) = False
+    needed tm = True
 
 startPrec : Nat
 startPrec = 0
@@ -65,9 +78,9 @@ unbracket tm = tm
 -- Put the special names (Nil, ::, Pair etc) back as syntax
 sugarApp : PTerm -> PTerm
 sugarApp (PApp fc (PApp _ (PRef _ (UN "Pair")) l) r)
-    = PPair fc l r
+    = PPair fc (unbracket l) (unbracket r)
 sugarApp (PApp fc (PApp _ (PRef _ (UN "MkPair")) l) r)
-    = PPair fc l r
+    = PPair fc (unbracket l) (unbracket r)
 sugarApp (PApp fc (PApp _ (PRef _ (UN "Equal")) l) r)
     = PEq fc l r
 sugarApp (PRef fc (UN "Nil")) = PList fc []
@@ -75,7 +88,7 @@ sugarApp (PRef fc (UN "Unit")) = PUnit fc
 sugarApp (PRef fc (UN "MkUnit")) = PUnit fc
 sugarApp tm@(PApp fc (PApp _ (PRef _ (UN "::")) x) xs)
     = case sugarApp (unbracket xs) of
-           PList fc xs' => PList fc (x :: xs')
+           PList fc xs' => PList fc (unbracketApp x :: xs')
            _ => tm
 sugarApp tm = tm
 

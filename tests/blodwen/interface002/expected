@@ -1,6 +1,6 @@
 1/2: Building Stuff (Stuff.blod)
 2/2: Building Functor (Functor.blod)
 Welcome to Blodwen. Good luck.
-Main> [(S (S (S Z))), (S (S (S (S Z))))]
-Main> [(S (S (S Z))), (S (S (S (S Z))))]
+Main> [S (S (S Z)), S (S (S (S Z)))]
+Main> [S (S (S Z)), S (S (S (S Z)))]
 Main> Bye for now!

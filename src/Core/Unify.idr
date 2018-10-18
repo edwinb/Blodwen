@@ -17,11 +17,13 @@ public export
 data UnifyMode = InLHS
                | InTerm
                | InDot
+               | InSearch
 
 Eq UnifyMode where
    InLHS == InLHS = True
    InTerm == InTerm = True
    InDot == InDot = True
+   InSearch == InSearch = True
    _ == _ = False
 
 public export
@@ -817,7 +819,8 @@ mutual
                                postpone loc env (NApp (NRef xt hdx) argsx)
                                                 (NApp (NRef yt hdy) argsy)
               else
-                if isDefInvertible (gamma gam) hdx && hdx == hdy
+                if (isDefInvertible (gamma gam) hdx && hdx == hdy)
+                       || (mode == InSearch && hdx == hdy)
                    then unifyArgs mode loc env argsx argsy
                    else if holex && holey
                            then

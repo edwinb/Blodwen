@@ -1,5 +1,6 @@
 module TTImp.Utils
 
+import Core.Context
 import Core.TT
 import TTImp.TTImp
 
@@ -135,4 +136,30 @@ mutual
       = ImplicitNames fc (map (\ (n, t) => (n, substNames bound ps t)) xs)
   substNamesDecl bound ps d = d
 
+nameNum : String -> (String, Int)
+nameNum str
+    = case span isDigit (reverse str) of
+           ("", _) => (str, 0)
+           (nums, pre)
+              => case unpack pre of
+                      ('_' :: rest) => (reverse (pack rest), cast (reverse nums))
+                      _ => (str, 0)
+
+export
+uniqueName : Defs -> List String -> String -> String
+uniqueName defs used n
+    = if usedName 
+         then uniqueName defs used (next n)
+         else n
+  where
+    usedName : Bool
+    usedName 
+        = case lookupTyName (UN n) (gamma defs) of
+               [] => n `elem` used
+               _ => True
+
+    next : String -> String
+    next str 
+        = let (n, i) = nameNum str in
+              n ++ "_" ++ show (i + 1)
 

@@ -133,6 +133,13 @@ findTyDeclAt p
     = do meta <- get Meta
          pure (map snd (findEntryWith p (tydecls meta)))
 
+export
+findHoleLHS : {auto m : Ref Meta (Metadata annot)} ->
+              Name -> Core annot (Maybe ClosedTerm)
+findHoleLHS hn
+    = do meta <- get Meta
+         pure (lookupBy (\x, y => dropNS x == dropNS y) hn (holeLHS meta))
+
 -- Normalise all the types of the names, since they might have had holes
 -- when added and the holes won't necessarily get saved
 normaliseTypes : {auto m : Ref Meta (Metadata annot)} ->
