@@ -27,6 +27,7 @@ import Idris.Syntax
 import TTImp.CaseSplit
 import TTImp.Elab
 import TTImp.ExprSearch
+import TTImp.GenerateDef
 import TTImp.TTImp
 import TTImp.ProcessTTImp
 import TTImp.Reflect
@@ -150,6 +151,15 @@ execExp ctm
 anyAt : (FC -> Bool) -> FC -> a -> Bool
 anyAt p loc y = p loc
 
+printClause : {auto c : Ref Ctxt Defs} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              Nat -> (RawImp FC, RawImp FC) ->
+              Core FC String
+printClause i (lhsraw, rhsraw)
+    = do lhs <- pterm lhsraw
+         rhs <- pterm rhsraw
+         pure (pack (replicate i ' ') ++ show lhs ++ " = " ++ show rhs)
+
 processEdit : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
               {auto s : Ref Syn SyntaxInfo} ->
@@ -179,22 +189,26 @@ processEdit (AddClause line name)
              | Nothing => printError (show name ++ " not defined here")
          printResult c
 processEdit (ExprSearch line name hints all)
-    = do tms <- exprSearch replFC name []
-         gam <- get Ctxt
-         let restms = map (normaliseHoles gam []) tms
-         let locs 
-               = case lookupDefName name (gamma gam) of
-                      [(n, Hole l _ _)] => l
-                      _ => 0
-         itms <- the (Core _ (List PTerm)) $
-                   traverse (\tm => 
-                              do let (_ ** (env, tm')) = dropLams locs [] tm
-                                 resugar env tm') restms
-         if all
-            then printResult $ showSep "\n" (map show itms)
-            else case itms of
-                      [] => printError "No search results"
-                      (x :: xs) => printResult (show x)
+    = do gam <- get Ctxt
+         case lookupDefName name (gamma gam) of
+              [(n, Hole locs _ _)] =>
+                  do tms <- exprSearch replFC name []
+                     let restms = map (normaliseHoles gam []) tms
+                     itms <- the (Core _ (List PTerm)) 
+                               (traverse (\tm => 
+                                           do let (_ ** (env, tm')) = dropLams locs [] tm
+                                              resugar env tm') restms)
+                     if all
+                        then printResult $ showSep "\n" (map show itms)
+                        else case itms of
+                                  [] => printError "No search results"
+                                  (x :: xs) => printResult (show x)
+              [(n, None)] => 
+                  do Just (fc, cs) <- makeDef (\p, n => onLine line p) n
+                         | Nothing => processEdit (AddClause line name)
+                     ls <- traverse (printClause (cast (snd (startPos fc)))) cs
+                     printResult $ showSep "\n" ls
+              _ => printError "Not a searchable hole"
   where
     dropLams : Nat -> Env Term vars -> Term vars -> 
                (vars' ** (Env Term vars', Term vars'))
