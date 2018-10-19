@@ -13,8 +13,9 @@ public export
 record Metadata annot where
        constructor MkMetadata
        -- Mapping from source annotation (location, typically) to
-       -- the LHS defined at that location
-       lhsApps : List (annot, ClosedTerm)
+       -- the LHS defined at that location. Also record the outer environment
+       -- length, since we don't want to case split on these.
+       lhsApps : List (annot, (Nat, ClosedTerm))
        -- Mapping from annotation the the name defined with that annotation,
        -- and its type (so, giving the ability to get the types of locally
        -- defined names)
@@ -56,10 +57,12 @@ TTC annot annot => TTC annot (Metadata annot) where
 
 export
 addLHS : {auto m : Ref Meta (Metadata annot)} ->
-         annot -> Env Term vars -> Term vars -> Core annot ()
-addLHS loc env tm
+         annot -> Nat -> Env Term vars -> Term vars -> Core annot ()
+addLHS loc outerenvlen env tm
     = do meta <- get Meta
-         put Meta (record { lhsApps $= ((loc, bindEnv env tm) ::) } meta)
+         put Meta (record { 
+                      lhsApps $= ((loc, outerenvlen, bindEnv env tm) ::) 
+                    } meta)
 
 export
 addNameType : {auto m : Ref Meta (Metadata annot)} ->
@@ -112,10 +115,10 @@ findEntryWith p ((l, x) :: xs)
 export
 findLHSAt : {auto m : Ref Meta (Metadata annot)} ->
             (annot -> ClosedTerm -> Bool) -> 
-            Core annot (Maybe (annot, ClosedTerm))
+            Core annot (Maybe (annot, Nat, ClosedTerm))
 findLHSAt p 
     = do meta <- get Meta
-         pure (findEntryWith p (lhsApps meta))
+         pure (findEntryWith (\ loc, tm => p loc (snd tm)) (lhsApps meta))
 
 export
 findTypeAt : {auto m : Ref Meta (Metadata annot)} ->
@@ -128,10 +131,10 @@ findTypeAt p
 export
 findTyDeclAt : {auto m : Ref Meta (Metadata annot)} ->
                (annot -> (Name, Nat, ClosedTerm) -> Bool) -> 
-               Core annot (Maybe (Name, Nat, ClosedTerm))
+               Core annot (Maybe (annot, Name, Nat, ClosedTerm))
 findTyDeclAt p
     = do meta <- get Meta
-         pure (map snd (findEntryWith p (tydecls meta)))
+         pure (findEntryWith p (tydecls meta))
 
 export
 findHoleLHS : {auto m : Ref Meta (Metadata annot)} ->

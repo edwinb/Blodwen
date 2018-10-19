@@ -1077,6 +1077,10 @@ editCmd
          col <- intLit
          n <- name
          pure (CaseSplit (fromInteger line) (fromInteger col) n)
+  <|> do replCmd ["ac"]
+         line <- intLit
+         n <- name
+         pure (AddClause (fromInteger line) n)
   <|> do replCmd ["ps"]
          line <- intLit
          n <- name

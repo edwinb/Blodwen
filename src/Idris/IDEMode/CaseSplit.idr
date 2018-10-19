@@ -6,6 +6,7 @@ import Core.TT
 
 import TTImp.CaseSplit
 import TTImp.TTImp
+import TTImp.Utils
 
 import Idris.IDEMode.TokenLine
 import Idris.REPLOpts
@@ -46,32 +47,6 @@ dump LBrace = "{"
 dump RBrace = "}"
 dump Equal = "="
 dump (Other str) = str
-
-nameNum : String -> (String, Int)
-nameNum str
-    = case span isDigit (reverse str) of
-           ("", _) => (str, 0)
-           (nums, pre)
-              => case unpack pre of
-                      ('_' :: rest) => (reverse (pack rest), cast (reverse nums))
-                      _ => (str, 0)
-
-uniqueName : Defs -> List String -> String -> String
-uniqueName defs used n
-    = if usedName 
-         then uniqueName defs used (next n)
-         else n
-  where
-    usedName : Bool
-    usedName 
-        = case lookupTyName (UN n) (gamma defs) of
-               [] => n `elem` used
-               _ => True
-
-    next : String -> String
-    next str 
-        = let (n, i) = nameNum str in
-              n ++ "_" ++ show (i + 1)
 
 doUpdates : Defs -> List (String, String) -> List SourcePart -> 
             State (List String) (List SourcePart)
@@ -172,25 +147,26 @@ updateCase splits line col
 
 getEnvArgNames : Defs -> Nat -> NF [] -> List String
 getEnvArgNames defs Z sc = getArgNames defs [] [] sc
-getEnvArgNames defs (S k) (NBind n (Pi _ _ _) sc)
+getEnvArgNames defs (S k) (NBind n _ sc)
     = getEnvArgNames defs k (sc (MkClosure defaultOpts [] [] Erased))
 getEnvArgNames defs n ty = []
 
 mutual
-  fnGenName : GenName -> String
-  fnGenName (Nested _ n) = fnName n
-  fnGenName (CaseBlock n _) = fnName n
-  fnGenName (WithBlock n _) = fnName n
+  fnGenName : Bool -> GenName -> String
+  fnGenName lhs (Nested _ n) = fnName lhs n
+  fnGenName lhs (CaseBlock n _) = fnName lhs n
+  fnGenName lhs (WithBlock n _) = fnName lhs n
 
-  fnName : Name -> String
-  fnName (UN n) 
+  fnName : Bool -> Name -> String
+  fnName lhs (UN n) 
       = if any (not . identChar) (unpack n)
-           then "op"
+           then if lhs then "(" ++ n ++ ")"
+                       else "op"
            else n
-  fnName (NS _ n) = fnName n
-  fnName (DN s _) = s
-  fnName (GN g) = fnGenName g
-  fnName n = show n
+  fnName lhs (NS _ n) = fnName lhs n
+  fnName lhs (DN s _) = s
+  fnName lhs (GN g) = fnGenName lhs g
+  fnName lhs n = show n
 
 export
 getClause : {auto c : Ref Ctxt Defs} ->
@@ -198,8 +174,11 @@ getClause : {auto c : Ref Ctxt Defs} ->
             Int -> Name -> Core FC (Maybe String)
 getClause l n
     = do defs <- get Ctxt
-         Just (n, envlen, ty) <- findTyDeclAt (\p, n => onLine (l-1) p)
+         Just (loc, n, envlen, ty) <- findTyDeclAt (\p, n => onLine (l-1) p)
              | Nothing => pure Nothing
          let argns = getEnvArgNames defs envlen (nf defs [] ty)
-         pure (Just (fnName n ++ " " ++ showSep " " argns ++ 
-                  " = ?" ++ fnName n ++ "_rhs"))
+         pure (Just (indent loc ++ fnName True n ++ concat (map (" " ++) argns) ++ 
+                  " = ?" ++ fnName False n ++ "_rhs"))
+  where
+    indent : FC -> String
+    indent fc = pack (replicate (cast (snd (startPos fc))) ' ')

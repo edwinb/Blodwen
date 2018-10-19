@@ -61,15 +61,12 @@ Show a => Show (SplitResult a) where
 
 findTyName : Defs -> Env Term vars -> Name -> Term vars -> Maybe Name
 findTyName defs env n (Bind x (PVar c ty) sc)
-      -- Take the last one, to skip anything shadowed
-    = case findTyName defs (PVar c ty :: env) n sc of
-           Nothing =>
-                if n == x
-                   then case nf defs env ty of
-                             NTCon tyn _ _ _ => Just tyn
-                             _ => Nothing
-                   else Nothing
-           res => res
+      -- Take the first one, which is the most recently bound
+    = if n == x
+         then case nf defs env ty of
+                   NTCon tyn _ _ _ => Just tyn
+                   _ => Nothing
+         else findTyName defs (PVar c ty :: env) n sc
 findTyName defs env n (Bind x b sc) = findTyName defs (b :: env) n sc
 findTyName _ _ _ _ = Nothing
 
@@ -153,29 +150,69 @@ expandCon loc usedvars con
                                        (getArgNames defs usedvars [] 
                                                     (nf defs [] ty))))
 
--- Return a new LHS to check, replacing 'var' with an application of 'con'
--- Also replace any variables with '_' to allow elaboration to
--- expand them
-newLHS : {auto c : Ref Ctxt Defs} ->
-         annot -> 
-         List Name -> -- all the variable names
-         (var : Name) -> (con : Name) -> 
-         RawImp annot -> Core annot (RawImp annot)
-newLHS fc allvars var con (IVar loc n)
+updateArg : {auto c : Ref Ctxt Defs} ->
+            annot -> 
+            List Name -> -- all the variable names
+            (var : Name) -> (con : Name) -> 
+            RawImp annot -> Core annot (RawImp annot)
+updateArg fc allvars var con (IVar loc n)
     = if n `elem` allvars
          then if n == var
                  then expandCon loc (filter (/= n) allvars) con
                  else pure $ Implicit loc
          else pure $ IVar loc n
-newLHS fc allvars var con (IApp loc f a)
-    = pure $ IApp loc !(newLHS loc allvars var con f) 
-                      !(newLHS loc allvars var con a)
-newLHS fc allvars var con (IImplicitApp loc f n a)
-    = pure $ IImplicitApp loc !(newLHS loc allvars var con f) n 
-                              !(newLHS loc allvars var con a)
-newLHS fc allvars var con (IAs loc n p)
-    = newLHS loc allvars var con p
-newLHS fc allvars var con _ = pure $ Implicit fc
+updateArg fc allvars var con (IApp loc f a)
+    = pure $ IApp loc !(updateArg loc allvars var con f) 
+                      !(updateArg loc allvars var con a)
+updateArg fc allvars var con (IImplicitApp loc f n a)
+    = pure $ IImplicitApp loc !(updateArg loc allvars var con f) n 
+                              !(updateArg loc allvars var con a)
+updateArg fc allvars var con (IAs loc n p)
+    = updateArg loc allvars var con p
+updateArg fc allvars var con _ = pure $ Implicit fc
+
+data ArgType annot
+    = Explicit annot (RawImp annot)
+    | Implicit annot (Maybe Name) (RawImp annot)
+
+update : {auto c : Ref Ctxt Defs} ->
+         annot -> 
+         List Name -> -- all the variable names
+         (var : Name) -> (con : Name) -> 
+         ArgType annot -> Core annot (ArgType annot)
+update locs allvars var con (Explicit loc arg)
+    = pure $ Explicit loc !(updateArg locs allvars var con arg)
+update locs allvars var con (Implicit loc n arg)
+    = pure $ Implicit loc n !(updateArg locs allvars var con arg)
+
+getFnArgs : RawImp annot -> List (ArgType annot) ->
+            (RawImp annot, List (ArgType annot))
+getFnArgs (IApp loc tm a) args
+    = getFnArgs tm (Explicit loc a :: args)
+getFnArgs (IImplicitApp loc tm n a) args
+    = getFnArgs tm (Implicit loc n a :: args)
+getFnArgs tm args = (tm, args)
+
+apply : RawImp annot -> List (ArgType annot) -> RawImp annot
+apply f (Explicit loc a :: args) = apply (IApp loc f a) args
+apply f (Implicit loc n a :: args) = apply (IImplicitApp loc f n a) args
+apply f [] = f
+
+-- Return a new LHS to check, replacing 'var' with an application of 'con'
+-- Also replace any variables with '_' to allow elaboration to
+-- expand them
+newLHS : {auto c : Ref Ctxt Defs} ->
+         annot -> 
+         Nat -> -- previous environment length; leave these alone
+         List Name -> -- all the variable names
+         (var : Name) -> (con : Name) -> 
+         RawImp annot -> Core annot (RawImp annot)
+newLHS loc envlen allvars var con tm
+    = do let (f, args) = getFnArgs tm []
+         let keep = map (const (Explicit loc (Implicit loc))) (take envlen args)
+         let ups = drop envlen args
+         ups' <- traverse (update loc allvars var con) ups
+         pure $ apply f (keep ++ ups')
 
 record Updates annot where
   constructor MkUpdates
@@ -256,7 +293,7 @@ getSplits : {auto m : Ref Meta (Metadata annot)} ->
             (annot -> ClosedTerm -> Bool) -> Name -> 
             Core annot (SplitResult (List (ClauseUpdate annot)))
 getSplits p n
-    = do Just (loc, lhs_in) <- findLHSAt p
+    = do Just (loc, envlen, lhs_in) <- findLHSAt p
               | Nothing => pure (SplitFail CantFindLHS)
          let lhs = substLets lhs_in
          let usedns = findAllVars lhs
@@ -266,7 +303,7 @@ getSplits p n
             | SplitFail err => pure (SplitFail err)
         
          rawlhs <- unelab loc [] lhs
-         trycases <- traverse (\c => newLHS loc usedns n c rawlhs) cons
+         trycases <- traverse (\c => newLHS loc envlen usedns n c rawlhs) cons
          cases <- traverse (mkCase fn rawlhs) trycases
 
          pure (combine cases [])
