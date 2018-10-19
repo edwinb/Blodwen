@@ -13,10 +13,10 @@ Idris 1 programs to fail to type check, are:
 + Minor differences in the meaning of export modifiers `private`, `export`,
   and `public export`, which now refer to visibility of names from other
   *namespaces* rather than visibility from other *files*.
-+ Anything which uses a %language pragma in Idris 1 is likely to be different.
-  Notably, elaborator reflection will exist, but most likely in a slighly
++ Anything which uses a `%language` pragma in Idris 1 is likely to be different.
+  Notably, elaborator reflection will exist, but most likely in a slightly
   different form because the internal details of the elaborator are different.
-+ The Prelude is much smaller (and easier to replace with an alternative).
++ The `Prelude` is much smaller (and easier to replace with an alternative).
 
 Watch this space for more details and the rationale for the changes, as I
 get around to writing it...
