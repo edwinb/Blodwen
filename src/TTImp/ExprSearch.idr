@@ -422,6 +422,7 @@ searchType loc opts env defining topty _ ty
                          ++ if recOK opts
                                then [tryRecursive loc opts env ty topty defining]
                                else [])
+
   where
     ambig : Error annot -> Bool
     ambig (AmbiguousSearch _ _ _) = True

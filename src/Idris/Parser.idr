@@ -1093,6 +1093,10 @@ editCmd
          line <- intLit
          n <- name
          pure (GenerateDef (fromInteger line) n)
+  <|> do replCmd ["ml"]
+         line <- intLit
+         n <- name
+         pure (MakeLemma (fromInteger line) n)
 
 export
 command : Rule REPLCmd

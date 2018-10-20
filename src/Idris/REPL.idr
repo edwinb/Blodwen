@@ -18,6 +18,7 @@ import Core.Unify
 import Idris.Desugar
 import Idris.Error
 import Idris.IDEMode.CaseSplit
+import Idris.IDEMode.Commands
 import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
@@ -28,6 +29,7 @@ import TTImp.CaseSplit
 import TTImp.Elab
 import TTImp.ExprSearch
 import TTImp.GenerateDef
+import TTImp.MakeLemma
 import TTImp.TTImp
 import TTImp.ProcessTTImp
 import TTImp.Reflect
@@ -206,6 +208,7 @@ processEdit (ExprSearch line name hints all)
                         else case itms of
                                   [] => printError "No search results"
                                   (x :: xs) => printResult (show x)
+              [] => printError $ "Unknown name " ++ show name
               _ => printError "Not a searchable hole"
   where
     dropLams : Nat -> Env Term vars -> Term vars -> 
@@ -222,6 +225,27 @@ processEdit (GenerateDef line name)
                      ls <- traverse (printClause (cast (snd (startPos fc)))) cs
                      printResult $ showSep "\n" ls
               _ => printError "Already defined"
+processEdit (MakeLemma line name)
+    = do gam <- get Ctxt
+         case lookupDefTyName name (gamma gam) of
+              [(n, Hole locs _ _, ty)] =>
+                  do (lty, lapp) <- makeLemma replFC name locs ty
+                     pty <- pterm lty
+                     papp <- pterm lapp
+                     opts <- get ROpts
+                     case idemode opts of
+                          REPL _ => printResult (show name ++ " : " ++ show pty ++ "\n" ++ 
+                                                 show papp)
+                          IDEMode i =>
+                            send (SExpList [SymbolAtom "return", 
+                                    SExpList [SymbolAtom "ok",
+                                      SExpList [SymbolAtom "metavariable-lemma",
+                                        SExpList [SymbolAtom "replace-metavariable",
+                                                  StringAtom (show papp)],
+                                        SExpList [SymbolAtom "definition-type",
+                                                  StringAtom (show name ++ " : " ++ show pty)]]],
+                                            toSExp i])
+              _ => printError "Can't make lifted definition"
 
 -- Returns 'True' if the REPL should continue
 export
