@@ -20,6 +20,7 @@ data IDECommand
      | CaseSplit Integer Integer String
      | AddClause Integer String
      | ExprSearch Integer String (List String) Bool
+     | GenerateDef Integer String
     
 readHints : List SExp -> Maybe (List String)
 readHints [] = Just []
@@ -61,6 +62,8 @@ getIDECommand (SExpList [SymbolAtom "proof-search", IntegerAtom l, StringAtom n,
   where
     getMode : String -> Bool
     getMode m = m == "all"
+getIDECommand (SExpList [SymbolAtom "generate-def", IntegerAtom l, StringAtom n])
+    = Just $ GenerateDef l n
 getIDECommand _ = Nothing
 
 export

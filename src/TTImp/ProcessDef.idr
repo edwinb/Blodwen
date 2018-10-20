@@ -119,6 +119,7 @@ combineLinear loc ((n, count) :: cs)
         = do newc <- combine c c'
              combineAll newc cs
 
+export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               {auto i : Ref ImpST (ImpState annot)} ->

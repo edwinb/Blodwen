@@ -113,6 +113,9 @@ process (ExprSearch l n hs all)
     = do Idris.REPL.process (Editing (ExprSearch (fromInteger l) (UN n) 
                                                  (map UN hs) all))
          pure ()
+process (GenerateDef l n)
+    = do Idris.REPL.process (Editing (GenerateDef (fromInteger l) (UN n)))
+         pure ()
 
 processCatch : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->

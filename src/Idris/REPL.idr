@@ -153,12 +153,15 @@ anyAt p loc y = p loc
 
 printClause : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->
-              Nat -> (RawImp FC, RawImp FC) ->
+              Nat -> ImpClause FC ->
               Core FC String
-printClause i (lhsraw, rhsraw)
+printClause i (PatClause _ lhsraw rhsraw)
     = do lhs <- pterm lhsraw
          rhs <- pterm rhsraw
          pure (pack (replicate i ' ') ++ show lhs ++ " = " ++ show rhs)
+printClause i (ImpossibleClause _ lhsraw)
+    = do lhs <- pterm lhsraw
+         pure (pack (replicate i ' ') ++ show lhs ++ " impossible")
 
 processEdit : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
@@ -203,11 +206,6 @@ processEdit (ExprSearch line name hints all)
                         else case itms of
                                   [] => printError "No search results"
                                   (x :: xs) => printResult (show x)
-              [(n, None)] => 
-                  do Just (fc, cs) <- makeDef (\p, n => onLine line p) n
-                         | Nothing => processEdit (AddClause line name)
-                     ls <- traverse (printClause (cast (snd (startPos fc)))) cs
-                     printResult $ showSep "\n" ls
               _ => printError "Not a searchable hole"
   where
     dropLams : Nat -> Env Term vars -> Term vars -> 
@@ -215,6 +213,15 @@ processEdit (ExprSearch line name hints all)
     dropLams Z env tm = (_ ** (env, tm))
     dropLams (S k) env (Bind _ b sc) = dropLams k (b :: env) sc 
     dropLams _ env tm = (_ ** (env, tm))
+processEdit (GenerateDef line name)
+    = do gam <- get Ctxt
+         case lookupDefName name (gamma gam) of
+              [(n, None)] => 
+                  do Just (fc, cs) <- makeDef (\p, n => onLine line p) n
+                         | Nothing => processEdit (AddClause line name)
+                     ls <- traverse (printClause (cast (snd (startPos fc)))) cs
+                     printResult $ showSep "\n" ls
+              _ => printError "Already defined"
 
 -- Returns 'True' if the REPL should continue
 export

@@ -27,6 +27,8 @@ Summary of new features:
   annotation of erased types, and linear types.
 + `let` bindings are now more expressive, and can be used to define pattern
   matching functions locally.
++ Names which are in scope in a type are also always in scope in the body of 
+  the corresponding definition.
 + Better inference. Holes are global to a source file, rather than local to
   a definition, meaning that some holes can be left in function types to be
   inferred by the type checker. This also gives better inference for the types

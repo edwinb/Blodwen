@@ -29,11 +29,17 @@ record RecData where
   recname : Name
   lhsapp : Term vars
 
+record SearchOpts where
+  constructor MkSearchOpts
+  holesOK : Bool
+  recOK : Bool
+  depth : Nat
+
 search : {auto c : Ref Ctxt Defs} ->
          {auto m : Ref Meta (Metadata annot)} ->
          {auto u : Ref UST (UState annot)} ->
          annot -> 
-         Nat -> Maybe RecData -> 
+         SearchOpts -> Maybe RecData -> 
          Maybe ClosedTerm ->
          Name -> Core annot (List ClosedTerm)
 
@@ -77,18 +83,20 @@ nameIsHole loc n
 searchIfHole : {auto c : Ref Ctxt Defs} ->
                {auto m : Ref Meta (Metadata annot)} ->
                {auto u : Ref UST (UState annot)} ->
-               annot -> Nat -> Maybe RecData -> Maybe ClosedTerm -> 
+               annot -> SearchOpts -> Maybe RecData -> Maybe ClosedTerm -> 
                Env Term vars -> (Name, Term vars) -> 
                Core annot (List (Term vars))
-searchIfHole loc Z defining topty env n 
-    = pure []
-searchIfHole loc (S depth) defining topty env (n, napp)
-    = if !(nameIsHole loc n) 
-         then do gam <- get Ctxt
-                 tms <- search loc depth defining topty n
-                 pure (map (\tm => normaliseHoles gam env 
-                                         (applyTo (embed tm) env)) tms)
-         else pure [napp]
+searchIfHole loc opts defining topty env (n, napp) 
+    = case depth opts of
+           Z => pure []
+           S k =>
+              if !(nameIsHole loc n) 
+                 then do gam <- get Ctxt
+                         tms <- search loc (record { depth = k } opts)
+                                       defining topty n
+                         pure (map (\tm => normaliseHoles gam env 
+                                                 (applyTo (embed tm) env)) tms)
+                 else pure [napp]
 
 isPairNF : Env Term vars -> NF vars -> Defs -> Bool
 isPairNF env (NTCon n _ _ _) defs
@@ -109,10 +117,10 @@ mkCandidates f (args :: argss)
 searchName : {auto c : Ref Ctxt Defs} ->
              {auto m : Ref Meta (Metadata annot)} ->
              {auto u : Ref UST (UState annot)} ->
-             annot -> Nat -> 
+             annot -> SearchOpts -> 
              Env Term vars -> NF vars -> Maybe ClosedTerm ->
              Maybe RecData -> (Name, GlobalDef) -> Core annot (List (Term vars))
-searchName loc depth env ty topty defining (con, condef)
+searchName loc opts env ty topty defining (con, condef)
     = do gam <- get Ctxt
          let cty = type condef
          log 5 $ "Trying " ++ show con
@@ -126,7 +134,7 @@ searchName loc depth env ty topty defining (con, condef)
                         [] <- unify InSearch loc env ty appTy
                            | _ => pure []
                         gam <- get Ctxt
-                        args' <- traverse (searchIfHole loc depth defining topty env) 
+                        args' <- traverse (searchIfHole loc opts defining topty env) 
                                           args
                         let cs = mkCandidates (Ref (DataCon tag arity) con) args'
                         log 10 $ "Candidates for " ++ show con ++ " " ++ show cs
@@ -143,7 +151,7 @@ searchName loc depth env ty topty defining (con, condef)
                       let candidate = apply (Ref Func con) (map snd args)
                       -- Go through the arguments and solve them, if they
                       -- haven't been solved by unification
-                      args' <- traverse (searchIfHole loc depth defining topty env) 
+                      args' <- traverse (searchIfHole loc opts defining topty env) 
                                         args
                       let cs = mkCandidates (Ref Func con) args'
                       log 10 $ "Candidates for " ++ show con ++ " " ++ show cs
@@ -171,16 +179,16 @@ successful (elab :: elabs)
 getSuccessful : {auto c : Ref Ctxt Defs} ->
                 {auto m : Ref Meta (Metadata annot)} ->
                 {auto u : Ref UST (UState annot)} ->
-                annot -> Bool ->
+                annot -> SearchOpts -> Bool ->
                 Env Term vars -> Term vars -> Maybe ClosedTerm ->
                 Maybe RecData ->
                 List (Core annot (List (Term vars))) ->
                 Core annot (List (Term vars))
-getSuccessful {vars} loc mkHole env ty topty defining all
+getSuccessful {vars} loc opts mkHole env ty topty defining all
     = do elabs <- successful all
          case concat (rights elabs) of
               [] => -- If no successful search, make a hole
-                if mkHole
+                if mkHole && holesOK opts
                    then do defs <- get Ctxt
                            let base = maybe "arg"
                                             (\r => nameRoot (recname r) ++ "_rhs")
@@ -190,24 +198,28 @@ getSuccessful {vars} loc mkHole env ty topty defining all
                            log 10 $ "All failed, added hole for " ++
                                      show ty ++ " (" ++ show n ++ ")"
                            pure [mkConstantApp n env]
-                   else pure []
+                   else if holesOK opts
+                           then pure []
+                           else throw (maybe (CantSolveGoal loc (bindEnv env ty))
+                                             (\pty => CantSolveGoal loc (embed pty))
+                                             topty)
               rs => pure rs
 
 searchNames : {auto c : Ref Ctxt Defs} ->
               {auto m : Ref Meta (Metadata annot)} ->
               {auto u : Ref UST (UState annot)} ->
-              annot -> Nat -> Env Term vars ->
+              annot -> SearchOpts -> Env Term vars ->
               Term vars -> Maybe ClosedTerm ->
               Maybe RecData -> List Name -> Core annot (List (Term vars))
-searchNames loc depth env ty topty defining []
+searchNames loc opts env ty topty defining []
     = pure []
-searchNames loc depth env ty topty defining (n :: ns)
+searchNames loc opts env ty topty defining (n :: ns)
     = do gam <- get Ctxt
          let visns = mapMaybe (visible (gamma gam) (currentNS gam)) (n :: ns)
          log 5 $ "Searching " ++ show (map fst visns) ++ " for " ++ show ty
          let nfty = nf gam env ty
-         getSuccessful loc False env ty topty defining
-            (map (searchName loc depth env nfty topty defining) visns)
+         getSuccessful loc opts False env ty topty defining
+            (map (searchName loc opts env nfty topty defining) visns)
   where
     visible : Gamma -> List String -> Name -> Maybe (Name, GlobalDef)
     visible gam nspace n
@@ -219,17 +231,17 @@ searchNames loc depth env ty topty defining (n :: ns)
 tryRecursive : {auto c : Ref Ctxt Defs} ->
                {auto m : Ref Meta (Metadata annot)} ->
                {auto u : Ref UST (UState annot)} ->
-               annot -> Nat -> 
+               annot -> SearchOpts -> 
                Env Term vars -> Term vars -> Maybe ClosedTerm ->
                Maybe RecData -> Core annot (List (Term vars))
-tryRecursive loc depth env ty topty Nothing = pure []
-tryRecursive loc depth env ty topty (Just rdata) 
+tryRecursive loc opts env ty topty Nothing = pure []
+tryRecursive loc opts env ty topty (Just rdata) 
     = do gam <- get Ctxt
          log 5 $ "Recursive: " ++ show (recname rdata) ++ " " ++ show (lhsapp rdata)
          case lookupGlobalExact (recname rdata) (gamma gam) of
               Nothing => pure []
               Just def =>
-                do tms <- searchName loc depth env (nf gam env ty) topty Nothing
+                do tms <- searchName loc opts env (nf gam env ty) topty Nothing
                                      (recname rdata, def)
                    gam <- get Ctxt
                    let tms = map (normaliseHoles gam env) tms
@@ -312,16 +324,16 @@ usableLocal loc _ _ = pure True
 searchLocalWith : {auto c : Ref Ctxt Defs} ->
                   {auto m : Ref Meta (Metadata annot)} ->
                   {auto u : Ref UST (UState annot)} ->
-                  annot -> Nat -> Env Term vars -> List (Term vars, Term vars) ->
+                  annot -> SearchOpts -> Env Term vars -> List (Term vars, Term vars) ->
                   Term vars -> Maybe ClosedTerm -> Maybe RecData -> 
                   Core annot (List (Term vars))
-searchLocalWith loc depth env [] ty topty defining
+searchLocalWith loc opts env [] ty topty defining
     = pure []
-searchLocalWith {vars} loc depth env ((p, pty) :: rest) ty topty defining
+searchLocalWith {vars} loc opts env ((p, pty) :: rest) ty topty defining
     = do gam <- get Ctxt
-         getSuccessful loc False env ty topty defining
+         getSuccessful loc opts False env ty topty defining
                        [findPos gam p id (nf gam env pty) ty,
-                        searchLocalWith loc depth env rest ty
+                        searchLocalWith loc opts env rest ty
                                         topty defining]
   where
     findDirect : Defs -> Term vars -> 
@@ -342,7 +354,7 @@ searchLocalWith {vars} loc depth env ((p, pty) :: rest) ty topty defining
                         pure (mkCandidates (f prf) []))
                     (do [] <- unify InTerm loc env ty appTy
                            | _ => pure []
-                        args' <- traverse (searchIfHole loc depth defining topty env) 
+                        args' <- traverse (searchIfHole loc opts defining topty env) 
                                           args
                         pure (mkCandidates (f prf) args'))
                 else pure []
@@ -351,7 +363,7 @@ searchLocalWith {vars} loc depth env ((p, pty) :: rest) ty topty defining
               (Term vars -> Term vars) ->
               NF vars -> Term vars -> Core annot (List (Term vars))
     findPos gam prf f x@(NTCon pn _ _ [xty, yty]) ty
-        = getSuccessful loc False env ty topty defining
+        = getSuccessful loc opts False env ty topty defining
               [findDirect gam prf f x (nf gam env ty),
                  (do fname <- maybe (throw (InternalError "No fst"))
                                     pure
@@ -360,7 +372,7 @@ searchLocalWith {vars} loc depth env ((p, pty) :: rest) ty topty defining
                                     pure
                                     (sndName gam)
                      if isPairType pn gam
-                        then getSuccessful loc False env ty topty defining
+                        then getSuccessful loc opts False env ty topty defining
                                [findPos gam prf
                                    (\r => apply (Ref Bound sname)
                                                 [quote gam env xty, 
@@ -377,26 +389,26 @@ searchLocalWith {vars} loc depth env ((p, pty) :: rest) ty topty defining
 searchLocal : {auto c : Ref Ctxt Defs} ->
               {auto m : Ref Meta (Metadata annot)} ->
               {auto u : Ref UST (UState annot)} ->
-              annot -> Nat -> 
+              annot -> SearchOpts -> 
               Env Term vars -> Term vars -> Maybe ClosedTerm ->
               Maybe RecData -> Core annot (List (Term vars))
-searchLocal loc depth env ty topty defining 
+searchLocal loc opts env ty topty defining 
     = do defs <- get Ctxt
-         searchLocalWith loc depth env (getAllEnv [] env) 
+         searchLocalWith loc opts env (getAllEnv [] env) 
                          ty topty defining
 
 searchType : {auto c : Ref Ctxt Defs} ->
              {auto m : Ref Meta (Metadata annot)} ->
              {auto u : Ref UST (UState annot)} ->
-             annot -> Nat -> Env Term vars -> Maybe RecData ->
+             annot -> SearchOpts -> Env Term vars -> Maybe RecData ->
              Maybe ClosedTerm ->
              Nat -> Term vars -> Core annot (List (Term vars))
-searchType loc depth env defining topty (S k) (Bind n (Pi c info ty) sc)
+searchType loc opts env defining topty (S k) (Bind n (Pi c info ty) sc)
     = do let env' : Env Term (n :: _) = Pi c info ty :: env
          log 6 $ "Introduced lambda, search for " ++ show sc
-         scVal <- searchType loc depth env' defining topty k sc
+         scVal <- searchType loc opts env' defining topty k sc
          pure (map (Bind n (Lam c info ty)) scVal)
-searchType loc depth env defining topty _ ty
+searchType loc opts env defining topty _ ty
     = case getFnArgs ty of
            (Ref (TyCon t ar) n, args) =>
                 do gam <- get Ctxt
@@ -409,15 +421,15 @@ searchType loc depth env defining topty _ ty
                              -- First try the locals,
                              -- Then try the hints in order
                              -- Then try a recursive call
-                             getSuccessful loc True env ty topty defining
-                                  [searchLocal loc depth env ty topty defining,
-                                   searchNames loc depth env ty topty defining
+                             getSuccessful loc opts True env ty topty defining
+                                  [searchLocal loc opts env ty topty defining,
+                                   searchNames loc opts env ty topty defining
                                                (opens ++ cons ++ chasers),
-                                   tryRecursive loc depth env ty topty defining]
+                                   tryRecursive loc opts env ty topty defining]
                      else pure []
            _ => do log 5 $ "Searching locals only at " ++ show ty
-                   getSuccessful loc True env ty topty defining 
-                       [searchLocal loc depth env ty topty defining]
+                   getSuccessful loc opts True env ty topty defining 
+                       [searchLocal loc opts env ty topty defining]
   where
     ambig : Error annot -> Bool
     ambig (AmbiguousSearch _ _ _) = True
@@ -434,26 +446,26 @@ normaliseScope defs env tm = normaliseHoles defs env tm
 searchHole : {auto c : Ref Ctxt Defs} ->
              {auto m : Ref Meta (Metadata annot)} ->
              {auto u : Ref UST (UState annot)} ->
-             annot -> Nat -> Maybe RecData -> Name -> 
+             annot -> SearchOpts -> Maybe RecData -> Name -> 
              Nat -> Maybe ClosedTerm ->
              Defs -> GlobalDef -> Core annot (List ClosedTerm)
-searchHole loc depth defining n locs topty gam glob
+searchHole loc opts defining n locs topty gam glob
     = do let searchty = normaliseScope gam [] (type glob)
          log 5 $ "Running search: " ++ show n ++ " in " ++ show (map recname defining) ++
                  " for " ++ show searchty
          dumpConstraints 5 True
-         searchType loc depth [] defining topty locs searchty
+         searchType loc opts [] defining topty locs searchty
 
 -- Declared at the top
-search loc depth defining topty n_in
+search loc opts defining topty n_in
     = do gam <- get Ctxt
          case lookupHoleName n_in (gamma gam) of
               Just (n, glob) =>
                    -- The definition should be 'BySearch' at this stage,
                    -- if it's arising from an auto implicit
                    case definition glob of
-                        Hole locs False _ => searchHole loc depth defining n locs topty gam glob
-                        BySearch _ _ => searchHole loc depth defining n 
+                        Hole locs False _ => searchHole loc opts defining n locs topty gam glob
+                        BySearch _ _ => searchHole loc opts defining n 
                                                    (getArity gam [] (type glob)) 
                                                    topty gam glob
                         _ => do log 10 $ show n_in ++ " not a hole"
@@ -489,5 +501,6 @@ exprSearch : {auto c : Ref Ctxt Defs} ->
 exprSearch loc n hints
     = do lhs <- findHoleLHS n
          defs <- get Ctxt
-         search loc 5 (getLHSData defs lhs) Nothing n
+         search loc (MkSearchOpts False True 5)
+                (getLHSData defs lhs) Nothing n
 

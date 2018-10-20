@@ -1089,6 +1089,10 @@ editCmd
          line <- intLit
          n <- name
          pure (ExprSearch (fromInteger line) n [] True)
+  <|> do replCmd ["gd"]
+         line <- intLit
+         n <- name
+         pure (GenerateDef (fromInteger line) n)
 
 export
 command : Rule REPLCmd

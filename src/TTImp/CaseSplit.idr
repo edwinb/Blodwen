@@ -287,15 +287,13 @@ combine (Invalid :: xs) acc = combine xs acc
 combine (x :: xs) acc = combine xs (x :: acc)
 
 export
-getSplits : {auto m : Ref Meta (Metadata annot)} ->
-            {auto c : Ref Ctxt Defs} ->
-            (Reflect annot, Reify annot) =>
-            (annot -> ClosedTerm -> Bool) -> Name -> 
-            Core annot (SplitResult (List (ClauseUpdate annot)))
-getSplits p n
-    = do Just (loc, envlen, lhs_in) <- findLHSAt p
-              | Nothing => pure (SplitFail CantFindLHS)
-         let lhs = substLets lhs_in
+getSplitsLHS : {auto m : Ref Meta (Metadata annot)} ->
+               {auto c : Ref Ctxt Defs} ->
+               (Reflect annot, Reify annot) =>
+               annot -> Nat -> ClosedTerm -> Name -> 
+               Core annot (SplitResult (List (ClauseUpdate annot)))
+getSplitsLHS loc envlen lhs_in n
+    = do let lhs = substLets lhs_in
          let usedns = findAllVars lhs
 
          defs <- get Ctxt
@@ -307,3 +305,14 @@ getSplits p n
          cases <- traverse (mkCase fn rawlhs) trycases
 
          pure (combine cases [])
+
+export
+getSplits : {auto m : Ref Meta (Metadata annot)} ->
+            {auto c : Ref Ctxt Defs} ->
+            (Reflect annot, Reify annot) =>
+            (annot -> ClosedTerm -> Bool) -> Name -> 
+            Core annot (SplitResult (List (ClauseUpdate annot)))
+getSplits p n
+    = do Just (loc, envlen, lhs_in) <- findLHSAt p
+              | Nothing => pure (SplitFail CantFindLHS)
+         getSplitsLHS loc envlen lhs_in n
