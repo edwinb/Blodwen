@@ -46,7 +46,7 @@ search : {auto c : Ref Ctxt Defs} ->
 mkArgs : {auto c : Ref Ctxt Defs} ->
          {auto u : Ref UST (UState annot)} ->
          annot -> Env Term vars -> NF vars -> 
-         Core annot (List (Name, Term vars), NF vars)
+         Core annot (List (Name, Bool, Term vars), NF vars)
 mkArgs loc env (NBind n (Pi c info ty) sc)
     = do gam <- get Ctxt
          argName <- genName "sa"
@@ -54,7 +54,11 @@ mkArgs loc env (NBind n (Pi c info ty) sc)
          setInvertible loc argName
          let arg = mkConstantApp argName env
          (rest, restTy) <- mkArgs loc env (sc (MkClosure defaultOpts [] env arg))
-         pure ((argName, arg) :: rest, restTy)
+         pure ((argName, explicit info, arg) :: rest, restTy)
+  where
+    explicit : PiInfo -> Bool
+    explicit Explicit = True
+    explicit _ = False
 mkArgs loc env ty = pure ([], ty)
 
 getAllEnv : (done : List Name) -> 
@@ -84,9 +88,9 @@ searchIfHole : {auto c : Ref Ctxt Defs} ->
                {auto m : Ref Meta (Metadata annot)} ->
                {auto u : Ref UST (UState annot)} ->
                annot -> SearchOpts -> Maybe RecData -> Maybe ClosedTerm -> 
-               Env Term vars -> (Name, Term vars) -> 
+               Env Term vars -> (Name, Bool, Term vars) -> 
                Core annot (List (Term vars))
-searchIfHole loc opts defining topty env (n, napp) 
+searchIfHole loc opts defining topty env (n, _, napp) 
     = case depth opts of
            Z => pure []
            S k =>
@@ -134,6 +138,9 @@ searchName loc opts env ty topty defining (con, condef)
                         [] <- unify InSearch loc env ty appTy
                            | _ => pure []
                         gam <- get Ctxt
+                        -- Search the explicit arguments first
+                        args' <- traverse (searchIfHole loc opts defining topty env) 
+                                          (filter (\arg => fst (snd arg)) args)
                         args' <- traverse (searchIfHole loc opts defining topty env) 
                                           args
                         let cs = mkCandidates (Ref (DataCon tag arity) con) args'
@@ -148,9 +155,11 @@ searchName loc opts env ty topty defining (con, condef)
                                    show (quote gam env appTy)
                       [] <- unify InSearch loc env ty appTy
                          | _ => pure []
-                      let candidate = apply (Ref Func con) (map snd args)
                       -- Go through the arguments and solve them, if they
                       -- haven't been solved by unification
+                      -- Search the explicit arguments first
+                      args' <- traverse (searchIfHole loc opts defining topty env) 
+                                        (filter (\arg => fst (snd arg)) args)
                       args' <- traverse (searchIfHole loc opts defining topty env) 
                                         args
                       let cs = mkCandidates (Ref Func con) args'
@@ -296,29 +305,7 @@ usableLocal : {auto c : Ref Ctxt Defs} ->
               annot -> Env Term vars -> NF vars -> Core annot Bool
 usableLocal loc env (NApp (NRef _ n) args)
     = do u <- nameIsHole loc n
-         if not u
-            then do defs <- get Ctxt
-                    us <- traverse (usableLocal loc env) 
-                                   (map (evalClosure defs) args)
-                    pure (and (map Delay us))
-            else pure False
-usableLocal {vars} loc env (NTCon n _ _ args)
-    = do defs <- get Ctxt
-         us <- traverse (usableLocal loc env) 
-                        (map (evalClosure defs) args)
-         pure (and (map Delay us))
-usableLocal loc env (NDCon n _ _ args)
-    = do defs <- get Ctxt
-         us <- traverse (usableLocal loc env) 
-                        (map (evalClosure defs) args)
-         pure (and (map Delay us))
-usableLocal loc env (NApp (NLocal _ _) args)
-    = do defs <- get Ctxt
-         us <- traverse (usableLocal loc env) 
-                        (map (evalClosure defs) args)
-         pure (and (map Delay us))
-usableLocal loc env (NBind x (Pi _ _ _) sc)
-    = usableLocal loc env (sc (toClosure defaultOpts env Erased))
+         pure (not u)
 usableLocal loc _ _ = pure True
 
 searchLocalWith : {auto c : Ref Ctxt Defs} ->
@@ -422,14 +409,19 @@ searchType loc opts env defining topty _ ty
                              -- Then try the hints in order
                              -- Then try a recursive call
                              getSuccessful loc opts True env ty topty defining
-                                  [searchLocal loc opts env ty topty defining,
-                                   searchNames loc opts env ty topty defining
-                                               (opens ++ cons ++ chasers),
-                                   tryRecursive loc opts env ty topty defining]
+                                  ([searchLocal loc opts env ty topty defining,
+                                    searchNames loc opts env ty topty defining
+                                                (opens ++ cons ++ chasers)]
+                                    ++ if recOK opts 
+                                         then [tryRecursive loc opts env ty topty defining]
+                                         else [])
                      else pure []
            _ => do log 5 $ "Searching locals only at " ++ show ty
                    getSuccessful loc opts True env ty topty defining 
-                       [searchLocal loc opts env ty topty defining]
+                       ([searchLocal loc opts env ty topty defining]
+                         ++ if recOK opts
+                               then [tryRecursive loc opts env ty topty defining]
+                               else [])
   where
     ambig : Error annot -> Bool
     ambig (AmbiguousSearch _ _ _) = True
