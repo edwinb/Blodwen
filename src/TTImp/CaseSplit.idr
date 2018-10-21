@@ -117,14 +117,10 @@ defaultNames : List String
 defaultNames = ["x", "y", "z", "w", "v", "s", "t", "u"]
 
 export
-getArgNames : Defs -> List Name -> Env Term vars -> NF vars -> List String
-getArgNames defs allvars env (NBind x (Pi _ p ty) sc) 
-    = let ns = case p of
-                   Explicit => let defnames = findNames ty in
-                                   [getName x defnames allvars]
-                   _ => [] in
-          ns ++ getArgNames defs (map UN ns ++ allvars) env 
-                            (sc (MkClosure defaultOpts [] env Erased))
+getArgName : Defs -> Name -> List Name -> NF vars -> String
+getArgName defs x allvars ty 
+    = let defnames = findNames ty in
+          getName x defnames allvars
   where
     findNames : NF vars -> List String
     findNames (NBind x (Pi _ _ _) _) = ["f", "g"]
@@ -137,6 +133,15 @@ getArgNames defs allvars env (NBind x (Pi _ p ty) sc)
     getName : Name -> List String -> List Name -> String
     getName (UN n) defs used = unique (n :: defs) (n :: defs) 0 used
     getName _ defs used = unique defs defs 0 used
+
+export
+getArgNames : Defs -> List Name -> Env Term vars -> NF vars -> List String
+getArgNames defs allvars env (NBind x (Pi _ p ty) sc) 
+    = let ns = case p of
+                   Explicit => [getArgName defs x allvars ty]
+                   _ => [] in
+          ns ++ getArgNames defs (map UN ns ++ allvars) env 
+                            (sc (MkClosure defaultOpts [] env Erased))
 getArgNames defs allvars env val = []
 
 expandCon : {auto c : Ref Ctxt Defs} ->

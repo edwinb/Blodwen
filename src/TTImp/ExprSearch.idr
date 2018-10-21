@@ -17,6 +17,7 @@ import Core.Normalise
 import Core.Unify
 import Core.TT
 
+import TTImp.CaseSplit
 import TTImp.Utils
 
 import Data.List
@@ -396,6 +397,17 @@ searchType loc opts env defining topty (S k) (Bind n (Pi c info ty) sc)
          log 6 $ "Introduced lambda, search for " ++ show sc
          scVal <- searchType loc opts env' defining topty k sc
          pure (map (Bind n (Lam c info ty)) scVal)
+searchType {vars} loc opts env defining topty Z (Bind n (Pi c info ty) sc)
+    = -- try a local before creating a lambda...
+      tryUnify 
+           (searchLocal loc opts env (Bind n (Pi c info ty) sc) topty defining)
+           (do log 6 $ "Introduced lambda, search for " ++ show sc
+               defs <- get Ctxt
+               let n' = UN (getArgName defs n vars (nf defs env ty))
+               let env' : Env Term (n' :: _) = Pi c info ty :: env
+               let sc' = renameTop n' sc
+               scVal <- searchType loc opts env' defining topty Z sc'
+               pure (map (Bind n' (Lam c info ty)) scVal))
 searchType loc opts env defining topty _ ty
     = case getFnArgs ty of
            (Ref (TyCon t ar) n, args) =>
