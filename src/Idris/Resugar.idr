@@ -150,19 +150,17 @@ mutual
       = do ds' <- traverse toPDecl ds
            sc' <- toPTerm startPrec sc
            bracket p startPrec (PLocal emptyFC (mapMaybe id ds') sc')
-  toPTerm p (IApp _ fn arg)
-      = do fn' <- toPTerm appPrec fn
-           arg' <- toPTerm argPrec arg
-           bracket p appPrec (sugarApp (PApp emptyFC fn' arg'))
+  toPTerm p tm@(IApp _ fn arg)
+      = do arg' <- toPTerm argPrec arg
+           app <- toPTermApp fn [(Nothing, arg')]
+           bracket p appPrec app
   toPTerm p (IImplicitApp _ fn n arg) 
-      = do imp <- showImplicits
+      = do arg' <- toPTerm startPrec arg
+           app <- toPTermApp fn [(Just n, arg')]
+           imp <- showImplicits
            if imp
-              then do fn' <- toPTerm appPrec fn
-                      arg' <- toPTerm startPrec arg
-                      bracket p startPrec (PImplicitApp emptyFC fn' n arg')
-              else do fn' <- toPTerm p fn
-                      mkOp fn'
-
+              then bracket p startPrec app
+              else mkOp app
   toPTerm p (ISearch _ d) = pure (PSearch emptyFC d)
   toPTerm p (IAlternative _ _ _) = pure (PImplicit emptyFC)
   toPTerm p (IRewrite _ rule tm) 
@@ -180,6 +178,41 @@ mutual
   toPTerm p (IMustUnify _ r pat) = pure (PDotted emptyFC !(toPTerm argPrec pat))
   toPTerm p (Implicit _) = pure (PImplicit emptyFC)
   toPTerm p (Infer _) = pure (PInfer emptyFC)
+
+  mkApp : {auto c : Ref Ctxt Defs} ->
+          {auto s : Ref Syn SyntaxInfo} ->
+          PTerm -> List (Maybe (Maybe Name), PTerm) -> Core FC PTerm
+  mkApp fn [] = pure fn 
+  mkApp fn ((Nothing, arg) :: rest)
+      = do let ap = sugarApp (PApp emptyFC fn arg)
+           mkApp ap rest
+  mkApp fn ((Just n, arg) :: rest)
+      = do imp <- showImplicits
+           if imp
+              then do let ap = PImplicitApp emptyFC fn n arg
+                      mkApp ap rest
+              else mkApp fn rest
+
+  toPTermApp : {auto c : Ref Ctxt Defs} ->
+               {auto s : Ref Syn SyntaxInfo} ->
+               RawImp annot -> List (Maybe (Maybe Name), PTerm) ->
+               Core FC PTerm
+  toPTermApp (IApp _ f a) args 
+      = do a' <- toPTerm argPrec a
+           toPTermApp f ((Nothing, a') :: args)
+  toPTermApp (IImplicitApp _ f n a) args 
+      = do a' <- toPTerm startPrec a
+           toPTermApp f ((Just n, a') :: args)
+  toPTermApp fn@(IVar _ n) args
+      = do defs <- get Ctxt
+           case lookupGlobalExact n (gamma defs) of
+                Nothing => do fn' <- toPTerm appPrec fn
+                              mkApp fn' args
+                Just def => do fn' <- toPTerm appPrec fn
+                               mkApp fn' (drop (length (vars def)) args)
+  toPTermApp fn args 
+      = do fn' <- toPTerm appPrec fn
+           mkApp fn' args
 
   toPClause : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->
