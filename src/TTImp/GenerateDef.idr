@@ -64,6 +64,7 @@ expandClause loc elab n c
          defs <- get Ctxt
          let rhsnf = normaliseHoles defs [] rhs'
          let (_ ** (env, rhsenv)) = dropLams locs [] rhsnf
+
          rhsraw <- unelab loc env rhsenv 
          log 5 $ "Got clause " ++ show lhs ++ " = " ++ show rhsenv
          pure [updateRHS c rhsraw]

@@ -9,12 +9,13 @@ module TTImp.ExprSearch
 -- We try to find as many results as possible, within the given search
 -- depth.
 
-import Core.Context
-import Core.TT
 import Core.CaseTree
+import Core.Context
+import Core.LinearCheck
 import Core.Metadata
 import Core.Normalise
 import Core.Unify
+import Core.TT
 
 import TTImp.Utils
 
@@ -486,6 +487,17 @@ getLHSData defs (Just tm) = getLHS (normaliseHoles defs [] tm)
                Ref _ n => Just (MkRecData n sc)
                _ => Nothing
 
+dropLinearErrors : {auto c : Ref Ctxt Defs} ->
+                   {auto u : Ref UST (UState annot)} ->
+                   annot -> List ClosedTerm ->
+                   Core annot (List ClosedTerm)
+dropLinearErrors loc [] = pure []
+dropLinearErrors loc (t :: ts)
+    = catch (do linearCheck loc Rig1 False [] t
+                ts' <- dropLinearErrors loc ts
+                pure (t :: ts'))
+            (\err => dropLinearErrors loc ts)
+
 export
 exprSearch : {auto c : Ref Ctxt Defs} ->
              {auto m : Ref Meta (Metadata annot)} ->
@@ -494,6 +506,7 @@ exprSearch : {auto c : Ref Ctxt Defs} ->
 exprSearch loc n hints
     = do lhs <- findHoleLHS n
          defs <- get Ctxt
-         search loc (MkSearchOpts False True 5)
+         rs <- search loc (MkSearchOpts False True 5)
                 (getLHSData defs lhs) Nothing n
+         dropLinearErrors loc rs
 
