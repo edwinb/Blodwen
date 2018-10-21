@@ -235,7 +235,7 @@ instantiate loc env metavar smvs otm tm {newvars}
                              (rewrite appendNilRightNeutral newvars in tm) of
                          Nothing => ufail loc $ "Can't make solution for " ++ show metavar
                          Just rhs => 
-                            do let soln = newDef ty Public 
+                            do let soln = newDef [] ty Public 
                                                (PMDef True [] (STerm rhs) (STerm rhs))
                                log 5 $ "Instantiated: " ++ show metavar ++
                                             " : " ++ show ty ++ 
@@ -371,14 +371,14 @@ mutual
              Nothing => ufail loc $ "Can't shrink hole"
              Just defty =>
                 do -- Make smaller hole
-                   let hole = newDef defty Public (Hole (length sofar) False False)
+                   let hole = newDef [] defty Public (Hole (length sofar) False False)
                    addHoleName loc newhole
                    addDef newhole hole
                    -- Solve old hole with it
                    case mkOldHoleDef holetype newhole sofar (sofar ++ args) of
                         Nothing => ufail loc $ "Can't shrink hole"
                         Just olddef =>
-                           do let soln = newDef defty Public
+                           do let soln = newDef [] defty Public
                                               (PMDef True [] (STerm olddef) (STerm olddef))
                               addDef oldhole soln
                               log 5 $ "Resolved hole " ++ show oldhole ++

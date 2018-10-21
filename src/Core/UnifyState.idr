@@ -425,7 +425,7 @@ addConstant : {auto u : Ref UST (UState annot)} ->
 addConstant loc env tm ty constrs
     = do let def = mkConstant env tm
          let defty = mkConstantTy env ty
-         let guess = newDef defty Public (Guess def constrs)
+         let guess = newDef [] defty Public (Guess def constrs)
          cn <- genName "p"
          addHoleName loc cn
          addDef cn guess
@@ -439,7 +439,7 @@ addNamedHole : {auto u : Ref UST (UState annot)} ->
                (ty : Term vars) -> Core annot ()
 addNamedHole loc cn patvar env ty
     = do let defty = mkConstantTy env ty
-         let hole = newDef defty Public (Hole (length env) patvar False)
+         let hole = newDef [] defty Public (Hole (length env) patvar False)
          addHoleName loc cn
          addDef cn hole
 
@@ -464,7 +464,7 @@ addSearchable : {auto u : Ref UST (UState annot)} ->
 addSearchable loc env ty depth def
     = do cn <- genName "search"
          let defty = mkConstantTy env ty
-         let hole = newDef defty Public (BySearch depth def)
+         let hole = newDef [] defty Public (BySearch depth def)
          addHoleName loc cn
          addDef cn hole
          pure cn
@@ -480,7 +480,7 @@ addDelayedElab : {auto u : Ref UST (UState annot)} ->
 addDelayedElab loc env ty
     = do cn <- genName "delayed"
          let defty = mkConstantTy env ty
-         let hole = newDef defty Public Delayed
+         let hole = newDef [] defty Public Delayed
          addHoleName loc cn
          addDef cn hole
          pure (cn, defty)

@@ -47,7 +47,7 @@ processType : {auto c : Ref Ctxt Defs} ->
               Env Term vars -> NestedNames vars ->
               Visibility -> List FnOpt -> ImpTy annot -> 
               Core annot ()
-processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
+processType {vars} elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
     = do n <- inCurrentNS n_in
          log 5 $ "Checking type decl " ++ show n ++ " : " ++ show ty_raw
 
@@ -70,7 +70,7 @@ processType elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
          let def = if ExternFn `elem` fnopts
                       then ExternDef (getArity gam env ty)
                       else None
-         addDef n (newDef (abstractFullEnvType env ty) vis def)
+         addDef n (newDef vars (abstractFullEnvType env ty) vis def)
 
          -- Add to the interactive editing metadata
          addTyDecl loc n env ty

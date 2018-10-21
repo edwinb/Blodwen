@@ -109,6 +109,8 @@ mutual
       = pure (sugarApp (PRef emptyFC n))
   toPTerm p (IVar _ (DN n _))
       = pure (sugarApp (PRef emptyFC (UN n)))
+  toPTerm p (IVar loc (GN (Nested _ n)))
+      = toPTerm p (IVar loc n)
   toPTerm p (IVar _ n) 
       = do ns <- fullNamespace
            pure (sugarApp (PRef emptyFC (if ns then n else dropNS n)))

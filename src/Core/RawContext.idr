@@ -34,7 +34,7 @@ addTyDecl : {auto c : Ref Ctxt Defs} ->
             annot -> (ty : RawTy) -> Core annot (Name, ClosedTerm)
 addTyDecl loc (MkRawTy n ty)
     = do tyc <- check loc [] ty TType
-         addDef n (newDef tyc Public None)
+         addDef n (newDef [] tyc Public None)
          pure (n, tyc)
 
 checkClause : {auto c : Ref Ctxt Defs} ->
@@ -61,7 +61,7 @@ addFn : {auto c : Ref Ctxt Defs} ->
         annot -> (def : RawFnDef) -> Core annot ()
 addFn loc (MkRawFn n ty cs)
     = do tyc <- check loc [] ty TType
-         addDef n (newDef tyc Public None)
+         addDef n (newDef [] tyc Public None)
          csc <- traverse (\x => checkClause loc x) cs
          (_ ** tree) <- getPMDef loc n tyc csc
          addFnDef loc n tree tree
@@ -73,7 +73,7 @@ addData loc (MkRawData tycon datacons)
          cons <- traverse (\x => checkCon x) datacons
          gam <- get Ctxt 
          let def = MkData (MkCon tn (getArity gam [] tty) tty) cons
-         addData Public def
+         addData [] Public def
   where
     checkCon : RawTy -> Core annot Constructor
     checkCon (MkRawTy n ty) 

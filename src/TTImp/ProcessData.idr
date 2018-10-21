@@ -92,7 +92,7 @@ processData : {auto c : Ref Ctxt Defs} ->
               Env Term vars -> NestedNames vars -> 
               Visibility -> ImpData annot -> 
               Core annot ()
-processData elab env nest vis (MkImpLater loc n_in ty_raw)
+processData {vars} elab env nest vis (MkImpLater loc n_in ty_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
          (ty, _) <- wrapError (InCon loc n) $
@@ -113,10 +113,10 @@ processData elab env nest vis (MkImpLater loc n_in ty_raw)
          let arity = getArity gam [] ty'
 
          -- Add the type constructor as a placeholder
-         addDef n (newDef ty' Public (TCon 0 arity [] [] []))
+         addDef n (newDef vars ty' Public (TCon 0 arity [] [] []))
          addToSave n
 
-processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
+processData {vars} elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
     = do n <- inCurrentNS n_in
          ty_imp <- mkBindImps env ty_raw
          (ty, _) <- wrapError (InCon loc n) $
@@ -143,7 +143,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
 
          -- Add a temporary type constructor, to use while checking
          -- data constructors (tag is meaningless here, so just set to 0)
-         addDef n (newDef ty' Public (TCon 0 arity [] [] []))
+         addDef n (newDef vars ty' Public (TCon 0 arity [] [] []))
          
          -- Constructors are private if the data type as a whole is
          -- export
@@ -151,7 +151,7 @@ processData elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
          cons <- traverse (checkCon elab env nest cvis n) cons_raw
 
          let def = MkData (MkCon n arity ty') cons
-         addData vis def
+         addData vars vis def
         
          traverse (processDataOpt loc n) dopts
          when (not (NoHints `elem` dopts)) $

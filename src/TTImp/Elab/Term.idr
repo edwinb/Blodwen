@@ -780,7 +780,7 @@ mutual
            log 10 $ "Shrunk env: " ++ show svars
            log 2 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
-           addDef casen (newDef casefnty Private None)
+           addDef casen (newDef vars casefnty Private None)
            setFlag loc casen Inline
 
            let alts' = map (updateClause casen env smaller) alts

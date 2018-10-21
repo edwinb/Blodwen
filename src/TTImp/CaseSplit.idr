@@ -135,7 +135,7 @@ getArgNames defs allvars env (NBind x (Pi _ p ty) sc)
     findNames ty = defaultNames
 
     getName : Name -> List String -> List Name -> String
-    getName (UN n) defs used = unique [n] [n] 0 used
+    getName (UN n) defs used = unique (n :: defs) (n :: defs) 0 used
     getName _ defs used = unique defs defs 0 used
 getArgNames defs allvars env val = []
 

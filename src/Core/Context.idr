@@ -274,6 +274,7 @@ public export
 record GlobalDef where
      constructor MkGlobalDef
      type : ClosedTerm
+     vars : List Name -- Environment name is defined in
      visibility : Visibility
      totality : Totality
      flags : List DefFlag
@@ -284,6 +285,7 @@ record GlobalDef where
 TTC annot GlobalDef where
   toBuf b def
       = do toBuf b (type def)
+           toBuf b (vars def)
            toBuf b (visibility def)
            toBuf b (totality def)
            toBuf b (flags def)
@@ -293,13 +295,14 @@ TTC annot GlobalDef where
 
   fromBuf s b
       = do ty <- fromBuf s b
+           vars <- fromBuf s b
            vis <- fromBuf s b
            tot <- fromBuf s b
            flgs <- fromBuf s b
            def <- fromBuf s b
            exp <- fromBuf s b
            ref <- fromBuf s b
-           pure (MkGlobalDef ty vis tot flgs def exp ref)
+           pure (MkGlobalDef ty vars vis tot flgs def exp ref)
 
 getRefs : Def -> List Name
 getRefs None = []
@@ -315,8 +318,8 @@ getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 getRefs Delayed = []
 
 export
-newDef : (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
-newDef ty vis def = MkGlobalDef ty vis Unchecked [] def Nothing (getRefs def)
+newDef : List Name -> (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
+newDef vars ty vis def = MkGlobalDef ty vars vis Unchecked [] def Nothing (getRefs def)
 
 -- A context of global definitions
 public export
@@ -973,7 +976,7 @@ addBuiltin : {auto x : Ref Ctxt Defs} ->
              Name -> ClosedTerm -> Totality ->
              PrimFn arity -> Core annot ()
 addBuiltin n ty tot op 
-    = addDef n (MkGlobalDef ty Public tot [Inline] (Builtin op) Nothing [])
+    = addDef n (MkGlobalDef ty [] Public tot [Inline] (Builtin op) Nothing [])
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->
@@ -1136,14 +1139,14 @@ paramPos tyn dcons = combinePos (map (getConPs Nothing tyn) dcons)
 
 export
 addData : {auto x : Ref Ctxt Defs} ->
-					Visibility -> DataDef -> Core annot ()
-addData vis (MkData (MkCon tyn arity tycon) datacons)
+					List Name -> Visibility -> DataDef -> Core annot ()
+addData vs vis (MkData (MkCon tyn arity tycon) datacons)
     = do gam <- getCtxt 
          tag <- getNextTypeTag 
-         let tydef = newDef tycon vis (TCon tag arity 
-                                            (paramPos tyn (map type datacons))
-                                            (allDet arity)
-                                            (map name datacons))
+         let tydef = newDef vs tycon vis (TCon tag arity 
+                                         (paramPos tyn (map type datacons))
+                                         (allDet arity)
+                                         (map name datacons))
          let gam' = addCtxt tyn tydef gam
          setCtxt (addDataConstructors 0 datacons gam')
   where
@@ -1178,7 +1181,7 @@ addData vis (MkData (MkCon tyn arity tycon) datacons)
                           List Constructor -> Gamma -> Gamma
     addDataConstructors tag [] gam = gam
     addDataConstructors tag (MkCon n a ty :: cs) gam
-        = do let condef = newDef ty (conVisibility vis) 
+        = do let condef = newDef vs ty (conVisibility vis) 
 						                     (DCon tag a (forcedPos 0 [] ty))
              let gam' = addCtxt n condef gam
              addDataConstructors (tag + 1) cs gam'

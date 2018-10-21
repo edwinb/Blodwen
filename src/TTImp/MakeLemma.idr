@@ -40,9 +40,11 @@ getArgs {vars} loc env (Bind x (Pi c p ty) sc)
          let x' = UN (uniqueName defs (map nameRoot vars) (nameRoot x))
          (sc', ty) <- getArgs loc (Pi c p ty :: env) (renameTop x' sc)
          -- Don't need to use the name if it's not used in the scope type
-         let mn = case shrinkTerm sc (DropCons SubRefl) of
-                       Nothing => Just x'
-                       _ => Nothing
+         let mn = case c of
+                       RigW => case shrinkTerm sc (DropCons SubRefl) of
+                                    Nothing => Just x'
+                                    _ => Nothing
+                       _ => Just x'
          let p' = if used c && not (bindableArg Here sc)
                      then Explicit
                      else Implicit
