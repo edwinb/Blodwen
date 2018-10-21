@@ -9,9 +9,27 @@ import TTImp.Elab.Unelab
 import TTImp.TTImp
 import TTImp.Utils
 
-needed : RigCount -> PiInfo
-needed Rig0 = Implicit
-needed _ = Explicit
+import Data.List
+
+%default covering
+
+used : RigCount -> Bool
+used Rig0 = False
+used _ = True
+
+-- True if the variable appears guarded by a constructor in the term
+bindable : Elem x vars -> Term vars -> Bool
+bindable {x} p tm
+    = case getFnArgs tm of
+           (Ref (TyCon _ _) n, args) => any (bindable p) args
+           (Ref (DataCon _ _) _, args) => any (bindable p) args
+           (Local _ p', []) => sameVar p p'
+           _ => False
+
+bindableArg : Elem x vars -> Term vars -> Bool
+bindableArg p (Bind _ (Pi _ _ ty) sc)
+   = bindable p ty || bindableArg (There p) sc
+bindableArg p _ = False
 
 getArgs : {auto c : Ref Ctxt Defs} ->
           annot -> Env Term vars -> Term vars -> 
@@ -25,7 +43,10 @@ getArgs {vars} loc env (Bind x (Pi c p ty) sc)
          let mn = case shrinkTerm sc (DropCons SubRefl) of
                        Nothing => Just x'
                        _ => Nothing
-         pure ((x, mn, needed c, c, ty') :: sc', ty)
+         let p' = if used c && not (bindableArg Here sc)
+                     then Explicit
+                     else Implicit
+         pure ((x, mn, p', c, ty') :: sc', ty)
 getArgs loc env ty
       = do ty' <- unelab loc env ty
            pure ([], ty')
