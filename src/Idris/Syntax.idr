@@ -38,7 +38,7 @@ record FC where
 export
 within : FilePos -> FC -> Bool
 within (x, y) (MkFC _ start end)
-   = (x, y) >= start && (x, y) < end
+   = (x, y) >= start && (x, y) <= end
 
 -- Return whether a given line is on the same line as the file context (assuming 
 -- we're in the right file)

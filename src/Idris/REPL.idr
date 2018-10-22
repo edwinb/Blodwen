@@ -173,14 +173,19 @@ processEdit : {auto c : Ref Ctxt Defs} ->
               EditCmd -> Core FC ()
 processEdit (TypeAt line col name)
     = do gam <- get Ctxt
-         Just (n, num, t) <- findTypeAt (\p, n => within (line-1, col-1) p &&
-                                                     fst n == name)
-            | Nothing => case lookupGlobalName name (gamma gam) of
-                              [] => throw (UndefinedName (MkFC "(interactive)" (0,0) (0,0)) name)
-                              ts => do tys <- traverse (displayType gam) ts
-                                       printResult (showSep "\n" tys)
-                                       pure ()
-         printResult !(showHole gam [] n num t)
+         let glob = lookupGlobalName name (gamma gam)
+         res <- the (Core _ String) $ case glob of
+                     [] => pure ""
+                     ts => do tys <- traverse (displayType gam) ts
+                              pure (showSep "\n" tys)
+         Just (n, num, t) <- findTypeAt (\p, n => within (line-1, col-1) p)
+            | Nothing => if res == ""
+                            then throw (UndefinedName (MkFC "(interactive)" (0,0) (0,0)) name)
+                            else printResult res
+         if res == ""
+            then printResult !(showHole gam [] n num t)
+            else printResult (res ++ "\n\n" ++ "Locally:\n" ++ 
+                                     !(showHole gam [] n num t))
 processEdit (CaseSplit line col name)
     = do let find = if col > 0
                        then within (line-1, col-1)

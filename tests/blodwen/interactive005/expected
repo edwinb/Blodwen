@@ -9,4 +9,5 @@ Main> zipWith f [] ys = []
 zipWith f (x :: xs) (y :: ys) = f x y :: zipWith f xs ys
 Main> lookup Here (ECons x es) = x
 lookup (There p) (ECons x es) = lookup p es
+Main> Main.uncurry : (a -> b -> c) -> (a, b) -> c
 Main> Bye for now!

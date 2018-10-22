@@ -121,14 +121,14 @@ mutual
   toPTerm p (IPi _ rig Implicit n arg ret)
       = do imp <- showImplicits
            if imp
-              then do arg' <- toPTerm tyPrec arg
-                      ret' <- toPTerm p ret
-                      bracket p startPrec (PPi emptyFC rig Implicit n arg' ret')
+              then do arg' <- toPTerm appPrec arg
+                      ret' <- toPTerm tyPrec ret
+                      bracket p tyPrec (PPi emptyFC rig Implicit n arg' ret')
               else toPTerm p ret
   toPTerm p (IPi _ rig pt n arg ret)
-      = do arg' <- toPTerm tyPrec arg
-           ret' <- toPTerm p ret
-           bracket p startPrec (PPi emptyFC rig pt n arg' ret')
+      = do arg' <- toPTerm appPrec arg
+           ret' <- toPTerm tyPrec ret
+           bracket p tyPrec (PPi emptyFC rig pt n arg' ret')
   toPTerm p (ILam _ rig pt mn arg sc)
       = do let n = case mn of
                         Nothing => UN "_"
