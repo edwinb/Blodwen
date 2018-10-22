@@ -124,7 +124,7 @@ mutual
        PPrimVal : FC -> Constant -> PTerm
        PQuote : FC -> PTerm -> PTerm
        PUnquote : FC -> PTerm -> PTerm
-       PHole : FC -> (holename : String) -> PTerm
+       PHole : FC -> (bracket : Bool) -> (holename : String) -> PTerm
        PType : FC -> PTerm
        PAs : FC -> Name -> (pattern : PTerm) -> PTerm
        PDotted : FC -> PTerm -> PTerm
@@ -388,7 +388,7 @@ mutual
     show (PQuote _ tm) = "`(" ++ show tm ++ ")"
     show (PUnquote _ tm) = "~(" ++ show tm ++ ")"
     show (PPrimVal _ c) = show c
-    show (PHole _ n) = "?" ++ n
+    show (PHole _ _ n) = "?" ++ n
     show (PType _) = "Type"
     show (PAs _ n p) = show n ++ "@" ++ show p
     show (PDotted _ p) = "." ++ show p
@@ -451,6 +451,8 @@ TTC FC IFaceInfo where
            ds <- fromBuf s b
            pure (MkIFaceInfo ic ps cs ms ds)
 
+-- If you update this, update 'extendAs' in Desugar to keep it up to date
+-- when reading imports
 public export
 record SyntaxInfo where
   constructor MkSyntax
@@ -459,6 +461,8 @@ record SyntaxInfo where
   infixes : StringMap (Fixity, Nat)
   prefixes : StringMap Nat
   ifaces : Context IFaceInfo
+  bracketholes : List Name -- hole names in argument position (so need
+                           -- to be bracketed when solved)
   startExpr : RawImp FC
 
 export
@@ -481,21 +485,24 @@ TTC FC SyntaxInfo where
   toBuf b syn 
       = do toBuf b (toList (infixes syn))
            toBuf b (toList (prefixes syn))
-           toBuf b (ifaces syn) 
+           toBuf b (ifaces syn)
+           toBuf b (bracketholes syn)
            toBuf b (startExpr syn)
 
   fromBuf s b 
       = do inf <- fromBuf s b
            pre <- fromBuf s b
            ifs <- fromBuf s b
+           bhs <- fromBuf s b
            start <- fromBuf s b
-           pure (MkSyntax (fromList inf) (fromList pre) ifs start)
+           pure (MkSyntax (fromList inf) (fromList pre) ifs bhs start)
 
 export
 initSyntax : SyntaxInfo
 initSyntax = MkSyntax (insert "=" (Infix, 0) empty) 
                       (insert "-" 10 empty)
                       empty
+                      []
                       (IVar (MkFC "(default)" (0, 0) (0, 0)) (UN "main"))
 
 -- A label for Syntax info in the global state

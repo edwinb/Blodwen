@@ -195,6 +195,8 @@ processEdit (AddClause line name)
          printResult c
 processEdit (ExprSearch line name hints all)
     = do gam <- get Ctxt
+         syn <- get Syn
+         let brack = elemBy (\x, y => dropNS x == dropNS y) name (bracketholes syn)
          case lookupDefName name (gamma gam) of
               [(n, Hole locs _ _)] =>
                   do tms <- exprSearch replFC name []
@@ -207,7 +209,10 @@ processEdit (ExprSearch line name hints all)
                         then printResult $ showSep "\n" (map show itms)
                         else case itms of
                                   [] => printError "No search results"
-                                  (x :: xs) => printResult (show x)
+                                  (x :: xs) => printResult 
+                                                  (show (if brack 
+                                                            then addBracket replFC x
+                                                            else x))
               [] => printError $ "Unknown name " ++ show name
               _ => printError "Not a searchable hole"
   where

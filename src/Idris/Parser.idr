@@ -44,7 +44,7 @@ atom fname
   <|> do start <- location
          x <- holeName
          end <- location
-         pure (PHole (MkFC fname start end) x)
+         pure (PHole (MkFC fname start end) False x)
   <|> do start <- location
          symbol "%"
          exactIdent "MkWorld"
@@ -103,7 +103,9 @@ mutual
   argExpr fname indents
       = do continue indents
            arg <- simpleExpr fname indents
-           pure (Left arg)
+           the (EmptyRule _) $ case arg of
+                PHole loc _ n => pure (Left (PHole loc True n))
+                t => pure (Left t)
     <|> do continue indents
            arg <- implicitArg fname indents
            pure (Right arg)

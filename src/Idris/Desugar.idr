@@ -55,7 +55,8 @@ extendAs old as newsyn
     = do syn <- get Syn
          put Syn (record { infixes $= mergeLeft (infixes newsyn),
                            prefixes $= mergeLeft (prefixes newsyn),
-                           ifaces $= mergeContextAs old as (ifaces newsyn) } 
+                           ifaces $= mergeContextAs old as (ifaces newsyn),
+                           bracketholes $= ((bracketholes newsyn) ++) } 
                   syn)
 
 mkPrec : Fixity -> Nat -> OpPrec
@@ -169,7 +170,11 @@ mutual
   desugar side ps (PPrimVal fc x) = pure $ IPrimVal fc x
   desugar side ps (PQuote fc x) = pure $ IQuote fc !(desugar side ps x)
   desugar side ps (PUnquote fc x) = pure $ IUnquote fc !(desugar side ps x)
-  desugar side ps (PHole fc holename) = pure $ IHole fc holename
+  desugar side ps (PHole fc br holename) 
+      = do when br $
+              do syn <- get Syn
+                 put Syn (record { bracketholes $= ((UN holename) ::) } syn)
+           pure $ IHole fc holename
   desugar side ps (PType fc) = pure $ IType fc
   desugar side ps (PAs fc vname pattern) 
       = pure $ IAs fc vname !(desugar side ps pattern)

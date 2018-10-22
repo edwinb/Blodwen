@@ -1,0 +1,5 @@
+1/1: Building iedit (iedit.blod)
+Welcome to Blodwen. Good luck.
+Main> \f => \g => \x => g (f x)
+Main> (\x => \zs => x :: zs)
+Main> Bye for now!

@@ -31,13 +31,9 @@ mkOp tm@(PApp fc (PApp _ (PRef _ n) x) y)
               Just _ => pure (POp fc (nameRoot n) (unbracketApp x) (unbracketApp y))
 mkOp tm = pure tm
 
-bracket : {auto s : Ref Syn SyntaxInfo} ->
-          (outer : Nat) -> (inner : Nat) -> PTerm -> Core FC PTerm
-bracket outer inner tm
-    = do tm' <- mkOp tm
-         if outer > inner && needed tm'
-            then pure (PBracketed emptyFC tm')
-            else pure tm'
+export
+addBracket : FC -> PTerm -> PTerm
+addBracket fc tm = if needed tm then PBracketed fc tm else tm
   where
     needed : PTerm -> Bool
     needed (PBracketed _ _) = False
@@ -46,6 +42,14 @@ bracket outer inner tm
     needed (PComprehension _ _ _) = False
     needed (PList _ _) = False
     needed tm = True
+
+bracket : {auto s : Ref Syn SyntaxInfo} ->
+          (outer : Nat) -> (inner : Nat) -> PTerm -> Core FC PTerm
+bracket outer inner tm
+    = do tm' <- mkOp tm
+         if outer > inner
+            then pure (addBracket emptyFC tm')
+            else pure tm'
 
 startPrec : Nat
 startPrec = 0
@@ -170,7 +174,7 @@ mutual
   toPTerm p (IPrimVal _ c) = pure (PPrimVal emptyFC c)
   toPTerm p (IQuote _ tm) = pure (PQuote emptyFC !(toPTerm startPrec tm))
   toPTerm p (IUnquote _ tm) = pure (PUnquote emptyFC !(toPTerm startPrec tm))
-  toPTerm p (IHole _ str) = pure (PHole emptyFC str)
+  toPTerm p (IHole _ str) = pure (PHole emptyFC False str)
   toPTerm p (IType _) = pure (PType emptyFC)
   toPTerm p (IBindVar _ v) = pure (PRef emptyFC (UN v))
   toPTerm p (IBindHere _ tm) = toPTerm p tm
