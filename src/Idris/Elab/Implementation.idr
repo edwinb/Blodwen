@@ -104,11 +104,14 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
          -- Don't make it a hint if it's a named implementation
          let opts = maybe [Inline, Hint True] (const [Inline]) impln
 
-         let impTy = bindTypeNames vars $
-                     bindConstraints fc AutoImplicit cons 
+         let initTy = bindConstraints fc AutoImplicit cons 
                          (apply (IVar fc iname) ps)
+         let paramBinds = findBindableNames True vars [] initTy
+         let impTy = doBind paramBinds initTy
+
          let impTyDecl = IClaim fc vis opts (MkImpTy fc impName impTy)
          log 5 $ "Implementation type: " ++ show impTy
+
          processDecl False env nest impTyDecl
          
          -- If the body is empty, we're done for now (just declaring that
@@ -126,9 +129,9 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
 
                -- 2. Elaborate top level function types for this interface
                defs <- get Ctxt
-               fns <- traverse (topMethType impName impsp (params cdata)
-                                            (map fst (methods cdata))) 
-                               (methods cdata)
+               fns <- topMethTypes [] impName impsp (params cdata)
+                                      (map fst (methods cdata)) 
+                                      (methods cdata)
                traverse (processDecl False env nest) (map mkTopMethDecl fns)
 
                -- 3. Build the record for the implementation
@@ -225,10 +228,15 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
     applyCon impl n = do mn <- inCurrentNS (methName n)
                          pure (dropNS n, IVar fc mn)
     
-    topMethType : Name -> List String -> List Name -> List Name ->
+    -- Return method name, specialised method name, implicit name updates,
+    -- and method type. Also return how the method name should be updated
+    -- in later method types (specifically, putting implicits in)
+    topMethType : List (Name, RawImp FC) ->
+                  Name -> List String -> List Name -> List Name ->
                   (Name, (Bool, RawImp FC)) -> 
-                  Core FC (Name, Name, List (String, String), RawImp FC)
-    topMethType impName impsp pnames allmeths (mn, (d, mty_in))
+                  Core FC ((Name, Name, List (String, String), RawImp FC),
+                             List (Name, RawImp FC))   
+    topMethType methupds impName impsp pnames allmeths (mn, (d, mty_in))
         = do -- Get the specialised type by applying the method to the
              -- parameters
              n <- inCurrentNS (methName mn)
@@ -236,8 +244,13 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
              -- Avoid any name clashes between parameters and method types by
              -- renaming IBindVars in the method types which appear in the
              -- parameters
-             let mty_in = substNames vars !(traverse (applyCon impName) allmeths) mty_in
+             let upds' = !(traverse (applyCon impName) allmeths)
+             let mty_in = substNames vars upds' mty_in
              let (mty_in, upds) = runState (renameIBinds impsp (findImplicits mty_in) mty_in) []
+             -- Finally update the method type so that implicits from the
+             -- parameters are passed through to any earlier methods which
+             -- appear in the type
+             let mty_in = substNames vars methupds mty_in
              let mbase = bindConstraints fc AutoImplicit cons $
                          substNames vars (zip pnames ps) mty_in
              let ibound = findImplicits mbase
@@ -246,12 +259,27 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
 
              log 3 $ "Method " ++ show mn ++ " ==> " ++
                      show n ++ " : " ++ show mty
+             log 5 $ "Updates " ++ show methupds
              log 5 $ "From " ++ show mbase 
              log 3 $ "Name updates " ++ show upds 
              log 3 $ "Param names: " ++ show pnames 
              log 10 $ "Used names " ++ show ibound
-             pure (mn, n, upds, mty)
-             
+             let ibinds = findIBinds mty
+             let methupds' = if isNil ibinds then []
+                             else [(n, impsApply (IVar fc n)
+                                     (map (\x => (UN x, IBindVar fc x)) ibinds))]
+             pure ((mn, n, upds, mty), methupds')
+    
+    topMethTypes : List (Name, RawImp FC) ->
+                   Name -> List String -> List Name -> List Name ->
+                   List (Name, (Bool, RawImp FC)) -> 
+                   Core FC (List (Name, Name, List (String, String), RawImp FC))
+    topMethTypes upds impName impsp pnames allmeths [] = pure []
+    topMethTypes upds impName impsp pnames allmeths (m :: ms)
+        = do (m', newupds) <- topMethType upds impName impsp pnames allmeths m
+             ms' <- topMethTypes (newupds ++ upds) impName impsp pnames allmeths ms
+             pure (m' :: ms')
+
     mkTopMethDecl : (Name, Name, List (String, String), RawImp FC) -> ImpDecl FC
     mkTopMethDecl (mn, n, upds, mty) = IClaim fc vis [] (MkImpTy fc n mty)
 
