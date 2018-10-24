@@ -29,7 +29,7 @@ blodwenTests
        "interactive005", "interactive006", "interactive007", "interactive008",
        "interface001", "interface002", "interface003", "interface004",
        "interface005", "interface006", "interface007", "interface008",
-       "interface009",
+       "interface009", "interface010",
        "lazy001","lazy002",
        "linear001", "linear002", "linear003", "linear004",
        "reflect001",
