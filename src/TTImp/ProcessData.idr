@@ -75,6 +75,10 @@ checkCon elab env nest vis tn (MkImpTy loc cn_in ty_raw)
 
          let ty' = abstractFullEnvType env ty
          log 3 $ show cn ++ " : " ++ show ty'
+         case vis of
+              Public => do addHash cn
+                           addHash ty'
+              _ => pure ()
 
          addToSave cn
          pure (MkCon cn (getArity gam [] ty') ty')
@@ -114,6 +118,10 @@ processData {vars} elab env nest vis (MkImpLater loc n_in ty_raw)
 
          -- Add the type constructor as a placeholder
          addDef n (newDef vars ty' Public (TCon 0 arity [] [] []))
+         case vis of
+              Private => pure ()
+              _ => do addHash n
+                      addHash ty'
          addToSave n
 
 processData {vars} elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
@@ -152,6 +160,10 @@ processData {vars} elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
 
          let def = MkData (MkCon n arity ty') cons
          addData vars vis def
+         
+         when (vis /= Private) $
+              do addHash n
+                 addHash ty'
         
          traverse (processDataOpt loc n) dopts
          when (not (NoHints `elem` dopts)) $

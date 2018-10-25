@@ -126,12 +126,13 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               {auto m : Ref Meta (Metadata annot)} ->
               Reflect annot =>
               Elaborator annot ->
-              Bool ->
+              (incase : Bool) ->
+              (hashit : Bool) ->
               Name ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
               Core annot (Maybe (Clause, Clause)) -- Compile time vs run time clauses
                      -- (the run time version has had 0-multiplicities erased)
-checkClause elab incase defining env nest (ImpossibleClause loc lhs_raw)
+checkClause elab incase hashit defining env nest (ImpossibleClause loc lhs_raw)
     = handleClause
          (do lhs_raw <- lhsInCurrentNS nest lhs_raw
              (lhs_in, _, lhsty_in) <- inferTerm elab incase defining env nest PATTERN InLHS lhs_raw
@@ -147,7 +148,7 @@ checkClause elab incase defining env nest (ImpossibleClause loc lhs_raw)
                                     then pure Nothing
                                     else throw (ValidCase loc env (Right err))
                        _ => throw (ValidCase loc env (Right err)))
-checkClause {vars} elab incase defining env nest (PatClause loc lhs_raw rhs_raw)
+checkClause {vars} elab incase hashit defining env nest (PatClause loc lhs_raw rhs_raw)
     = do gam <- get Ctxt
          lhs_raw_in <- lhsInCurrentNS nest lhs_raw
          let lhs_raw = implicitsAs gam vars lhs_raw_in
@@ -201,6 +202,9 @@ checkClause {vars} elab incase defining env nest (PatClause loc lhs_raw rhs_raw)
 
          addLHS (getAnnot lhs_raw) (length env) env' lhspat
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
+         when hashit $ 
+           do addHash lhspat
+              addHash rhs
          pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
   where
     extend : Env Term extvs -> SubVars vs extvs ->
@@ -245,25 +249,29 @@ processDef : {auto c : Ref Ctxt Defs} ->
 processDef elab incase env nest loc n_in cs_raw
     = do gam <- getCtxt
          n <- inCurrentNS n_in
-         case lookupDefTyExact n gam of
+         case lookupGlobalExact n gam of
               Nothing => throw (NoDeclaration loc n)
-              Just (None, ty) =>
-                do cs <- traverse (checkClause elab incase n env nest) cs_raw
-                   (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
-                   (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
-                   
-                   let Just Refl = nameListEq cargs rargs
-                           | Nothing => throw (InternalError "WAT")
-                   addFnDef loc n tree_comp tree_rt
-                   
-                   addToSave n
-                   gam <- getCtxt
-                   log 3 $
-                      case lookupDefExact n gam of
-                           Just (PMDef _ args tc tr) =>
-                              "Case tree for " ++ show n ++ "\n\t" ++
-                              show args ++ " " ++ show tc ++ "\n" ++
-                              "Run time tree\n" ++
-                              show args ++ " " ++ show tr
-                           _ => "No case tree for " ++ show n
-              Just (_, ty) => throw (AlreadyDefined loc n)
+              Just glob =>
+                case definition glob of
+                     None =>
+                        do let ty = type glob
+                           let hashit = visibility glob == Public
+                           cs <- traverse (checkClause elab incase hashit n env nest) cs_raw
+                           (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
+                           (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
+                           
+                           let Just Refl = nameListEq cargs rargs
+                                   | Nothing => throw (InternalError "WAT")
+                           addFnDef loc n tree_comp tree_rt
+                           
+                           addToSave n
+                           gam <- getCtxt
+                           log 3 $
+                              case lookupDefExact n gam of
+                                   Just (PMDef _ args tc tr) =>
+                                      "Case tree for " ++ show n ++ "\n\t" ++
+                                      show args ++ " " ++ show tc ++ "\n" ++
+                                      "Run time tree\n" ++
+                                      show args ++ " " ++ show tr
+                                   _ => "No case tree for " ++ show n
+                     _ => throw (AlreadyDefined loc n)

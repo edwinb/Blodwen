@@ -3,6 +3,7 @@ module Core.Context
 import Core.CaseTree
 import Core.CompileExpr
 import public Core.Core
+import public Core.Hash
 import Core.TT
 import Core.TTC
 import Core.Options
@@ -336,6 +337,8 @@ record Defs where
       toSave : SortedSet -- Definitions to write out as .tti
       imported : List (List String, Bool, List String) 
           -- imported modules, to rexport, as namespace
+      importHashes : List (List String, Int)
+          -- interface hashes of imported modules
       allImported : List (String, List String)
           -- all imported filenames/namespaces, just to avoid loading something
           -- twice unnecessarily (this is a record of all the things we've
@@ -350,6 +353,7 @@ record Defs where
       nextTag : Int -- next tag for type constructors
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
+      ifaceHash : Int
 
 export
 noGam : Defs -> Defs
@@ -362,9 +366,9 @@ noGam = record { gamma = empty }
 export
 TTC annot Defs where
   toBuf b val 
-      = do toBuf b (CMap.toList (exactNames (gamma val)))
-           toBuf b (currentNS val)
+      = do toBuf b (currentNS val)
            toBuf b (imported val)
+           toBuf b (CMap.toList (exactNames (gamma val)))
            toBuf b (laziness (options val))
            toBuf b (pairnames (options val))
            toBuf b (rewritenames (options val))
@@ -373,9 +377,9 @@ TTC annot Defs where
            toBuf b (hiddenNames val)
            toBuf b (cgdirectives val)
   fromBuf s b
-      = do ns <- fromBuf s b {a = List (Name, GlobalDef)}
-           modNS <- fromBuf s b
+      = do modNS <- fromBuf s b
            imported <- fromBuf s b
+           ns <- fromBuf s b {a = List (Name, GlobalDef)}
            lazy <- fromBuf s b
            pair <- fromBuf s b
            rw <- fromBuf s b
@@ -390,7 +394,7 @@ TTC annot Defs where
                                       primnames = prim,
                                       namedirectives = ndirs
                                     } defaults)
-                            empty imported [] [] empty [] hides ds 100 0 0)
+                            empty imported [] [] [] empty [] hides ds 100 0 0 5381)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -399,7 +403,7 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] empty [] [] [] 100 0 0
+initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] [] empty [] [] [] 100 0 0 5381
 
 export
 getSave : Defs -> List Name
@@ -523,6 +527,19 @@ clearCtxt : {auto c : Ref Ctxt Defs} ->
 clearCtxt
     = do defs <- get Ctxt
          put Ctxt (record { options = options defs } initCtxt)
+
+export
+addHash : {auto c : Ref Ctxt Defs} ->
+          Hashable a => a -> Core annot ()
+addHash x
+    = do defs <- get Ctxt
+         put Ctxt (record { ifaceHash = hashWithSalt (ifaceHash defs) x } defs)
+
+export
+initHash : {auto c : Ref Ctxt Defs} -> Core annot ()
+initHash
+    = do defs <- get Ctxt
+         put Ctxt (record { ifaceHash = 5381 } defs)
 
 export
 isDelayType : Name -> Defs -> Bool

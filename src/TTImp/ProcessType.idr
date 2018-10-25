@@ -75,6 +75,10 @@ processType {vars} elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
          -- Add to the interactive editing metadata
          addTyDecl loc n env ty
 
+         when (vis /= Private) $
+              do addHash n
+                 addHash ty
+
          log 1 $ "Setting options for " ++ show n ++ ": " ++ show fnopts
          traverse (processFnOpt loc n) fnopts
          addToSave n

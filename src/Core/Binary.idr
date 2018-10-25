@@ -2,6 +2,7 @@ module Core.Binary
 
 import Core.Context
 import Core.Core
+import Core.Hash
 import Core.Options
 import Core.TT
 import Core.TTC
@@ -23,7 +24,7 @@ import Data.Buffer
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 export
 ttcVersion : Int
-ttcVersion = 19
+ttcVersion = 20
 
 export
 checkTTCVersion : Int -> Int -> Core annot ()
@@ -37,6 +38,8 @@ checkTTCVersion ver exp
 record TTCFile annot extra where
   constructor MkTTCFile
   version : Int
+  ifaceHash : Int
+  importHashes : List (List String, Int)
   holes : List (annot, Name)
   constraints : Context (Constraint annot)
   context : Defs
@@ -48,6 +51,8 @@ record TTCFile annot extra where
   toBuf b file
       = do toBuf b "TTC"
            toBuf b (version file)
+           toBuf b (ifaceHash file)
+           toBuf b (importHashes file)
            toBuf b (holes file)
            toBuf b (constraints file)
            toBuf b (context file)
@@ -58,11 +63,14 @@ record TTCFile annot extra where
            when (hdr /= "TTC") $ corrupt "TTC header"
            ver <- fromBuf s b
            checkTTCVersion ver ttcVersion
+           ifaceHash <- fromBuf s b
+           importHashes <- fromBuf s b
            holes <- fromBuf s b
            constraints <- fromBuf s b
            defs <- fromBuf s b
            ex <- fromBuf s b
-           pure (MkTTCFile ver holes constraints defs ex)
+           pure (MkTTCFile ver ifaceHash importHashes 
+                           holes constraints defs ex)
 
 -- Update the various fields in Defs affected by the name's flags
 processFlags : Name -> List DefFlag -> Defs -> Defs
@@ -108,15 +116,16 @@ writeToTTC extradata fname
                                    cgdirectives = cgdirectives defs
                                  } initCtxt)
                          defs
-         toBuf buf (MkTTCFile ttcVersion (holes ust) (constraints ust) defs'
+         toBuf buf (MkTTCFile ttcVersion (ifaceHash defs) (importHashes defs)
+                              (holes ust) (constraints ust) defs'
                               extradata)
          Right ok <- coreLift $ writeToFile fname !(get Bin)
                | Left err => throw (InternalError (fname ++ ": " ++ show err))
          pure ()
 
 -- Add definitions from a binary file to the current context
--- Returns the "extra" section of the file (user defined data) and the list
--- of additional TTCs that need importing
+-- Returns the "extra" section of the file (user defined data), the interface
+-- has and the list of additional TTCs that need importing
 -- (we need to return these, rather than do it here, because after loading
 -- the data that's when we process the extra data...)
 export
@@ -128,7 +137,7 @@ readFromTTC : (TTC annot annot, TTC annot extra) =>
               (fname : String) -> -- file containing the module
               (modNS : List String) -> -- module namespace
               (importAs : List String) -> -- namespace to import as
-              Core annot (Maybe (extra, List (List String, Bool, List String)))
+              Core annot (Maybe (extra, Int, List (List String, Bool, List String)))
 readFromTTC loc reexp fname modNS importAs
     = do defs <- get Ctxt
          -- If it's already in the context, don't load it again
@@ -155,4 +164,53 @@ readFromTTC loc reexp fname modNS importAs
          ust <- get UST
          put UST (record { holes = holes ttc,
                            constraints = constraints ttc } ust)
-         pure (Just (extraData ttc, imported (context ttc)))
+         pure (Just (extraData ttc, ifaceHash ttc, imported (context ttc)))
+
+getImportHashes : TTC annot annot =>
+                  Ref Share (StringMap String) -> Ref Bin Binary ->
+                  Core annot (List (List String, Int))
+getImportHashes s b
+    = do hdr <- fromBuf {a = String} s b
+         when (hdr /= "TTC") $ corrupt "TTC header"
+         ver <- fromBuf {a = Int} s b
+         checkTTCVersion ver ttcVersion
+         ifaceHash <- fromBuf {a = Int} s b
+         fromBuf s b
+
+getHash : TTC annot annot =>
+          Ref Share (StringMap String) -> Ref Bin Binary ->
+          Core annot Int
+getHash s b
+    = do hdr <- fromBuf {a = String} s b
+         when (hdr /= "TTC") $ corrupt "TTC header"
+         ver <- fromBuf {a = Int} s b
+         checkTTCVersion ver ttcVersion
+         fromBuf s b
+
+export
+readIFaceHash : TTC annot annot =>
+                (fname : String) -> -- file containing the module
+                Core annot Int
+readIFaceHash fname
+    = do Right buf <- coreLift $ readFromFile fname
+            | Left err => pure 0
+         b <- newRef Bin buf
+         s <- initShare
+         
+         catch (getHash s b)
+               (\err => pure 0)
+
+export
+readImportHashes : TTC annot annot =>
+                (fname : String) -> -- file containing the module
+                Core annot (List (List String, Int))
+readImportHashes fname
+    = do Right buf <- coreLift $ readFromFile fname
+            | Left err => pure []
+         b <- newRef Bin buf
+         s <- initShare
+         
+         catch (getImportHashes s b)
+               (\err => pure [])
+
+         

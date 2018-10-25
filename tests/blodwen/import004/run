@@ -1,0 +1,8 @@
+cp Mult1.blod Mult.blod
+$1 --no-prelude Test.blod < input
+sleep 1
+# Make sure interface has changed!
+cp Mult2.blod Mult.blod
+$1 --no-prelude Test.blod < input
+
+rm -rf Mult.blod build

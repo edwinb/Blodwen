@@ -49,7 +49,7 @@ expandClause : {auto c : Ref Ctxt Defs} ->
                annot -> Elaborator annot -> Name -> ImpClause annot -> 
                Core annot (List (ImpClause annot))
 expandClause loc elab n c
-    = do Just (clause, _) <- checkClause elab False n [] (MkNested []) c
+    = do Just (clause, _) <- checkClause elab False False n [] (MkNested []) c
             | Nothing => pure [] -- TODO: impossible clause, do something
                                  -- appropriate
          let MkClause {vars} env lhs rhs = clause

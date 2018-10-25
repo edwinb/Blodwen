@@ -11,9 +11,10 @@ import TTImp.ProcessTTImp
 import TTImp.Reflect
 import TTImp.TTImp
 
-import Idris.Parser
-import Idris.Syntax
 import Idris.Desugar
+import Idris.Parser
+import Idris.REPLCommon
+import Idris.Syntax
 
 import Control.Catchable
 import Interfaces.FileIO
@@ -48,25 +49,33 @@ processDecls decls
 readModule : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
              {auto s : Ref Syn SyntaxInfo} ->
+             (top : Bool) ->
              FC ->
              (visible : Bool) -> -- Is import visible to top level module?
              (reexp : Bool) -> -- Should the module be reexported?
              (imp : List String) -> -- Module name to import
              (as : List String) -> -- Namespace to import into
              Core FC ()
-readModule loc vis reexp imp as
+readModule top loc vis reexp imp as
     = do fname <- nsToPath loc imp
-         Just (syn, more) <- readFromTTC {extra = SyntaxInfo} loc vis fname imp as
+         Just (syn, hash, more) <- readFromTTC {extra = SyntaxInfo} loc vis fname imp as
               | Nothing => when vis (setVisible imp) -- already loaded, just set visibility
          addImported (imp, reexp, as)
          extendAs imp as syn
+
+         defs <- get Ctxt
+         when top $ put Ctxt (record { importHashes $= ((as, hash) ::) } defs)
+
+         -- If we're rexporting, it needs to be part of the module hash
+         when reexp $ addHash imp
+
          modNS <- getNS
          when vis $ setVisible imp
          traverse (\ mimp => 
                        do let m = fst mimp
                           let reexp = fst (snd mimp)
                           let as = snd (snd mimp)
-                          readModule loc (vis && reexp) reexp m as) more
+                          readModule False loc (vis && reexp) reexp m as) more
          setNS modNS
 
 readImport : {auto c : Ref Ctxt Defs} ->
@@ -74,7 +83,14 @@ readImport : {auto c : Ref Ctxt Defs} ->
              {auto s : Ref Syn SyntaxInfo} ->
              Import -> Core FC ()
 readImport imp
-    = readModule (loc imp) True (reexport imp) (path imp) (nameAs imp)
+    = readModule True (loc imp) True (reexport imp) (path imp) (nameAs imp)
+
+readHash : {auto c : Ref Ctxt Defs} ->
+           Import -> Core FC (List String, Int)
+readHash imp
+    = do fname <- nsToPath (loc imp) (path imp)
+         h <- readIFaceHash fname
+         pure (nameAs imp, h)
 
 prelude : Import
 prelude = MkImport (MkFC "(implicit)" (0, 0) (0, 0)) False
@@ -95,8 +111,8 @@ readAsMain : {auto c : Ref Ctxt Defs} ->
              {auto s : Ref Syn SyntaxInfo} ->
              (fname : String) -> Core FC ()
 readAsMain fname
-    = do Just (syn, more) <- readFromTTC {extra = SyntaxInfo} 
-                                         toplevelFC True fname [] []
+    = do Just (syn, _, more) <- readFromTTC {extra = SyntaxInfo} 
+                                            toplevelFC True fname [] []
               | Nothing => pure ()
          replNS <- getNS
          extendAs replNS replNS syn
@@ -104,7 +120,7 @@ readAsMain fname
                        do let m = fst mimp
                           let as = snd (snd mimp)
                           fname <- nsToPath emptyFC m
-                          readModule emptyFC True False m as) more
+                          readModule False emptyFC True False m as) more
          setNS replNS
 
 addPrelude : List Import -> List Import
@@ -113,14 +129,31 @@ addPrelude imps
        then prelude :: imps
        else imps
 
+-- Get a file's modified time. If it doesn't exist, return 0 (that is, it
+-- was last modified at the dawn of time so definitely out of date for
+-- rebuilding purposes...)
+modTime : String -> Core annot Integer
+modTime fname
+    = do Right f <- coreLift $ openFile fname Read
+             | Left err => pure 0 -- Beginning of Time :)
+         Right t <- coreLift $ fileModifiedTime f
+             | Left err => pure 0
+         coreLift $ closeFile f
+         pure t
+
 -- Process everything in the module; return the syntax information which
 -- needs to be written to the TTC (e.g. exported infix operators)
+-- Returns 'Nothing' if it didn't reload anything
 processMod : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState FC)} ->
              {auto s : Ref Syn SyntaxInfo} ->
              {auto m : Ref Meta (Metadata FC)} ->
-             Module -> Core FC (List (Error FC))
-processMod mod
+             {auto o : Ref ROpts REPLOpts} ->
+             (srcf : String) -> (ttcf : String) -> (msg : String) ->
+             Module -> 
+             (sourcecode : String) ->
+             Core FC (Maybe (List (Error FC)))
+processMod srcf ttcf msg mod sourcecode
     = catch (do i <- newRef ImpST (initImpState {annot = FC})
                 let ns = moduleNS mod
                 when (ns /= ["Main"]) $
@@ -135,19 +168,46 @@ processMod mod
                      if (noprelude !getSession || moduleNS mod == ["Prelude"])
                         then imports mod
                         else addPrelude (imports mod)
-                -- read imports here
-                -- Note: We should only import .ttc - assumption is that there's
-                -- a phase before this which builds the dependency graph
-                -- (also that we only build child dependencies if rebuilding
-                -- changes the interface - will need to store a hash in .ttc!)
-                traverse readImport imps
-                -- Before we process the source, make sure the "hide_everywhere"
-                -- names are set to private
-                defs <- get Ctxt
-                traverse (\x => setVisibility emptyFC x Private) (hiddenNames defs)
-                setNS ns
-                processDecls (decls mod))
-            (\err => pure [err])
+
+                hs <- traverse readHash imps
+                log 5 $ show (moduleNS mod) ++ " hashes:\n" ++
+                        show (sort hs)
+                imphs <- readImportHashes ttcf
+                log 5 $ "Old hashes from " ++ ttcf ++ ":\n" ++ show (sort imphs)
+
+                -- If the old hashes are the same as the hashes we've just
+                -- read from the imports, and the source file is older than
+                -- the ttc, we can skip the rest.
+                srctime <- modTime srcf
+                ttctime <- modTime ttcf
+
+                if (sort hs == sort imphs && srctime <= ttctime)
+                   then -- Hashes the same, source up to date, just set the namespace
+                        -- for the REPL
+                        do setNS ns
+                           pure Nothing
+                   else 
+                     do iputStrLn msg
+                        let Right mod = runParser sourcecode 
+                                             (do p <- prog srcf
+                                                 eoi
+                                                 pure p)
+                            | Left err => pure (Just [ParseFail err])
+                        -- read imports here
+                        -- Note: We should only import .ttc - assumption is that there's
+                        -- a phase before this which builds the dependency graph
+                        -- (also that we only build child dependencies if rebuilding
+                        -- changes the interface - will need to store a hash in .ttc!)
+                        traverse readImport imps
+
+                        -- Before we process the source, make sure the "hide_everywhere"
+                        -- names are set to private
+                        defs <- get Ctxt
+                        traverse (\x => setVisibility emptyFC x Private) (hiddenNames defs)
+                        setNS ns
+                        errs <- processDecls (decls mod)
+                        pure (Just errs))
+          (\err => pure (Just [err]))
 
 -- Process a file. Returns any errors, rather than throwing them, because there
 -- might be lots of errors collected across a whole file.
@@ -156,8 +216,9 @@ process : {auto c : Ref Ctxt Defs} ->
           {auto u : Ref UST (UState FC)} ->
           {auto s : Ref Syn SyntaxInfo} ->
           {auto m : Ref Meta (Metadata FC)} ->
-          FileName -> Core FC (List (Error FC))
-process file
+          {auto o : Ref ROpts REPLOpts} ->
+          String -> FileName -> Core FC (List (Error FC))
+process buildmsg file
     = do Right res <- coreLift (readFile file)
                | Left err => pure [FileErr file err]
          case runParser res (do p <- prog file; eoi; pure p) of
@@ -166,13 +227,15 @@ process file
                 -- Processing returns a list of errors across a whole module,
                 -- but may fail for other reasons, so we still need to catch
                 -- other possible errors
-                    catch (do errs <- processMod mod
+                    catch (do initHash
+                              fn <- getTTCFileName file ".ttc"
+                              Just errs <- processMod file fn buildmsg mod res
+                                   | Nothing => pure [] -- skipped it
                               if isNil errs
                                  then
                                    do defs <- get Ctxt
                                       d <- getDirs
                                       makeBuildDirectory (pathToNS (working_dir d) file)
-                                      fn <- getTTCFileName file ".ttc"
                                       writeToTTC !(get Syn) fn
                                       mfn <- getTTCFileName file ".ttm"
                                       writeToTTM mfn

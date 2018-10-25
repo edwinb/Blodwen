@@ -153,10 +153,10 @@ buildMod loc num len mod
         let showMod = showSep "." (reverse (buildNS mod))
 
         if needsBuilding
-           then do iputStrLn $ show num ++ "/" ++ show len ++
+           then do let msg = show num ++ "/" ++ show len ++
                                    ": Building " ++ showMod ++
                                    " (" ++ src ++ ")"
-                   [] <- process {u} {m} src
+                   [] <- process {u} {m} msg src
                       | errs => do traverse emitError errs
                                    pure errs
                    pure []

@@ -24,7 +24,7 @@ blodwenTests
        "chicken001", "chicken002",
        "error001", "error002", "error003", "error004", "error005",
        "error006",
-       "import001", "import002", "import003",
+       "import001", "import002", "import003", "import004",
        "interactive001", "interactive002", "interactive003", "interactive004",
        "interactive005", "interactive006", "interactive007", "interactive008",
        "interface001", "interface002", "interface003", "interface004",
