@@ -4,10 +4,13 @@ code to see how certain features work.
 
 Overview
 --------
-Core language TT (defined in Core.TT), indexed over the names in scope so
-that we know terms are always well scoped. Values (i.e. normal forms) also
-defined in Core.TT as NF; constructors do not evaluate their arguments until
-explicitly requested.
+Core language TT (defined in Core.TT), based on quantitative type theory
+(see https://bentnib.org/quantitative-type-theory.html). Binders have
+"multiplicities" which are either 0, 1 or unlimited.
+
+Terms are indexed over the names in scope so that we know terms are always well
+scoped. Values (i.e. normal forms) also defined in Core.TT as NF; constructors
+do not evaluate their arguments until explicitly requested.
 
 Elaborate to TT from a higher level language TTImp (defined in TTImp.TTImp),
 which is TT with implicit arguments, local function definitions, case blocks,
