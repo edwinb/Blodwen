@@ -292,6 +292,8 @@ interface Num ty where
   (*) : ty -> ty -> ty
   fromInteger : Integer -> ty
 
+%allow_overloads fromInteger
+
 public export
 interface Num ty => Neg ty where
   negate : ty -> ty
@@ -428,6 +430,8 @@ interface Applicative m => Monad m where
   -- default implementations
   (>>=) x f = join (f <$> x)
   join x = x >>= id
+
+%allow_overloads (>>=)
 
 public export
 guard : Alternative f => Bool -> f ()

@@ -115,53 +115,90 @@ stripDelay defs ty@(NTCon n t a args)
          else ty
 stripDelay defs tm = tm
 
+data TypeMatch = Concrete | Poly | NoMatch
+
 mutual
-  mightMatchD : Defs -> NF vars -> NF [] -> Bool
+  mightMatchD : Defs -> NF vars -> NF [] -> TypeMatch
   mightMatchD defs l r = mightMatch defs (stripDelay defs l) (stripDelay defs r)
 
-  mightMatch : Defs -> NF vars -> NF [] -> Bool
+  mightMatchArg : Defs -> NF vars -> NF [] -> Bool
+  mightMatchArg defs l r
+      = case mightMatchD defs l r of
+             NoMatch => False
+             _ => True
+
+  mightMatch : Defs -> NF vars -> NF [] -> TypeMatch
   mightMatch defs target (NBind n (Pi _ _ _) sc)
       = mightMatchD defs target (sc (toClosure defaultOpts [] Erased))
   mightMatch defs (NTCon n t a args) (NTCon n' t' a' args')
-      = if n == n'
-           then and (map Delay
-                         (zipWith (mightMatchD defs) (map (evalClosure defs) args) 
-                                                     (map (evalClosure defs) args')))
-           else False
+      = if n == n' && and (map Delay
+                          (zipWith (mightMatchArg defs) (map (evalClosure defs) args) 
+                                                        (map (evalClosure defs) args')))
+           then Concrete
+           else NoMatch
   mightMatch defs (NDCon n t a args) (NDCon n' t' a' args')
-      = if t == t'
-           then and (map Delay
-                         (zipWith (mightMatchD defs) (map (evalClosure defs) args) 
-                                                     (map (evalClosure defs) args')))
-           else False
-  mightMatch defs (NPrimVal x) (NPrimVal y) = x == y
-  mightMatch defs NType NType = True
-  mightMatch defs (NApp _ _) _ = True
-  mightMatch defs NErased _ = True
-  mightMatch defs _ (NApp _ _) = True
-  mightMatch defs _ NErased = True
-  mightMatch _ _ _ = False
+      = if t == t' && and (map Delay
+                          (zipWith (mightMatchArg defs) (map (evalClosure defs) args) 
+                                                        (map (evalClosure defs) args')))
+           then Concrete
+           else NoMatch
+  mightMatch defs (NPrimVal x) (NPrimVal y) 
+      = if x == y then Concrete else NoMatch
+  mightMatch defs NType NType = Concrete
+  mightMatch defs (NApp _ _) _ = Poly
+  mightMatch defs NErased _ = Poly
+  mightMatch defs _ (NApp _ _) = Poly
+  mightMatch defs _ NErased = Poly
+  mightMatch _ _ _ = NoMatch
 
 -- Return true if the given name could return something of the given target type
-couldBeName : Defs -> NF vars -> Name -> Bool
+couldBeName : Defs -> NF vars -> Name -> TypeMatch
 couldBeName defs target n
     = case lookupTyExact n (gamma defs) of
-           Nothing => True -- could be a local name, don't rule it out
+           Nothing => Poly -- could be a local name, don't rule it out
            Just ty => mightMatchD defs target (nf defs [] ty)
 
-couldBeFn : Defs -> NF vars -> RawImp annot -> Bool
+couldBeFn : Defs -> NF vars -> RawImp annot -> TypeMatch
 couldBeFn defs ty (IVar _ n) = couldBeName defs ty n
-couldBeFn defs ty _ = True
+couldBeFn defs ty _ = Poly
 
-couldBe : Defs -> NF vars -> RawImp annot -> Bool
-couldBe {vars} defs ty@(NTCon n _ _ _) app = couldBeFn {vars} defs ty (getFn app)
-couldBe {vars} defs ty@(NPrimVal _) app = couldBeFn {vars} defs ty (getFn app)
-couldBe defs ty _ = True -- target is not a concrete type, so could be possible
+-- Returns Nothing if there's no possibility the expression's type matches
+-- the target type
+-- Just (True, app) if it's a match on concrete return type
+-- Just (False, app) if it might be a match due to being polymorphic
+couldBe : Defs -> NF vars -> RawImp annot -> Maybe (Bool, RawImp annot)
+couldBe {vars} defs ty@(NTCon n _ _ _) app 
+   = case couldBeFn {vars} defs ty (getFn app) of
+          Concrete => Just (True, app)
+          Poly => Just (False, app)
+          NoMatch => Nothing
+couldBe {vars} defs ty@(NPrimVal _) app 
+   = case couldBeFn {vars} defs ty (getFn app) of
+          Concrete => Just (True, app)
+          Poly => Just (False, app)
+          NoMatch => Nothing
+couldBe defs ty app = Just (False, app)
+
+overloadable : Defs -> RawImp annot -> Bool
+overloadable defs fn
+    = overloadableFn (getFn fn)
+  where
+    overloadableFn : RawImp annot -> Bool
+    overloadableFn (IVar _ n)
+        = case lookupGlobalExact n (gamma defs) of
+               Nothing => False
+               Just defs => Overloadable `elem` flags defs
+    overloadableFn _ = False
 
 export
 pruneByType : Defs -> NF vars -> List (RawImp annot) -> List (RawImp annot)
 pruneByType defs target alts
-    = let res = filter (couldBe defs target) alts in
+    = let matches = mapMaybe (couldBe defs target) alts
+          res = if or (map Delay (map fst matches))
+                -- if there's any concrete matches, drop the ones marked
+                -- as '%allow_overloads' from the possible set
+                   then filter (not . overloadable defs) (map snd matches)
+                   else map snd matches in
           if isNil res
              then alts -- if none of them work, better to show all the errors
              else res

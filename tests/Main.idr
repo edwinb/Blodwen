@@ -18,7 +18,7 @@ blodwenTests
        "test006", "test007", "test008", "test009", "test010",
        "test011", "test012", "test013", "test014", "test015",
        "test016", "test017", "test018", "test019", "test020",
-       "test021",
+       "test021", "test022",
        "chez001", "chez002", "chez003", "chez004", "chez005",
        "chez006",
        "chicken001", "chicken002",

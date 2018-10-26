@@ -2,7 +2,7 @@
 error1.blod:8:9--8:14:While processing right hand side of Main.wrong at error1.blod:8:1--9:1:
 Can't find an implementation for Show (Vect (S (S (S (S Z)))) Integer)
 1/1: Building error2 (error2.blod)
-Prelude.blod:873:18--873:23:While processing right hand side of showPrec at Prelude.blod:873:3--875:1:
+Prelude.blod:877:18--877:23:While processing right hand side of showPrec at Prelude.blod:877:3--879:1:
 Multiple solutions found in search. Possible correct results:
 	Show implementation at error2.blod:11:1--15:1
 	Show implementation at error2.blod:7:1--11:1

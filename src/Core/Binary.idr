@@ -81,6 +81,7 @@ processFlags n (TypeHint ty d :: fs) defs
   = processFlags n fs (addToTypeHints ty n d defs)
 processFlags n (Inline :: fs) defs = processFlags n fs defs
 processFlags n (Invertible :: fs) defs = processFlags n fs defs
+processFlags n (Overloadable :: fs) defs = processFlags n fs defs
 
 -- For every name (from 'toSave' in defs), add its definition and any
 -- information from its flags to the new set of Defs that we'll write out

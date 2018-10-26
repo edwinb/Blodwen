@@ -149,7 +149,11 @@ exactlyOne : {auto c : Ref Ctxt Defs} ->
              annot -> Env Term vars -> Term vars -> Maybe ClosedTerm -> 
              List (Core annot (Term vars)) ->
              Core annot (Term vars)
-exactlyOne loc env ty topty [elab] = elab
+exactlyOne loc env ty topty [elab] 
+    = catch elab
+         (\err => case err of
+                       CantSolveGoal _ _ => throw err
+                       _ => cantSolve loc env ty topty)
 exactlyOne loc env ty topty all
     = do elabs <- successful all
          case rights elabs of

@@ -36,13 +36,6 @@ Syntax: `%runElab <expr>`
 Run the elaborator reflection expression `<expr>`, which must be of type
 `Elab a`. Note that this is only minimally implemented at the moment.
 
-### %hide_export
-
-Syntax: `%hide <name>`
-
-Throughout the rest of the file *and any file which imports this module*, 
-consider the `<name>` to be private to its own namespace.
-
 ### %lazy
 
 Syntax: `%lazy <lazy_name> <delay_name> <force_name>`
@@ -65,18 +58,39 @@ Use the given name as the default rewriting function in the `rewrite` syntax.
 
 Syntax: `%integerLit <fromInteger_name>`
 
-Apply all integer literals to the given function name when elaborating.
+Apply the given function to all integer literals when elaborating.
 The default Prelude sets this to `fromInteger`.
 
 ### %stringList
 
-Apply all string literals to the given function name when elaborating.
+Syntax: `%stringLit <fromString_name>`
+
+Apply the given function to all string literals when elaborating.
 The default Prelude does not set this.
 
 ### %charLit
 
-Apply all character literals to the given function name when elaborating.
+Syntax: `%charLit <fromChar_name>`
+
+Apply the given function to all character literals when elaborating.
 The default Prelude does not set this.
+
+### %allow_overloads
+
+Syntax: `%allow_overloads <name>`
+
+This is primarily for compatibility with the Idris 1 notion of name overloading
+which allows in particular `(>>=)` and `fromInteger` to be overloaded in an
+ad-hoc fashion as well as via the `Monad` and `Num` interfaces respectively.
+
+It effect is: If `<name>` is one of the possibilities in an ambiguous
+application, and one of the other possibilities is immediately resolvable by
+return type, remove `<name>` from the list of possibilities.
+
+If this sounds quite hacky, it's because it is. It's probably better not to
+use it other than for the specific cases where we need it for compatibility.
+It might be removed, if we can find a better way to resolve ambiguities with
+`(>>=)` and `fromInteger` in particular!
 
 ## Implementation/debugging directives
 

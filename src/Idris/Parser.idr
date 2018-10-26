@@ -760,6 +760,9 @@ directive fname indents
   <|> do exactIdent "start"
          e <- expr EqOK fname indents
          pure (StartExpr e)
+  <|> do exactIdent "allow_overloads"
+         n <- name
+         pure (Overloadable n)
 
 fix : Rule Fixity
 fix

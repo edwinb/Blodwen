@@ -246,6 +246,7 @@ data DefFlag
     | GlobalHint Bool -- True == always search (not a default hint)
     | Inline
     | Invertible -- assume safe to cancel arguments in unification
+    | Overloadable -- allow ad-hoc overloads
 
 export
 Eq DefFlag where
@@ -253,6 +254,7 @@ Eq DefFlag where
     (==) (GlobalHint x) (GlobalHint y) = x == y
     (==) Inline Inline = True
     (==) Invertible Invertible = True
+    (==) Overloadable Overloadable = True
     (==) _ _ = False
 
 TTC annot DefFlag where
@@ -260,6 +262,7 @@ TTC annot DefFlag where
   toBuf b (GlobalHint t) = do tag 1; toBuf b t
   toBuf b Inline = tag 2
   toBuf b Invertible = tag 3
+  toBuf b Overloadable = tag 4
 
   fromBuf s b 
       = case !getTag of
@@ -267,6 +270,7 @@ TTC annot DefFlag where
              1 => do t <- fromBuf s b; pure (GlobalHint t)
              2 => pure Inline
              3 => pure Invertible
+             4 => pure Overloadable
              _ => corrupt "DefFlag"
 
 -- *everything* about a definition goes here, so that we can save out the
@@ -1299,6 +1303,19 @@ setFlag loc n fl
               Just def =>
                    do let flags' = fl :: filter (/= fl) (flags def)
                       addDef n (record { flags = flags' } def)
+
+export
+setNameFlag : {auto x : Ref Ctxt Defs} ->
+			    		annot -> Name -> DefFlag -> Core annot ()
+setNameFlag loc n fl
+    = do ctxt <- getCtxt
+         case lookupGlobalName n ctxt of
+              [] => throw (UndefinedName loc n)
+              [(n', def)] =>
+                   do let flags' = fl :: filter (/= fl) (flags def)
+                      addDef n' (record { flags = flags' } def)
+              res => throw (AmbiguousName loc (map fst res))
+
 
 export
 unsetFlag : {auto x : Ref Ctxt Defs} ->

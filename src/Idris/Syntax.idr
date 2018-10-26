@@ -210,6 +210,7 @@ mutual
        CGAction : String -> String -> Directive
        Names : Name -> List String -> Directive
        StartExpr : PTerm -> Directive
+       Overloadable : Name -> Directive
 
   public export
   data PDecl : Type where
