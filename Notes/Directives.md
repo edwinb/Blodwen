@@ -12,7 +12,7 @@ by "likelihood of being useful to most programmers".
 
 Syntax: `%name <name> <name_list>`
 
-For interactive editing purposes, gives `<name_list>` as the preferred names
+For interactive editing purposes, use `<name_list>` as the preferred names
 for variables with type `<name>`.
 
 ### %hide
@@ -68,7 +68,7 @@ Syntax: `%integerLit <fromInteger_name>`
 Apply all integer literals to the given function name when elaborating.
 The default Prelude sets this to `fromInteger`.
 
-### %stringList
+### %stringLit
 
 Apply all string literals to the given function name when elaborating.
 The default Prelude does not set this.
