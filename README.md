@@ -40,6 +40,7 @@ Summary of new features:
   default Idris 1 back end. (Also, optionally, Chicken Scheme and Racket can
   be used as targets).
 + Everything works faster :).
++ Self-hosted compiler allows compiling the compiler itself on any platform where Idris/Blodwen runs, e.g. compiling Blodwen directly in your browser.
 
 A significant change in the implementation is that there is an intermediate
 language `TTImp`, which is essentially a desugared Idris, and is cleanly
