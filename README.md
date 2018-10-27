@@ -13,6 +13,8 @@ Idris 1 programs to fail to type check, are:
 + Minor differences in the meaning of export modifiers `private`, `export`,
   and `public export`, which now refer to visibility of names from other
   *namespaces* rather than visibility from other *files*.
++ Module names must match the filename in which they are defined (unless
+  the module's name is "Main").
 + Anything which uses a `%language` pragma in Idris 1 is likely to be different.
   Notably, elaborator reflection will exist, but most likely in a slightly
   different form because the internal details of the elaborator are different.

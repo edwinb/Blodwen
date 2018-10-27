@@ -417,6 +417,8 @@ interface Functor f => Applicative f where
   pure : a -> f a
   (<*>) : f (a -> b) -> f a -> f b
 
+%allow_overloads pure
+
 public export
 interface Applicative f => Alternative f where
     empty : f a

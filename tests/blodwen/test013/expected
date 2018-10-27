@@ -3,13 +3,11 @@
 Welcome to Blodwen. Good luck.
 Main>    x : Nat
    y : Nat
-   x : Nat
    res : Nat
 -------------------------------------
 foo : IsSuc (S (S x))
 Main>    y : Nat
    x : Nat
-   y : Nat
    res : Nat
    ys : Vect (S Z) Nat
 -------------------------------------

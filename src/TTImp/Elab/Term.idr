@@ -692,6 +692,8 @@ mutual
                                        tytm expected
                   else throw (BadPattern loc n)
 
+  -- TODO: There's a lot of this, the components probably belongs in 
+  -- their own module
   checkCase : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
               {auto e : Ref EST (EState vars)} ->
               {auto i : Ref ImpST (ImpState annot)} ->
@@ -763,6 +765,9 @@ mutual
            -- environment, taken from the elaboration state, also removing
            -- things we can't match on and nothing depends on
            let (svars ** smaller) = shrinkEnv defs (subEnv est) [] [] env
+           -- if the scrutinee is ones of the arguments in 'env' we should
+           -- split on that, rather than adding it as a new argument
+           let splitOn = findScrutinee env smaller scr
            
            caseretty <- case expected of
                              FnType [] ty => pure ty
@@ -770,21 +775,25 @@ mutual
                                 do t <- addHole loc env TType "ty"
                                    log 10 $ "Invented hole for case type " ++ show t
                                    pure (mkConstantApp t env)
+
            let casefnty = abstractOver env $
-                            absOthers {done = []} env smaller 
-                              (Bind scrn (Pi caseRig Explicit scrty) 
+                            absOthers {done = []} (allow splitOn env) smaller 
+                              (maybe (Bind scrn (Pi caseRig Explicit scrty) 
                                          (weaken caseretty))
+                                     (const caseretty) splitOn)
 
            log 10 $ "Env: " ++ show (length vars) ++ " " ++ show vars
            log 10 $ "Outer env: " ++ show (outerEnv est)
            log 10 $ "Shrunk env: " ++ show svars
-           log 2 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
+           log 2 $ "Case function type: " ++ show casen ++ " : " ++ 
+                    show (normalise defs [] casefnty)
 
            addDef casen (newDef [] casefnty Private None)
            setFlag loc casen Inline
 
-           let alts' = map (updateClause casen env smaller) alts
+           let alts' = map (updateClause casen splitOn env smaller) alts
            log 2 $ "Generated alts: " ++ show alts'
+           log 2 $ "From: " ++ show alts
            log 5 $ "Nested: " ++ show (mkConstantAppFull casen pre_env)
 
            let nest' = record { names $= ((casen, (casen, 
@@ -792,9 +801,26 @@ mutual
                               nest
            process c u i m True pre_env nest' (IDef loc casen alts')
 
-           pure (App (applyToOthers (mkConstantAppFull casen env) env smaller) 
-                     scrtm, caseretty)
+           let applyEnv = applyToOthers (mkConstantAppFull casen env) env smaller
+           pure (maybe (App applyEnv scrtm) (const applyEnv) splitOn, 
+                 caseretty)
     where
+      findScrutinee : Env Term vs -> SubVars vs' vs ->
+                      RawImp annot -> Maybe (x ** Elem x vs)
+      findScrutinee {vs = n' :: _} (b :: bs) (DropCons p) (IVar loc' n)
+          = if n' == n && notLet b
+               then Just (n' ** Here)
+               else do (_ ** p) <- findScrutinee bs p (IVar loc' n)
+                       Just (_ ** There p)
+        where
+          notLet : Binder t -> Bool
+          notLet (Let _ _ _) = False
+          notLet _ = True
+      findScrutinee (b :: bs) (KeepCons p) (IVar loc' n)
+          = do (_ ** p) <- findScrutinee bs p (IVar loc' n)
+               Just (_ ** There p)
+      findScrutinee _ _ _ = Nothing
+
       dropHere : List (x ** Elem x (v :: vs)) -> List (x ** Elem x vs)
       dropHere [] = []
       dropHere ((_ ** Here) :: vs) = dropHere vs
@@ -916,11 +942,22 @@ mutual
       toRig0 Here (b :: bs) = setMultiplicity b Rig0 :: bs
       toRig0 (There p) (b :: bs) = b :: toRig0 p bs
 
+      toRig1 : Elem x vs -> Env Term vs -> Env Term vs
+      toRig1 Here (b :: bs) 
+          = if multiplicity b == Rig0
+               then setMultiplicity b Rig1 :: bs
+               else b :: bs
+      toRig1 (There p) (b :: bs) = b :: toRig1 p bs
+
       -- If the name is used elsewhere, update its multiplicity so it's
       -- not required to be used in the case block
       updateMults : List (x ** Elem x vs) -> Env Term vs -> Env Term vs
       updateMults [] env = env
       updateMults ((_ ** p) :: us) env = updateMults us (toRig0 p env)
+
+      allow : Maybe (x ** Elem x vs) -> Env Term vs -> Env Term vs
+      allow Nothing env = env
+      allow (Just (_ ** p)) env = toRig1 p env
 
       setToZero : List Name -> Env Term vs -> Env Term vs
       setToZero ns [] = []
@@ -956,20 +993,26 @@ mutual
       canBindName _ vs = Nothing
 
       addEnv : Env Term vs -> SubVars vs' vs -> List Name -> 
-               (List (RawImp annot), List Name)
+               (List (Maybe (RawImp annot)), List Name)
       addEnv [] sub used = ([], used)
       -- Skip the let bindings, they were let bound in the case function type
-      addEnv (Let _ _ _ :: bs) SubRefl used = addEnv bs SubRefl used
-      addEnv (Let _ _ _ :: bs) (DropCons p) used = addEnv bs p used
+      addEnv (Let _ _ _ :: bs) SubRefl used 
+          = let (rest, used') = addEnv bs SubRefl used in
+                (Nothing :: rest, used')
+      addEnv (Let _ _ _ :: bs) (DropCons p) used 
+          = let (rest, used') = addEnv bs p used in
+                (Nothing :: rest, used')
       addEnv {vs = v :: vs} (b :: bs) SubRefl used
-          = addEnv bs SubRefl used
+          = let (rest, used') = addEnv bs SubRefl used in
+                (Nothing :: rest, used')
       addEnv (b :: bs) (KeepCons p) used
-          = addEnv bs p used
+          = let (rest, used') = addEnv bs p used in
+                (Nothing :: rest, used')
       addEnv {vs = v :: vs} (b :: bs) (DropCons p) used
           = let (rest, used') = addEnv bs p used in
                 case canBindName v used' of
-                     Just n => (IAs loc n (Implicit loc) :: rest, n :: used')
-                     _ => (Implicit loc :: rest, used')
+                     Just n => (Just (IAs loc n (Implicit loc)) :: rest, n :: used')
+                     _ => (Just (Implicit loc) :: rest, used')
 
       -- Names used in the pattern we're matching on, so don't bind them
       -- in the generated case block
@@ -979,14 +1022,36 @@ mutual
       usedIn (IAs _ n a) = n :: usedIn a
       usedIn _ = []
 
-      updateClause : Name -> Env Term vars -> SubVars vs' vars ->
+      -- Replace a variable in the argument list; if the reference is to
+      -- a variable kept in the outer environment (therefore not an argument
+      -- in the list) don't consume it
+      replace : Elem x vs -> RawImp annot -> List (Maybe (RawImp annot)) ->
+                List (RawImp annot)
+      replace Here lhs (_ :: xs) = lhs :: mapMaybe id xs
+      replace (There p) lhs (Nothing :: xs) 
+          = replace p lhs xs
+      replace (There p) lhs (Just x :: xs) 
+          = x :: replace p lhs xs
+      replace _ _ xs = mapMaybe id xs
+
+      mkSplit : Maybe (x ** Elem x vs) -> 
+                RawImp annot -> List (Maybe (RawImp annot)) -> 
+                List (RawImp annot)
+      mkSplit Nothing lhs args = reverse (lhs :: mapMaybe id args)
+      mkSplit (Just (_ ** prf)) lhs args
+          = reverse (replace prf lhs args)
+
+      updateClause : Name -> Maybe (x ** Elem x vars) ->
+                     Env Term vars -> SubVars vs' vars ->
                      ImpClause annot -> ImpClause annot
-      updateClause casen env sub (PatClause loc' lhs rhs)
-          = let args = fst (addEnv env sub (usedIn lhs)) in
-                PatClause loc' (apply (IVar loc' casen) (reverse (lhs :: args))) rhs
-      updateClause casen env sub (ImpossibleClause loc' lhs)
-          = let args = fst (addEnv env sub (usedIn lhs)) in
-                ImpossibleClause loc' (apply (IVar loc' casen) (reverse (lhs :: args)))
+      updateClause casen splitOn env sub (PatClause loc' lhs rhs)
+          = let args = fst (addEnv env sub (usedIn lhs))
+                args' = mkSplit splitOn lhs args in
+                PatClause loc' (apply (IVar loc' casen) args') rhs
+      updateClause casen splitOn env sub (ImpossibleClause loc' lhs)
+          = let args = fst (addEnv env sub (usedIn lhs))
+                args' = mkSplit splitOn lhs args in
+                ImpossibleClause loc' (apply (IVar loc' casen) args')
   
   checkLocal : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
                {auto e : Ref EST (EState vars)} ->
