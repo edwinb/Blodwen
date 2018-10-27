@@ -149,7 +149,15 @@ mutual
   toPTerm p (ICase _ sc scty alts)
       = do sc' <- toPTerm startPrec sc
            alts' <- traverse toPClause alts
-           bracket p startPrec (PCase emptyFC sc' alts')
+           bracket p startPrec (mkIf (PCase emptyFC sc' alts'))
+    where
+      mkIf : PTerm -> PTerm
+      mkIf tm@(PCase loc sc [MkPatClause _ (PRef _ tval) t [], 
+                             MkPatClause _ (PRef _ fval) f []])
+         = if dropNS tval == UN "True" && dropNS fval == UN "False"
+              then PIfThenElse loc sc t f
+              else tm
+      mkIf tm = tm
   toPTerm p (ILocal _ ds sc)
       = do ds' <- traverse toPDecl ds
            sc' <- toPTerm startPrec sc

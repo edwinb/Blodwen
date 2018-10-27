@@ -350,6 +350,8 @@ mutual
         = "{" ++ showCount rig ++ "_ : " ++ show arg ++ "} -> " ++ show ret
     show (PPi _ rig Implicit (Just n) arg ret)
         = "{" ++ showCount rig ++ show n ++ " : " ++ show arg ++ "} -> " ++ show ret
+    show (PPi _ RigW AutoImplicit Nothing arg ret)
+        = show arg ++ " => " ++ show ret
     show (PPi _ rig AutoImplicit Nothing arg ret) -- shouldn't happen
         = "{auto " ++ showCount rig ++ "_ : " ++ show arg ++ "} -> " ++ show ret
     show (PPi _ rig AutoImplicit (Just n) arg ret)
