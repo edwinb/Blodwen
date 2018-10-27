@@ -678,7 +678,7 @@ mutual
           = do checkVisibleNS n
                let nt : NameType 
                         = case def of
-                             PMDef _ _ _ _ => Func
+                             PMDef _ _ _ _ _ => Func
                              DCon tag arity _ => DataCon tag arity
                              TCon tag arity _ _ _ => TyCon tag arity
                              _ => Func
@@ -780,7 +780,7 @@ mutual
            log 10 $ "Shrunk env: " ++ show svars
            log 2 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
-           addDef casen (newDef vars casefnty Private None)
+           addDef casen (newDef [] casefnty Private None)
            setFlag loc casen Inline
 
            let alts' = map (updateClause casen env smaller) alts

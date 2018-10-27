@@ -6,6 +6,7 @@ import Compiler.Scheme.Racket
 import Compiler.Common
 
 import Core.AutoSearch
+import Core.CaseTree
 import Core.CompileExpr
 import Core.Context
 import Core.InitPrimitives
@@ -105,6 +106,37 @@ displayType gam (n, def)
                 pure (show n ++ " : " ++ show tm))
             (\num => showHole gam [] n num (type def))
             (isHole def)
+
+getEnvTerm : List Name -> Env Term vars -> Term vars ->
+             (vars' ** (Env Term vars', Term vars'))
+getEnvTerm (n :: ns) env (Bind x b sc)
+    = if n == x
+         then getEnvTerm ns (b :: env) sc
+         else (_ ** (env, Bind x b sc))
+getEnvTerm _ env tm = (_ ** (env, tm))
+
+displayClause : {auto c : Ref Ctxt Defs} ->
+                {auto s : Ref Syn SyntaxInfo} ->
+                Defs -> (List Name, ClosedTerm, ClosedTerm) -> 
+                Core FC String
+displayClause gam (vs, lhs, rhs)
+    = do let (_ ** (env, lhsenv)) = getEnvTerm vs [] lhs
+         lhstm <- resugar env (normaliseHoles gam env lhsenv)
+         let (_ ** (env, rhsenv)) = getEnvTerm vs [] rhs
+         rhstm <- resugar env (normaliseHoles gam env rhsenv)
+         pure (show lhstm ++ " = " ++ show rhstm)
+
+displayPats : {auto c : Ref Ctxt Defs} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              Defs -> (Name, GlobalDef) -> 
+              Core FC String
+displayPats gam (n, def)
+    = case definition def of
+           PMDef _ _ _ _ pats
+               => do ty <- displayType gam (n, def)
+                     ps <- traverse (displayClause gam) pats
+                     pure (ty ++ "\n" ++ showSep "\n" ps)
+           _ => pure (show n ++ " is not a pattern matching definition")
 
 setOpt : {auto c : Ref Ctxt Defs} ->
          {auto o : Ref ROpts REPLOpts} ->
@@ -305,6 +337,13 @@ process (Check itm)
          ity <- resugar [] (normaliseHoles gam [] ty)
          coreLift (putStrLn (show itm ++ " : " ++ show ity))
          pure True
+process (PrintDef fn)
+    = do defs <- get Ctxt
+         case lookupGlobalName fn (gamma defs) of
+              [] => throw (UndefinedName replFC fn)
+              ts => do defs <- traverse (displayPats defs) ts
+                       printResult (showSep "\n" defs)
+                       pure True
 process Reload
     = do opts <- get ROpts
          case mainfile opts of

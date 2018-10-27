@@ -134,6 +134,12 @@ data Def : Type where
      PMDef : (ishole : Bool) -> (args : List Name) -> 
              (treeCT : CaseTree args) -> -- Compile time case tree
              (treeRT : CaseTree args) -> -- Run time case tree (0 multiplicities erased)
+             (pats : List (List Name, ClosedTerm, ClosedTerm)) ->
+                      -- original checked patterns (lhs/rhs) with the
+                      -- names in the environment
+                      -- Patterns are used for display purposes only, and will
+                      -- only be there for definitions arising from the
+                      -- TTImp elaborator
              Def
      ExternDef : (arity : Nat) -> Def
      Builtin : PrimFn arity -> Def
@@ -171,7 +177,7 @@ data Def : Type where
 export
 Show Def where
   show None = "No definition"
-  show (PMDef hole args tree _) 
+  show (PMDef hole args tree _ _) 
       = showHole hole ++"; " ++ show args ++ ";" ++ show tree
     where
       showHole : Bool -> String
@@ -199,8 +205,9 @@ Show Def where
 
 TTC annot Def where
   toBuf b None = tag 0
-  toBuf b (PMDef ishole args ct rt) 
+  toBuf b (PMDef ishole args ct rt pats) 
       = do tag 1; toBuf b ishole; toBuf b args; toBuf b ct; toBuf b rt
+           toBuf b pats
   toBuf b (ExternDef arity)
       = do tag 2; toBuf b arity;
   toBuf b (Builtin _)
@@ -224,7 +231,8 @@ TTC annot Def where
       = case !getTag of
              0 => pure None
              1 => do w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
-                     pure (PMDef w x y z)
+                     p <- fromBuf s b
+                     pure (PMDef w x y z p)
              2 => do a <- fromBuf s b
                      pure (ExternDef a)
              3 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
@@ -311,7 +319,7 @@ TTC annot GlobalDef where
 
 getRefs : Def -> List Name
 getRefs None = []
-getRefs (PMDef ishole args sc _) = getRefs sc
+getRefs (PMDef ishole args sc _ _) = getRefs sc
 getRefs (ExternDef _) = []
 getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
@@ -1065,12 +1073,13 @@ checkNameVisibility loc n vis tm
 -- Add a function definition, as long as the type exists already
 export
 addFnDef : {auto x : Ref Ctxt Defs} ->
-					 annot -> Name -> CaseTree args -> CaseTree args -> Core annot ()
-addFnDef loc n treeCT treeRT
+					 annot -> Name -> CaseTree args -> CaseTree args -> 
+           List (List Name, ClosedTerm, ClosedTerm) -> Core annot ()
+addFnDef loc n treeCT treeRT pats
     = do ctxt <- get Ctxt
          case lookupGlobalExact n (gamma ctxt) of
               Just def => 
-                 let def' = record { definition = PMDef False _ treeCT treeRT,
+                 let def' = record { definition = PMDef False _ treeCT treeRT pats,
                                      refersTo = getRefs treeCT } def in
                      addDef n def'
               Nothing => throw (NoDeclaration loc n)

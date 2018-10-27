@@ -91,4 +91,6 @@ mutual
 export
 unelab : {auto c : Ref Ctxt Defs} ->
          annot -> Env Term vars -> Term vars -> Core annot (RawImp annot)
-unelab loc env tm = pure $ fst !(unelabTy loc env tm)
+unelab loc env tm
+    = do tm' <- unelabTy loc env tm
+         pure $ fst tm'

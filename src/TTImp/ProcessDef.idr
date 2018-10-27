@@ -235,6 +235,10 @@ nameListEq (x :: xs) (y :: ys) with (nameEq x y)
   nameListEq (x :: xs) (y :: ys) | Nothing = Nothing
 nameListEq _ _ = Nothing
 
+toPats : (Clause, Clause) -> (List Name, ClosedTerm, ClosedTerm)
+toPats (MkClause {vars} env lhs rhs, _) 
+    = (vars, bindEnv env lhs, bindEnv env rhs)
+
 export
 processDef : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -262,13 +266,14 @@ processDef elab incase env nest loc n_in cs_raw
                            
                            let Just Refl = nameListEq cargs rargs
                                    | Nothing => throw (InternalError "WAT")
-                           addFnDef loc n tree_comp tree_rt
+                           addFnDef loc n tree_comp tree_rt 
+                                    (mapMaybe (map toPats) cs)
                            
                            addToSave n
                            gam <- getCtxt
                            log 3 $
                               case lookupDefExact n gam of
-                                   Just (PMDef _ args tc tr) =>
+                                   Just (PMDef _ args tc tr _) =>
                                       "Case tree for " ++ show n ++ "\n\t" ++
                                       show args ++ " " ++ show tc ++ "\n" ++
                                       "Run time tree\n" ++

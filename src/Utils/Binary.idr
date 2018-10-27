@@ -360,6 +360,23 @@ TTC annot a => TTC annot (Maybe a) where
             _ => corrupt "Maybe"
 
 export
+(TTC annot a, TTC annot b) => TTC annot (Either a b) where
+  toBuf b (Left val)
+     = do tag 0
+          toBuf b val
+  toBuf b (Right val)
+     = do tag 1
+          toBuf b val
+
+  fromBuf s b
+     = case !getTag of
+            0 => do val <- fromBuf s b
+                    pure (Left val)
+            1 => do val <- fromBuf s b
+                    pure (Right val)
+            _ => corrupt "Either"
+
+export
 TTC annot a => TTC annot (List a) where
   toBuf b xs
       = do toBuf b (cast {to=Int} (length xs))

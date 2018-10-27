@@ -84,7 +84,7 @@ parameters (defs : Defs, opts : EvalOpts)
                    
     evalDef : Env Term free -> LocalEnv free vars -> Stack free ->
               NameType -> Name -> Def -> NF free
-    evalDef env loc stk nt fn (PMDef h args tree _)
+    evalDef env loc stk nt fn (PMDef h args tree _ _)
         = if h || not (holesOnly opts) then
              case extendFromStack args loc stk of
                   Nothing => NApp (NRef nt fn) stk

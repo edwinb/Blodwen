@@ -1109,6 +1109,9 @@ command
     = do symbol ":"; replCmd ["t", "type"]
          tm <- expr EqOK "(interactive)" init
          pure (Check tm)
+  <|> do symbol ":"; replCmd ["printdef"]
+         n <- name
+         pure (PrintDef n)
   <|> do symbol ":"; replCmd ["s", "search"]
          n <- name
          pure (ProofSearch n)

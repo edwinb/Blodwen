@@ -121,7 +121,7 @@ mutual
                 Nothing => pure False
                 Just elab =>
                      do tm <- elab
-                        updateDef n (const (Just (PMDef True [] (STerm tm) (STerm tm))))
+                        updateDef n (const (Just (PMDef True [] (STerm tm) (STerm tm) [])))
                         log 5 $ "Resolved delayed hole " ++ show n ++ " = " ++ show tm
                         removeHoleName n
                         pure True

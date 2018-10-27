@@ -286,6 +286,7 @@ public export
 data REPLCmd : Type where
      Eval : PTerm -> REPLCmd
      Check : PTerm -> REPLCmd
+     PrintDef : Name -> REPLCmd
      Reload : REPLCmd
      Load : String -> REPLCmd
      Edit : REPLCmd

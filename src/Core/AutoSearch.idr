@@ -447,7 +447,7 @@ searchHole loc defaults depth trying defining n topty gam glob
          log 5 $ "Determining arguments okay"
          soln <- searchType loc defaults depth (searchty :: trying) [] defining topty searchty
          log 5 $ "Solution: " ++ show n ++ " = " ++ show (normalise gam [] soln)
-         addDef n (record { definition = PMDef True [] (STerm soln) (STerm soln) } glob)
+         addDef n (record { definition = PMDef True [] (STerm soln) (STerm soln) [] } glob)
          removeHoleName n
          pure soln
 

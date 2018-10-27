@@ -35,7 +35,15 @@ Hashable a => Hashable (List a) where
 
 export
 Hashable String where
-  hashWithSalt h str = hashWithSalt h (unpack str)
+  hashWithSalt h str = hashChars h 0 (cast (length str)) str
+    where
+      hashChars : Int -> Int -> Int -> String -> Int
+      hashChars h p len str
+          = assert_total $
+              if p == len 
+                 then h
+                 else hashChars (h * 33 + cast (strIndex str p)) 
+                                (p + 1) len str
 
 export
 Hashable Name where
