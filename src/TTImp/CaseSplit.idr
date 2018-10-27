@@ -269,7 +269,7 @@ mkCase {c} fn orig lhs_raw
                                         PATTERN InLHS lhs_raw
                put Ctxt defs -- reset the context, we don't want any updates
 
-               lhs' <- unelab (getAnnot lhs_raw) [] lhs
+               lhs' <- unelabNoSugar (getAnnot lhs_raw) [] lhs
                pure (Valid lhs' (getUpdates defs orig lhs')))
            (\err => case err of
                          WhenUnifying _ env l r err
@@ -305,7 +305,7 @@ getSplitsLHS loc envlen lhs_in n
          OK (fn, tyn, cons) <- findCons n lhs
             | SplitFail err => pure (SplitFail err)
         
-         rawlhs <- unelab loc [] lhs
+         rawlhs <- unelabNoSugar loc [] lhs
          trycases <- traverse (\c => newLHS loc envlen usedns n c rawlhs) cons
          cases <- traverse (mkCase fn rawlhs) trycases
 
