@@ -73,6 +73,16 @@ play. Good luck :).
 
 (Why "Blodwen"? The answer is here: http://ivortheengine.wikia.com/wiki/Idris)
 
+Docker
+======
+
+You can build and run a Docker image with Blodwen using the following shell commands:
+```bash
+docker build -t blodwen .
+docker run -it blodwen
+```
+
+
 Things still missing
 ====================
 
