@@ -3,8 +3,7 @@
 Welcome to Blodwen. Good luck.
 Main>  0 m : Type -> Type
  0 d : Door Closed
- 0 m : Type -> Type
- 1 d : Door Open
+ 1 d' : Door Open
 -------------------------------------
 foo : Use Many m ()
 Main> Bye for now!

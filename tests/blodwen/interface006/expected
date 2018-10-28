@@ -6,13 +6,7 @@ IFace> False
 IFace> Bye for now!
 2/2: Building IFace1 (IFace1.blod)
 Welcome to Blodwen. Good luck.
-IFace1>  0 a : Type
- 0 p : a -> Type
-   l' : a
-   r' : p l'
-   l : a
-   r : p l
-   pi : (DecEq a, Eq (p t))
+IFace1>    con : (DecEq a, Eq (p t))
  0 a : Type
  0 p : a -> Type
    l : a

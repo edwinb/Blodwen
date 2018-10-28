@@ -5,7 +5,7 @@ Main>  0 b : Type
  0 a : Type
  0 m : Type -> Type
    x : m a
-   pi : Monad m
+   con : Monad m
 -------------------------------------
 foo : (a' -> m b) -> m b
 Main> Bye for now!

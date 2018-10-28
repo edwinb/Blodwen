@@ -37,7 +37,7 @@ deleteDoor : (1 d : Door Closed) -> Any m ()
 doorProg : Any m ()
 doorProg
     = do d <- newDoor
-         Right d <- openDoor d
+         Right d' <- openDoor d
             | Left d => deleteDoor d
          ?foo
 

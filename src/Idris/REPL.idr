@@ -73,18 +73,20 @@ tidy : Name -> String
 tidy (MN n _) = n
 tidy n = show n
 
-showHole : {auto c : Ref Ctxt Defs} ->
-           {auto s : Ref Syn SyntaxInfo} ->
-           Defs -> Env Term vars -> Name -> Nat -> Term vars -> Core FC String
-showHole gam env fn (S args) (Bind x (Let c val ty) sc)
-    = showHole gam env fn args (subst val sc)
-showHole gam env fn (S args) (Bind x b sc)
+showEnv : {auto c : Ref Ctxt Defs} ->
+          {auto s : Ref Syn SyntaxInfo} ->
+          Defs -> Env Term vars -> Name -> Nat -> Term vars -> 
+          Core FC (List (Name, String), String)
+showEnv gam env fn (S args) (Bind x (Let c val ty) sc)
+    = showEnv gam env fn args (subst val sc)
+showEnv gam env fn (S args) (Bind x b sc)
     = do ity <- resugar env (normaliseHoles gam env (binderType b))
          let pre = if showName x
                       then showCount (multiplicity b) ++ 
                            impBracket (implicitBind b) (tidy x ++ " : " ++ show ity) ++ "\n"
                       else ""
-         pure $ pre ++ !(showHole gam (b :: env) fn args sc)
+         (envstr, ret) <- showEnv gam (b :: env) fn args sc
+         pure ((x, pre) :: envstr, ret)
   where
     implicitBind : Binder (Term vars) -> Bool
     implicitBind (Pi _ Explicit _) = False
@@ -92,10 +94,29 @@ showHole gam env fn (S args) (Bind x b sc)
     implicitBind (Lam _ Explicit _) = False
     implicitBind (Lam _ _ _) = True
     implicitBind _ = False
-showHole gam env fn args ty
+showEnv gam env fn args ty
     = do ity <- resugar env (normaliseHoles gam env ty)
-         pure $ "-------------------------------------\n" ++
-                nameRoot fn ++ " : " ++ show ity
+         pure ([], "-------------------------------------\n" ++
+                    nameRoot fn ++ " : " ++ show ity)
+
+showHole : {auto c : Ref Ctxt Defs} ->
+           {auto s : Ref Syn SyntaxInfo} ->
+           Defs -> Env Term vars -> Name -> Nat -> Term vars -> 
+           Core FC String
+showHole gam env fn args ty
+    = do (envs, ret) <- showEnv gam env fn args ty
+         pp <- getPPrint
+         let envs' = if showImplicits pp 
+                        then envs
+                        else dropShadows envs
+         pure (concat (map snd envs') ++ ret)
+  where
+    dropShadows : List (Name, a) -> List (Name, a)
+    dropShadows [] = []
+    dropShadows ((n, ty) :: ns)
+        = if n `elem` map fst ns
+             then dropShadows ns
+             else (n, ty) :: dropShadows ns
 
 displayType : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->

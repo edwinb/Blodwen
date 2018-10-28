@@ -275,7 +275,10 @@ mutual
            = Bind n (Let c a ty) (useVars (map weaken as) sc)
       useVars _ sc = sc -- Can't happen?
   checkImp rigc process elabinfo env nest (IPi loc rigp plicity Nothing ty retTy) expected 
-      = do n <- genVarName "pi"
+      = do n <- case plicity of
+                     Explicit => genVarName "arg"
+                     Implicit => genVarName "implicit"
+                     AutoImplicit => genVarName "con"
            checkPi rigc process elabinfo loc env nest rigp plicity (dropNS n) ty retTy expected
   checkImp rigc process elabinfo env nest (IPi loc rigp plicity (Just n) ty retTy) expected 
       = checkPi rigc process elabinfo loc env nest rigp plicity n ty retTy expected
