@@ -1,0 +1,5 @@
+1/1: Building iedit (iedit.blod)
+Welcome to Blodwen. Good luck.
+Main>     zipHere [] ys = []
+    zipHere (x :: xs) (y :: ys) = (x, y) :: zipHere xs ys
+Main> Bye for now!

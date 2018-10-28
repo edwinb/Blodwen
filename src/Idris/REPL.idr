@@ -281,13 +281,18 @@ processEdit (ExprSearch line name hints all)
     dropLams _ env tm = (_ ** (env, tm))
 processEdit (GenerateDef line name)
     = do gam <- get Ctxt
-         case lookupDefName name (gamma gam) of
-              [(n, None)] => 
-                  do Just (fc, cs) <- makeDef (\p, n => onLine line p) n
-                         | Nothing => processEdit (AddClause line name)
-                     ls <- traverse (printClause (cast (snd (startPos fc)))) cs
-                     printResult $ showSep "\n" ls
-              _ => printError "Already defined"
+         Just (_, n', _, _) <- findTyDeclAt (\p, n => onLine line p)
+             | Nothing => printError ("Can't find declaration for " ++ show name ++ " on line " ++ show line)
+         case lookupDefExact n' (gamma gam) of
+              Just None =>
+                  catch 
+                    (do Just (fc, cs) <- makeDef (\p, n => onLine line p) n'
+                           | Nothing => processEdit (AddClause line name)
+                        ls <- traverse (printClause (cast (snd (startPos fc)))) cs
+                        printResult $ showSep "\n" ls)
+                    (\err => printError $ "Can't find a definition for " ++ show n')
+              Just _ => printError "Already defined"
+              Nothing => printError $ "Can't find declaration for " ++ show name
 processEdit (MakeLemma line name)
     = do gam <- get Ctxt
          case lookupDefTyName name (gamma gam) of

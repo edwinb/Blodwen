@@ -18,6 +18,8 @@ import TTImp.Reflect
 import TTImp.TTImp
 import TTImp.Utils
 
+%default covering
+
 mutual
   fnGenName : Bool -> GenName -> String
   fnGenName lhs (Nested _ n) = fnName lhs n
@@ -55,12 +57,12 @@ expandClause loc elab n c
          let MkClause {vars} env lhs rhs = clause
          log 5 $ show vars ++ " " ++ show lhs ++ " = " ++ show rhs
          let Ref Func n = getFn rhs
-            | _ => throw (InternalError "No searchable hole on RHS")
+            | _ => throw (GenericMsg loc "No searchable hole on RHS")
          defs <- get Ctxt
          let Just (Hole locs _ _) = lookupDefExact n (gamma defs)
-            | _ => throw (InternalError "No searchable hole on RHS")
+            | _ => throw (GenericMsg loc "No searchable hole on RHS")
          (rhs' :: _) <- exprSearch loc n []
-            | _ => throw (InternalError "No result found for search on RHS")
+            | _ => throw (GenericMsg loc "No result found for search on RHS")
          defs <- get Ctxt
          let rhsnf = normaliseHoles defs [] rhs'
          let (_ ** (env, rhsenv)) = dropLams locs [] rhsnf
@@ -188,9 +190,13 @@ makeDef p n
          meta <- get Meta
          ust <- get UST
          let argns = getEnvArgNames defs envlen (nf defs [] ty)
+         -- Need to add implicit patterns for the outer environment.
+         -- We won't try splitting on these
+         let pre_env = replicate envlen (Implicit loc) 
+
          let rhshole = uniqueName defs [] (fnName False n ++ "_rhs")
          let initcs = PatClause loc 
-                            (apply (IVar loc n) (map (IBindVar loc) argns))
+                            (apply (IVar loc n) (pre_env ++ (map (IBindVar loc) argns)))
                             (IHole loc rhshole)
          i <- newRef ImpST (initImpState {annot})
          cs' <- mkSplits loc (\ c, u, i, m => processDecl {c} {u} {i} {m})

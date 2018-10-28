@@ -73,7 +73,8 @@ processType {vars} elab env nest vis fnopts (MkImpTy loc n_in ty_raw)
          addDef n (newDef vars (abstractFullEnvType env ty) vis def)
 
          -- Add to the interactive editing metadata
-         addTyDecl loc n env ty
+         addTyDecl loc n env ty -- for definition generation
+         addNameType loc n env ty -- for looking up types
 
          when (vis /= Private) $
               do addHash n
