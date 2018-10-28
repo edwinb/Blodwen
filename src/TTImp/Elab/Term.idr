@@ -785,8 +785,7 @@ mutual
            log 10 $ "Env: " ++ show (length vars) ++ " " ++ show vars
            log 10 $ "Outer env: " ++ show (outerEnv est)
            log 10 $ "Shrunk env: " ++ show svars
-           log 2 $ "Case function type: " ++ show casen ++ " : " ++ 
-                    show (normalise defs [] casefnty)
+           log 2 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
 
            addDef casen (newDef [] casefnty Private None)
            setFlag loc casen Inline

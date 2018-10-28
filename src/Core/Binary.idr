@@ -3,6 +3,7 @@ module Core.Binary
 import Core.Context
 import Core.Core
 import Core.Hash
+import Core.Normalise
 import Core.Options
 import Core.TT
 import Core.TTC
@@ -92,7 +93,8 @@ mkSaveDefs (n :: ns) acc defs
     = case lookupGlobalExact n (gamma defs) of
            Nothing => mkSaveDefs ns acc defs -- 'n' really should exist though!
            Just gdef =>
-                let gam' = addCtxt n gdef (gamma acc) 
+                let gdef' = record { type $= normaliseHoles defs [] } gdef
+                    gam' = addCtxt n gdef' (gamma acc) 
                     defs' = processFlags n (flags gdef) defs in
                     mkSaveDefs ns (record { gamma = gam' } acc) defs'
 

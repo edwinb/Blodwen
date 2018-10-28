@@ -60,9 +60,9 @@ showCount Rig0 = " 0 "
 showCount Rig1 = " 1 "
 showCount RigW = "   "
 
-impBracket : PiInfo -> String -> String
-impBracket Explicit str = str
-impBracket _ str = "{" ++ str ++ "}"
+impBracket : Bool -> String -> String
+impBracket False str = str
+impBracket True str = "{" ++ str ++ "}"
 
 showName : Name -> Bool
 showName (UN "_") = False

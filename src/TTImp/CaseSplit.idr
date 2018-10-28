@@ -255,19 +255,21 @@ getUpdates defs orig new
     = updates $ execState (findUpdates defs orig new) (MkUpdates [] [])
 
 mkCase : {auto c : Ref Ctxt Defs} ->
+         {auto u : Ref UST (UState annot)} ->
          (Reflect annot, Reify annot) =>
          Name -> RawImp annot -> RawImp annot -> Core annot (ClauseUpdate annot)
-mkCase {c} fn orig lhs_raw
-    = do u <- newRef UST initUState
-         i <- newRef ImpST initImpState
+mkCase {c} {u} fn orig lhs_raw
+    = do i <- newRef ImpST initImpState
          m <- newRef Meta initMetadata
          defs <- get Ctxt
+         ust <- get UST
          handleClause
            (do (lhs, _, _) <- inferTerm {c} {u} {i} {m}
                                         (\c, u, i, m => processDecl {c} {u} {i} {m})
                                         False fn [] (MkNested [])
                                         PATTERN InLHS lhs_raw
                put Ctxt defs -- reset the context, we don't want any updates
+               put UST ust
 
                lhs' <- unelabNoSugar (getAnnot lhs_raw) [] lhs
                pure (Valid lhs' (getUpdates defs orig lhs')))
@@ -281,6 +283,7 @@ mkCase {c} fn orig lhs_raw
 
 substLets : Term vars -> Term vars
 substLets (Bind n (Let c val ty) sc) = substLets (subst val sc)
+substLets (Bind n (PLet c val ty) sc) = substLets (subst val sc)
 substLets (Bind n b sc) = Bind n b (substLets sc)
 substLets tm = tm
 
@@ -294,6 +297,7 @@ combine (x :: xs) acc = combine xs (x :: acc)
 export
 getSplitsLHS : {auto m : Ref Meta (Metadata annot)} ->
                {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState annot)} ->
                (Reflect annot, Reify annot) =>
                annot -> Nat -> ClosedTerm -> Name -> 
                Core annot (SplitResult (List (ClauseUpdate annot)))
@@ -307,6 +311,7 @@ getSplitsLHS loc envlen lhs_in n
         
          rawlhs <- unelabNoSugar loc [] lhs
          trycases <- traverse (\c => newLHS loc envlen usedns n c rawlhs) cons
+
          cases <- traverse (mkCase fn rawlhs) trycases
 
          pure (combine cases [])
@@ -314,6 +319,7 @@ getSplitsLHS loc envlen lhs_in n
 export
 getSplits : {auto m : Ref Meta (Metadata annot)} ->
             {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState annot)} ->
             (Reflect annot, Reify annot) =>
             (annot -> ClosedTerm -> Bool) -> Name -> 
             Core annot (SplitResult (List (ClauseUpdate annot)))

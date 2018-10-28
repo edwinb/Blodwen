@@ -133,7 +133,7 @@ perror (VisibilityError fc vx x vy y)
     = pure $ show vx ++ " " ++ show (sugarName x) ++ 
              " cannot refer to " ++ show vy ++ " " ++ show (sugarName y)
 perror (NonLinearPattern _ n) = pure $ "Non linear pattern " ++ show (sugarName n)
-perror (BadPattern _ n) = pure $ "Pattern not allowed here"
+perror (BadPattern _ n) = pure $ "Pattern not allowed here: " ++ show n
 perror (NoDeclaration _ n) = pure $ "No type declaration for " ++ show n
 perror (AlreadyDefined _ n) = pure $ show n ++ " is already defined"
 perror (NotFunctionType _ env tm)

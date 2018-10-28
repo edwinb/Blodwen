@@ -90,6 +90,7 @@ splittableNames _ = []
 
 trySplit : {auto m : Ref Meta (Metadata annot)} ->
            {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
            (Reflect annot, Reify annot) =>
            annot -> RawImp annot -> ClosedTerm -> RawImp annot -> Name ->
            Core annot (Name, List (ImpClause annot))

@@ -61,8 +61,12 @@ addLHS : {auto m : Ref Meta (Metadata annot)} ->
 addLHS loc outerenvlen env tm
     = do meta <- get Meta
          put Meta (record { 
-                      lhsApps $= ((loc, outerenvlen, bindEnv env tm) ::) 
+                      lhsApps $= ((loc, outerenvlen, bindEnv (toPat env) tm) ::) 
                     } meta)
+  where
+    toPat : Env Term vs -> Env Term vs
+    toPat (Lam c p ty :: bs) = PVar c ty :: toPat bs
+    toPat (b :: bs) = b :: toPat bs
 
 export
 addNameType : {auto m : Ref Meta (Metadata annot)} ->
