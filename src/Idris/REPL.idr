@@ -76,22 +76,22 @@ tidy n = show n
 showHole : {auto c : Ref Ctxt Defs} ->
            {auto s : Ref Syn SyntaxInfo} ->
            Defs -> Env Term vars -> Name -> Nat -> Term vars -> Core FC String
-showHole gam env fn (S args) (Bind x (Pi c inf ty) sc)
-    = do ity <- resugar env (normaliseHoles gam env ty)
-         let pre = if showName x
-                      then showCount c ++ 
-                           impBracket inf (tidy x ++ " : " ++ show ity) ++ "\n"
-                      else ""
-         pure $ pre ++ !(showHole gam (Pi c inf ty :: env) fn args sc)
-showHole gam env fn (S args) (Bind x (PVar c ty) sc)
-    = do ity <- resugar env (normaliseHoles gam env ty)
-         let pre = if showName x
-                      then showCount c ++ 
-                           impBracket Explicit (tidy x ++ " : " ++ show ity) ++ "\n"
-                      else ""
-         pure $ pre ++ !(showHole gam (PVar c ty :: env) fn args sc)
-showHole gam env fn args (Bind x (Let c val ty) sc)
+showHole gam env fn (S args) (Bind x (Let c val ty) sc)
     = showHole gam env fn args (subst val sc)
+showHole gam env fn (S args) (Bind x b sc)
+    = do ity <- resugar env (normaliseHoles gam env (binderType b))
+         let pre = if showName x
+                      then showCount (multiplicity b) ++ 
+                           impBracket (implicitBind b) (tidy x ++ " : " ++ show ity) ++ "\n"
+                      else ""
+         pure $ pre ++ !(showHole gam (b :: env) fn args sc)
+  where
+    implicitBind : Binder (Term vars) -> Bool
+    implicitBind (Pi _ Explicit _) = False
+    implicitBind (Pi _ _ _) = True
+    implicitBind (Lam _ Explicit _) = False
+    implicitBind (Lam _ _ _) = True
+    implicitBind _ = False
 showHole gam env fn args ty
     = do ity <- resugar env (normaliseHoles gam env ty)
          pure $ "-------------------------------------\n" ++

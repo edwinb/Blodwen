@@ -2,4 +2,15 @@
 Welcome to Blodwen. Good luck.
 Main> \f => \g => \x => g (f x)
 Main> (\x => \zs => x :: zs)
+Main>  0 c : Type
+ 0 b : Type
+ 0 a : Type
+ 0 k : Nat
+   ys : Vect k b
+   y : b
+   xs : Vect k a
+   x : a
+   f : a -> b -> c
+-------------------------------------
+f : a -> b -> c
 Main> Bye for now!
