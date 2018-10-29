@@ -25,7 +25,8 @@ data ParseError = ParseFail String (Maybe (Int, Int)) (List Token)
 export
 Show ParseError where
   show (ParseFail err loc toks)
-      = "Parse error: " ++ err ++ " at " ++ show loc ++ "\n" ++ show toks
+      = "Parse error: " ++ err ++ " at " ++ show loc ++ "\n" ++ 
+        show (take 10 toks)
   show (LexFail (c, l, str)) 
       = "Lex error at " ++ show (c, l) ++ " input: " ++ str
   show (FileFail err)

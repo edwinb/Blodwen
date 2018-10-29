@@ -57,7 +57,7 @@ data Error annot
     | GenericMsg annot String
     | TTCError TTCErrorMsg
     | FileErr String FileError
-    | ParseFail ParseError
+    | ParseFail annot ParseError
     | ModuleNotFound annot (List String)
     | CyclicImports (List (List String))
     | ForceNeeded
@@ -161,7 +161,7 @@ Show annot => Show (Error annot) where
   show (GenericMsg fc str) = show fc ++ ":" ++ str
   show (TTCError msg) = "Error in TTC file: " ++ show msg
   show (FileErr fname err) = "File error (" ++ fname ++ "): " ++ show err
-  show (ParseFail err) = "Parse error (" ++ show err ++ ")"
+  show (ParseFail fc err) = "Parse error (" ++ show err ++ ")"
   show (ModuleNotFound fc ns) 
       = show fc ++ ":" ++ showSep "." (reverse ns) ++ " not found"
   show (CyclicImports ns)
@@ -226,7 +226,7 @@ getAnnot (BadRunElab loc _ tm) = Just loc
 getAnnot (GenericMsg loc y) = Just loc
 getAnnot (TTCError x) = Nothing
 getAnnot (FileErr x y) = Nothing
-getAnnot (ParseFail x) = Nothing
+getAnnot (ParseFail loc x) = Just loc
 getAnnot (ModuleNotFound loc xs) = Just loc
 getAnnot (CyclicImports xs) = Nothing
 getAnnot ForceNeeded = Nothing

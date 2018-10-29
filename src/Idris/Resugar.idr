@@ -37,6 +37,7 @@ addBracket fc tm = if needed tm then PBracketed fc tm else tm
   where
     needed : PTerm -> Bool
     needed (PBracketed _ _) = False
+    needed (PRef _ _) = False
     needed (PPair _ _ _) = False
     needed (PUnit _) = False
     needed (PComprehension _ _ _) = False

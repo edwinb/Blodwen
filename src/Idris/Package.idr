@@ -8,6 +8,7 @@ import Core.Unify
 
 import Idris.CommandLine
 import Idris.ModTree
+import Idris.ProcessIdr
 import Idris.REPLOpts
 import Idris.SetOptions
 import Idris.Syntax
@@ -253,7 +254,7 @@ processPackage cmd file
                                   (do desc <- parsePkgDesc file
                                       eoi
                                       pure desc)
-             | Left err => throw (ParseFail err)
+             | Left err => throw (ParseFail (getParseErrorLoc file err) err)
          pkg <- addFields fs (initPkgDesc pname)
          case cmd of
               Build => do [] <- build pkg

@@ -314,6 +314,22 @@ processEdit (MakeLemma line name)
                                                   StringAtom (show name ++ " : " ++ show pty)]]],
                                             toSExp i])
               _ => printError "Can't make lifted definition"
+processEdit (MakeCase line name)
+    = printError "Not implemented yet"
+
+export
+loadMainFile : {auto c : Ref Ctxt Defs} ->
+               {auto u : Ref UST (UState FC)} ->
+               {auto s : Ref Syn SyntaxInfo} ->
+               {auto m : Ref Meta (Metadata FC)} ->
+               {auto o : Ref ROpts REPLOpts} ->
+               String -> Core FC ()
+loadMainFile f
+    = do resetContext
+         updateErrorLine !(buildDeps f)
+         Right res <- coreLift (readFile f)
+            | Left err => setSource ""
+         setSource res
 
 -- Returns 'True' if the REPL should continue
 export
@@ -375,17 +391,13 @@ process Reload
          case mainfile opts of
               Nothing => do coreLift $ putStrLn "No file loaded"
                             pure True
-              Just f =>
-                do -- Clear the context and load again
-                   resetContext
-                   updateErrorLine !(buildDeps f)
-                   pure True
+              Just f => do loadMainFile f
+                           pure True
 process (Load f)
     = do opts <- get ROpts
          put ROpts (record { mainfile = Just f } opts)
          -- Clear the context and load again
-         resetContext
-         updateErrorLine !(buildDeps f)
+         loadMainFile f
          pure True
 process (CD dir)
     = do setWorkingDir dir
@@ -398,8 +410,7 @@ process Edit
               Just f =>
                 do let line = maybe "" (\i => " +" ++ show i) (errorLine opts)
                    coreLift $ system (editor opts ++ " " ++ f ++ line)
-                   resetContext
-                   updateErrorLine !(buildDeps f)
+                   loadMainFile f
                    pure True
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})

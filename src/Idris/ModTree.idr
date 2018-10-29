@@ -48,23 +48,23 @@ Show BuildMod where
       showNS ns = showSep "." (reverse ns)
 
 readHeader : {auto c : Ref Ctxt Defs} ->
-             annot -> (mod : List String) -> Core annot (String, Module)
+             FC -> (mod : List String) -> Core FC (String, Module)
 readHeader loc mod
     = do path <- nsToSource loc mod
          Right res <- coreLift (readFile path)
             | Left err => throw (FileErr path err)
          case runParser res (progHdr path) of
-              Left err => throw (ParseFail err)
+              Left err => throw (ParseFail (getParseErrorLoc path err) err)
               Right mod => pure (path, mod)
 
 data AllMods : Type where
 
 mkModTree : {auto c : Ref Ctxt Defs} ->
             {auto a : Ref AllMods (List (List String, ModTree))} ->
-            annot -> 
+            FC -> 
             (done : List (List String)) -> -- if 'mod' is here we have a cycle
             (mod : List String) ->
-            Core annot ModTree
+            Core FC ModTree
 mkModTree loc done mod
   = if mod `elem` done
        then throw (CyclicImports (done ++ [mod]))
@@ -107,7 +107,7 @@ mkBuildMods acc mod
 export
 getBuildMods : {auto c : Ref Ctxt Defs} ->
                {auto o : Ref ROpts REPLOpts} ->
-               annot -> (mainFile : String) -> Core annot (List BuildMod)
+               FC -> (mainFile : String) -> Core FC (List BuildMod)
 getBuildMods loc fname
     = do a <- newRef AllMods []
          d <- getDirs
@@ -115,7 +115,7 @@ getBuildMods loc fname
          t <- mkModTree {a} loc [] (pathToNS (working_dir d) fname)
          pure (reverse (mkBuildMods [] t))
 
-fnameModified : String -> Core annot Integer
+fnameModified : String -> Core FC Integer
 fnameModified fname
     = do Right f <- coreLift $ openFile fname Read
              | Left err => throw (FileErr fname err)

@@ -14,6 +14,7 @@ import TTImp.TTImp
 import Idris.Desugar
 import Idris.Parser
 import Idris.REPLCommon
+import Idris.REPLOpts
 import Idris.Syntax
 
 import Control.Catchable
@@ -141,6 +142,12 @@ modTime fname
          coreLift $ closeFile f
          pure t
 
+export
+getParseErrorLoc : String -> ParseError -> FC
+getParseErrorLoc fname (ParseFail _ (Just pos) _) = MkFC fname pos pos
+getParseErrorLoc fname (LexFail (l, c, _)) = MkFC fname (l, c) (l, c)
+getParseErrorLoc fname _ = replFC
+
 -- Process everything in the module; return the syntax information which
 -- needs to be written to the TTC (e.g. exported infix operators)
 -- Returns 'Nothing' if it didn't reload anything
@@ -192,7 +199,7 @@ processMod srcf ttcf msg mod sourcecode
                                              (do p <- prog srcf
                                                  eoi
                                                  pure p)
-                            | Left err => pure (Just [ParseFail err])
+                            | Left err => pure (Just [ParseFail (getParseErrorLoc srcf err) err])
                         -- read imports here
                         -- Note: We should only import .ttc - assumption is that there's
                         -- a phase before this which builds the dependency graph
@@ -222,7 +229,7 @@ process buildmsg file
     = do Right res <- coreLift (readFile file)
                | Left err => pure [FileErr file err]
          case runParser res (do p <- prog file; eoi; pure p) of
-              Left err => pure [ParseFail err]
+              Left err => pure [ParseFail (getParseErrorLoc file err) err]
               Right mod =>
                 -- Processing returns a list of errors across a whole module,
                 -- but may fail for other reasons, so we still need to catch

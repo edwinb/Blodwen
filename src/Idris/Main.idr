@@ -91,7 +91,7 @@ stMain opts
                updateREPLOpts
                case fname of
                     Nothing => readPrelude
-                    Just f => updateErrorLine !(buildDeps f)
+                    Just f => loadMainFile f
 
                doRepl <- postOptions opts
                if doRepl then

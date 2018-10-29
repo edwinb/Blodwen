@@ -162,7 +162,7 @@ perror (GenericMsg _ str) = pure str
 perror (TTCError msg) = pure $ "Error in TTC file: " ++ show msg
 perror (FileErr fname err) 
     = pure $ "File error in " ++ show fname ++ ": " ++ show err
-perror (ParseFail err)
+perror (ParseFail _ err)
     = pure $ "Parse error: " ++ show err
 perror (ModuleNotFound _ ns)
     = pure $ showSep "." (reverse ns) ++ " not found"

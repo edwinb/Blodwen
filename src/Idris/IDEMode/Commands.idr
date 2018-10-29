@@ -22,6 +22,7 @@ data IDECommand
      | ExprSearch Integer String (List String) Bool
      | GenerateDef Integer String
      | MakeLemma Integer String
+     | MakeCase Integer String
     
 readHints : List SExp -> Maybe (List String)
 readHints [] = Just []
@@ -66,6 +67,8 @@ getIDECommand (SExpList [SymbolAtom "proof-search", IntegerAtom l, StringAtom n,
 getIDECommand (SExpList [SymbolAtom "generate-def", IntegerAtom l, StringAtom n])
     = Just $ GenerateDef l n
 getIDECommand (SExpList [SymbolAtom "make-lemma", IntegerAtom l, StringAtom n])
+    = Just $ MakeLemma l n
+getIDECommand (SExpList [SymbolAtom "make-case", IntegerAtom l, StringAtom n])
     = Just $ MakeLemma l n
 getIDECommand _ = Nothing
 

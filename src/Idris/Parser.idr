@@ -1086,7 +1086,7 @@ editCmd
          line <- intLit
          n <- name
          pure (AddClause (fromInteger line) n)
-  <|> do replCmd ["ps"]
+  <|> do replCmd ["ps", "proofsearch"]
          line <- intLit
          n <- name
          pure (ExprSearch (fromInteger line) n [] False)
@@ -1098,10 +1098,14 @@ editCmd
          line <- intLit
          n <- name
          pure (GenerateDef (fromInteger line) n)
-  <|> do replCmd ["ml"]
+  <|> do replCmd ["ml", "makelemma"]
          line <- intLit
          n <- name
          pure (MakeLemma (fromInteger line) n)
+  <|> do replCmd ["mc", "makecase"]
+         line <- intLit
+         n <- name
+         pure (MakeCase (fromInteger line) n)
 
 export
 command : Rule REPLCmd

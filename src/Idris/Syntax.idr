@@ -281,6 +281,7 @@ data EditCmd : Type where
      ExprSearch : Int -> Name -> List Name -> Bool -> EditCmd
      GenerateDef : Int -> Name -> EditCmd
      MakeLemma : Int -> Name -> EditCmd
+     MakeCase : Int -> Name -> EditCmd
 
 public export
 data REPLCmd : Type where

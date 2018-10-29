@@ -119,6 +119,9 @@ process (GenerateDef l n)
 process (MakeLemma l n)
     = do Idris.REPL.process (Editing (MakeLemma (fromInteger l) (UN n)))
          pure ()
+process (MakeCase l n)
+    = do Idris.REPL.process (Editing (MakeCase (fromInteger l) (UN n)))
+         pure ()
 
 processCatch : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->
