@@ -194,9 +194,9 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
             = "(let ((" ++ v ++ " " ++ "(vector-ref " ++ target ++ " " ++ show i ++ "))) "
                     ++ bindArgs (i + 1) ns vs body ++ ")"
 
-    schConstAlt : SVars vars -> CConstAlt vars -> Core annot String
-    schConstAlt vs (MkConstAlt c exp)
-        = pure $ "((" ++ schConstant c ++ ") " ++ !(schExp vs exp) ++ ")"
+    schConstAlt : SVars vars -> String -> CConstAlt vars -> Core annot String
+    schConstAlt vs target (MkConstAlt c exp)
+        = pure $ "((equal? " ++ target ++ " " ++ schConstant c ++ ") " ++ !(schExp vs exp) ++ ")"
       
     -- oops, no traverse for Vect in Core
     schArgs : SVars vars -> Vect n (CExp vars) -> Core annot (Vect n String)
@@ -236,9 +236,10 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
                      ++ schCaseDef defc ++ "))"
     schExp vs (CConstCase sc alts def) 
         = do defc <- maybe (pure Nothing) (\v => pure (Just !(schExp vs v))) def
-             pure $ "(case " ++ !(schExp vs sc) ++ " " 
-                      ++ showSep " " !(traverse (schConstAlt vs) alts)
-                      ++ schCaseDef defc ++ ")"
+             tcode <- schExp vs sc
+             pure $ "(let ((sc " ++ tcode ++ ")) (cond " -- ++ !(schExp vs sc) ++ " " 
+                      ++ showSep " " !(traverse (schConstAlt vs "sc") alts)
+                      ++ schCaseDef defc ++ "))"
     schExp vs (CPrimVal c) = pure $ schConstant c
     schExp vs CErased = pure "'()"
     schExp vs (CCrash msg) = pure $ "(error " ++ show msg ++ ")"

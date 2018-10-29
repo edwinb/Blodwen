@@ -18,6 +18,8 @@
     (cast-num (string->number x))))
 (define string-cons (lambda (x y) (string-append (string x) y)))
 (define get-tag (lambda (x) (vector-ref x 0)))
+(define string-reverse (lambda (x)
+  (list->string (reverse (string->list x)))))
 
 (define either-left 
   (lambda (x)
