@@ -430,7 +430,7 @@ mutual
   caseAlt : FileName -> IndentInfo -> Rule PClause
   caseAlt fname indents
       = do start <- location
-           lhs <- appExpr fname indents
+           lhs <- opExpr NoEq fname indents
            caseRHS fname start indents lhs
           
   caseRHS : FileName -> FilePos -> IndentInfo -> PTerm -> Rule PClause
