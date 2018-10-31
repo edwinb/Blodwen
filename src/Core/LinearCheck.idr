@@ -51,11 +51,14 @@ count p (q :: xs) = if sameVar p q then 1 + count p xs else count p xs
 -- If it *was* used elsewhere, the hole's type should have it at a rig
 -- count of zero, otherwise its rig count should be left alone.
 -- That is: the 'useInHole' argument reflects whether the given variable
--- should be treated as Rig1 when we encounter the next hole
+-- should be treated as Rig1.
 
--- If there's more than one hole, assume the variable gets used in the
--- first one we encounter (so continue with 'useInHole' as False after
--- encountering a hole)
+-- If there's more than one hole, treat the holes independently. That is,
+-- the hole is to help the programmer, so set the type such that the variable
+-- is available for each hole.
+-- While this isn't strictly right for QTT's notion of usage, it means that
+-- the usage information shown for each hole is more useful for interactive
+-- editing.
 
 -- Returns 'False' if no hole encountered (so no need to change usage data
 -- for the rest of the definition)
@@ -67,7 +70,7 @@ mutual
   updateHoleUsageArgs useInHole var [] = pure False
   updateHoleUsageArgs useInHole var (a :: as)
       = do h <- updateHoleUsage useInHole var a
-           h' <- updateHoleUsageArgs (useInHole && not h) var as
+           h' <- updateHoleUsageArgs useInHole var as
            pure (h || h')
 
   updateHoleType : {auto c : Ref Ctxt Defs} ->
@@ -99,7 +102,7 @@ mutual
                     Elem x vars -> Term vars -> Core annot Bool 
   updateHoleUsage useInHole var (Bind n (Let c val ty) sc)
         = do h <- updateHoleUsage useInHole var val
-             h' <- updateHoleUsage (useInHole && not h) (There var) sc
+             h' <- updateHoleUsage useInHole (There var) sc
              pure (h || h')
   updateHoleUsage useInHole var (Bind n b sc)
         = updateHoleUsage useInHole (There var) sc
