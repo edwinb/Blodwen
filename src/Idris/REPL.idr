@@ -258,6 +258,7 @@ processEdit (ExprSearch line name hints all)
          case lookupDefName name (gamma gam) of
               [(n, Hole locs _ _)] =>
                   do tms <- exprSearch replFC name []
+                     gam <- get Ctxt
                      let restms = map (normaliseHoles gam []) tms
                      itms <- the (Core _ (List PTerm)) 
                                (traverse (\tm => 
