@@ -43,7 +43,8 @@ addDefaults fc ms defs body
     extendBody ms (n :: ns) body
         = case lookup n defs of
                Nothing => extendBody (n :: ms) ns body
-               Just cs => extendBody ms ns (IDef fc n cs :: body)
+               Just cs => extendBody ms ns 
+                              (IDef fc n (map (substLocClause fc) cs) :: body)
 
     dropGot : List Name -> List (ImpDecl FC) -> List Name
     dropGot ms [] = ms

@@ -136,6 +136,79 @@ mutual
       = ImplicitNames fc (map (\ (n, t) => (n, substNames bound ps t)) xs)
   substNamesDecl bound ps d = d
 
+mutual
+  export
+  substLoc : annot -> RawImp annot -> RawImp annot
+  substLoc fc' (IVar fc n) = IVar fc' n
+  substLoc fc' (IPi fc r p mn argTy retTy) 
+      = IPi fc' r p mn (substLoc fc' argTy) 
+                      (substLoc fc' retTy)
+  substLoc fc' (ILam fc r p mn argTy scope)
+      = ILam fc' r p mn (substLoc fc' argTy) 
+                        (substLoc fc' scope)
+  substLoc fc' (ILet fc r n nTy nVal scope)
+      = ILet fc' r n (substLoc fc' nTy) 
+                     (substLoc fc' nVal)
+                     (substLoc fc' scope)
+  substLoc fc' (ICase fc y ty xs) 
+      = ICase fc' (substLoc fc' y) (substLoc fc' ty)
+                  (map (substLocClause fc') xs)
+  substLoc fc' (ILocal fc xs y) 
+      = ILocal fc' (map (substLocDecl fc') xs) 
+                   (substLoc fc' y)
+  substLoc fc' (IApp fc fn arg) 
+      = IApp fc' (substLoc fc' fn) (substLoc fc' arg)
+  substLoc fc' (IImplicitApp fc fn y arg)
+      = IImplicitApp fc' (substLoc fc' fn) y (substLoc fc' arg)
+  substLoc fc' (IAlternative fc y xs) 
+      = IAlternative fc' y (map (substLoc fc') xs)
+  substLoc fc' (ICoerced fc y) 
+      = ICoerced fc' (substLoc fc' y)
+  substLoc fc' (IQuote fc y)
+      = IQuote fc' (substLoc fc' y)
+  substLoc fc' (IUnquote fc y)
+      = IUnquote fc' (substLoc fc' y)
+  substLoc fc' (IAs fc y pattern)
+      = IAs fc' y (substLoc fc' pattern)
+  substLoc fc' (IMustUnify fc r pattern)
+      = IMustUnify fc' r (substLoc fc' pattern)
+  substLoc fc' tm = tm
+
+  export
+  substLocClause : annot -> ImpClause annot -> ImpClause annot
+  substLocClause fc' (PatClause fc lhs rhs)
+      = PatClause fc' (substLoc fc' lhs) 
+                      (substLoc fc' rhs)
+  substLocClause fc' (ImpossibleClause fc lhs)
+      = ImpossibleClause fc' (substLoc fc' lhs)
+
+  substLocTy : annot -> ImpTy annot -> ImpTy annot
+  substLocTy fc' (MkImpTy fc n ty) 
+      = MkImpTy fc' n (substLoc fc' ty)
+  
+  substLocData : annot -> ImpData annot -> ImpData annot
+  substLocData fc' (MkImpData fc n con opts dcons) 
+      = MkImpData fc' n (substLoc fc' con) opts
+                        (map (substLocTy fc') dcons)
+  substLocData fc' (MkImpLater fc n con) 
+      = MkImpLater fc' n (substLoc fc' con)
+
+  substLocDecl : annot -> ImpDecl annot -> ImpDecl annot
+  substLocDecl fc' (IClaim fc vis opts td) 
+      = IClaim fc' vis opts (substLocTy fc' td)
+  substLocDecl fc' (IDef fc n cs) 
+      = IDef fc' n (map (substLocClause fc') cs)
+  substLocDecl fc' (IData fc vis d) 
+      = IData fc' vis (substLocData fc' d)
+  substLocDecl fc' (INamespace fc ns ds) 
+      = INamespace fc' ns (map (substLocDecl fc') ds)
+  substLocDecl fc' (IReflect fc y) 
+      = IReflect fc' (substLoc fc' y)
+  substLocDecl fc' (ImplicitNames fc xs) 
+      = ImplicitNames fc' (map (\ (n, t) => (n, substLoc fc' t)) xs)
+  substLocDecl fc' d = d
+
+
 nameNum : String -> (String, Int)
 nameNum str
     = case span isDigit (reverse str) of
