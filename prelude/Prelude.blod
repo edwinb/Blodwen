@@ -160,7 +160,8 @@ Eq () where
 public export
 Eq Bool where
   True == True = True
-  False == False = False
+  False == False = True
+  _ == _ = True
 
 public export
 Eq Int where
