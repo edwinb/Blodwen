@@ -161,7 +161,7 @@ public export
 Eq Bool where
   True == True = True
   False == False = True
-  _ == _ = True
+  _ == _ = False
 
 public export
 Eq Int where
