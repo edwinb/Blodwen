@@ -167,7 +167,7 @@ Reify annot => Reify (ImpDecl annot) where
            vis' <- reify defs (evalClosure defs vis)
            opts' <- reify defs (evalClosure defs opts)
            ty' <- reify defs (evalClosure defs ty)
-           pure (IClaim fc' vis' opts' ty')
+           pure (IClaim fc' RigW vis' opts' ty')
   reify defs (NDCon (NS ["Reflect"] (UN "Def")) _ _ [fc, n, cs])
       = do fc' <- reify defs (evalClosure defs fc)
            n' <- reify defs (evalClosure defs n)
@@ -182,7 +182,7 @@ Reify annot => Reify (ImpDecl annot) where
 
 export
 Reflect annot => Reflect (ImpDecl annot) where
-  reflect defs env (IClaim fc vis opts ty)
+  reflect defs env (IClaim fc _ vis opts ty)
       = do fc' <- reflect defs env fc
            vis' <- reflect defs env vis
            opts' <- reflect defs env opts

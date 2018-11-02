@@ -358,7 +358,7 @@ topDecl indents
          directive indents
   <|> do vis <- visibility
          claim <- tyDecl indents
-         pure (IClaim () vis [] claim)
+         pure (IClaim () RigW vis [] claim)
   <|> do nd <- clause indents
          pure (IDef () (fst nd) [snd nd])
 

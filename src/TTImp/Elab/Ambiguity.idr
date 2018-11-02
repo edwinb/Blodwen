@@ -21,7 +21,7 @@ expandAmbigName : ElabMode -> EState vars ->
 -- Insert implicit dots here, for things we can't match on directly
 -- (Only when mode is InLHS and it's not the name of the function we're 
 -- defining)
-expandAmbigName InLHS estate defs env nest orig args (IPrimVal fc c) exp
+expandAmbigName (InLHS _) estate defs env nest orig args (IPrimVal fc c) exp
     = if isType c
          then IMustUnify fc "Primitive type constructor" orig
          else orig
@@ -34,7 +34,7 @@ expandAmbigName InLHS estate defs env nest orig args (IPrimVal fc c) exp
     isType DoubleType = True
     isType WorldType = True
     isType _ = False
-expandAmbigName InLHS estate defs env nest orig args (IBindVar fc n) exp
+expandAmbigName (InLHS _) estate defs env nest orig args (IBindVar fc n) exp
    = if n `elem` lhsPatVars estate
         then IMustUnify fc "Non linear pattern variable" orig
         else orig
@@ -80,11 +80,11 @@ expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
     wrapDot : ElabMode -> Name -> List (RawImp annot) -> 
               Def -> RawImp annot -> RawImp annot
     wrapDot _ _ _ (DCon _ _ _) tm = tm
-    wrapDot InLHS n' [arg] _ tm 
+    wrapDot (InLHS _) n' [arg] _ tm 
        = if n' == defining estate || isPrimApp n' arg
             then tm
             else IMustUnify fc "Not a constructor application or primitive" tm
-    wrapDot InLHS n' _ _ tm 
+    wrapDot (InLHS _) n' _ _ tm 
        = if n' == defining estate
             then tm
             else IMustUnify fc "Not a constructor application or primitive" tm
@@ -95,7 +95,7 @@ expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
                            (definition def) (buildAlt (IVar fc n) args)
 
     notLHS : ElabMode -> Bool
-    notLHS InLHS = False
+    notLHS (InLHS _) = False
     notLHS _ = True
 
 expandAmbigName mode estate defs env nest orig args (IApp fc f a) exp

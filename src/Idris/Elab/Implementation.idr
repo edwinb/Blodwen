@@ -110,7 +110,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
          let paramBinds = findBindableNames True vars [] initTy
          let impTy = doBind paramBinds initTy
 
-         let impTyDecl = IClaim fc vis opts (MkImpTy fc impName impTy)
+         let impTyDecl = IClaim fc RigW vis opts (MkImpTy fc impName impTy)
          log 5 $ "Implementation type: " ++ show impTy
 
          processDecl False env nest impTyDecl
@@ -282,7 +282,7 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
              pure (m' :: ms')
 
     mkTopMethDecl : (Name, Name, List (String, String), RawImp FC) -> ImpDecl FC
-    mkTopMethDecl (mn, n, upds, mty) = IClaim fc vis [] (MkImpTy fc n mty)
+    mkTopMethDecl (mn, n, upds, mty) = IClaim fc RigW vis [] (MkImpTy fc n mty)
 
     -- Given the method type (result of topMethType) return the mapping from
     -- top level method name to current implementation's method name

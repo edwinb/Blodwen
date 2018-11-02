@@ -126,16 +126,16 @@ checkClause : {auto c : Ref Ctxt Defs} ->
               {auto m : Ref Meta (Metadata annot)} ->
               Reflect annot =>
               Elaborator annot ->
-              (incase : Bool) ->
-              (hashit : Bool) ->
+              (incase : Bool) -> (mult : RigCount) -> (hashit : Bool) ->
               Name ->
               Env Term vars -> NestedNames vars -> ImpClause annot ->
               Core annot (Maybe (Clause, Clause)) -- Compile time vs run time clauses
                      -- (the run time version has had 0-multiplicities erased)
-checkClause elab incase hashit defining env nest (ImpossibleClause loc lhs_raw)
+checkClause elab incase mult hashit defining env nest (ImpossibleClause loc lhs_raw)
     = handleClause
          (do lhs_raw <- lhsInCurrentNS nest lhs_raw
-             (lhs_in, _, lhsty_in) <- inferTerm elab incase defining env nest PATTERN InLHS lhs_raw
+             (lhs_in, _, lhsty_in) <- inferTerm elab incase defining env nest
+                                                PATTERN (InLHS mult) lhs_raw
              gam <- get Ctxt
              let lhs = normaliseHoles gam env lhs_in
              let lhsty = normaliseHoles gam env lhsty_in
@@ -148,13 +148,14 @@ checkClause elab incase hashit defining env nest (ImpossibleClause loc lhs_raw)
                                     then pure Nothing
                                     else throw (ValidCase loc env (Right err))
                        _ => throw (ValidCase loc env (Right err)))
-checkClause {vars} elab incase hashit defining env nest (PatClause loc lhs_raw rhs_raw)
+checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_raw rhs_raw)
     = do gam <- get Ctxt
          lhs_raw_in <- lhsInCurrentNS nest lhs_raw
          let lhs_raw = implicitsAs gam vars lhs_raw_in
          log 5 ("Checking LHS: " ++ show lhs_raw)
          (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
-              inferTerm elab incase defining env nest PATTERN InLHS lhs_raw
+              inferTerm elab incase defining env nest
+                        PATTERN (InLHS mult) lhs_raw
          -- Check there's no holes or constraints in the left hand side
          -- we've just checked - they must be resolved now (that's what
          -- True means)
@@ -185,8 +186,12 @@ checkClause {vars} elab incase hashit defining env nest (PatClause loc lhs_raw r
          log 10 ("New env: " ++ show env')
 
          setHoleLHS (bindEnv env lhs')
+         let mode
+               = case mult of
+                      Rig0 => InType -- treat as used in type only
+                      _ => InExpr
          (rhs, rhs_erased) <- wrapError (InRHS loc defining) $
-                checkTerm elab incase defining env' env prf nest' NONE InExpr rhs_raw reqty
+                checkTerm elab incase defining env' env prf nest' NONE mode rhs_raw reqty
          clearHoleLHS
          log 5 ("Checked and erased RHS: " ++ show rhs_erased)
 
@@ -260,7 +265,10 @@ processDef elab incase env nest loc n_in cs_raw
                      None =>
                         do let ty = type glob
                            let hashit = visibility glob == Public
-                           cs <- traverse (checkClause elab incase hashit n env nest) cs_raw
+                           let mult = if multiplicity glob == Rig0
+                                         then Rig0
+                                         else Rig1
+                           cs <- traverse (checkClause elab incase mult hashit n env nest) cs_raw
                            (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
                            (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
                            

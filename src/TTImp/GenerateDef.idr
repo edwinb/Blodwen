@@ -51,7 +51,7 @@ expandClause : {auto c : Ref Ctxt Defs} ->
                annot -> Elaborator annot -> Name -> ImpClause annot -> 
                Core annot (List (ImpClause annot))
 expandClause loc elab n c
-    = do Just (clause, _) <- checkClause elab False False n [] (MkNested []) c
+    = do Just (clause, _) <- checkClause elab False Rig1 False n [] (MkNested []) c
             | Nothing => pure [] -- TODO: impossible clause, do something
                                  -- appropriate
          let MkClause {vars} env lhs rhs = clause
@@ -139,7 +139,7 @@ generateSplits {c} {u} {i} {m} loc fn (PatClause fc lhs rhs)
     = do (lhstm, _, _) <- inferTerm {c} {u} {i} {m}
                                         (\c, u, i, m => processDecl {c} {u} {i} {m})
                                         False fn [] (MkNested [])
-                                        PATTERN InLHS lhs
+                                        PATTERN (InLHS Rig1) lhs
          traverse (trySplit fc lhs lhstm rhs) (splittableNames lhs)
 
 mutual

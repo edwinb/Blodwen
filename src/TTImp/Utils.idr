@@ -122,8 +122,8 @@ mutual
 
   substNamesDecl : List Name -> List (Name, RawImp annot) ->
                     ImpDecl annot -> ImpDecl annot
-  substNamesDecl bound ps (IClaim fc vis opts td) 
-      = IClaim fc vis opts (substNamesTy bound ps td)
+  substNamesDecl bound ps (IClaim fc r vis opts td) 
+      = IClaim fc r vis opts (substNamesTy bound ps td)
   substNamesDecl bound ps (IDef fc n cs) 
       = IDef fc n (map (substNamesClause bound ps) cs)
   substNamesDecl bound ps (IData fc vis d) 
@@ -194,8 +194,8 @@ mutual
       = MkImpLater fc' n (substLoc fc' con)
 
   substLocDecl : annot -> ImpDecl annot -> ImpDecl annot
-  substLocDecl fc' (IClaim fc vis opts td) 
-      = IClaim fc' vis opts (substLocTy fc' td)
+  substLocDecl fc' (IClaim fc r vis opts td) 
+      = IClaim fc' r vis opts (substLocTy fc' td)
   substLocDecl fc' (IDef fc n cs) 
       = IDef fc' n (map (substLocClause fc') cs)
   substLocDecl fc' (IData fc vis d) 

@@ -366,7 +366,7 @@ mutual
                 {auto m : Ref Meta (Metadata FC)} ->
                 List Name -> PDecl -> Core FC (List (ImpDecl FC))
   desugarDecl ps (PClaim fc vis opts ty) 
-      = pure [IClaim fc vis opts !(desugarType ps ty)]
+      = pure [IClaim fc RigW vis opts !(desugarType ps ty)]
   desugarDecl ps (PDef fc clauses) 
   -- The clauses won't necessarily all be from the same function, so split
   -- after desugaring, by function name, using collectDefs from RawImp

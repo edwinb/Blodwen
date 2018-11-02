@@ -255,7 +255,7 @@ mutual
   toPDecl : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             ImpDecl annot -> Core FC (Maybe PDecl)
-  toPDecl (IClaim _ vis opts ty) 
+  toPDecl (IClaim _ _ vis opts ty) 
       = pure (Just (PClaim emptyFC vis opts !(toPTypeDecl ty)))
   toPDecl (IDef _ n cs)
       = pure (Just (PDef emptyFC !(traverse toPClause cs)))

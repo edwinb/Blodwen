@@ -267,7 +267,7 @@ mkCase {c} {u} fn orig lhs_raw
            (do (lhs, _, _) <- inferTerm {c} {u} {i} {m}
                                         (\c, u, i, m => processDecl {c} {u} {i} {m})
                                         False fn [] (MkNested [])
-                                        PATTERN InLHS lhs_raw
+                                        PATTERN (InLHS Rig1) lhs_raw
                put Ctxt defs -- reset the context, we don't want any updates
                put UST ust
 

@@ -21,10 +21,6 @@ import Data.List.Views
 
 %default covering
 
-getRigNeeded : ElabMode -> RigCount
-getRigNeeded InType = Rig0 -- unrestricted usage in types
-getRigNeeded _ = Rig1
-
 findPLetRenames : Term vars -> List (Name, Name)
 findPLetRenames (Bind n (PLet c (Local {x = x@(MN _ _)} _ p) ty) sc)
     = (x, n) :: findPLetRenames sc
@@ -41,6 +37,11 @@ doPLetRenames ns drops (Bind n b sc)
            Just n' => Bind n' b (doPLetRenames ns (n' :: drops) (renameTop n' sc))
            Nothing => Bind n b (doPLetRenames ns drops sc)
 doPLetRenames ns drops sc = sc
+
+getRigNeeded : ElabMode -> RigCount
+getRigNeeded InType = Rig0 -- unrestricted usage in types
+getRigNeeded (InLHS Rig0) = Rig0
+getRigNeeded _ = Rig1
 
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
@@ -72,10 +73,10 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          -- - Finally, last attempts at solving constraints, but this
          --   is most likely just to be able to display helpful errors
          solveConstraints (case elabmode of
-                                InLHS => InLHS
+                                InLHS _ => InLHS
                                 _ => InTerm) Normal
          solveConstraints (case elabmode of
-                                InLHS => InLHS
+                                InLHS _ => InLHS
                                 _ => InTerm) Normal
          gam <- get Ctxt
          chktm <- retryDelayedIn env (getAnnot tm) (normaliseHoles gam env chktm_in)
@@ -85,13 +86,13 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          when (not incase) $
            -- resolve any default hints
            do solveConstraints (case elabmode of
-                                     InLHS => InLHS
+                                     InLHS _ => InLHS
                                      _ => InTerm) Defaults
               -- perhaps resolving defaults helps...
               -- otherwise, this last go is most likely just to give us more
               -- helpful errors.
               solveConstraints (case elabmode of
-                                     InLHS => InLHS
+                                     InLHS _ => InLHS
                                      _ => InTerm) LastChance
 
          dumpDots
@@ -122,7 +123,7 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          checkUserHoles False -- need to fail if there are any guards
                               -- or 'linearCheck' will fail
          ptm' <- the (Core _ (Term vars)) $ case elabmode of
-                    InLHS => pure ptm'
+                    InLHS _ => pure ptm'
                     _ => do linearCheck (getAnnot tm) rigc False env ptm'
                             pure ptm'
          
@@ -147,12 +148,13 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          -- were of the form x@_, where the _ is inferred to be a variable,
          -- to just x)
          case elabmode of
-              InLHS => let vs = findPLetRenames ptm' in
-                           do log 5 $ "Renamed PLets " ++ show (doPLetRenames vs [] ptm')
-                              log 5 $ "Renamed PLets type " ++ show (doPLetRenames vs [] pty')
-                              let ret = doPLetRenames vs [] ptm'
-                              pure (ret, ret,
-                                    doPLetRenames vs [] pty')
+              InLHS _ => 
+                 let vs = findPLetRenames ptm' in
+                     do log 5 $ "Renamed PLets " ++ show (doPLetRenames vs [] ptm')
+                        log 5 $ "Renamed PLets type " ++ show (doPLetRenames vs [] pty')
+                        let ret = doPLetRenames vs [] ptm'
+                        pure (ret, ret,
+                              doPLetRenames vs [] pty')
               _ => do perase <- linearCheck (getAnnot tm) rigc True env ptm'
                       pure (ptm', perase, pty')
 

@@ -105,8 +105,8 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, opts
           -- which appear in other method types
           ty_constr = substNames vars (map applyCon allmeths) ty
           ty_imp = bindTypeNames vars (bindIFace fc ity ty_constr)
-          tydecl = IClaim fc vis (if d then [Inline, Invertible]
-                                       else [Inline]) (MkImpTy fc n ty_imp) 
+          tydecl = IClaim fc RigW vis (if d then [Inline, Invertible]
+                                            else [Inline]) (MkImpTy fc n ty_imp) 
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
                        map (IBindVar fc) (map bindName allmeths))
@@ -161,7 +161,7 @@ getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, co
           ty_imp = bindTypeNames (meths ++ vars) fty 
           hintname = DN ("Constraint " ++ show con)
                         (MN ("__" ++ show iname ++ "_" ++ show con) 0)
-          tydecl = IClaim fc vis [Inline, Hint False] (MkImpTy fc hintname ty_imp)
+          tydecl = IClaim fc RigW vis [Inline, Hint False] (MkImpTy fc hintname ty_imp)
           conapp = apply (IVar fc cname)
                       (map (IBindVar fc) (map bindName constraints) ++
                        map (const (Implicit fc)) meths) 
@@ -179,7 +179,7 @@ getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, co
     constName n = UN (bindName n)
 
 getSig : ImpDecl FC -> Maybe (FC, List FnOpt, Name, (Bool, RawImp FC))
-getSig (IClaim _ _ opts (MkImpTy fc n ty)) = Just (fc, opts, n, (False, ty))
+getSig (IClaim _ _ _ opts (MkImpTy fc n ty)) = Just (fc, opts, n, (False, ty))
 getSig (IData _ _ (MkImpLater fc n ty)) = Just (fc, [Invertible], n, (True, ty))
 getSig _ = Nothing
 
@@ -296,7 +296,7 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                   
              let ity = apply (IVar fc iname) (map (IVar fc) (map fst params))
              let dty_imp = bindTypeNames vars (bindIFace fc ity dty)
-             let dtydecl = IClaim fc vis [] (MkImpTy fc dn dty_imp) 
+             let dtydecl = IClaim fc RigW vis [] (MkImpTy fc dn dty_imp) 
              processDecl False env nest dtydecl
 
              let cs' = map (changeName dn) cs

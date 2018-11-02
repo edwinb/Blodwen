@@ -144,7 +144,8 @@ mutual
 
   public export
   data ImpDecl : Type -> Type where
-       IClaim : annot -> Visibility -> List FnOpt -> ImpTy annot -> ImpDecl annot
+       IClaim : annot -> RigCount -> 
+                Visibility -> List FnOpt -> ImpTy annot -> ImpDecl annot
        IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
        IData : annot -> Visibility -> ImpData annot -> ImpDecl annot
        INamespace : annot -> List String -> List (ImpDecl annot) ->
@@ -241,7 +242,7 @@ definedInBlock = concatMap defName
     getName (MkImpTy _ n _) = n
 
     defName : ImpDecl annot -> List Name
-    defName (IClaim _ _ _ ty) = [getName ty]
+    defName (IClaim _ _ _ _ ty) = [getName ty]
     defName (IData _ _ (MkImpData _ n _ _ cons)) = n :: map getName cons
     defName (IData _ _ (MkImpLater _ n _)) = [n]
     defName _ = []
@@ -353,7 +354,7 @@ mutual
 
   export
   Show (ImpDecl annot) where
-    show (IClaim _ _ _ ty) = show ty
+    show (IClaim _ _ _ _ ty) = show ty
     show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                          showSep "\n\t" (map show cs)
     show (IData _ _ d) = show d
@@ -808,8 +809,8 @@ mutual
 
   export
   TTC annot annot => TTC annot (ImpDecl annot) where
-    toBuf b (IClaim fc vis xs d) 
-        = do tag 0; toBuf b fc; toBuf b vis; toBuf b xs; toBuf b d
+    toBuf b (IClaim fc c vis xs d) 
+        = do tag 0; toBuf b c; toBuf b fc; toBuf b vis; toBuf b xs; toBuf b d
     toBuf b (IDef fc n xs) 
         = do tag 1; toBuf b fc; toBuf b n; toBuf b xs
     toBuf b (IData fc vis d) 
@@ -828,9 +829,10 @@ mutual
 
     fromBuf s b
         = case !getTag of
-               0 => do fc <- fromBuf s b; vis <- fromBuf s b;
+               0 => do fc <- fromBuf s b; c <- fromBuf s b
+                       vis <- fromBuf s b;
                        xs <- fromBuf s b; d <- fromBuf s b
-                       pure (IClaim fc vis xs d)
+                       pure (IClaim fc c vis xs d)
                1 => do fc <- fromBuf s b; n <- fromBuf s b
                        xs <- fromBuf s b
                        pure (IDef fc n xs)

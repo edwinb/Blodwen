@@ -1,0 +1,6 @@
+1/1: Building record (record.blod)
+Welcome to Blodwen. Good luck.
+Main> [1, 2, 3, 4, 5]
+Main> [1, 2, 3, 4, 5]
+Main> some_fn testPerson : Nat -> Nat
+Main> Bye for now!

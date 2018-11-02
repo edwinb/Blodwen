@@ -126,7 +126,9 @@ elabRecord {vars} fc vis env nest tn params rcon fields
                    log 5 $ show lhs ++ " = " ++ show fldName
 
                    processDecls env nest 
-                       [IClaim fc vis [] (MkImpTy fc gname gty),
+                       [IClaim fc (if c == Rig0
+                                      then Rig0
+                                      else RigW) vis [] (MkImpTy fc gname gty),
                         IDef fc gname [PatClause fc lhs (IVar fc fldName)]]
 
                    let upds' = (n, IApp fc (IVar fc gname) (IVar fc rname)) :: upds

@@ -44,7 +44,7 @@ insertImpLam env tm _ = pure tm
 
 noteLHSPatVar : {auto e : Ref EST (EState vars)} ->
              ElabMode -> String -> Core annot ()
-noteLHSPatVar InLHS n
+noteLHSPatVar (InLHS _) n
     = do est <- get EST
          put EST (record { lhsPatVars $= (n ::) } est)
 noteLHSPatVar _ _ = pure ()
@@ -119,7 +119,7 @@ mutual
            let lazyTm = insertLazy gam tm (map (nf gam env) exp)
            case elabMode elabinfo of
                -- don't expand implicit lambda on LHS
-               InLHS => checkImp rigc process elabinfo env nest lazyTm exp
+               InLHS _ => checkImp rigc process elabinfo env nest lazyTm exp
                _ => do tm' <- insertImpLam env lazyTm exp 
                        let loc = getAnnot tm'
                        case forceName gam of
@@ -378,7 +378,7 @@ mutual
                                  pure (mkConstantApp t env))
                              pure mexpected
            solveConstraints (case elabMode elabinfo of
-                                  InLHS => InLHS
+                                  InLHS c => InLHS
                                   _ => InTerm) Normal
            defs <- get Ctxt
            delayOnFailure loc env expected ambiguous $
@@ -405,7 +405,7 @@ mutual
                              pure mexpected
            defs <- get Ctxt
            solveConstraints (case elabMode elabinfo of
-                                  InLHS => InLHS
+                                  InLHS c => InLHS
                                   _ => InTerm) Normal
            delayOnFailure loc env expected ambiguous $
             (\delayed =>
@@ -426,10 +426,10 @@ mutual
                                           -- (maybe rethink this, there should be a better
                                           -- way that allows one pass)
                                           solveConstraints (case elabMode elabinfo of
-                                                                 InLHS => InLHS
+                                                                 InLHS c => InLHS
                                                                  _ => InTerm) Normal
                                           solveConstraints (case elabMode elabinfo of
-                                                                 InLHS => InLHS
+                                                                 InLHS c => InLHS
                                                                  _ => InTerm) Normal
                                           pure res)) alts'))
     where
@@ -547,7 +547,7 @@ mutual
            traverse implicitBind (map fst argImps)
            checkExp rigc process loc elabinfo env nest bv bt expected
   checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (FnType [] expected) with (elabMode elabinfo)
-    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (FnType [] expected) | InLHS
+    checkImp rigc process elabinfo env nest (IMustUnify loc r tm) (FnType [] expected) | (InLHS _)
       = do (wantedTm, wantedTy) <- checkImp rigc process 
                                             (record { dotted = True,
                                                       elabMode = InExpr } elabinfo)
@@ -564,7 +564,7 @@ mutual
   checkImp rigc process elabinfo env nest (IMustUnify loc r tm) expected
       = throw (GenericMsg loc ("Dot pattern not valid here (unknown type) " ++ show tm))
   checkImp rigc process elabinfo env nest (IAs loc var tm) expected with (elabMode elabinfo)
-    checkImp rigc process elabinfo env nest (IAs loc var tm) (FnType [] expected) | InLHS
+    checkImp rigc process elabinfo env nest (IAs loc var tm) (FnType [] expected) | (InLHS c)
       = checkAs rigc process elabinfo loc env nest var tm expected
     checkImp rigc process elabinfo env nest (IAs loc var tm) expected | elabmode
         = throw (GenericMsg loc "@-pattern not valid here")
@@ -647,13 +647,16 @@ mutual
                          (apply (Local (Just rigb) lv) imps) tytm expected
              Nothing =>
                  do nspace <- getNS
-                    case lookupDefTyNameIn nspace x (gamma gam) of
+                    case lookupGlobalNameIn nspace x (gamma gam) of
                          [] => throw $ UndefinedName loc x
-                         [(fullname, def, ty)] => 
-                              resolveRef fullname def gam (embed ty)
+                         [(fullname, gdef)] => 
+                              do let ty = type gdef
+                                 let def = definition gdef
+                                 let mult = multiplicity gdef
+                                 resolveRef fullname gdef gam
                          ns => exactlyOne loc env (elabMode elabinfo)
-                                    (map (\ (n, def, ty) =>
-                                       (Just n, resolveRef n def gam (embed ty))) ns)
+                                    (map (\ (n, gdef) =>
+                                       (Just n, resolveRef n gdef gam)) ns)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
       rigSafe Rig1 RigW = throw (LinearMisuse loc x Rig1 RigW)
@@ -662,8 +665,8 @@ mutual
       rigSafe _ _ = pure ()
 
       defOK : Bool -> ElabMode -> NameType -> Bool
-      defOK False InLHS (DataCon _ _) = True
-      defOK False InLHS _ = False
+      defOK False (InLHS _) (DataCon _ _) = True
+      defOK False (InLHS _) _ = False
       defOK _ _ _ = True
 
       checkVisibleNS : Name -> Core annot ()
@@ -675,10 +678,14 @@ mutual
       checkVisibleNS _ = pure ()
 
       resolveRef : Reflect annot =>
-                   Name -> Def -> Defs -> Term vars -> 
+                   Name -> GlobalDef -> Defs ->
                    Core annot (Term vars, Term vars)
-      resolveRef n def gam varty
-          = do checkVisibleNS n
+      resolveRef n gdef gam
+          = do let varty = embed (type gdef)
+               let def = definition gdef
+               let mult = multiplicity gdef
+               rigSafe mult rigc
+               checkVisibleNS n
                let nt : NameType 
                         = case def of
                              PMDef _ _ _ _ _ => Func
@@ -1110,8 +1117,8 @@ mutual
           = MkImpLater loc' (newName nest n) tycons
 
       updateName : NestedNames vars -> ImpDecl annot -> ImpDecl annot
-      updateName nest (IClaim loc' vis fnopts ty) 
-           = IClaim loc' vis fnopts (updateTyName nest ty)
+      updateName nest (IClaim loc' r vis fnopts ty) 
+           = IClaim loc' r vis fnopts (updateTyName nest ty)
       updateName nest (IDef loc' n cs) 
            = IDef loc' (newName nest n) cs
       updateName nest (IData loc' vis d) 
@@ -1148,7 +1155,7 @@ mutual
                        -- Unify the given expression with the as pattern hole.
                        -- This will resolve the as pattern hole with the
                        -- pattern, which gets let-bound later
-                       convert loc InLHS env (nf gam env tm) (nf gam env patTm)
+                       convert loc (elabMode elabinfo) env (nf gam env tm) (nf gam env patTm)
                        pure (patTm, expected)
 
   checkApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
@@ -1169,8 +1176,9 @@ mutual
                                             FnType args ret => 
                                                 FnType ((argn, Erased) :: args) ret)
            gam <- get Ctxt
-           when (elabMode elabinfo /= InLHS) $
-             solveConstraints InTerm Normal
+           case elabMode elabinfo of
+                InLHS _ => pure ()
+                _ => solveConstraints InTerm Normal
            case nf gam env fnty of
                 NBind _ (Pi rigf _ ty) scdone =>
                   do impsUsed <- saveImps
@@ -1182,7 +1190,7 @@ mutual
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
                                      (_, IMustUnify _ _ _, _) => arg
-                                     (InLHS, _, Rig0) => IMustUnify loc "Erased argument" arg
+                                     (InLHS Rig1, _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      log 5 $ "Checking argument of type " ++ show (quote (noGam gam) env ty)
                                  ++ " at " ++ show (rigMult rigf rigc)
@@ -1402,7 +1410,7 @@ mutual
                -- on the LHS, just treat it as an implicit pattern variable.
                -- on the RHS, add a searchable hole
                case elabMode elabinfo of
-                    InLHS => 
+                    InLHS _ => 
                        do gam <- get Ctxt
                           hn <- genName (nameRoot bn)
                           -- Add as a pattern variable, but let it unify with other

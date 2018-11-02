@@ -20,12 +20,12 @@ public export
 data ImplicitMode = NONE | PI RigCount | PATTERN
 
 public export
-data ElabMode = InType | InLHS | InExpr
+data ElabMode = InType | InLHS RigCount | InExpr
 
 export
 Eq ElabMode where
   InType == InType = True
-  InLHS == InLHS = True
+  (InLHS c) == (InLHS c') = c == c'
   InExpr == InExpr = True
   _ == _ = False
 
@@ -254,7 +254,7 @@ checkUsedImplicits loc env mode used given tm
                ((Nothing, _) :: _) => throw (GenericMsg loc "No auto implicit here")
   where
     notUsed : ElabMode -> (Maybe Name, RawImp annot) -> Bool
-    notUsed InLHS (n, IAs _ _ (Implicit _)) = False -- added by elaborator, ignore it
+    notUsed (InLHS _) (n, IAs _ _ (Implicit _)) = False -- added by elaborator, ignore it
     notUsed _ (x, _) = not (x `elem` used)
 
 export
@@ -446,7 +446,7 @@ convert : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
           Core annot (List Name)
 convert loc elabmode env x y 
     = let umode = case elabmode of
-                       InLHS => InLHS
+                       InLHS _ => InLHS
                        _ => InTerm in
           catch (do gam <- get Ctxt
                     log 10 $ "Unifying " ++ show (quote (noGam gam) env x) ++ " and " 
@@ -509,7 +509,7 @@ bindUnsolved {vars} loc elabmode _
                                               (normaliseHoles defs env exp)
                        log 5 $ "Added unbound implicit " ++ show bindtm
                        unify (case elabmode of
-                                   InLHS => InLHS
+                                   InLHS _ => InLHS
                                    _ => InTerm)
                              loc env tm bindtm
                        pure ()
@@ -528,14 +528,14 @@ getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
             Core annot (List (Name, Term vars))
 getToBind {vars} loc elabmode impmode env toptm
     = do solveConstraints (case elabmode of
-                                InLHS => InLHS
+                                InLHS _ => InLHS
                                 _ => InTerm) Normal
          gam <- get Ctxt
          log 1 $ "Binding in " ++ show (normaliseHoles gam env toptm)
       
          bindUnsolved loc elabmode impmode
          solveConstraints (case elabmode of
-                                InLHS => InLHS
+                                InLHS _ => InLHS
                                 _ => InTerm) Normal
          dumpConstraints 2 False
 
@@ -885,7 +885,7 @@ successful : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
 successful elabmode [] = pure []
 successful elabmode ((tm, elab) :: elabs)
     = do solveConstraints (case elabmode of
-                                InLHS => InLHS
+                                InLHS _ => InLHS
                                 _ => InTerm) Normal
          init_st <- getAllState
          Right res <- tryError elab
@@ -935,7 +935,7 @@ anyOne loc elabmode [] = throw (GenericMsg loc "All elaborators failed")
 anyOne loc elabmode [(tm, elab)] = elab
 anyOne loc elabmode ((tm, e) :: es) 
     = try (do solveConstraints (case elabmode of
-                                     InLHS => InLHS
+                                     InLHS _ => InLHS
                                      _ => InTerm) Normal
               e) 
           (anyOne loc elabmode es)

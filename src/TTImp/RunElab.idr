@@ -66,7 +66,7 @@ elabScript {vars} loc elab env nest tm@(NDCon (NS ["Reflect"] (UN n)) _ _ args)
     elabCon defs "DeclareType" [fn, fty]
         = do fn <- doReify (evalClosure defs fn)
              ty <- doReify (evalClosure defs fty)
-             processType elab env nest Public [] (MkImpTy loc fn ty)
+             processType elab env nest RigW Public [] (MkImpTy loc fn ty)
              retUnit
     elabCon defs "DefineFunc" [fn, cs]
         = do fn <- doReify (evalClosure defs fn)

@@ -287,6 +287,7 @@ public export
 record GlobalDef where
      constructor MkGlobalDef
      type : ClosedTerm
+     multiplicity : RigCount
      vars : List Name -- Environment name is defined in
      visibility : Visibility
      totality : Totality
@@ -298,6 +299,7 @@ record GlobalDef where
 TTC annot GlobalDef where
   toBuf b def
       = do toBuf b (type def)
+           toBuf b (multiplicity def)
            toBuf b (vars def)
            toBuf b (visibility def)
            toBuf b (totality def)
@@ -308,6 +310,7 @@ TTC annot GlobalDef where
 
   fromBuf s b
       = do ty <- fromBuf s b
+           mult <- fromBuf s b
            vars <- fromBuf s b
            vis <- fromBuf s b
            tot <- fromBuf s b
@@ -315,7 +318,7 @@ TTC annot GlobalDef where
            def <- fromBuf s b
            exp <- fromBuf s b
            ref <- fromBuf s b
-           pure (MkGlobalDef ty vars vis tot flgs def exp ref)
+           pure (MkGlobalDef ty mult vars vis tot flgs def exp ref)
 
 getRefs : Def -> List Name
 getRefs None = []
@@ -331,8 +334,14 @@ getRefs (Guess guess constraints) = CSet.toList (getRefs guess)
 getRefs Delayed = []
 
 export
+newRigDef : RigCount -> List Name -> 
+            (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
+newRigDef r vars ty vis def 
+   = MkGlobalDef ty r vars vis Unchecked [] def Nothing (getRefs def)
+
+export
 newDef : List Name -> (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
-newDef vars ty vis def = MkGlobalDef ty vars vis Unchecked [] def Nothing (getRefs def)
+newDef = newRigDef RigW
 
 -- A context of global definitions
 public export
@@ -1005,7 +1014,7 @@ addBuiltin : {auto x : Ref Ctxt Defs} ->
              Name -> ClosedTerm -> Totality ->
              PrimFn arity -> Core annot ()
 addBuiltin n ty tot op 
-    = addDef n (MkGlobalDef ty [] Public tot [Inline] (Builtin op) Nothing [])
+    = addDef n (MkGlobalDef ty RigW [] Public tot [Inline] (Builtin op) Nothing [])
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->
