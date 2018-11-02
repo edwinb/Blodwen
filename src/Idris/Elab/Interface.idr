@@ -59,11 +59,7 @@ mkIfaceData {vars} fc vis env constraints n conName ps dets meths
 
 -- Get the implicit arguments for a method declaration or constraint hint
 -- to allow us to build the data declaration
-getMethDecl : {auto c : Ref Ctxt Defs} ->
-              {auto u : Ref UST (UState FC)} ->
-              {auto i : Ref ImpST (ImpState FC)} ->
-              {auto m : Ref Meta (Metadata FC)} ->
-              Env Term vars -> NestedNames vars ->
+getMethDecl : Env Term vars -> NestedNames vars ->
               (params : List (Name, RawImp FC)) ->
               (mnames : List Name) ->
               (FC, List FnOpt, n, (Bool, RawImp FC)) -> (n, RawImp FC)

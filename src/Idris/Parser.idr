@@ -891,6 +891,46 @@ implDecl fname indents
                          vis cons n params iname 
                          (map (collectDefs . concat) body))
 
+fieldDecl : FileName -> IndentInfo -> Rule (List PField)
+fieldDecl fname indents
+      = do symbol "{"
+           commit
+           fs <- fieldBody Implicit
+           symbol "}"
+           atEnd indents
+           pure fs
+    <|> do fs <- fieldBody Explicit
+           atEnd indents
+           pure fs
+  where
+    fieldBody : PiInfo -> Rule (List PField)
+    fieldBody p
+        = do start <- location
+             ns <- sepBy1 (symbol ",") unqualifiedName
+             symbol ":"
+             ty <- expr EqOK fname indents
+             end <- location
+             pure (map (\n => MkField (MkFC fname start end)
+                                      Rig1 p (UN n) ty) ns)
+
+recordDecl : FileName -> IndentInfo -> Rule PDecl
+recordDecl fname indents
+    = do start <- location
+         vis <- visibility
+         col <- column
+         keyword "record"
+         commit
+         n <- name
+         params <- many (ifaceParam fname indents)
+         keyword "where"
+         dc <- option Nothing (do exactIdent "constructor"
+                                  n <- name
+                                  pure (Just n))
+         flds <- assert_total (blockAfter col (fieldDecl fname))
+         end <- location
+         pure (PRecord (MkFC fname start end) 
+                       vis n params dc (concat flds))
+
 claim : FileName -> IndentInfo -> Rule PDecl
 claim fname indents
     = do start <- location
@@ -953,6 +993,8 @@ topDecl fname indents
   <|> do d <- ifaceDecl fname indents
          pure [d]
   <|> do d <- implDecl fname indents
+         pure [d]
+  <|> do d <- recordDecl fname indents
          pure [d]
   <|> do d <- claim fname indents
          pure [d]

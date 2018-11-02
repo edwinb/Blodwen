@@ -213,6 +213,10 @@ mutual
        Overloadable : Name -> Directive
 
   public export
+  data PField : Type where
+       MkField : FC -> RigCount -> PiInfo -> Name -> (ty : PTerm) -> PField
+
+  public export
   data PDecl : Type where
        PClaim : FC -> Visibility -> List FnOpt -> PTypeDecl -> PDecl
        PDef : FC -> List PClause -> PDecl
@@ -235,6 +239,14 @@ mutual
                          (implName : Maybe Name) ->
                          Maybe (List PDecl) ->
                          PDecl
+       PRecord : FC ->
+                 Visibility ->
+                 Name ->
+                 (params : List (Name, PTerm)) ->
+                 (conName : Maybe Name) ->
+                 List PField ->
+                 PDecl
+
        -- TODO: PRecord
        -- TODO: PPostulate
        -- TODO: PMutual

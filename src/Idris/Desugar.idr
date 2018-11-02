@@ -15,6 +15,7 @@ import Idris.Syntax
 
 import Idris.Elab.Implementation
 import Idris.Elab.Interface
+import Idris.Elab.Record
 
 import Parser.RawImp
 
@@ -345,6 +346,16 @@ mutual
   desugarData ps (MkPLater fc n tycon) 
       = pure $ MkImpLater fc n (bindTypeNames ps !(desugar AnyExpr ps tycon))
 
+  desugarField : {auto s : Ref Syn SyntaxInfo} ->
+                 {auto c : Ref Ctxt Defs} ->
+                 {auto u : Ref UST (UState FC)} ->
+                 {auto i : Ref ImpST (ImpState FC)} ->
+                 {auto m : Ref Meta (Metadata FC)} ->
+                 List Name -> PField -> 
+                 Core FC (FC, RigCount, PiInfo, Name, RawImp FC)
+  desugarField ps (MkField fc rig p n ty)
+      = pure $ (fc, rig, p, n, (bindTypeNames ps !(desugar AnyExpr ps ty)))
+
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
   export
@@ -418,6 +429,24 @@ mutual
                              elabImplementation fc vis env nest consb
                                                 tn paramsb impname 
                                                 body')]
+  desugarDecl ps (PRecord fc vis tn params conname fields)
+      = do params' <- traverse (\ ntm => do tm' <- desugar AnyExpr ps (snd ntm)
+                                            pure (fst ntm, tm')) params
+           let fnames = map fname fields
+           -- Look for bindable names in the parameters
+           let bnames = concatMap (findBindableNames True 
+                                      (ps ++ fnames ++ map fst params) []) 
+                                  (map snd params')
+           let paramsb = map (\ (n, tm) => (n, doBind bnames tm)) params'
+           fields' <- traverse (desugarField (ps ++ map fname fields ++
+                                              map fst params)) fields
+           pure [IPragma (\env, nest => 
+                             elabRecord fc vis env nest tn
+                                           paramsb conname 
+                                           fields')]
+    where
+      fname : PField -> Name
+      fname (MkField _ _ _ n _) = n
   desugarDecl ps (PFixity fc Prefix prec n) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)

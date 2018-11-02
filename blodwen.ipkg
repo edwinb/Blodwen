@@ -17,6 +17,7 @@ modules = Idris.BindImplicits,
 
           Idris.Elab.Implementation,
           Idris.Elab.Interface,
+          Idris.Elab.Record,
 
           Idris.IDEMode.CaseSplit,
           Idris.IDEMode.Commands,
