@@ -202,3 +202,16 @@ pruneByType defs target alts
           if isNil res
              then alts -- if none of them work, better to show all the errors
              else res
+
+export
+ambiguous : Error annot -> Bool
+ambiguous (AmbiguousElab _ _ _) = True
+ambiguous (AmbiguousName _ _) = True
+ambiguous (AllFailed _) = True
+ambiguous (InType _ _ err) = ambiguous err
+ambiguous (InCon _ _ err) = ambiguous err
+ambiguous (InLHS _ _ err) = ambiguous err
+ambiguous (InRHS _ _ err) = ambiguous err
+ambiguous (WhenUnifying _ _ _ _ err) = ambiguous err
+ambiguous _ = False
+
