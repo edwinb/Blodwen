@@ -247,7 +247,6 @@ mutual
                  List PField ->
                  PDecl
 
-       -- TODO: PRecord
        -- TODO: PPostulate
        -- TODO: PMutual
        -- TODO: POpen (for opening named interfaces)

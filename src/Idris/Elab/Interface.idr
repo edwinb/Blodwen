@@ -7,10 +7,10 @@ import Core.Metadata
 import Core.TT
 import Core.Unify
 
-import Idris.BindImplicits
 import Idris.Resugar
 import Idris.Syntax
 
+import TTImp.BindImplicits
 import TTImp.ProcessTTImp
 import TTImp.Elab
 import TTImp.Elab.Unelab

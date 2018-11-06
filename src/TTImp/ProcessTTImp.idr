@@ -14,6 +14,7 @@ import Core.Unify
 import TTImp.Elab
 import TTImp.ProcessData
 import TTImp.ProcessDef
+import TTImp.ProcessRecord
 import TTImp.ProcessType
 import TTImp.RunElab
 import TTImp.TTImp
@@ -49,6 +50,9 @@ processDecl incase env nest (IDef loc n cs)
 processDecl incase env nest (IData loc vis d) 
     = processData (\c, u, i, m => processDecl {c} {u} {i} {m})
                   env nest vis d
+processDecl incase env nest (IRecord loc vis r) 
+    = processRecord (\c, u, i, m => processDecl {c} {u} {i} {m})
+                    env nest vis r
 processDecl incase env nest (INamespace loc ns ds)
     = do oldns <- getNS
          extendNS (reverse ns)

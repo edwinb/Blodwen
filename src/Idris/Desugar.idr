@@ -10,15 +10,14 @@ import Core.Unify
 
 import Data.StringMap
 
-import Idris.BindImplicits
 import Idris.Syntax
 
 import Idris.Elab.Implementation
 import Idris.Elab.Interface
-import Idris.Elab.Record
 
 import Parser.RawImp
 
+import TTImp.BindImplicits
 import TTImp.TTImp
 import TTImp.Utils
 
@@ -352,9 +351,9 @@ mutual
                  {auto i : Ref ImpST (ImpState FC)} ->
                  {auto m : Ref Meta (Metadata FC)} ->
                  List Name -> PField -> 
-                 Core FC (FC, RigCount, PiInfo, Name, RawImp FC)
+                 Core FC (IField FC)
   desugarField ps (MkField fc rig p n ty)
-      = pure $ (fc, rig, p, n, (bindTypeNames ps !(desugar AnyExpr ps ty)))
+      = pure (MkIField fc rig p n (bindTypeNames ps !(desugar AnyExpr ps ty)))
 
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
@@ -437,13 +436,12 @@ mutual
            let bnames = concatMap (findBindableNames True 
                                       (ps ++ fnames ++ map fst params) []) 
                                   (map snd params')
+           fields' <- traverse (desugarField (ps ++ fnames ++ map fst params))
+                               fields
            let paramsb = map (\ (n, tm) => (n, doBind bnames tm)) params'
            fields' <- traverse (desugarField (ps ++ map fname fields ++
                                               map fst params)) fields
-           pure [IPragma (\env, nest => 
-                             elabRecord fc vis env nest tn
-                                           paramsb conname 
-                                           fields')]
+           pure [IRecord fc vis (MkImpRecord fc tn paramsb conname fields')]
     where
       fname : PField -> Name
       fname (MkField _ _ _ n _) = n

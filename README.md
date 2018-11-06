@@ -76,8 +76,9 @@ play. Good luck :).
 Things still missing
 ====================
 
-+ Some high level syntax, notably records, 'with', dependent pairs, and
-  numeric ranges
++ Some high level syntax, notably record update syntax, 'with', 
+  dependent pairs, and numeric ranges
++ 'mutual' blocks
 + Cumulativity and totality checking
 + Codata (or rather, you can have it, but there's no productivity check...)
 + Parts of the ide-mode

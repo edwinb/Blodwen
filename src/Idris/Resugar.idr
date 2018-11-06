@@ -252,6 +252,25 @@ mutual
   toPData (MkImpLater _ n ty)
       = pure (MkPLater emptyFC n !(toPTerm startPrec ty))
 
+  toPField : {auto c : Ref Ctxt Defs} ->
+             {auto s : Ref Syn SyntaxInfo} ->
+             IField annot -> Core FC PField
+  toPField (MkIField _ c p n ty)
+      = do ty' <- toPTerm startPrec ty
+           pure (MkField emptyFC c p n ty')
+
+  toPRecord : {auto c : Ref Ctxt Defs} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              ImpRecord annot -> 
+              Core FC (Name, List (Name, PTerm), Maybe Name, List PField)
+  toPRecord (MkImpRecord _ n ps con fs)
+      = do ps' <- traverse (\ (n, ty) => 
+                                   do ty' <- toPTerm startPrec ty
+                                      pure (n, ty')) ps
+           fs' <- traverse toPField fs
+           pure (n, ps', con, fs')
+
+
   toPDecl : {auto c : Ref Ctxt Defs} ->
             {auto s : Ref Syn SyntaxInfo} ->
             ImpDecl annot -> Core FC (Maybe PDecl)
@@ -261,6 +280,9 @@ mutual
       = pure (Just (PDef emptyFC !(traverse toPClause cs)))
   toPDecl (IData _ vis d)
       = pure (Just (PData emptyFC vis !(toPData d)))
+  toPDecl (IRecord _ vis r)
+      = do (n, ps, con, fs) <- toPRecord r
+           pure (Just (PRecord emptyFC vis n ps con fs))
   toPDecl (IReflect _ tm)
       = pure (Just (PReflect emptyFC !(toPTerm startPrec tm)))
   toPDecl (INamespace _ ns ds)

@@ -1,7 +1,6 @@
 package blodwen
 
-modules = Idris.BindImplicits,
-          Idris.CommandLine,
+modules = Idris.CommandLine,
           Idris.Desugar,
           Idris.Error,
           Idris.ModTree,

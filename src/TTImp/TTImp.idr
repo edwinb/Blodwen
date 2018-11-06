@@ -113,6 +113,19 @@ mutual
                     ImpData annot
   
   public export
+  data IField : Type -> Type where
+       MkIField : annot -> RigCount -> PiInfo -> Name -> RawImp annot ->
+                  IField annot
+
+  public export
+  data ImpRecord : Type -> Type where
+       MkImpRecord : annot -> (n : Name) ->
+                     (params : List (Name, RawImp annot)) ->
+                     (conName : Maybe Name) ->
+                     (fields : List (IField annot)) ->
+                     ImpRecord annot
+                     
+  public export
   data FnOpt : Type where
        Inline : FnOpt
        -- Flag means the hint is a direct hint, not a function which might
@@ -148,6 +161,7 @@ mutual
                 Visibility -> List FnOpt -> ImpTy annot -> ImpDecl annot
        IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
        IData : annot -> Visibility -> ImpData annot -> ImpDecl annot
+       IRecord : annot -> Visibility -> ImpRecord annot -> ImpDecl annot
        INamespace : annot -> List String -> List (ImpDecl annot) ->
                     ImpDecl annot
        IReflect : annot -> RawImp annot -> ImpDecl annot
@@ -245,6 +259,7 @@ definedInBlock = concatMap defName
     defName (IClaim _ _ _ _ ty) = [getName ty]
     defName (IData _ _ (MkImpData _ n _ _ cons)) = n :: map getName cons
     defName (IData _ _ (MkImpLater _ n _)) = [n]
+    defName (IRecord _ _ (MkImpRecord _ n _ _ _)) = [n]
     defName _ = []
 
 export
@@ -353,11 +368,24 @@ mutual
         = "data " ++ show n ++ " : " ++ show tycon
 
   export
+  Show (IField annot) where
+    show (MkIField _ c Explicit n ty) = show n ++ " : " ++ show ty
+    show (MkIField _ c _ n ty) = "{" ++ show n ++ " : " ++ show ty ++ "}"
+
+  export
+  Show (ImpRecord annot) where
+    show (MkImpRecord _ n params con fields)
+        = "record " ++ show n ++ " " ++ show params ++ 
+          " " ++ show con ++ "\n\t" ++ 
+          showSep "\n\t" (map show fields) ++ "\n"
+
+  export
   Show (ImpDecl annot) where
     show (IClaim _ _ _ _ ty) = show ty
     show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                          showSep "\n\t" (map show cs)
     show (IData _ _ d) = show d
+    show (IRecord _ _ d) = show d
     show (INamespace _ ns decls) 
         = "namespace " ++ show ns ++ 
           showSep "\n" (assert_total $ map show decls)
@@ -790,6 +818,26 @@ mutual
                _ => corrupt "ImpData"
 
   export
+  TTC annot annot => TTC annot (IField annot) where
+    toBuf b (MkIField fc c p n ty)
+        = do toBuf b fc; toBuf b c; toBuf b p; toBuf b n; toBuf b ty
+
+    fromBuf s b
+        = do fc <- fromBuf s b; c <- fromBuf s b; p <- fromBuf s b
+             n <- fromBuf s b; ty <- fromBuf s b
+             pure (MkIField fc c p n ty)
+
+  export
+  TTC annot annot => TTC annot (ImpRecord annot) where
+    toBuf b (MkImpRecord fc n ps con fs)
+        = do toBuf b fc; toBuf b n; toBuf b ps; toBuf b con; toBuf b fs
+
+    fromBuf s b
+        = do fc <- fromBuf s b; n <- fromBuf s b; ps <- fromBuf s b
+             con <- fromBuf s b; fs <- fromBuf s b
+             pure (MkImpRecord fc n ps con fs)
+
+  export
   TTC annot FnOpt where
     toBuf b Inline = tag 0
     toBuf b (Hint t) = do tag 1; toBuf b t
@@ -815,17 +863,19 @@ mutual
         = do tag 1; toBuf b fc; toBuf b n; toBuf b xs
     toBuf b (IData fc vis d) 
         = do tag 2; toBuf b fc; toBuf b vis; toBuf b d
+    toBuf b (IRecord fc vis r) 
+        = do tag 3; toBuf b fc; toBuf b vis; toBuf b r
     toBuf b (INamespace fc xs ds) 
-        = do tag 3; toBuf b fc; toBuf b xs; toBuf b ds
+        = do tag 4; toBuf b fc; toBuf b xs; toBuf b ds
     toBuf b (IReflect fc tm) 
-        = do tag 4; toBuf b fc; toBuf b tm
+        = do tag 5; toBuf b fc; toBuf b tm
     toBuf b (ImplicitNames fc xs) 
-        = do tag 5; toBuf b fc; toBuf b xs
+        = do tag 6; toBuf b fc; toBuf b xs
     toBuf b (IHint fc hintname target) 
-        = do tag 6; toBuf b fc; toBuf b hintname; toBuf b target
+        = do tag 7; toBuf b fc; toBuf b hintname; toBuf b target
     toBuf b (IPragma f) = throw (InternalError "Can't write Pragma")
     toBuf b (ILog n) 
-        = do tag 7; toBuf b n
+        = do tag 8; toBuf b n
 
     fromBuf s b
         = case !getTag of
@@ -839,17 +889,20 @@ mutual
                2 => do fc <- fromBuf s b; vis <- fromBuf s b
                        d <- fromBuf s b
                        pure (IData fc vis d)
-               3 => do fc <- fromBuf s b; xs <- fromBuf s b
+               3 => do fc <- fromBuf s b; vis <- fromBuf s b
+                       r <- fromBuf s b
+                       pure (IRecord fc vis r)
+               4 => do fc <- fromBuf s b; xs <- fromBuf s b
                        ds <- fromBuf s b
                        pure (INamespace fc xs ds)
-               4 => do fc <- fromBuf s b; tm <- fromBuf s b
+               5 => do fc <- fromBuf s b; tm <- fromBuf s b
                        pure (IReflect fc tm)
-               5 => do fc <- fromBuf s b; xs <- fromBuf s b
+               6 => do fc <- fromBuf s b; xs <- fromBuf s b
                        pure (ImplicitNames fc xs)
-               6 => do fc <- fromBuf s b; hintname <- fromBuf s b
+               7 => do fc <- fromBuf s b; hintname <- fromBuf s b
                        target <- fromBuf s b
                        pure (IHint fc hintname target)
-               7 => do n <- fromBuf s b
+               8 => do n <- fromBuf s b
                        pure (ILog n)
                _ => corrupt "ImpDecl"
 

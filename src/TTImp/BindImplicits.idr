@@ -1,4 +1,4 @@
-module Idris.BindImplicits
+module TTImp.BindImplicits
 
 import Core.TT
 import TTImp.TTImp
