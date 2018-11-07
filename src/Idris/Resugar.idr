@@ -163,6 +163,9 @@ mutual
       = do ds' <- traverse toPDecl ds
            sc' <- toPTerm startPrec sc
            bracket p startPrec (PLocal emptyFC (mapMaybe id ds') sc')
+  toPTerm p (IUpdate _ ds)
+      = do ds' <- traverse toPFieldUpdate ds
+           bracket p startPrec (PUpdate emptyFC ds')
   toPTerm p tm@(IApp _ fn arg)
       = do arg' <- toPTerm argPrec arg
            app <- toPTermApp fn [(Nothing, arg')]
@@ -226,6 +229,16 @@ mutual
   toPTermApp fn args 
       = do fn' <- toPTerm appPrec fn
            mkApp fn' args
+
+  toPFieldUpdate : {auto c : Ref Ctxt Defs} ->
+                   {auto s : Ref Syn SyntaxInfo} ->
+                   IFieldUpdate annot -> Core FC PFieldUpdate
+  toPFieldUpdate (ISetField p v)
+      = do v' <- toPTerm startPrec v
+           pure (PSetField p v')
+  toPFieldUpdate (ISetFieldApp p v)
+      = do v' <- toPTerm startPrec v
+           pure (PSetFieldApp p v')
 
   toPClause : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->

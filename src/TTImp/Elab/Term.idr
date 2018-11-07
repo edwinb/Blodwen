@@ -286,6 +286,8 @@ mutual
           checkCase rigc process elabinfo loc env nest scr scrty alts expected
   checkImp rigc process elabinfo env nest (ILocal loc nested scope) expected 
       = checkLocal rigc process elabinfo loc env nest nested scope expected
+  checkImp rigc process elabinfo env nest (IUpdate loc fs) expected
+      = throw (InternalError "record update not implemented")
   checkImp {vars} rigc process elabinfo env nest (IApp loc fn arg) expected 
       = do -- Collect the implicits from the top level application first
            let (fn', args) = collectGivenImps fn

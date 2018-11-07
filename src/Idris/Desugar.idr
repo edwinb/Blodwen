@@ -116,6 +116,8 @@ mutual
   desugar side ps (PLocal fc xs scope) 
       = pure $ ILocal fc (concat !(traverse (desugarDecl ps) xs)) 
                          !(desugar side (definedIn xs ++ ps) scope)
+  desugar side ps (PUpdate fc fs)
+      = pure $ IUpdate fc !(traverse (desugarUpdate side ps) fs)
   desugar side ps (PApp fc x y) 
       = pure $ IApp fc !(desugar side ps x) !(desugar side ps y)
   desugar side ps (PImplicitApp fc x argn y) 
@@ -211,6 +213,17 @@ mutual
       toPure tm = DoExp fc (PApp fc (PRef fc (UN "pure")) tm)
   desugar side ps (PRewrite fc rule tm)
       = pure $ IRewrite fc !(desugar side ps rule) !(desugar side ps tm)
+
+  desugarUpdate : {auto s : Ref Syn SyntaxInfo} ->
+                  {auto c : Ref Ctxt Defs} ->
+                  {auto u : Ref UST (UState FC)} ->
+                  {auto i : Ref ImpST (ImpState FC)} ->
+                  {auto m : Ref Meta (Metadata FC)} ->
+                  Side -> List Name -> PFieldUpdate -> Core FC (IFieldUpdate FC)
+  desugarUpdate side ps (PSetField p v)
+      = pure (ISetField p !(desugar side ps v))
+  desugarUpdate side ps (PSetFieldApp p v)
+      = pure (ISetFieldApp p !(desugar side ps v))
 
   expandList : {auto s : Ref Syn SyntaxInfo} ->
                {auto c : Ref Ctxt Defs} ->

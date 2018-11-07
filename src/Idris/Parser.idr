@@ -218,6 +218,7 @@ mutual
     <|> atom fname
     <|> binder fname indents
     <|> rewrite_ fname indents
+    <|> record_ fname indents
     <|> do start <- location
            symbol ".("
            commit
@@ -458,6 +459,26 @@ mutual
            atEnd indents
            end <- location
            pure (PIfThenElse (MkFC fname start end) x t e)
+
+  record_ : FileName -> IndentInfo -> Rule PTerm
+  record_ fname indents
+      = do start <- location
+           keyword "record"
+           commit
+           symbol "{"
+           fs <- sepBy1 (symbol ",") (field fname indents)
+           symbol "}"
+           end <- location
+           pure (PUpdate (MkFC fname start end) fs)
+
+  field : FileName -> IndentInfo -> Rule PFieldUpdate
+  field fname indents
+      = do path <- sepBy1 (symbol "->") unqualifiedName
+           upd <- (do symbol "="; pure PSetField)
+                      <|>
+                  (do symbol "$="; pure PSetFieldApp)
+           val <- opExpr NoEq fname indents
+           pure (upd path val)
 
   rewrite_ : FileName -> IndentInfo -> Rule PTerm
   rewrite_ fname indents

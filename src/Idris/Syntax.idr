@@ -118,6 +118,7 @@ mutual
               (alts : List PClause) -> PTerm
        PCase : FC -> PTerm -> List PClause -> PTerm
        PLocal : FC -> List PDecl -> (scope : PTerm) -> PTerm
+       PUpdate : FC -> List PFieldUpdate -> PTerm
        PApp : FC -> PTerm -> PTerm -> PTerm
        PImplicitApp : FC -> PTerm -> (argn : Maybe Name) -> PTerm -> PTerm
        PSearch : FC -> (depth : Nat) -> PTerm
@@ -152,6 +153,11 @@ mutual
 
        -- TODO: Dependent pairs, ranges, idiom brackets (?), 
        -- 'with' disambiguation
+
+  public export
+  data PFieldUpdate : Type where
+       PSetField : (path : List String) -> PTerm -> PFieldUpdate
+       PSetFieldApp : (path : List String) -> PTerm -> PFieldUpdate
 
   public export
   data PDo : Type where
@@ -351,6 +357,10 @@ mutual
   showDo (DoRewrite _ rule)
       = "rewrite " ++ show rule
 
+  showUpdate : PFieldUpdate -> String
+  showUpdate (PSetField p v) = showSep "->" p ++ " = " ++ show v
+  showUpdate (PSetFieldApp p v) = showSep "->" p ++ " $= " ++ show v
+
   export
   Show PTerm where
     show (PRef _ n) = show n
@@ -391,6 +401,8 @@ mutual
         showCase (MkImpossible _ lhs) = show lhs ++ " impossible"
     show (PLocal _ ds sc) -- We'll never see this when displaying a normal form...
         = "let { << definitions >>  } in " ++ show sc
+    show (PUpdate _ fs)
+        = "record { " ++ showSep ", " (map showUpdate fs) ++ " }"
     show (PApp _ f a) = show f ++ " " ++ show a
     show (PImplicitApp _ f Nothing a) 
         = show f ++ " @{" ++ show a ++ "}"
