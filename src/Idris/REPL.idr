@@ -357,7 +357,6 @@ process (Eval itm)
                     then do ity <- resugar [] (norm gam [] ty)
                             coreLift (putStrLn (show itm ++ " : " ++ show ity))
                     else coreLift (putStrLn (show itm))
-                 dumpConstraints 0 True
                  pure True
   where
     nfun : REPLEval -> Defs -> Env Term vs -> Term vs -> Term vs

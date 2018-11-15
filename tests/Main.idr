@@ -33,7 +33,7 @@ blodwenTests
        "interface009", "interface010",
        "lazy001","lazy002",
        "linear001", "linear002", "linear003", "linear004", "linear005",
-       "record001",
+       "record001", "record002",
        "reflect001",
        "perf001",
        "prelude001",
