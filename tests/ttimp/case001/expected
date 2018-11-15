@@ -2,7 +2,7 @@ Welcome to TTImp. Good luck.
 Loading cases.tti
 Processing as TTImp
 LOG 0: --- CONSTRAINTS AND HOLES ---
-LOG 0: ?Main.something : (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect !m !a)) -> (0 n : Main.Nat) -> (xs : (Main.Vect !n !a)) -> (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect !m !a)) -> (0 {k:155} : Main.Nat) -> (xs : (Main.Vect !{k:155} !a)) -> (x : !a) -> (0 n : Main.Nat) -> (Main.Vect (Main.plus !{k:155} !m) !a)
+LOG 0: ?Main.something : (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect m[0] a[1])) -> (0 n : Main.Nat) -> (xs : (Main.Vect n[0] a[3])) -> (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect m[0] a[1])) -> (0 {k:155} : Main.Nat) -> (xs : (Main.Vect {k:155}[0] a[3])) -> (x : a[4]) -> (0 n : Main.Nat) -> (Main.Vect (Main.plus {k:155}[3] m[5]) a[6])
 Blodwen> (Main.Cons (Main.S (Main.S (Main.S Main.Z))) Integer 1 (Main.Cons (Main.S (Main.S Main.Z)) Integer 2 (Main.Cons (Main.S Main.Z) Integer 3 (Main.Cons Main.Z Integer 4 (Main.Nil Integer))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
 Blodwen> (Main.Cons (Main.S (Main.S (Main.S Main.Z))) Integer 1 (Main.something Integer (Main.S (Main.S Main.Z)) (Main.Cons (Main.S Main.Z) Integer 3 (Main.Cons Main.Z Integer 4 (Main.Nil Integer))) (Main.S (Main.S Main.Z)) (Main.Cons (Main.S Main.Z) Integer 1 (Main.Cons Main.Z Integer 2 (Main.Nil Integer))) Integer (Main.S (Main.S Main.Z)) (Main.Cons (Main.S Main.Z) Integer 3 (Main.Cons Main.Z Integer 4 (Main.Nil Integer))) (Main.S Main.Z) (Main.Cons Main.Z Integer 2 (Main.Nil Integer)) 1 (Main.S (Main.S Main.Z)))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
 Blodwen> Bye for now!
@@ -10,7 +10,7 @@ Welcome to TTImp. Good luck.
 Loading build/cases.ttc
 Processing as TTC
 LOG 0: --- CONSTRAINTS AND HOLES ---
-LOG 0: ?Main.something : (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect !m !a)) -> (0 n : Main.Nat) -> (xs : (Main.Vect !n !a)) -> (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect !m !a)) -> (0 {k:155} : Main.Nat) -> (xs : (Main.Vect !{k:155} !a)) -> (x : !a) -> (0 n : Main.Nat) -> (Main.Vect (Main.plus !{k:155} !m) !a)
+LOG 0: ?Main.something : (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect m[0] a[1])) -> (0 n : Main.Nat) -> (xs : (Main.Vect n[0] a[3])) -> (0 a : Type) -> (0 m : Main.Nat) -> (ys : (Main.Vect m[0] a[1])) -> (0 {k:155} : Main.Nat) -> (xs : (Main.Vect {k:155}[0] a[3])) -> (x : a[4]) -> (0 n : Main.Nat) -> (Main.Vect (Main.plus {k:155}[3] m[5]) a[6])
 Blodwen> (Main.Cons (Main.S (Main.S (Main.S Main.Z))) Integer 1 (Main.Cons (Main.S (Main.S Main.Z)) Integer 2 (Main.Cons (Main.S Main.Z) Integer 3 (Main.Cons Main.Z Integer 4 (Main.Nil Integer))))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
 Blodwen> (Main.Cons (Main.S (Main.S (Main.S Main.Z))) Integer 1 (Main.something Integer (Main.S (Main.S Main.Z)) (Main.Cons (Main.S Main.Z) Integer 3 (Main.Cons Main.Z Integer 4 (Main.Nil Integer))) (Main.S (Main.S Main.Z)) (Main.Cons (Main.S Main.Z) Integer 1 (Main.Cons Main.Z Integer 2 (Main.Nil Integer))) Integer (Main.S (Main.S Main.Z)) (Main.Cons (Main.S Main.Z) Integer 3 (Main.Cons Main.Z Integer 4 (Main.Nil Integer))) (Main.S Main.Z) (Main.Cons Main.Z Integer 2 (Main.Nil Integer)) 1 (Main.S (Main.S Main.Z)))) : (Main.Vect (Main.S (Main.S (Main.S (Main.S Main.Z)))) Integer)
 Blodwen> Bye for now!

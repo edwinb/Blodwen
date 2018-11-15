@@ -824,13 +824,17 @@ mutual
                        put EST
                            (record { boundNames $= ((n, (tm, expected)) ::),
                                      toBind $= ((n, (tm, expected)) ::),
-                                     asVariables $= ((n, rigc) ::) } est)
+                                     asVariables $= ((n, asRig rigc) ::) } est)
                        gam <- get Ctxt
                        -- Unify the given expression with the as pattern hole.
                        -- This will resolve the as pattern hole with the
                        -- pattern, which gets let-bound later
                        convert loc (elabMode elabinfo) env (nf gam env tm) (nf gam env patTm)
                        pure (patTm, expected)
+    where
+      asRig : RigCount -> RigCount
+      asRig RigW = RigW
+      asRig _ = Rig0 -- can't use if matching on it
 
   checkApp : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->

@@ -21,20 +21,22 @@ import Data.List.Views
 
 %default covering
 
-findPLetRenames : Term vars -> List (Name, Name)
+findPLetRenames : Term vars -> List (Name, (RigCount, Name))
 findPLetRenames (Bind n (PLet c (Local {x = x@(MN _ _)} _ p) ty) sc)
-    = (x, n) :: findPLetRenames sc
+    = (x, (c, n)) :: findPLetRenames sc
 findPLetRenames (Bind n _ sc) = findPLetRenames sc
 findPLetRenames tm = []
 
-doPLetRenames : List (Name, Name) -> List Name -> Term vars -> Term vars
+doPLetRenames : List (Name, (RigCount, Name)) -> List Name -> Term vars -> Term vars
 doPLetRenames ns drops (Bind n b@(PLet _ _ _) sc)
     = if n `elem` drops
          then subst Erased (doPLetRenames ns drops sc)
          else Bind n b (doPLetRenames ns drops sc)
 doPLetRenames ns drops (Bind n b sc)
     = case lookup n ns of
-           Just n' => Bind n' b (doPLetRenames ns (n' :: drops) (renameTop n' sc))
+           Just (c, n') => 
+              Bind n' (setMultiplicity b c)
+                   (doPLetRenames ns (n' :: drops) (renameTop n' sc))
            Nothing => Bind n b (doPLetRenames ns drops sc)
 doPLetRenames ns drops sc = sc
 

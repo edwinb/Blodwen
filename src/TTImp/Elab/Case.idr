@@ -343,7 +343,11 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
     -- in the list) don't consume it
     replace : Elem x vs -> RawImp annot -> List (Maybe (RawImp annot)) ->
               List (RawImp annot)
-    replace Here lhs (_ :: xs) = lhs :: mapMaybe id xs
+    replace Here lhs (old :: xs) 
+       = let lhs' = case old of
+                         Just (IAs loc' n _) => IAs loc' n lhs 
+                         _ => lhs in
+             lhs' :: mapMaybe id xs
     replace (There p) lhs (Nothing :: xs) 
         = replace p lhs xs
     replace (There p) lhs (Just x :: xs) 

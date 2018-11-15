@@ -1,14 +1,14 @@
 Welcome to TTImp. Good luck.
 Loading interp.tti
 Processing as TTImp
-Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus !var !var) : ({arg:102} : Main.Nat) -> ({arg:102} : Main.Nat) -> Main.Nat
-Blodwen> \var : Main.Nat => (Main.plus !var (Main.S Main.Z)) : ({arg:102} : Main.Nat) -> Main.Nat
+Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus var[0] var[1]) : ({arg:102} : Main.Nat) -> ({arg:102} : Main.Nat) -> Main.Nat
+Blodwen> \var : Main.Nat => (Main.plus var[0] (Main.S Main.Z)) : ({arg:102} : Main.Nat) -> Main.Nat
 Blodwen> (Main.S (Main.S (Main.S (Main.S Main.Z)))) : Main.Nat
 Blodwen> Bye for now!
 Welcome to TTImp. Good luck.
 Loading build/interp.ttc
 Processing as TTC
-Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus !var !var) : ({arg:102} : Main.Nat) -> ({arg:102} : Main.Nat) -> Main.Nat
-Blodwen> \var : Main.Nat => (Main.plus !var (Main.S Main.Z)) : ({arg:102} : Main.Nat) -> Main.Nat
+Blodwen> \var : Main.Nat => \var : Main.Nat => (Main.plus var[0] var[1]) : ({arg:102} : Main.Nat) -> ({arg:102} : Main.Nat) -> Main.Nat
+Blodwen> \var : Main.Nat => (Main.plus var[0] (Main.S Main.Z)) : ({arg:102} : Main.Nat) -> Main.Nat
 Blodwen> (Main.S (Main.S (Main.S (Main.S Main.Z)))) : Main.Nat
 Blodwen> Bye for now!

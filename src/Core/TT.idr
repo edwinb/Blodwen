@@ -1160,8 +1160,9 @@ Show (Term vars) where
 
         showApp : Term vars -> List (Term vars) -> String
         -- It's for debugging purposes, so it's useful to mark resolved
-        -- names somehow; resolved names are prefixed with a '!'
-        showApp (Local {x} r y) [] = "!" ++ show x -- ++ "[" ++ show (vCount y) ++ "]"
+        -- names somehow; resolved names are displayed with their de Bruijn
+				-- index count
+        showApp (Local {x} r y) [] = show x ++ "[" ++ show (vCount y) ++ "]"
         showApp (Ref x fn) [] = show fn
         showApp (Bind n (Lam c x ty) sc) [] 
             = assert_total ("\\" ++ showCount c ++ show n ++ " : " ++ show ty ++ " => " ++ show sc)
