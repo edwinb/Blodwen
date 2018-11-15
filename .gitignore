@@ -11,4 +11,9 @@ auto-save-list
 tramp
 .\#*
 
-blodwen
+/blodwen
+/ttimp
+/runtests
+/src/BlodwenPaths.idr
+/tests/**/output
+/*/build/
