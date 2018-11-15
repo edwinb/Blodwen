@@ -87,7 +87,7 @@ findCons n lhs
               do defs <- get Ctxt
                  case findTyName defs [] n lhs of
                       Nothing => pure (SplitFail (CantSplitThis n 
-                                         ("Can't find name " ++ show n ++ " in LHS")))
+                                         ("Can't find type of " ++ show n ++ " in LHS")))
                       Just tyn =>
                           case lookupDefExact tyn (gamma defs) of
                                Just (TCon _ _ _ _ cons) => pure (OK (fn, tyn, cons))

@@ -265,3 +265,17 @@ names defined in the inner namespace are explicitly exported. The visibility
 modifiers "export", "public export", and "private" control whether the name
 can be seen in any other namespace, and it's nothing to do with the file
 they're defined in at all.
+
+Records
+-------
+Records are part of TTImp (rather than the surface language). Elaborating a
+record declaration creates a data type and associated projection functions.
+Record setters are generated on demand while elaborating TTImp (in
+TTImp.Elab.Term and TTImp.Elab.Record). Setters are translated directly to
+'case' blocks, which means that update of dependent fields works as one might
+expect (i.e. it's safe as long as all of the fields are updated at the same
+time consistently).
+
+In TTImp, unlike in Idris 1, records are not implicitly put into their own
+namespace, but higher level languages (e.g. Idris itself) can do so explicitly
+themselves.

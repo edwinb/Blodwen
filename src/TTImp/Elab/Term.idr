@@ -4,6 +4,7 @@ import TTImp.TTImp
 import TTImp.Elab.Ambiguity
 import TTImp.Elab.Case
 import TTImp.Elab.Delayed
+import TTImp.Elab.Record
 import TTImp.Elab.Rewrite
 import public TTImp.Elab.State
 import TTImp.Reflect
@@ -99,6 +100,9 @@ mutual
   -- If there's local definitions, add implicits inside the block
   check rigc process elabinfo env nest tm@(ILocal loc fs sc) expected
       = checkImp rigc process elabinfo env nest tm expected
+  -- No implicits on record updates
+  check rigc process elabinfo env nest tm@(IUpdate loc fs rec) expected
+      = checkImp rigc process elabinfo env nest tm expected
   check rigc process elabinfo env nest tm@(ILet loc rig n ty val sc) expected
       = checkImp rigc process elabinfo env nest tm expected
   check rigc process elabinfo env nest tm_in exp 
@@ -141,7 +145,8 @@ mutual
   checkFnApp {vars} rigc process loc elabinfo env nest tm_in exp
       = do defs <- get Ctxt
            handle
-             (do (ctm, cty) <- check rigc process elabinfo env nest tm_in exp
+             (do log 10 $ "Checking " ++ show tm_in ++ " at " ++ show exp
+                 (ctm, cty) <- check rigc process elabinfo env nest tm_in exp
                  log 10 $ "Checked fnapp " ++ show (ctm, cty, exp)
                  let ctynf = nf defs env cty
                  case exp of
@@ -151,14 +156,14 @@ mutual
                  case nf defs env cty of
                       NTCon n _ _ _ =>
                           if isDelayType n defs
-                             then throw (InternalError "Need force!")
+                             then throw (InternalError "Force")
                              else checkExp rigc process loc elabinfo env nest
                                            ctm cty exp
                       _ => checkExp rigc process loc elabinfo env nest
                                     ctm cty exp)
              (\err =>
                   case err of
-                       InternalError _ =>
+                       InternalError "Force" =>
                            case forceName defs of
                                 Nothing => check rigc process elabinfo env nest tm_in Unknown
                                 Just fn =>
@@ -286,8 +291,15 @@ mutual
           checkCase rigc process elabinfo loc env nest scr scrty alts expected
   checkImp rigc process elabinfo env nest (ILocal loc nested scope) expected 
       = checkLocal rigc process elabinfo loc env nest nested scope expected
-  checkImp rigc process elabinfo env nest (IUpdate loc fs) expected
-      = throw (InternalError "record update not implemented")
+  checkImp rigc process elabinfo env nest (IUpdate loc fs rec) expected
+      = do recty <- case expected of
+                         FnType [] ret => pure ret
+                         _ => do (_, ty) <- checkImp rigc process elabinfo 
+                                                     env nest rec Unknown
+                                 pure ty
+           rcase <- recUpdate rigc process elabinfo loc env nest fs rec recty
+           log 5 $ "Record update: " ++ show rcase
+           check rigc process elabinfo env nest rcase expected
   checkImp {vars} rigc process elabinfo env nest (IApp loc fn arg) expected 
       = do -- Collect the implicits from the top level application first
            let (fn', args) = collectGivenImps fn

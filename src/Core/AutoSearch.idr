@@ -186,7 +186,7 @@ searchNames loc defaults depth trying env ty topty defining []
 searchNames loc defaults depth trying env ty topty defining (n :: ns)
     = do gam <- get Ctxt
          let visns = mapMaybe (visible (gamma gam) (currentNS gam)) (n :: ns)
-         log 5 $ "Searching " ++ show (map fst visns) ++ " for " ++ show ty
+         log 2 $ "Searching " ++ show (map fst visns) ++ " for " ++ show ty
          let nfty = nf gam env ty
          exactlyOne loc env ty topty
             (map (searchName loc defaults depth trying env nfty topty defining) visns)
@@ -387,7 +387,8 @@ searchType loc defaults depth trying env defining topty ty
                                     (detArgs sd, globalHints sd, directHints sd, indirectHints sd)
                              let opens = filter (/=defining) allOpens
                              let cons = filter (/=defining) allCons
-                             log 5 $ "Hints for " ++ show n ++ " " ++ show defaults ++ " : " ++ show cons
+                             log 2 $ "Hints for " ++ show n ++ " " ++ show defaults ++ " : " ++ show cons
+                             log 2 $ "Chasers: " ++ show chasers
                              -- Solutions is either:
                              -- One of the locals
                              -- or *Exactly one* of the open hints

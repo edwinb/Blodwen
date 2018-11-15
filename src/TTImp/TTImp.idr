@@ -52,7 +52,7 @@ mutual
        ICase : annot -> RawImp annot -> (ty : RawImp annot) ->
                List (ImpClause annot) -> RawImp annot
        ILocal : annot -> List (ImpDecl annot) -> RawImp annot -> RawImp annot
-       IUpdate : annot -> List (IFieldUpdate annot) -> RawImp annot
+       IUpdate : annot -> List (IFieldUpdate annot) -> RawImp annot -> RawImp annot
        IApp : annot -> 
               (fn : RawImp annot) -> (arg : RawImp annot) -> RawImp annot
        IImplicitApp : annot -> 
@@ -197,8 +197,8 @@ mutual
      = union (used ns sc) (usedCases ns xs)
   used ns (ILocal _ ds sc) 
      = union (usedDecls ns ds) (used ns sc)
-  used ns (IUpdate _ fs) 
-     = usedFields ns fs
+  used ns (IUpdate _ fs rec)
+     = union (usedFields ns fs) (used ns rec)
   used ns (IApp _ fn arg) 
      = union (used ns fn) (used ns arg)
   used ns (IImplicitApp _ fn _ arg)
@@ -285,7 +285,7 @@ getAnnot (ILam x _ _ _ _ _) = x
 getAnnot (ILet x _ _ _ _ _) = x
 getAnnot (ICase x _ _ _) = x
 getAnnot (ILocal x _ _) = x
-getAnnot (IUpdate x _) = x
+getAnnot (IUpdate x _ _) = x
 getAnnot (IApp x _ _) = x
 getAnnot (IImplicitApp x _ _ _) = x
 getAnnot (ISearch x _) = x
@@ -341,8 +341,8 @@ mutual
         = "(%case (" ++ show scr ++ ") " ++ show alts ++ ")"
     show (ILocal _ def scope)
         = "(%local (" ++ show def ++ ") " ++ show scope ++ ")"
-    show (IUpdate _ flds)
-        = "(%record " ++ showSep ", " (map show flds) ++ ")"
+    show (IUpdate _ flds rec)
+        = "(%record " ++ showSep ", " (map show flds) ++ " " ++ show rec ++ ")"
     show (IApp _ fn arg) 
         = "(" ++ show fn ++ " " ++ show arg ++ ")"
     show (IImplicitApp _ fn Nothing arg) 
@@ -669,8 +669,8 @@ mutual
         = do tag 4; toBuf b fc; toBuf b y; toBuf b ty; toBuf b xs
     toBuf b (ILocal fc xs sc) 
         = do tag 5; toBuf b fc; toBuf b xs; toBuf b sc
-    toBuf b (IUpdate fc fs) 
-        = do tag 6; toBuf b fc; toBuf b fs
+    toBuf b (IUpdate fc fs rec) 
+        = do tag 6; toBuf b fc; toBuf b fs; toBuf b rec
     toBuf b (IApp fc fn arg) 
         = do tag 7; toBuf b fc; toBuf b fn; toBuf b arg
     toBuf b (IImplicitApp fc fn y arg) 
@@ -732,7 +732,8 @@ mutual
                        xs <- fromBuf s b; sc <- fromBuf s b
                        pure (ILocal fc xs sc)
                6 => do fc <- fromBuf s b; fs <- fromBuf s b
-                       pure (IUpdate fc fs)
+                       rec <- fromBuf s b
+                       pure (IUpdate fc fs rec)
                7 => do fc <- fromBuf s b; fn <- fromBuf s b
                        arg <- fromBuf s b
                        pure (IApp fc fn arg)

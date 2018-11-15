@@ -101,6 +101,8 @@ perror (AllFailed ts)
     allUndefined [(_, UndefinedName loc e)] = Just (UndefinedName loc e)
     allUndefined ((_, UndefinedName _ e) :: es) = allUndefined es
     allUndefined _ = Nothing
+perror (RecordTypeNeeded _ _)
+    = pure "Can't infer type for this record update"
 perror (InvalidImplicit _ env n tm)
     = pure $ show n ++ " is not a valid implicit argument in " ++ !(pshow env tm)
 perror (CantSolveGoal _ g)

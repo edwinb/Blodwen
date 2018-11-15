@@ -163,9 +163,10 @@ mutual
       = do ds' <- traverse toPDecl ds
            sc' <- toPTerm startPrec sc
            bracket p startPrec (PLocal emptyFC (mapMaybe id ds') sc')
-  toPTerm p (IUpdate _ ds)
+  toPTerm p (IUpdate _ ds f)
       = do ds' <- traverse toPFieldUpdate ds
-           bracket p startPrec (PUpdate emptyFC ds')
+           f' <- toPTerm argPrec f
+           bracket p startPrec (PApp emptyFC (PUpdate emptyFC ds') f')
   toPTerm p tm@(IApp _ fn arg)
       = do arg' <- toPTerm argPrec arg
            app <- toPTermApp fn [(Nothing, arg')]

@@ -36,6 +36,7 @@ data Error annot
     | AmbiguousElab annot (Env Term vars) (List (Term vars))
     | AmbiguousSearch annot (Env Term vars) (List (Term vars))
     | AllFailed (List (Maybe Name, Error annot))
+    | RecordTypeNeeded annot (Env Term vars)
     | InvalidImplicit annot (Env Term vars) Name (Term vars)
     | CantSolveGoal annot (Term [])
     | DeterminingArg annot Name (Env Term vars) (Term vars)
@@ -122,6 +123,8 @@ Show annot => Show (Error annot) where
   show (AmbiguousElab fc env ts) = show fc ++ ":Ambiguous elaboration " ++ show ts
   show (AmbiguousSearch fc env ts) = show fc ++ ":Ambiguous search " ++ show ts
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
+  show (RecordTypeNeeded fc env)
+      = show fc ++ ":Can't infer type of record to update"
   show (InvalidImplicit fc env n tm) 
       = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm
   show (CantSolveGoal fc g) 
@@ -204,6 +207,7 @@ getAnnot (AmbiguousElab loc _ xs) = Just loc
 getAnnot (AmbiguousSearch loc _ xs) = Just loc
 getAnnot (AllFailed ((_, x) :: xs)) = getAnnot x
 getAnnot (AllFailed []) = Nothing
+getAnnot (RecordTypeNeeded loc _) = Just loc
 getAnnot (InvalidImplicit loc _ y tm) = Just loc
 getAnnot (CantSolveGoal loc tm) = Just loc
 getAnnot (DeterminingArg loc y env tm) = Just loc
