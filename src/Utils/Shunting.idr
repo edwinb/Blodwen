@@ -20,8 +20,8 @@ data OpPrec
 -- Tokens are either operators or already parsed expressions in some 
 -- higher level language
 public export
-data Tok annot a = Op annot String OpPrec
-                 | Expr a
+data Tok annot op a = Op annot op OpPrec
+                    | Expr a
 
 -- The result of shunting is a parse tree with the precedences made explicit
 -- in the tree.
@@ -33,14 +33,14 @@ data Tok annot a = Op annot String OpPrec
 -- there's a better way though!
 
 public export
-data Tree annot a = Inf annot String (Tree annot a) (Tree annot a)
-                  | Pre annot String (Tree annot a)
-                  | Leaf a
+data Tree annot op a = Inf annot op (Tree annot op a) (Tree annot op a)
+                     | Pre annot op (Tree annot op a)
+                     | Leaf a
 
 export
-Show a => Show (Tree annot a) where
-  show (Inf _ op l r) = "(" ++ op ++ " " ++ show l ++ " " ++ show r ++ ")"
-  show (Pre _ op l) = "(" ++ op ++ " " ++ show l ++ ")"
+(Show op, Show a) => Show (Tree annot op a) where
+  show (Inf _ op l r) = "(" ++ show op ++ " " ++ show l ++ " " ++ show r ++ ")"
+  show (Pre _ op l) = "(" ++  show op ++ " " ++ show l ++ ")"
   show (Leaf val) = show val
 
 Show OpPrec where
@@ -50,23 +50,23 @@ Show OpPrec where
   show (Prefix p) = "prefix " ++ show p
 
 export
-Show a => Show (Tok annot a) where
-  show (Op _ op p) = op ++ " " ++ show p
+(Show op, Show a) => Show (Tok annot op a) where
+  show (Op _ op p) = show op ++ " " ++ show p
   show (Expr val) = show val
 
 -- Label for the output queue state
 data Out : Type where
 
-output : List (Tree annot a) -> Tok annot a -> 
-         Core annot (List (Tree annot a))
+output : List (Tree annot op a) -> Tok annot op a -> 
+         Core annot (List (Tree annot op a))
 output [] (Op _ _ _) = throw (InternalError "Invalid input to shunting")
 output (x :: stk) (Op loc str (Prefix _)) = pure $ Pre loc str x :: stk
 output (x :: y :: stk) (Op loc str _) = pure $ Inf loc str y x :: stk
 output stk (Expr a) = pure $ Leaf a :: stk
 output _ _ = throw (InternalError "Invalid input to shunting")
 
-emit : {auto o : Ref Out (List (Tree annot a))} -> 
-       Tok annot a -> Core annot ()
+emit : {auto o : Ref Out (List (Tree annot op a))} -> 
+       Tok annot op a -> Core annot ()
 emit t
     = do out <- get Out
          put Out !(output out t)
@@ -83,25 +83,25 @@ isLAssoc _ = False
 
 -- Return whether the first operator should be applied before the second,
 -- assuming 
-higher : annot -> String -> OpPrec -> String -> OpPrec -> Core annot Bool
+higher : Show op => annot -> op -> OpPrec -> op -> OpPrec -> Core annot Bool
 higher loc opx op opy (Prefix p) = pure False
 higher loc opx (NonAssoc x) opy oy
     = if x == getPrec oy
-         then throw (GenericMsg loc ("Operator '" ++ opx ++ 
+         then throw (GenericMsg loc ("Operator '" ++ show opx ++ 
                                      "' is non-associative"))
          else pure (x > getPrec oy)
 higher loc opx ox opy (NonAssoc y)
     = if getPrec ox == y
-         then throw (GenericMsg loc ("Operator '" ++ opy ++ 
+         then throw (GenericMsg loc ("Operator '" ++ show opy ++ 
                                      "' is non-associative"))
          else pure (getPrec ox > y)
 higher loc opl l opr r 
     = pure $ (getPrec l > getPrec r) ||
              ((getPrec l == getPrec r) && isLAssoc l)
 
-processStack : {auto o : Ref Out (List (Tree annot a))} ->
-               List (annot, String, OpPrec) -> String -> OpPrec ->
-               Core annot (List (annot, String, OpPrec))
+processStack : Show op => {auto o : Ref Out (List (Tree annot op a))} ->
+               List (annot, op, OpPrec) -> op -> OpPrec ->
+               Core annot (List (annot, op, OpPrec))
 processStack [] op prec = pure []
 processStack ((loc, opx, sprec) :: xs) opy prec 
     = if !(higher loc opx sprec opy prec)
@@ -109,9 +109,9 @@ processStack ((loc, opx, sprec) :: xs) opy prec
                  processStack xs opy prec
          else pure ((loc, opx, sprec) :: xs)
 
-shunt : {auto o : Ref Out (List (Tree annot a))} ->
-        (opstk : List (annot, String, OpPrec)) -> 
-        List (Tok annot a) -> Core annot (Tree annot a)
+shunt : Show op => {auto o : Ref Out (List (Tree annot op a))} ->
+        (opstk : List (annot, op, OpPrec)) -> 
+        List (Tok annot op a) -> Core annot (Tree annot op a)
 shunt stk (Expr x :: rest)
     = do emit (Expr x)
          shunt stk rest
@@ -132,27 +132,7 @@ shunt {annot} stk []
     sprec (x, y, z) = z
  
 export
-parseOps : List (Tok annot a) -> Core annot (Tree annot a)
+parseOps : Show op => List (Tok annot op a) -> Core annot (Tree annot op a)
 parseOps toks 
-    = do o <- newRef {t = List (Tree annot a)} Out []
+    = do o <- newRef {t = List (Tree annot op a)} Out []
          shunt [] toks
-
--- Some things to help with testing, not exported
-
-pl : Tok () Int
-pl = Op () "+" (AssocL 8)
-
-tm : Tok () Int
-tm = Op () "*" (AssocL 9)
-
-neg : Tok () Int
-neg = Op () "-" (Prefix 10)
-
-cons : Tok () Int
-cons = Op () ":" (NonAssoc 9)
-
-num : Int -> Tok () Int
-num = Expr 
-
-testParse : Show a => List (Tok () a) -> IO ()
-testParse toks = coreRun (parseOps toks) (\err => printLn err) printLn

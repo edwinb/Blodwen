@@ -67,7 +67,7 @@ mkPrec Infix p = NonAssoc p
 mkPrec Prefix p = Prefix p
 
 toTokList : {auto s : Ref Syn SyntaxInfo} ->
-            PTerm -> Core FC (List (Tok FC PTerm))
+            PTerm -> Core FC (List (Tok FC OpStr PTerm))
 toTokList (POp fc op l r)
     = do syn <- get Syn
          case lookup op (infixes syn) of
@@ -312,7 +312,7 @@ mutual
                 {auto u : Ref UST (UState FC)} ->
                 {auto i : Ref ImpST (ImpState FC)} ->
                 {auto m : Ref Meta (Metadata FC)} ->
-                Side -> List Name -> Tree FC PTerm -> Core FC (RawImp FC)
+                Side -> List Name -> Tree FC OpStr PTerm -> Core FC (RawImp FC)
   desugarTree side ps (Inf loc "=" l r) -- special case since '=' is special syntax
       = do l' <- desugarTree side ps l
            r' <- desugarTree side ps r
