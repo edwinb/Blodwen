@@ -111,8 +111,12 @@ symbols
        "(", ")", "{", "}", "[", "]", ",", ";", "_", 
        "`(", "`", "~"]
 
+export
+opChars : String
+opChars = ":!#$%&*+./<=>?@\\^|-~"
+
 validSymbol : Lexer
-validSymbol = some (oneOf ":!#$%&*+./<=>?@\\^|-~")
+validSymbol = some (oneOf opChars)
 
 -- Valid symbols which have a special meaning so can't be operators
 export

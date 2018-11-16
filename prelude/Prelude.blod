@@ -56,7 +56,7 @@ infixl 6 <+>
 infixr 9 .
 infixr 0 $
 
--- Can't do this syntax yet: infixl 9 `div`, `mod`
+infixl 9 `div`, `mod`
 
 -----------------------
 -- UTILITY FUNCTIONS --

@@ -15,6 +15,7 @@ import Idris.Syntax
 import Idris.Elab.Implementation
 import Idris.Elab.Interface
 
+import Parser.Lexer
 import Parser.RawImp
 
 import TTImp.BindImplicits
@@ -70,12 +71,20 @@ toTokList : {auto s : Ref Syn SyntaxInfo} ->
 toTokList (POp fc op l r)
     = do syn <- get Syn
          case lookup op (infixes syn) of
-              Nothing => throw (GenericMsg fc $ "Unknown operator '" ++ op ++ "'")
+              Nothing => 
+                let ops = unpack opChars in
+                    if any (\x => x `elem` ops) (unpack op)
+                       then throw (GenericMsg fc $ "Unknown operator '" ++ op ++ "'")
+                       else do rtoks <- toTokList r
+                               pure (Expr l :: Op fc op backtickPrec :: rtoks)
               Just (Prefix, _) =>
                       throw (GenericMsg fc $ "'" ++ op ++ "' is a prefix operator")
               Just (fix, prec) =>
                    do rtoks <- toTokList r
                       pure (Expr l :: Op fc op (mkPrec fix prec) :: rtoks)
+  where
+    backtickPrec : OpPrec
+    backtickPrec = NonAssoc 10
 toTokList (PPrefixOp fc op arg)
     = do syn <- get Syn
          case lookup op (prefixes syn) of

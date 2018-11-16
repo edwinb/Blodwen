@@ -71,6 +71,13 @@ whereBlock fname
          ds <- block (topDecl fname)
          pure (collectDefs (concat ds))
 
+iOperator : Rule String
+iOperator 
+    = operator
+  <|> do symbol "`"
+         n <- unqualifiedName
+         symbol "`"
+         pure n
 
 mutual
   appExpr : FileName -> IndentInfo -> Rule PTerm
@@ -84,7 +91,7 @@ mutual
            end <- location
            pure (applyExpImp start end f args)
     <|> do start <- location
-           op <- operator
+           op <- iOperator
            arg <- expr EqOK fname indents
            end <- location
            pure (PPrefixOp (MkFC fname start end) op arg)
@@ -134,7 +141,7 @@ mutual
       = do start <- location
            l <- appExpr fname indents
            (do continue indents
-               op <- operator
+               op <- iOperator
                r <- opExpr q fname indents
                end <- location
                pure (POp (MkFC fname start end) op l r))
@@ -152,7 +159,7 @@ mutual
       -- left section. This may also be a prefix operator, but we'll sort
       -- that out when desugaring: if the operator is infix, treat it as a
       -- section otherwise treat it as prefix
-      = do op <- operator
+      = do op <- iOperator
            e <- expr EqOK fname indents
            symbol ")"
            end <- location
@@ -163,7 +170,7 @@ mutual
            pure (PUnit (MkFC fname start end))
       -- right section (1-tuple is just an expression)
     <|> do e <- expr EqOK fname indents
-           (do op <- operator
+           (do op <- iOperator
                symbol ")"
                end <- location
                pure (PSectionR (MkFC fname start end) e op)
@@ -975,7 +982,7 @@ fixDecl fname indents
          fixity <- fix
          commit
          prec <- intLit
-         ops <- sepBy1 (symbol ",") operator
+         ops <- sepBy1 (symbol ",") iOperator
          end <- location
          pure (map (PFixity (MkFC fname start end) fixity (cast prec)) ops)
 
