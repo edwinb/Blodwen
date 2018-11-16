@@ -80,7 +80,6 @@ processDecls : {auto c : Ref Ctxt Defs} ->
 processDecls env nest decls
     = do i <- newRef ImpST (initImpState {annot})
          traverse (processDecl False env nest) decls
-         dumpConstraints 0 True
          hs <- getHoleNames
          traverse addToSave hs
          pure ()
