@@ -68,31 +68,33 @@ mkPrec Prefix p = Prefix p
 
 toTokList : {auto s : Ref Syn SyntaxInfo} ->
             PTerm -> Core FC (List (Tok FC OpStr PTerm))
-toTokList (POp fc op l r)
+toTokList (POp fc opn l r)
     = do syn <- get Syn
+         let op = nameRoot opn
          case lookup op (infixes syn) of
               Nothing => 
                 let ops = unpack opChars in
                     if any (\x => x `elem` ops) (unpack op)
                        then throw (GenericMsg fc $ "Unknown operator '" ++ op ++ "'")
                        else do rtoks <- toTokList r
-                               pure (Expr l :: Op fc op backtickPrec :: rtoks)
+                               pure (Expr l :: Op fc opn backtickPrec :: rtoks)
               Just (Prefix, _) =>
                       throw (GenericMsg fc $ "'" ++ op ++ "' is a prefix operator")
               Just (fix, prec) =>
                    do rtoks <- toTokList r
-                      pure (Expr l :: Op fc op (mkPrec fix prec) :: rtoks)
+                      pure (Expr l :: Op fc opn (mkPrec fix prec) :: rtoks)
   where
     backtickPrec : OpPrec
     backtickPrec = NonAssoc 10
-toTokList (PPrefixOp fc op arg)
+toTokList (PPrefixOp fc opn arg)
     = do syn <- get Syn
+         let op = nameRoot opn
          case lookup op (prefixes syn) of
               Nothing =>
                    throw (GenericMsg fc $ "'" ++ op ++ "' is not a prefix operator")
               Just prec =>
                    do rtoks <- toTokList arg
-                      pure (Op fc op (Prefix prec) :: rtoks)
+                      pure (Op fc opn (Prefix prec) :: rtoks)
 toTokList t = pure [Expr t]
 
 mutual
@@ -150,7 +152,7 @@ mutual
       = do syn <- get Syn
            -- It might actually be a prefix argument rather than a section
            -- so check that first, otherwise desugar as a lambda
-           case lookup op (prefixes syn) of
+           case lookup (nameRoot op) (prefixes syn) of
                 Nothing => 
                    desugar side ps (PLam fc RigW Explicit (MN "arg" 0) (PImplicit fc)
                                (POp fc op (PRef fc (MN "arg" 0)) arg))
@@ -313,26 +315,26 @@ mutual
                 {auto i : Ref ImpST (ImpState FC)} ->
                 {auto m : Ref Meta (Metadata FC)} ->
                 Side -> List Name -> Tree FC OpStr PTerm -> Core FC (RawImp FC)
-  desugarTree side ps (Inf loc "=" l r) -- special case since '=' is special syntax
+  desugarTree side ps (Inf loc (UN "=") l r) -- special case since '=' is special syntax
       = do l' <- desugarTree side ps l
            r' <- desugarTree side ps r
            pure (IApp loc (IApp loc (IVar loc (UN "Equal")) l') r')
-  desugarTree side ps (Inf loc "$" l r) -- special case since '$' is special syntax
+  desugarTree side ps (Inf loc (UN "$") l r) -- special case since '$' is special syntax
       = do l' <- desugarTree side ps l
            r' <- desugarTree side ps r
            pure (IApp loc l' r')
   desugarTree side ps (Inf loc op l r)
       = do l' <- desugarTree side ps l
            r' <- desugarTree side ps r
-           pure (IApp loc (IApp loc (IVar loc (UN op)) l') r')
+           pure (IApp loc (IApp loc (IVar loc op) l') r')
   -- negation is a special case, since we can't have an operator with
   -- two meanings otherwise
-  desugarTree side ps (Pre loc "-" arg)
+  desugarTree side ps (Pre loc (UN "-") arg)
       = do arg' <- desugarTree side ps arg
            pure (IApp loc (IVar loc (UN "negate")) arg')
   desugarTree side ps (Pre loc op arg)
       = do arg' <- desugarTree side ps arg
-           pure (IApp loc (IVar loc (UN op)) arg')
+           pure (IApp loc (IVar loc op) arg')
   desugarTree side ps (Leaf t) = desugar side ps t
 
   desugarType : {auto s : Ref Syn SyntaxInfo} ->
@@ -475,14 +477,16 @@ mutual
     where
       fname : PField -> Name
       fname (MkField _ _ _ n _) = n
-  desugarDecl ps (PFixity fc Prefix prec n) 
+  desugarDecl ps (PFixity fc Prefix prec (UN n)) 
       = do syn <- get Syn
            put Syn (record { prefixes $= insert n prec } syn)
            pure []
-  desugarDecl ps (PFixity fc fix prec n) 
+  desugarDecl ps (PFixity fc fix prec (UN n)) 
       = do syn <- get Syn
            put Syn (record { infixes $= insert n (fix, prec) } syn)
            pure []
+  desugarDecl ps (PFixity fc _ _ _)
+      = throw (GenericMsg fc "Fixity declarations must be for unqualified names")
   desugarDecl ps (PNamespace fc ns decls)
       = do ds <- traverse (desugarDecl ps) decls
            pure [INamespace fc ns (concat ds)]

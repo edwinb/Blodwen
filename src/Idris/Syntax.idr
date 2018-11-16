@@ -98,7 +98,7 @@ data Fixity = InfixL | InfixR | Infix | Prefix
 
 public export
 OpStr : Type
-OpStr = String
+OpStr = Name
 
 mutual
   -- The full high level source language
@@ -422,10 +422,10 @@ mutual
     show (PDotted _ p) = "." ++ show p
     show (PImplicit _) = "_"
     show (PInfer _) = "?"
-    show (POp _ op x y) = show x ++ " " ++ op ++ " " ++ show y
-    show (PPrefixOp _ op x) = op ++ show x
-    show (PSectionL _ op x) = "(" ++ op ++ " " ++ show x ++ ")"
-    show (PSectionR _ x op) = "(" ++ show x ++ " " ++ op ++ ")"
+    show (POp _ op x y) = show x ++ " " ++ show op ++ " " ++ show y
+    show (PPrefixOp _ op x) = show op ++ show x
+    show (PSectionL _ op x) = "(" ++ show op ++ " " ++ show x ++ ")"
+    show (PSectionR _ x op) = "(" ++ show x ++ " " ++ show op ++ ")"
     show (PEq fc l r) = show l ++ " = " ++ show r
     show (PBracketed _ tm) = "(" ++ show tm ++ ")"
     show (PDoBlock _ ds) 

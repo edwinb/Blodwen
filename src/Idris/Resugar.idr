@@ -28,7 +28,7 @@ mkOp tm@(PApp fc (PApp _ (PRef _ n) x) y)
     = do syn <- get Syn
          case StringMap.lookup (nameRoot n) (infixes syn) of
               Nothing => pure tm
-              Just _ => pure (POp fc (nameRoot n) (unbracketApp x) (unbracketApp y))
+              Just _ => pure (POp fc n (unbracketApp x) (unbracketApp y))
 mkOp tm = pure tm
 
 export

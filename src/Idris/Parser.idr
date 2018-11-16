@@ -71,11 +71,12 @@ whereBlock fname
          ds <- block (topDecl fname)
          pure (collectDefs (concat ds))
 
-iOperator : Rule String
+iOperator : Rule Name
 iOperator 
-    = operator
+    = do n <- operator
+         pure (UN n)
   <|> do symbol "`"
-         n <- unqualifiedName
+         n <- name
          symbol "`"
          pure n
 
@@ -150,7 +151,7 @@ mutual
                              symbol "=" 
                              r <- opExpr EqOK fname indents
                              end <- location
-                             pure (POp (MkFC fname start end) "=" l r)
+                             pure (POp (MkFC fname start end) (UN "=") l r)
                      else fail "= not allowed")
                <|> pure l
 
