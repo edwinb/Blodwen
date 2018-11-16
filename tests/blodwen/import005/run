@@ -1,0 +1,8 @@
+cp ModC1.blod ModC.blod
+$1 ModA.blod < input
+sleep 1
+# Make sure interface has changed!
+cp ModC2.blod ModC.blod
+$1 ModA.blod < input
+
+rm -rf ModC.blod build

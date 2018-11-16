@@ -1,0 +1,11 @@
+module ModB
+
+import public ModC
+
+export
+foo : Int -> Int
+foo x = x * x * x
+
+export
+baz : Int
+baz = 42

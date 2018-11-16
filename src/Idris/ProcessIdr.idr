@@ -91,6 +91,9 @@ readHash : {auto c : Ref Ctxt Defs} ->
 readHash imp
     = do fname <- nsToPath (loc imp) (path imp)
          h <- readIFaceHash fname
+         -- If the import is a 'public' import, then it forms part of
+         -- our own interface so add its hash to our hash
+         when (reexport imp) $ addHash h
          pure (nameAs imp, h)
 
 prelude : Import

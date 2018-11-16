@@ -1,0 +1,6 @@
+module ModA
+
+import ModB
+
+bar : Int -> Int
+bar x = foo (foo x)

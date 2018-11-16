@@ -1,0 +1,5 @@
+module ModC
+
+public export
+testVal : Int
+testVal = 42
