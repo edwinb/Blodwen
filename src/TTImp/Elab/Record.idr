@@ -78,23 +78,23 @@ replace k v ((k', v') :: vs)
          else ((k', v') :: replace k v vs)
 
 findPath : {auto c : Ref Ctxt Defs} ->
-           annot -> List String -> Maybe Name -> 
+           annot -> List String -> List String -> Maybe Name -> 
            (String -> RawImp annot) ->
            Rec annot -> Core annot (Rec annot)
-findPath loc [] tyn val (Field lhs _) = pure (Field lhs (val lhs))
-findPath loc [] tyn val rec 
-   = throw (GenericMsg loc "Invalid record update")
-findPath loc (p :: ps) Nothing val (Field n v) 
-   = throw (GenericMsg loc (p ++ " is not part of a record type"))
-findPath loc (p :: ps) (Just tyn) val (Field n v) 
+findPath loc [] full tyn val (Field lhs _) = pure (Field lhs (val lhs))
+findPath loc [] full tyn val rec 
+   = throw (IncompatibleFieldUpdate loc full)
+findPath loc (p :: ps) full Nothing val (Field n v) 
+   = throw (NotRecordField loc p Nothing)
+findPath loc (p :: ps) full (Just tyn) val (Field n v) 
    = do defs <- get Ctxt
         let Just con = findConName defs tyn
-                 | Nothing => throw (GenericMsg loc "Can't find record constructor")
+                 | Nothing => throw (NotRecordType loc tyn)
         let Just fs = findFields defs con
-                 | Nothing => throw (GenericMsg loc "Can't find record fields")
+                 | Nothing => throw (NotRecordType loc tyn)
         args <- mkArgs fs
         let rec' = Constr con args
-        findPath loc (p :: ps) (Just tyn) val rec'
+        findPath loc (p :: ps) full (Just tyn) val rec'
   where
     mkArgs : List (String, Maybe Name) -> 
              Core annot (List (String, Rec annot))
@@ -104,17 +104,15 @@ findPath loc (p :: ps) (Just tyn) val (Field n v)
              args' <- mkArgs ps
              pure ((p, Field fldn (IVar loc (UN fldn))) :: args')
 
-findPath loc (p :: ps) tyn val (Constr con args) 
+findPath loc (p :: ps) full tyn val (Constr con args) 
    = do let Just prec = lookup p args
-                 | Nothing => throw (GenericMsg loc ("Record type " ++ 
-                                       show tyn ++ " has no field " ++ p))
+                 | Nothing => throw (NotRecordField loc p tyn)
         defs <- get Ctxt
         let Just fs = findFields defs con
                  | Nothing => pure (Constr con args)
         let Just mfty = lookup p fs
-                 | Nothing => throw (GenericMsg loc ("Record type " ++ 
-                                       show tyn ++ " has no field " ++ p))
-        prec' <- findPath loc ps mfty val prec
+                 | Nothing => throw (NotRecordField loc p tyn)
+        prec' <- findPath loc ps full mfty val prec
         pure (Constr con (replace p prec' args))
 
 getSides : {auto c : Ref Ctxt Defs} ->
@@ -123,9 +121,9 @@ getSides : {auto c : Ref Ctxt Defs} ->
 getSides loc (ISetField path val) tyn orig rec 
    -- update 'rec' so that 'path' is accessible on the lhs and rhs,
    -- then set the path on the rhs to 'val'
-   = findPath loc path (Just tyn) (const val) rec
+   = findPath loc path path (Just tyn) (const val) rec
 getSides loc (ISetFieldApp path val) tyn orig rec 
-   = findPath loc path (Just tyn) (\n => apply val [IVar loc (UN n)]) rec
+   = findPath loc path path (Just tyn) (\n => apply val [IVar loc (UN n)]) rec
  where
    get : List String -> RawImp annot -> RawImp annot
    get [] rec = rec

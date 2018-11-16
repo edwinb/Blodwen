@@ -37,6 +37,9 @@ data Error annot
     | AmbiguousSearch annot (Env Term vars) (List (Term vars))
     | AllFailed (List (Maybe Name, Error annot))
     | RecordTypeNeeded annot (Env Term vars)
+    | NotRecordField annot String (Maybe Name)
+    | NotRecordType annot Name
+    | IncompatibleFieldUpdate annot (List String)
     | InvalidImplicit annot (Env Term vars) Name (Term vars)
     | CantSolveGoal annot (Term [])
     | DeterminingArg annot Name (Env Term vars) (Term vars)
@@ -125,10 +128,16 @@ Show annot => Show (Error annot) where
   show (AllFailed ts) = "No successful elaboration: " ++ assert_total (show ts)
   show (RecordTypeNeeded fc env)
       = show fc ++ ":Can't infer type of record to update"
-  show (InvalidImplicit fc env n tm) 
-      = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm
-  show (CantSolveGoal fc g) 
-      = show fc ++ ":Can't solve goal " ++ assert_total (show g)
+  show (NotRecordField fc fld Nothing)
+      = show fc ++ ":" ++ fld ++ " is not part of a record type"
+  show (NotRecordField fc fld (Just ty)) 
+      = show fc ++ ":Record type " ++ show ty ++ " has no field " ++ fld 
+  show (NotRecordType fc ty)
+      = show fc ++ ":" ++ show ty ++ " is not a record type"
+  show (IncompatibleFieldUpdate fc flds) 
+      = show fc ++ ":Field update " ++ showSep "->" flds ++ " not compatible with other updates" 
+  show (InvalidImplicit fc env n tm) = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm 
+  show (CantSolveGoal fc g) = show fc ++ ":Can't solve goal " ++ assert_total (show g)
   show (DeterminingArg fc n env g)
       = show fc ++ ":Can't solve goal " ++ assert_total (show g) ++ 
                 " since argument " ++ show n ++ " can't be inferred"

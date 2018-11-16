@@ -103,6 +103,15 @@ perror (AllFailed ts)
     allUndefined _ = Nothing
 perror (RecordTypeNeeded _ _)
     = pure "Can't infer type for this record update"
+perror (NotRecordField fc fld Nothing)
+    = pure $ fld ++ " is not part of a record type"
+perror (NotRecordField fc fld (Just ty))
+    = pure $ "Record type " ++ show ty ++ " has no field " ++ fld
+perror (NotRecordType fc ty)
+    = pure $ show ty ++ " is not a record type"
+perror (IncompatibleFieldUpdate fc flds)
+    = pure $ "Field update " ++ showSep "->" flds ++ 
+             " not compatible with other updates"
 perror (InvalidImplicit _ env n tm)
     = pure $ show n ++ " is not a valid implicit argument in " ++ !(pshow env tm)
 perror (CantSolveGoal _ g)
