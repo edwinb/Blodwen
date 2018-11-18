@@ -58,7 +58,7 @@ elabImplementation : {auto c : Ref Ctxt Defs} ->
                      {auto i : Ref ImpST (ImpState FC)} ->
                      {auto s : Ref Syn SyntaxInfo} ->
                      {auto m : Ref Meta (Metadata FC)} ->
-                     FC -> Visibility -> 
+                     FC -> Visibility -> Pass ->
                      Env Term vars -> NestedNames vars ->
                      (constraints : List (Maybe Name, RawImp FC)) ->
                      Name ->
@@ -67,7 +67,7 @@ elabImplementation : {auto c : Ref Ctxt Defs} ->
                      Maybe (List (ImpDecl FC)) ->
                      Core FC ()
 -- TODO: Refactor all these steps into separate functions
-elabImplementation {vars} fc vis env nest cons iname ps impln mbody
+elabImplementation {vars} fc vis pass env nest cons iname ps impln mbody
     = do let impName_in = maybe (mkImpl fc iname ps) id impln
          impName <- inCurrentNS impName_in
          syn <- get Syn
@@ -113,11 +113,11 @@ elabImplementation {vars} fc vis env nest cons iname ps impln mbody
          let impTyDecl = IClaim fc RigW vis opts (MkImpTy fc impName impTy)
          log 5 $ "Implementation type: " ++ show impTy
 
-         processDecl False env nest impTyDecl
+         when (typePass pass) $ processDecl False env nest impTyDecl
          
          -- If the body is empty, we're done for now (just declaring that
          -- the implementation exists and define it later)
-         maybe (pure ())
+         when (defPass pass) $ maybe (pure ())
            (\body_in => do
                -- 1.5. Lookup default definitions and add them to to body
                let (body, missing)

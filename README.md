@@ -79,8 +79,10 @@ Things still missing
 + Some high level syntax, notably record update syntax, 'with', 
   dependent pairs, and numeric ranges
 + 'mutual' blocks
++ 'parameters' blocks
 + Cumulativity and totality checking
 + Codata (or rather, you can have it, but there's no productivity check...)
 + Parts of the ide-mode
 + Documentation strings
++ ':search' and ':apropos' at the REPL
 + The rest of this "Things still missing" list

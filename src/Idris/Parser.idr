@@ -815,6 +815,16 @@ namespaceDecl fname indents
          ds <- assert_total (nonEmptyBlock (topDecl fname))
          pure (PNamespace (MkFC fname start end) ns (concat ds))
 
+mutualDecls : FileName -> IndentInfo -> Rule PDecl
+mutualDecls fname indents
+    = do start <- location
+         keyword "mutual"
+         commit
+         ds <- assert_total (nonEmptyBlock (topDecl fname))
+         end <- location
+         pure (PMutual (MkFC fname start end) (concat ds))
+
+
 fnOpt : Rule FnOpt
 fnOpt
     = do exactIdent "hint"
@@ -917,7 +927,7 @@ implDecl fname indents
          atEnd indents
          end <- location
          pure (PImplementation (MkFC fname start end)
-                         vis cons n params iname 
+                         vis Single cons n params iname 
                          (map (collectDefs . concat) body))
 
 fieldDecl : FileName -> IndentInfo -> Rule (List PField)
@@ -1008,6 +1018,8 @@ topDecl fname indents
          pure [d]
   <|> do d <- namespaceDecl fname indents
          pure [d]
+  <|> do d <- mutualDecls fname indents
+         pure [d]
   <|> do d <- directiveDecl fname indents
          pure [d]
   <|> do start <- location
@@ -1055,6 +1067,8 @@ collectDefs (PDef annot cs :: ds)
     isClause _ = Nothing
 collectDefs (PNamespace annot ns nds :: ds)
     = PNamespace annot ns (collectDefs nds) :: collectDefs ds
+collectDefs (PMutual annot nds :: ds)
+    = PMutual annot (collectDefs nds) :: collectDefs ds
 collectDefs (d :: ds)
     = d :: collectDefs ds
 

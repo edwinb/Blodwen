@@ -387,6 +387,40 @@ mutual
   desugarField ps (MkField fc rig p n ty)
       = pure (MkIField fc rig p n (bindTypeNames ps !(desugar AnyExpr ps ty)))
 
+  -- Get the declaration to process on each pass of a mutual block
+  -- Essentially: types on the first pass 
+  --    i.e. type constructors of data declarations
+  --         function types
+  --         interfaces (in full, since it includes function types)
+  --         records (in full, similarly)
+  --         implementation headers (i.e. note their existence, but not the bodies)
+  -- Everything else on the second pass
+  getDecl : Pass -> PDecl -> Maybe PDecl
+  getDecl p (PImplementation fc vis _ cons n ps iname ds)
+      = Just (PImplementation fc vis p cons n ps iname ds)
+
+  getDecl p (PNamespace fc ns ds)
+      = Just (PNamespace fc ns (mapMaybe (getDecl p) ds))
+
+  getDecl AsType d@(PClaim _ _ _ _) = Just d
+  getDecl AsType (PData fc vis (MkPData dfc tyn tyc opts cons))
+      = Just (PData fc vis (MkPLater dfc tyn tyc))
+  getDecl AsType d@(PInterface fc vis cons n ps det cname ds) = Just d
+  getDecl AsType d@(PRecord fc vis n ps con fs) = Just d
+  getDecl AsType d@(PFixity _ _ _ _) = Just d
+  getDecl AsType d@(PDirective _ _) = Just d
+  getDecl AsType d = Nothing
+
+  getDecl AsDef (PClaim _ _ _ _) = Nothing
+  getDecl AsDef (PData fc vis (MkPLater dfc tyn tyc)) = Nothing
+  getDecl AsDef (PInterface fc vis cons n ps det cname ds) = Nothing
+  getDecl AsDef (PRecord fc vis n ps con fs) = Nothing
+  getDecl AsDef (PFixity _ _ _ _) = Nothing
+  getDecl AsDef (PDirective _ _) = Nothing
+  getDecl AsDef d = Just d
+
+  getDecl Single d = Just d
+
   -- Given a high level declaration, return a list of TTImp declarations
   -- which process it, and update any necessary state on the way.
   export
@@ -443,7 +477,7 @@ mutual
                              elabInterface fc vis env nest consb
                                            tn paramsb det conname 
                                            (concat body'))]
-  desugarDecl ps (PImplementation fc vis cons tn params impname body)
+  desugarDecl ps (PImplementation fc vis pass cons tn params impname body)
       = do cons' <- traverse (\ ntm => do tm' <- desugar AnyExpr ps (snd ntm)
                                           pure (fst ntm, tm')) cons
            params' <- traverse (desugar AnyExpr ps) params
@@ -457,7 +491,7 @@ mutual
                           (\b => do b' <- traverse (desugarDecl ps) b
                                     pure (Just (concat b'))) body
            pure [IPragma (\env, nest =>
-                             elabImplementation fc vis env nest consb
+                             elabImplementation fc vis pass env nest consb
                                                 tn paramsb impname 
                                                 body')]
   desugarDecl ps (PRecord fc vis tn params conname fields)
@@ -487,6 +521,10 @@ mutual
            pure []
   desugarDecl ps (PFixity fc _ _ _)
       = throw (GenericMsg fc "Fixity declarations must be for unqualified names")
+  desugarDecl ps (PMutual fc ds)
+      = do let mds = mapMaybe (getDecl AsType) ds ++ mapMaybe (getDecl AsDef) ds
+           mds' <- traverse (desugarDecl ps) mds
+           pure (concat mds')
   desugarDecl ps (PNamespace fc ns decls)
       = do ds <- traverse (desugarDecl ps) decls
            pure [INamespace fc ns (concat ds)]

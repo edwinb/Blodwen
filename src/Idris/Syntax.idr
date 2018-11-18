@@ -221,6 +221,25 @@ mutual
   public export
   data PField : Type where
        MkField : FC -> RigCount -> PiInfo -> Name -> (ty : PTerm) -> PField
+  
+  -- For noting the pass we're in when desugaring a mutual block
+  public export
+  data Pass = Single | AsType | AsDef
+
+  export
+  Eq Pass where
+    Single == Single = True
+    AsType == AsType = True
+    AsDef == AsDef = True
+    _ == _ = False
+
+  export
+  typePass : Pass -> Bool
+  typePass p = p == Single || p == AsType
+
+  export
+  defPass : Pass -> Bool
+  defPass p = p == Single || p == AsDef
 
   public export
   data PDecl : Type where
@@ -229,7 +248,7 @@ mutual
        PData : FC -> Visibility -> PDataDecl -> PDecl
        PReflect : FC -> PTerm -> PDecl
        PInterface : FC -> 
-                    Visibility ->
+                    Visibility -> 
                     (constraints : List (Maybe Name, PTerm)) ->
                     Name ->
                     (params : List (Name, PTerm)) ->
@@ -238,7 +257,7 @@ mutual
                     List PDecl ->
                     PDecl
        PImplementation : FC ->
-                         Visibility ->
+                         Visibility -> Pass ->
                          (constraints : List (Maybe Name, PTerm)) ->
                          Name ->
                          (params : List PTerm) ->
@@ -246,7 +265,7 @@ mutual
                          Maybe (List PDecl) ->
                          PDecl
        PRecord : FC ->
-                 Visibility ->
+                 Visibility -> 
                  Name ->
                  (params : List (Name, PTerm)) ->
                  (conName : Maybe Name) ->
@@ -254,8 +273,8 @@ mutual
                  PDecl
 
        -- TODO: PPostulate
-       -- TODO: PMutual
        -- TODO: POpen (for opening named interfaces)
+       PMutual : FC -> List PDecl -> PDecl
        PFixity : FC -> Fixity -> Nat -> OpStr -> PDecl
        PNamespace : FC -> List String -> List PDecl -> PDecl
        PDirective : FC -> Directive -> PDecl
