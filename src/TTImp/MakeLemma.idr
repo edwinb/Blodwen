@@ -17,6 +17,10 @@ used : RigCount -> Bool
 used Rig0 = False
 used _ = True
 
+hiddenName : Name -> Bool
+hiddenName (MN "_" _) = True
+hiddenName _ = False
+
 -- True if the variable appears guarded by a constructor in the term
 bindable : Elem x vars -> Term vars -> Bool
 bindable {x} p tm
@@ -45,7 +49,7 @@ getArgs {vars} loc env (Bind x (Pi c p ty) sc)
                                     Nothing => Just x'
                                     _ => Nothing
                        _ => Just x'
-         let p' = if used c && not (bindableArg Here sc)
+         let p' = if used c && not (bindableArg Here sc) && not (hiddenName x)
                      then Explicit
                      else Implicit
          pure ((x, mn, p', c, ty') :: sc', ty)

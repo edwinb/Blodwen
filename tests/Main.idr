@@ -49,26 +49,30 @@ fail err
     = do putStrLn err
          exitWith (ExitFailure 1)
 
-runTest : String -> String -> String -> IO ()
+runTest : String -> String -> String -> IO Bool
 runTest dir prog test
     = do chdir (dir ++ "/" ++ test)
          putStr $ dir ++ "/" ++ test ++ ": "
          system $ "sh ./run " ++ prog ++ " > output"
          Right out <- readFile "output"
-               | Left err => fail (show err)
+               | Left err => do print err
+                                pure False
          Right exp <- readFile "expected"
-               | Left err => fail (show err)
+               | Left err => do print err
+                                pure False
          if (out == exp)
             then putStrLn "success"
             else putStrLn "FAILURE"
          chdir "../.."
-         pure ()
+         pure (out == exp)
 
 main : IO ()
 main
     = do [_, ttimp, blodwen] <- getArgs
               | _ => do putStrLn "Usage: runtests [ttimp path] [blodwen path]"
-         traverse (runTest "ttimp" ttimp) ttimpTests
-         traverse (runTest "blodwen" blodwen) blodwenTests
-         pure ()
+         ttimps <- traverse (runTest "ttimp" ttimp) ttimpTests
+         blods <- traverse (runTest "blodwen" blodwen) blodwenTests
+         if (any not (ttimps ++ blods))
+            then exitWith (ExitFailure 1)
+            else exitWith ExitSuccess
 

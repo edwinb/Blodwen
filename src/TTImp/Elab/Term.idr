@@ -454,10 +454,10 @@ mutual
           do (rulev, rulet) <- check rigc process elabinfo env nest rule Unknown
              (lemma, pred, predty) <- elabRewrite loc env expected rulet
 
-             rname <- genVarName "rule"
-             pname <- genVarName "pred"
+             rname <- genVarName "_"
+             pname <- genVarName "_"
 
-             let pbind = Let RigW pred predty
+             let pbind = Let Rig0 pred predty
              let rbind = Let RigW (weaken rulev) (weaken rulet)
 
              let env' = rbind :: pbind :: env

@@ -62,7 +62,8 @@ data Equal : forall a, b . a -> b -> Type where
 
 %inline
 public export
-rewrite__impl : {0 x, y : a} -> (0 p : _) -> x = y -> p y -> p x
+rewrite__impl : {0 x, y : a} -> (0 p : _) -> 
+                (1 rule : x = y) -> (1 val : p y) -> p x
 rewrite__impl p Refl prf = prf
 
 %rewrite Equal rewrite__impl
