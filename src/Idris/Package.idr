@@ -73,6 +73,7 @@ field fname
       = strField PVersion "version"
     <|> strField PAuthors "authors"
     <|> strField POpts "options"
+    <|> strField POpts "opts"
     <|> strField PPrebuild "prebuild"
     <|> strField PPostbuild "postbuild"
     <|> strField PPreinstall "preinstall"
