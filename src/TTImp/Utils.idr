@@ -104,6 +104,11 @@ mutual
                         ++ bound in
             PatClause fc (substNames [] [] lhs) 
                          (substNames bound' ps rhs)
+  substNamesClause bound ps (WithClause fc lhs wval cs)
+      = let bound' = map UN (map snd (findBindableNames True bound [] lhs))
+                        ++ bound in
+            WithClause fc (substNames [] [] lhs) 
+                          (substNames bound' ps wval) cs
   substNamesClause bound ps (ImpossibleClause fc lhs)
       = ImpossibleClause fc (substNames bound [] lhs)
 

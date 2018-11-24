@@ -368,6 +368,11 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
         = let args = fst (addEnv env sub (usedIn lhs))
               args' = mkSplit splitOn lhs args in
               PatClause loc' (apply (IVar loc' casen) args') rhs
+    -- With isn't allowed in a case block but include for completeness
+    updateClause casen splitOn env sub (WithClause loc' lhs wval cs)
+        = let args = fst (addEnv env sub (usedIn lhs))
+              args' = mkSplit splitOn lhs args in
+              WithClause loc' (apply (IVar loc' casen) args') wval cs
     updateClause casen splitOn env sub (ImpossibleClause loc' lhs)
         = let args = fst (addEnv env sub (usedIn lhs))
               args' = mkSplit splitOn lhs args in

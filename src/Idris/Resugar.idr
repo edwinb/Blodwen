@@ -248,6 +248,10 @@ mutual
       = pure (MkPatClause emptyFC !(toPTerm startPrec lhs)
                                   !(toPTerm startPrec rhs)
                                   [])
+  toPClause (WithClause _ lhs rhs cs)
+      = pure (MkWithClause emptyFC !(toPTerm startPrec lhs)
+                                   !(toPTerm startPrec rhs)
+                                   !(traverse toPClause cs))
   toPClause (ImpossibleClause _ lhs)
       = pure (MkImpossible emptyFC !(toPTerm startPrec lhs))
 

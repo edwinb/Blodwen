@@ -199,7 +199,8 @@ mutual
   data PClause : Type where
        MkPatClause : FC -> (lhs : PTerm) -> (rhs : PTerm) -> 
                      (whereblock : List PDecl) -> PClause
-       -- TODO: MkWithClause
+       MkWithClause : FC -> (lhs : PTerm) -> (wval : PTerm) -> 
+                        List PClause -> PClause
        MkImpossible : FC -> (lhs : PTerm) -> PClause
 
   public export
@@ -360,6 +361,7 @@ showCount RigW = ""
 mutual
   showAlt : PClause -> String
   showAlt (MkPatClause _ lhs rhs _) = " | " ++ show lhs ++ " => " ++ show rhs ++ ";"
+  showAlt (MkWithClause _ lhs wval cs) = " | <<with alts not possible>>;"
   showAlt (MkImpossible _ lhs) = " | " ++ show lhs ++ " impossible;"
 
   showDo : PDo -> String
@@ -410,6 +412,7 @@ mutual
       where
         showAlt : PClause -> String
         showAlt (MkPatClause _ lhs rhs _) = " | " ++ show lhs ++ " => " ++ show rhs ++ ";"
+        showAlt (MkWithClause _ lhs rhs _) = " | <<with alts not possible>>"
         showAlt (MkImpossible _ lhs) = " | " ++ show lhs ++ " impossible;"
     show (PCase _ tm cs) 
         = "case " ++ show tm ++ " of { " ++ 
@@ -417,6 +420,7 @@ mutual
       where
         showCase : PClause -> String
         showCase (MkPatClause _ lhs rhs _) = show lhs ++ " => " ++ show rhs
+        showCase (MkWithClause _ lhs rhs _) = " | <<with alts not possible>>"
         showCase (MkImpossible _ lhs) = show lhs ++ " impossible"
     show (PLocal _ ds sc) -- We'll never see this when displaying a normal form...
         = "let { << definitions >>  } in " ++ show sc

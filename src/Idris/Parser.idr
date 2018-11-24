@@ -616,25 +616,49 @@ tyDecl fname indents
          atEnd indents
          pure (MkPTy (MkFC fname start end) n ty)
 
-parseRHS : FileName -> FilePos -> IndentInfo -> (lhs : PTerm) -> Rule PClause
-parseRHS fname start indents lhs
-     = do symbol "="
-          commit
-          rhs <- expr EqOK fname indents
-          ws <- option [] (whereBlock fname)
-          atEnd indents
-          end <- location
-          pure (MkPatClause (MkFC fname start end) lhs rhs ws)
-   <|> do keyword "impossible"
-          atEnd indents
-          end <- location
-          pure (MkImpossible (MkFC fname start end) lhs)
+mutual
+  parseRHS : (withArgs : Nat) ->
+             FileName -> FilePos -> IndentInfo -> (lhs : PTerm) -> Rule PClause
+  parseRHS withArgs fname start indents lhs
+       = do symbol "="
+            commit
+            rhs <- expr EqOK fname indents
+            ws <- option [] (whereBlock fname)
+            atEnd indents
+            end <- location
+            pure (MkPatClause (MkFC fname start end) lhs rhs ws)
+     <|> do keyword "with"
+            wstart <- location
+            symbol "("
+            wval <- bracketedExpr fname wstart indents
+            ws <- nonEmptyBlock (clause (S withArgs) fname)
+            end <- location
+            pure (MkWithClause (MkFC fname start end) lhs wval ws)
+     <|> do keyword "impossible"
+            atEnd indents
+            end <- location
+            pure (MkImpossible (MkFC fname start end) lhs)
 
-clause : FileName -> IndentInfo -> Rule PClause
-clause fname indents
-    = do start <- location
-         lhs <- expr NoEq fname indents
-         parseRHS fname start indents lhs
+  clause : Nat -> FileName -> IndentInfo -> Rule PClause
+  clause withArgs fname indents
+      = do start <- location
+           lhs <- expr NoEq fname indents
+           extra <- many parseWithArg
+           if (withArgs /= length extra)
+              then fail "Wrong number of 'with' arguments"
+              else parseRHS withArgs fname start indents (applyArgs lhs extra)
+    where
+      applyArgs : PTerm -> List (FC, PTerm) -> PTerm
+      applyArgs f [] = f
+      applyArgs f ((fc, a) :: args) = applyArgs (PApp fc f a) args
+
+      parseWithArg : Rule (FC, PTerm)
+      parseWithArg 
+          = do symbol "|"
+               start <- location
+               tm <- expr NoEq fname indents
+               end <- location
+               pure (MkFC fname start end, tm)
 
 mkTyConType : FC -> List Name -> PTerm
 mkTyConType fc [] = PType fc
@@ -983,7 +1007,7 @@ claim fname indents
 definition : FileName -> IndentInfo -> Rule PDecl
 definition fname indents
     = do start <- location
-         nd <- clause fname indents
+         nd <- clause 0 fname indents
          end <- location
          pure (PDef (MkFC fname start end) [nd])
 

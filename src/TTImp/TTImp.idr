@@ -96,8 +96,9 @@ mutual
   data ImpClause : Type -> Type where
        PatClause : annot -> (lhs : RawImp annot) -> (rhs : RawImp annot) ->
                    ImpClause annot
+       WithClause : annot -> (lhs : RawImp annot) -> (wval : RawImp annot) ->
+                    List (ImpClause annot) -> ImpClause annot
        ImpossibleClause : annot -> (lhs : RawImp annot) -> ImpClause annot
-       -- TODO: WithClause
   
   public export
   data DataOpt : Type where
@@ -224,6 +225,9 @@ mutual
   usedCases : SortedSet -> List (ImpClause annot) -> SortedSet
   usedCases ns [] = empty
   usedCases ns (ImpossibleClause _ _ :: rest) = usedCases ns rest
+  usedCases ns (WithClause _ lhs wval ws :: rest)
+      = union (used (union (bindVars lhs) ns) wval)
+              (usedCases ns (ws ++ rest))
   usedCases ns (PatClause _ lhs rhs :: rest)
       = union (used (union (bindVars lhs) ns) rhs)
               (usedCases ns rest)
@@ -380,6 +384,8 @@ mutual
   export
   Show (ImpClause annot) where
     show (PatClause _ lhs rhs) = show lhs ++ " = " ++ show rhs
+    show (WithClause _ lhs wval cs) 
+        = show lhs ++ " with (" ++ show wval ++ ") " ++ show cs
     show (ImpossibleClause _ lhs) = show lhs ++ " impossible"
 
   export
@@ -818,6 +824,8 @@ mutual
         = do tag 0; toBuf b fc; toBuf b lhs; toBuf b rhs
     toBuf b (ImpossibleClause fc lhs) 
         = do tag 1; toBuf b fc; toBuf b lhs
+    toBuf b (WithClause fc lhs wval cs) 
+        = do tag 2; toBuf b fc; toBuf b lhs; toBuf b wval; toBuf b cs
 
     fromBuf s b
         = case !getTag of
@@ -826,6 +834,9 @@ mutual
                        pure (PatClause fc lhs rhs)
                1 => do fc <- fromBuf s b; lhs <- fromBuf s b; 
                        pure (ImpossibleClause fc lhs)
+               2 => do fc <- fromBuf s b; lhs <- fromBuf s b; 
+                       wval <- fromBuf s b; cs <- fromBuf s b
+                       pure (WithClause fc lhs wval cs)
                _ => corrupt "ImpClause"
 
   export

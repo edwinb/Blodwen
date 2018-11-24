@@ -231,6 +231,9 @@ checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_
             = extend (Let c tmv tmt :: env) (DropCons p) (weaken nest) sc tysc
     extend env p nest tm ty = pure (_ ** (p, env, nest, tm, ty))
 
+checkClause {vars} elab incase mult hashit defining env nest (WithClause loc lhs_raw rhs_raw cs)
+    = throw (InternalError "with blocks not implemented")
+
 nameListEq : (xs : List Name) -> (ys : List Name) -> Maybe (xs = ys)
 nameListEq [] [] = Just Refl
 nameListEq (x :: xs) (y :: ys) with (nameEq x y)

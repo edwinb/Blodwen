@@ -95,6 +95,12 @@ Reify annot => Reify (ImpClause annot) where
            lhs' <- reify defs (evalClosure defs lhs)
            rhs' <- reify defs (evalClosure defs rhs)
            pure (PatClause fc' lhs' rhs')
+  reify defs (NDCon (NS ["Reflect"] (UN "WithClause")) _ _ [fc, lhs, wval, cs])
+      = do fc' <- reify defs (evalClosure defs fc)
+           lhs' <- reify defs (evalClosure defs lhs)
+           wval' <- reify defs (evalClosure defs wval)
+           cs' <- reify defs (evalClosure defs cs)
+           pure (WithClause fc' lhs' wval' cs')
   reify defs (NDCon (NS ["Reflect"] (UN "Impossible")) _ _ [fc, lhs])
       = do fc' <- reify defs (evalClosure defs fc)
            lhs' <- reify defs (evalClosure defs lhs)
@@ -108,6 +114,12 @@ Reflect annot => Reflect (ImpClause annot) where
            lhs' <- reflect defs env lhs
            rhs' <- reflect defs env rhs
            appCon defs (NS ["Reflect"] (UN "PatClause")) [fc', lhs', rhs']
+  reflect defs env (WithClause fc lhs wval cs)
+      = do fc' <- reflect defs env fc
+           lhs' <- reflect defs env lhs
+           wval' <- reflect defs env wval
+           cs' <- reflect defs env cs
+           appCon defs (NS ["Reflect"] (UN "WithClause")) [fc', lhs', wval', cs']
   reflect defs env (ImpossibleClause fc lhs)
       = do fc' <- reflect defs env fc
            lhs' <- reflect defs env lhs

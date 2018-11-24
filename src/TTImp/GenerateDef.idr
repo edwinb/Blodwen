@@ -1,4 +1,4 @@
-module TTImp.Generate
+module TTImp.GenerateDef
 
 -- Attempt to generate a complete definition from a type
 
@@ -73,6 +73,8 @@ expandClause loc elab n c
   where
     updateRHS : ImpClause annot -> RawImp annot -> ImpClause annot
     updateRHS (PatClause fc lhs _) rhs = PatClause fc lhs rhs
+    -- 'with' won't happen, include for completeness
+    updateRHS (WithClause fc lhs wval cs) rhs = WithClause fc lhs wval cs
     updateRHS (ImpossibleClause fc lhs) _ = ImpossibleClause fc lhs
 
     dropLams : Nat -> Env Term vars -> Term vars -> 
@@ -135,6 +137,7 @@ generateSplits : {auto m : Ref Meta (Metadata annot)} ->
                  annot -> Name -> ImpClause annot -> 
                  Core annot (List (Name, List (ImpClause annot)))
 generateSplits loc fn (ImpossibleClause fc lhs) = pure []
+generateSplits loc fn (WithClause fc lhs wval cs) = pure []
 generateSplits {c} {u} {i} {m} loc fn (PatClause fc lhs rhs) 
     = do (lhstm, _, _) <- inferTerm {c} {u} {i} {m}
                                         (\c, u, i, m => processDecl {c} {u} {i} {m})
