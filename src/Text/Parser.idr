@@ -13,7 +13,7 @@ import public Text.Token
 match : (Eq k, TokenKind k) =>
         (kind : k) ->
         Grammar (Token k) True (TokType kind)
-match kind = terminal $
+match kind = terminal "Unrecognised input" $
   \(Tok kind' text) => if kind' == kind
                           then Just $ tokValue kind text
                           else Nothing

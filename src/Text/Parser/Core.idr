@@ -15,12 +15,13 @@ import public Control.Delayed
 export
 data Grammar : (tok : Type) -> (consumes : Bool) -> Type -> Type where
      Empty : (val : ty) -> Grammar tok False ty
-     Terminal : (tok -> Maybe a) -> Grammar tok True a
-     NextIs : (tok -> Bool) -> Grammar tok False tok
+     Terminal : String -> (tok -> Maybe a) -> Grammar tok True a
+     NextIs : String -> (tok -> Bool) -> Grammar tok False tok
      EOF : Grammar tok False ()
 
-     Fail : String -> Grammar tok c ty
+     Fail : Bool -> String -> Grammar tok c ty
      Commit : Grammar tok False ()
+     MustWork : Grammar tok c a -> Grammar tok c a
 
      SeqEat : Grammar tok True a -> Inf (a -> Grammar tok c2 b) ->
               Grammar tok True b
@@ -72,8 +73,9 @@ export
 export
 Functor (Grammar tok c) where
   map f (Empty val)  = Empty (f val)
-  map f (Fail msg)   = Fail msg
-  map f (Terminal g) = Terminal (\t => map f (g t))
+  map f (Fail fatal msg) = Fail fatal msg
+  map f (MustWork g) = MustWork (map f g)
+  map f (Terminal msg g) = Terminal msg (\t => map f (g t))
   map f (Alt x y)    = Alt (map f x) (map f y)
   map f (SeqEat act next)
       = SeqEat act (\val => map f (next val))
@@ -114,10 +116,11 @@ export
 export
 mapToken : (a -> b) -> Grammar b c ty -> Grammar a c ty
 mapToken f (Empty val) = Empty val
-mapToken f (Terminal g) = Terminal (g . f)
-mapToken f (NextIs g) = SeqEmpty (NextIs (g . f)) (Empty . f)
+mapToken f (Terminal msg g) = Terminal msg (g . f)
+mapToken f (NextIs msg g) = SeqEmpty (NextIs msg (g . f)) (Empty . f)
 mapToken f EOF = EOF
-mapToken f (Fail msg) = Fail msg
+mapToken f (Fail fatal msg) = Fail fatal msg
+mapToken f (MustWork g) = MustWork (mapToken f g)
 mapToken f Commit = Commit
 mapToken f (SeqEat act next) = SeqEat (mapToken f act) (\x => mapToken f (next x))
 mapToken f (SeqEmpty act next) = SeqEmpty (mapToken f act) (\x => mapToken f (next x))
@@ -130,24 +133,28 @@ pure = Empty
 
 ||| Check whether the next token satisfies a predicate
 export
-nextIs : (tok -> Bool) -> Grammar tok False tok
+nextIs : String -> (tok -> Bool) -> Grammar tok False tok
 nextIs = NextIs
 
 ||| Look at the next token in the input
 export
 peek : Grammar tok False tok
-peek = nextIs (const True)
+peek = nextIs "Unrecognised token" (const True)
 
 ||| Succeeds if running the predicate on the next token returns Just x,
 ||| returning x. Otherwise fails.
 export
-terminal : (tok -> Maybe a) -> Grammar tok True a
+terminal : String -> (tok -> Maybe a) -> Grammar tok True a
 terminal = Terminal
 
 ||| Always fail with a message
 export
 fail : String -> Grammar tok c ty
-fail = Fail
+fail = Fail False
+
+export
+fatalError : String -> Grammar tok c ty
+fatalError = Fail True
 
 ||| Succeed if the input is empty
 export
@@ -160,9 +167,14 @@ export
 commit : Grammar tok False ()
 commit = Commit
 
+||| If the parser fails, treat it as a fatal error
+export
+mustWork : Grammar tok c ty -> Grammar tok c ty
+mustWork = MustWork
+
 data ParseResult : List tok -> (consumes : Bool) -> Type -> Type where
      Failure : {xs : List tok} ->
-               (committed : Bool) ->
+               (committed : Bool) -> (fatal : Bool) ->
                (err : String) -> (rest : List tok) -> ParseResult xs c ty
      EmptyRes : (committed : Bool) ->
                 (val : ty) -> (more : List tok) -> ParseResult more False ty
@@ -176,7 +188,7 @@ data ParseResult : List tok -> (consumes : Bool) -> Type -> Type where
 weakenRes : {whatever, c : Bool} -> {xs : List tok} ->
             (com' : Bool) ->
 						ParseResult xs c ty -> ParseResult xs (whatever && c) ty
-weakenRes com' (Failure com msg ts) = Failure com' msg ts
+weakenRes com' (Failure com fatal msg ts) = Failure com' fatal msg ts
 weakenRes {whatever=True} com' (EmptyRes com val xs) = EmptyRes com' val xs
 weakenRes {whatever=False} com' (EmptyRes com val xs) = EmptyRes com' val xs
 weakenRes com' (NonEmptyRes com val more) = NonEmptyRes com' val more
@@ -191,29 +203,33 @@ doParse : {c : Bool} ->
           ParseResult xs c ty
 -- doParse com xs act with (sizeAccessible xs)
 doParse com xs (Empty val) = EmptyRes com val xs
-doParse com [] (Fail str) = Failure com str []
-doParse com (x :: xs) (Fail str) = Failure com str (x :: xs)
+doParse com [] (Fail fatal str) = Failure com fatal str []
+doParse com (x :: xs) (Fail fatal str) = Failure com fatal str (x :: xs)
 doParse com xs Commit = EmptyRes True () xs
+doParse com xs (MustWork g) with (doParse com xs g)
+  doParse com xs (MustWork g) | Failure com' _ msg ts = Failure com' True msg ts
+  doParse com xs (MustWork g) | res = res
 
-doParse com [] (Terminal f) = Failure com "End of input" []
-doParse com (x :: xs) (Terminal f) 
+doParse com [] (Terminal err f) = Failure com False "End of input" []
+doParse com (x :: xs) (Terminal err f) 
       = maybe
-           (Failure com "Unrecognised token" (x :: xs))
+           (Failure com False err (x :: xs))
            (\a => NonEmptyRes com {xs=[]} a xs)
            (f x)
 doParse com [] EOF = EmptyRes com () []
 doParse com (x :: xs) EOF 
-      = Failure com "Expected end of input" (x :: xs)
-doParse com [] (NextIs f) = Failure com "End of input" []
-doParse com (x :: xs) (NextIs f) 
+      = Failure com False "Expected end of input" (x :: xs)
+doParse com [] (NextIs err f) = Failure com False "End of input" []
+doParse com (x :: xs) (NextIs err f) 
       = if f x
            then EmptyRes com x (x :: xs)
-           else Failure com "Unrecognised token" (x :: xs)
+           else Failure com False err (x :: xs)
 doParse com xs (Alt x y) with (doParse False xs x)
-  doParse com xs (Alt x y) | Failure com' msg ts
-        = if com' -- If the alternative had committed, don't try the
+  doParse com xs (Alt x y) | Failure com' fatal msg ts
+        = if com' || fatal
+                  -- If the alternative had committed, don't try the
                   -- other branch (and reset commit flag)
-             then Failure com msg ts
+             then Failure com fatal msg ts
              else weakenRes com (doParse False xs y)
   -- Successfully parsed the first option, so use the outer commit flag
   doParse com xs (Alt x y) | (EmptyRes _ val xs)
@@ -222,25 +238,25 @@ doParse com xs (Alt x y) with (doParse False xs x)
         = NonEmptyRes com val more
 doParse com xs (SeqEmpty act next)
         = case assert_total (doParse com xs act) of
-               Failure com msg ts => Failure com msg ts
+               Failure com fatal msg ts => Failure com fatal msg ts
                EmptyRes com val xs =>
                      case assert_total (doParse com xs (next val)) of
-                          Failure com' msg ts => Failure com' msg ts
+                          Failure com' fatal msg ts => Failure com' fatal msg ts
                           EmptyRes com' val xs => EmptyRes com' val xs
                           NonEmptyRes com' val more => NonEmptyRes com' val more
                NonEmptyRes {x} {xs=ys} com val more =>
                      case (assert_total (doParse com more (next val))) of
-                          Failure com' msg ts => Failure com' msg ts
+                          Failure com' fatal msg ts => Failure com' fatal msg ts
                           EmptyRes com' val _ => NonEmptyRes com' val more
                           NonEmptyRes {x=x1} {xs=xs1} com' val more' =>
                                rewrite appendAssociative (x :: ys) (x1 :: xs1) more' in
                                        NonEmptyRes com' val more'
 doParse com xs (SeqEat act next) with (doParse com xs act)
-  doParse com xs (SeqEat act next) | Failure com' msg ts
-       = Failure com' msg ts
+  doParse com xs (SeqEat act next) | Failure com' fatal msg ts
+       = Failure com' fatal msg ts
   doParse com (x :: (ys ++ more)) (SeqEat act next) | (NonEmptyRes com' val more)
        = case assert_total (doParse com' more (next val)) of
-              Failure com' msg ts => Failure com' msg ts
+              Failure com' fatal msg ts => Failure com' fatal msg ts
               EmptyRes com' val _ => NonEmptyRes com' val more
               NonEmptyRes {x=x1} {xs=xs1} com' val more' =>
                    rewrite appendAssociative (x :: ys) (x1 :: xs1) more' in
@@ -260,6 +276,6 @@ parse : (act : Grammar tok c ty) -> (xs : List tok) ->
         Either (ParseError tok) (ty, List tok)
 parse act xs
     = case doParse False xs act of
-           Failure _ msg ts => Left (Error msg ts)
+           Failure _ _ msg ts => Left (Error msg ts)
            EmptyRes _ val rest => pure (val, rest)
            NonEmptyRes _ val rest => pure (val, rest)

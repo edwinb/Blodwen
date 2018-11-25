@@ -71,6 +71,23 @@ whereBlock fname
          ds <- block (topDecl fname)
          pure (collectDefs (concat ds))
 
+-- Expect a keyword, but if we get anything else it's a fatal error
+commitKeyword : IndentInfo -> String -> Rule ()
+commitKeyword indents req
+    = do mustContinue indents (Just req)
+         keyword req
+         mustContinue indents Nothing
+
+commitSymbol : String -> Rule ()
+commitSymbol req
+    = symbol req
+       <|> fatalError ("Expected '" ++ req ++ "'")
+
+continueWith : IndentInfo -> String -> Rule ()
+continueWith indents req
+    = do mustContinue indents (Just req)
+         symbol req
+
 iOperator : Rule Name
 iOperator 
     = do n <- operator
@@ -96,6 +113,7 @@ mutual
            arg <- expr EqOK fname indents
            end <- location
            pure (PPrefixOp (MkFC fname start end) op arg)
+    <|> fail "Expected 'case', 'if', 'do', application or operator expression"
     where
       applyExpImp : FilePos -> FilePos -> PTerm -> 
                     List (Either PTerm (Maybe Name, PTerm)) -> 
@@ -162,11 +180,11 @@ mutual
       -- section otherwise treat it as prefix
       = do op <- iOperator
            e <- expr EqOK fname indents
-           symbol ")"
+           continueWith indents ")"
            end <- location
            pure (PSectionL (MkFC fname start end) op e)
       -- unit type/value
-    <|> do symbol ")"
+    <|> do continueWith indents ")"
            end <- location
            pure (PUnit (MkFC fname start end))
       -- right section (1-tuple is just an expression)
@@ -200,11 +218,11 @@ mutual
                             estart <- location
                             el <- expr EqOK fname indents
                             pure (estart, el))
-           symbol ")"
+           continueWith indents ")"
            end <- location
            pure (PPair (MkFC fname start end) e
                        (mergePairs end rest))
-     <|> do symbol ")"
+     <|> do continueWith indents ")"
             end <- location
             pure (PBracketed (MkFC fname start end) e)
     where
@@ -252,16 +270,17 @@ mutual
            symbol "["
            listExpr fname start indents
   
-  getMult : Constant -> EmptyRule RigCount
-  getMult (BI 0) = pure Rig0
-  getMult (BI 1) = pure Rig1
-  getMult _ = fail "Invalid multiplicity"
-
-  multiplicity : EmptyRule RigCount
+  multiplicity : EmptyRule (Maybe Integer)
   multiplicity
-      = do c <- constant
-           getMult c
-    <|> pure RigW
+      = do c <- intLit
+           pure (Just c)
+    <|> pure Nothing
+
+  getMult : Maybe Integer -> EmptyRule RigCount
+  getMult (Just 0) = pure Rig0
+  getMult (Just 1) = pure Rig1
+  getMult Nothing = pure RigW
+  getMult _ = fatalError "Invalid multiplicity (must be 0 or 1)"
 
   pibindAll : FC -> PiInfo -> List (RigCount, Maybe Name, PTerm) -> 
               PTerm -> PTerm
@@ -273,28 +292,31 @@ mutual
              Rule (List (RigCount, Name, PTerm))
   bindList fname start indents
       = sepBy1 (symbol ",")
-               (do rig <- multiplicity
+               (do rigc <- multiplicity
                    n <- unqualifiedName
                    ty <- option 
                             (PInfer (MkFC fname start start))
                             (do symbol ":"
                                 opExpr EqOK fname indents)
+                   rig <- getMult rigc
                    pure (rig, UN n, ty))
 
   pibindList : FileName -> FilePos -> IndentInfo -> 
                Rule (List (RigCount, Maybe Name, PTerm))
   pibindList fname start indents
-       = do rig <- multiplicity
+       = do rigc <- multiplicity
             ns <- sepBy1 (symbol ",") unqualifiedName
             symbol ":"
             ty <- expr EqOK fname indents
             atEnd indents
+            rig <- getMult rigc
             pure (map (\n => (rig, Just (UN n), ty)) ns)
      <|> sepBy1 (symbol ",")
-                (do rig <- multiplicity
+                (do rigc <- multiplicity
                     n <- name
                     symbol ":"
                     ty <- expr EqOK fname indents
+                    rig <- getMult rigc
                     pure (rig, Just n, ty))
       
   bindSymbol : Rule PiInfo
@@ -361,7 +383,7 @@ mutual
            symbol "\\"
            binders <- bindList fname start indents
            symbol "=>"
-           continue indents
+           mustContinue indents Nothing
            scope <- expr EqOK fname indents
            end <- location
            pure (bindAll (MkFC fname start end) binders scope)
@@ -375,12 +397,13 @@ mutual
               Rule (FilePos, FilePos, RigCount, PTerm, PTerm, List PClause)
   letBinder fname indents
       = do start <- location
-           rig <- multiplicity
+           rigc <- multiplicity
            pat <- expr NoEq fname indents
            symbol "="
            val <- expr EqOK fname indents
            alts <- block (patAlt fname)
            end <- location
+           rig <- getMult rigc
            pure (start, end, rig, pat, val, alts)
 
   buildLets : FileName ->
@@ -410,18 +433,17 @@ mutual
   let_ fname indents
       = do start <- location
            keyword "let"
-           res <- block (letBinder fname) 
-           continue indents
-           keyword "in"
+           res <- nonEmptyBlock (letBinder fname) 
+           commitKeyword indents "in"
            scope <- typeExpr EqOK fname indents
            end <- location
            pure (buildLets fname res scope)
                 
     <|> do start <- location
            keyword "let"
-           ds <- block (topDecl fname)
-           continue indents
-           keyword "in"
+           commit
+           ds <- nonEmptyBlock (topDecl fname)
+           commitKeyword indents "in"
            scope <- typeExpr EqOK fname indents
            end <- location
            pure (PLocal (MkFC fname start end) (collectDefs (concat ds)) scope)
@@ -431,7 +453,7 @@ mutual
       = do start <- location
            keyword "case"
            scr <- expr EqOK fname indents
-           keyword "of"
+           commitKeyword indents "of"
            alts <- block (caseAlt fname)
            end <- location
            pure (PCase (MkFC fname start end) scr alts)
@@ -445,7 +467,7 @@ mutual
   caseRHS : FileName -> FilePos -> IndentInfo -> PTerm -> Rule PClause
   caseRHS fname start indents lhs
       = do symbol "=>"
-           continue indents
+           mustContinue indents Nothing
            rhs <- expr EqOK fname indents
            atEnd indents 
            end <- location
@@ -460,9 +482,9 @@ mutual
       = do start <- location
            keyword "if"
            x <- expr EqOK fname indents
-           keyword "then"
+           commitKeyword indents "then"
            t <- expr EqOK fname indents
-           keyword "else"
+           commitKeyword indents "else"
            e <- expr EqOK fname indents
            atEnd indents
            end <- location
@@ -493,7 +515,7 @@ mutual
       = do start <- location
            keyword "rewrite"
            rule <- expr EqOK fname indents
-           keyword "in"
+           commitKeyword indents "in"
            tm <- expr EqOK fname indents
            end <- location
            pure (PRewrite (MkFC fname start end) rule tm)
@@ -611,10 +633,11 @@ tyDecl fname indents
     = do start <- location
          n <- name
          symbol ":"
-         ty <- expr EqOK fname indents
-         end <- location
-         atEnd indents
-         pure (MkPTy (MkFC fname start end) n ty)
+         mustWork $
+            do ty <- expr EqOK fname indents
+               end <- location
+               atEnd indents
+               pure (MkPTy (MkFC fname start end) n ty)
 
 mutual
   parseRHS : (withArgs : Nat) ->
@@ -645,8 +668,8 @@ mutual
            lhs <- expr NoEq fname indents
            extra <- many parseWithArg
            if (withArgs /= length extra)
-              then fail "Wrong number of 'with' arguments"
-              else parseRHS withArgs fname start indents (applyArgs lhs extra)
+              then fatalError "Wrong number of 'with' arguments"
+              else mustWork (parseRHS withArgs fname start indents (applyArgs lhs extra))
     where
       applyArgs : PTerm -> List (FC, PTerm) -> PTerm
       applyArgs f [] = f
@@ -876,7 +899,7 @@ getVisibility Nothing [] = pure Private
 getVisibility (Just vis) [] = pure vis
 getVisibility Nothing (Left x :: xs) = getVisibility (Just x) xs
 getVisibility (Just vis) (Left x :: xs)
-   = fail $ "Multiple visibility modifiers"
+   = fatalError "Multiple visibility modifiers"
 getVisibility v (_ :: xs) = getVisibility v xs
 
 getRight : Either a b -> Maybe b
@@ -1047,7 +1070,8 @@ topDecl fname indents
   <|> do d <- directiveDecl fname indents
          pure [d]
   <|> do start <- location
-         dstr <- terminal (\x => case tok x of
+         dstr <- terminal "Expected CG directive"
+                          (\x => case tok x of
                                       CGDirective d => Just d
                                       _ => Nothing)
          end <- location
@@ -1065,6 +1089,7 @@ topDecl fname indents
          pure [d]
   <|> do d <- definition fname indents
          pure [d]
+  <|> fatalError "Couldn't parse declaration"
 
 -- All the clauses get parsed as one-clause definitions. Collect any
 -- neighbouring clauses into one definition. This might mean merging two
@@ -1170,7 +1195,7 @@ setOption set
          pure (ShowNamespace set)
   <|> do exactIdent "showtypes"
          pure (ShowTypes set)
-  <|> if set then setVarOption else fail "Invalid option"
+  <|> if set then setVarOption else fatalError "Unrecognised option"
 
 replCmd : List String -> Rule ()
 replCmd [] = fail "Unrecognised command"
@@ -1215,6 +1240,7 @@ editCmd
          line <- intLit
          n <- name
          pure (MakeCase (fromInteger line) n)
+  <|> fatalError "Unrecognised command"
 
 export
 command : Rule REPLCmd

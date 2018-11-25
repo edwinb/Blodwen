@@ -25,8 +25,8 @@ data ParseError = ParseFail String (Maybe (Int, Int)) (List Token)
 export
 Show ParseError where
   show (ParseFail err loc toks)
-      = "Parse error: " ++ err ++ " at " ++ show loc ++ "\n" ++ 
-        show (take 10 toks)
+      = "Parse error: " ++ err ++ " (next tokens: "
+            ++ show (take 10 toks) ++ ")" 
   show (LexFail (c, l, str)) 
       = "Lex error at " ++ show (c, l) ++ " input: " ++ str
   show (FileFail err)
@@ -35,7 +35,7 @@ Show ParseError where
 export
 eoi : EmptyRule ()
 eoi 
-    = do nextIs (isEOI . tok)
+    = do nextIs "Expected end of input" (isEOI . tok)
          pure ()
   where
     isEOI : Token -> Bool
@@ -223,7 +223,8 @@ getCharLit str
 export
 constant : Rule Constant
 constant 
-    = terminal (\x => case tok x of
+    = terminal "Expected constant"
+               (\x => case tok x of
                            Literal i => Just (BI i)
                            StrLit s => case escape s of
                                             Nothing => Nothing
@@ -242,21 +243,24 @@ constant
 export
 intLit : Rule Integer
 intLit 
-    = terminal (\x => case tok x of
+    = terminal "Expected integer literal"
+               (\x => case tok x of
                            Literal i => Just i
                            _ => Nothing)
 
 export
 strLit : Rule String
 strLit 
-    = terminal (\x => case tok x of
+    = terminal "Expected string literal"
+               (\x => case tok x of
                            StrLit s => Just s
                            _ => Nothing)
 
 export
 symbol : String -> Rule ()
 symbol req
-    = terminal (\x => case tok x of
+    = terminal ("Expected '" ++ req ++ "'")
+               (\x => case tok x of
                            Symbol s => if s == req then Just ()
                                                    else Nothing
                            _ => Nothing)
@@ -264,7 +268,8 @@ symbol req
 export
 keyword : String -> Rule ()
 keyword req
-    = terminal (\x => case tok x of
+    = terminal ("Expected '" ++ req ++ "'")
+               (\x => case tok x of
                            Keyword s => if s == req then Just ()
                                                     else Nothing
                            _ => Nothing)
@@ -272,7 +277,8 @@ keyword req
 export
 exactIdent : String -> Rule ()
 exactIdent req
-    = terminal (\x => case tok x of
+    = terminal ("Expected " ++ req)
+               (\x => case tok x of
                            Ident s => if s == req then Just ()
                                                   else Nothing
                            _ => Nothing)
@@ -280,7 +286,8 @@ exactIdent req
 export
 operator : Rule String
 operator
-    = terminal (\x => case tok x of
+    = terminal "Expected operator"
+               (\x => case tok x of
                            Symbol s => 
                                 if s `elem` reservedSymbols 
                                    then Nothing
@@ -289,7 +296,8 @@ operator
 
 identPart : Rule String
 identPart 
-    = terminal (\x => case tok x of
+    = terminal "Expected name"
+               (\x => case tok x of
                            Ident str => Just str
                            _ => Nothing)
 
@@ -312,7 +320,8 @@ unqualifiedName = identPart
 export
 holeName : Rule String
 holeName 
-    = terminal (\x => case tok x of
+    = terminal "Expected hole name"
+               (\x => case tok x of
                            HoleIdent str => Just str
                            _ => Nothing)
 
@@ -341,18 +350,28 @@ IndentInfo = Int
 
 export
 init : IndentInfo
--- init = MkIndent [0] False
-init = 0 -- MkIndent [0] False
+init = 0
 
--- -- Fail if this is the end of a block entry or end of file
-export
-continue : (indent : IndentInfo) -> EmptyRule ()
-continue indent
-    = do eoi; fail {c=False} "End of input"
+continueF : EmptyRule () -> (indent : IndentInfo) -> EmptyRule ()
+continueF err indent
+    = do eoi; err
   <|> do col <- column
          if (col <= indent)
-            then fail "No more args"
+            then err
             else pure ()
+
+-- Fail if this is the end of a block entry or end of file
+export
+continue : (indent : IndentInfo) -> EmptyRule ()
+continue = continueF (fail "Unexpected end of expression")
+
+-- As 'continue' but failing is fatal (i.e. entire parse fails)
+export
+mustContinue : (indent : IndentInfo) -> Maybe String -> EmptyRule ()
+mustContinue indent Nothing 
+   = continueF (fatalError "Unexpected end of expression") indent
+mustContinue indent (Just req) 
+   = continueF (fatalError ("Expected '" ++ req ++ "'")) indent
 
 data ValidIndent 
      = AnyIndent -- In {}, entries can begin in any column
@@ -396,7 +415,7 @@ export
 atEnd : (indent : IndentInfo) -> EmptyRule ()
 atEnd indent
     = eoi
-  <|> do nextIs (isTerminator . tok)
+  <|> do nextIs "Expected end of block" (isTerminator . tok)
          pure ()
   <|> do col <- column
          if (col <= indent)
@@ -455,9 +474,10 @@ blockEntry valid rule
 blockEntries : ValidIndent -> (IndentInfo -> Rule ty) ->
                EmptyRule (List ty)
 blockEntries valid rule
-    = do res <- blockEntry valid rule
-         ts <- blockEntries (snd res) rule
-         pure (fst res :: ts)
+     = do eoi; pure []
+   <|> do res <- blockEntry valid rule
+          ts <- blockEntries (snd res) rule
+          pure (fst res :: ts)
    <|> pure []
 
 export

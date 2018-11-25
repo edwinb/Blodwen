@@ -20,18 +20,18 @@ data Token = Ident String
 
 export
 Show Token where
-  show (Ident x) = "Ident " ++ x
-  show (HoleIdent x) = "HoleIdent " ++ x
-  show (Literal x) = "Lit " ++ show x
-  show (StrLit x) = "Str " ++ show x
-  show (CharLit x) = "Char " ++ show x
-  show (DoubleLit x) = "Double " ++ show x
-  show (Symbol x) = "Sym " ++ x
-  show (Keyword x) = "Keyword " ++ x
-  show (Unrecognised x) = "BAD_TOKEN " ++ x
-  show (Comment x) = "Comment"
+  show (Ident x) = "identifier " ++ x
+  show (HoleIdent x) = "hole identifier " ++ x
+  show (Literal x) = "literal " ++ show x
+  show (StrLit x) = "string " ++ show x
+  show (CharLit x) = "character " ++ show x
+  show (DoubleLit x) = "double " ++ show x
+  show (Symbol x) = "symbol " ++ x
+  show (Keyword x) = x
+  show (Unrecognised x) = "Unrecognised " ++ x
+  show (Comment x) = "comment"
   show (CGDirective x) = "CGDirective " ++ x
-  show EndInput = "EndInput"
+  show EndInput = "end of input"
 
 export
 Show (TokenData Token) where

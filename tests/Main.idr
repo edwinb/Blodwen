@@ -36,6 +36,8 @@ blodwenTests
        "record001", "record002",
        "reflect001",
        "perf001",
+       "perror001", "perror002", "perror003", "perror004", "perror005",
+       "perror006",
        "prelude001",
        "sugar001"]
 

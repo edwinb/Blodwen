@@ -174,7 +174,7 @@ perror (TTCError msg) = pure $ "Error in TTC file: " ++ show msg
 perror (FileErr fname err) 
     = pure $ "File error in " ++ show fname ++ ": " ++ show err
 perror (ParseFail _ err)
-    = pure $ "Parse error: " ++ show err
+    = pure $ show err
 perror (ModuleNotFound _ ns)
     = pure $ showSep "." (reverse ns) ++ " not found"
 perror (CyclicImports ns)
