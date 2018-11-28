@@ -67,6 +67,17 @@ updateREPLOpts
               Just e => put ROpts (record { editor = e } opts)
               Nothing => pure ()
 
+showInfo : {auto c : Ref Ctxt Defs}
+        -> {auto o : Ref ROpts REPLOpts}
+        -> List CLOpt
+        -> Core annot Bool
+showInfo Nil = pure False
+showInfo (BlodwenPaths :: _)
+    = do defs <- get Ctxt
+         iputStrLn (toString (dirs (options defs)))
+         pure True
+showInfo (_::rest) = showInfo rest
+
 stMain : List CLOpt -> Core FC ()
 stMain opts
     = do c <- newRef Ctxt initCtxt
@@ -80,38 +91,43 @@ stMain opts
          let outmode = if ide then IDEMode 0 else REPL False
          let fname = findInput opts
          o <- newRef ROpts (REPLOpts.defaultOpts fname outmode)
-         
-         -- If there's a --build or --install, just do that then quit
-         done <- processPackageOpts opts
 
-         when (not done) $
-            do preOptions opts
+         finish <- showInfo opts
+         if finish
+         then pure ()
+         else do
 
-               u <- newRef UST initUState
-               updateREPLOpts
-               case fname of
-                    Nothing => readPrelude
-                    Just f => loadMainFile f
+           -- If there's a --build or --install, just do that then quit
+           done <- processPackageOpts opts
 
-               doRepl <- postOptions opts
-               if doRepl then
-                    if ide
-                       then replIDE {c} {u} {m}
-                       else do iputStrLn "Welcome to Blodwen. Good luck."
-                               repl {c} {u} {m}
-                  else
-                    -- exit with an error code if there was an error, otherwise
-                    -- just exit
-                    do ropts <- get ROpts
-                       case errorLine ropts of
-                            Nothing => pure ()
-                            Just _ => coreLift $ exit 1
+           when (not done) $
+              do preOptions opts
+
+                 u <- newRef UST initUState
+                 updateREPLOpts
+                 case fname of
+                      Nothing => readPrelude
+                      Just f => loadMainFile f
+
+                 doRepl <- postOptions opts
+                 if doRepl then
+                      if ide
+                         then replIDE {c} {u} {m}
+                         else do iputStrLn "Welcome to Blodwen. Good luck."
+                                 repl {c} {u} {m}
+                    else
+                      -- exit with an error code if there was an error, otherwise
+                      -- just exit
+                      do ropts <- get ROpts
+                         case errorLine ropts of
+                              Nothing => pure ()
+                              Just _ => coreLift $ exit 1
 
 -- Run any options (such as --version or --help) which imply printing a
 -- message then exiting. Returns wheter the program should continue
 quitOpts : List CLOpt -> IO Bool
 quitOpts [] = pure True
-quitOpts (Version :: _) 
+quitOpts (Version :: _)
     = do putStrLn versionMsg
          pure False
 quitOpts (Help :: _)
@@ -131,9 +147,8 @@ main = do Right opts <- getCmdOpts
           if continue
              then
                 coreRun (stMain opts)
-                     (\err : Error _ => 
+                     (\err : Error _ =>
                              do putStrLn ("Uncaught error: " ++ show err)
                                 exit 1)
                      (\res => pure ())
              else pure ()
-
