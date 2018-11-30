@@ -1,0 +1,7 @@
+1/1: Building with (with.blod)
+Welcome to Blodwen. Good luck.
+Main> Even (S (S Z))
+Main> Odd (S (S Z))
+Main> Nothing
+Main> Just Refl
+Main> Bye for now!

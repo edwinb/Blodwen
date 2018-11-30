@@ -4,12 +4,14 @@ import Core.TT
 import Core.Unify
 import Core.Context
 import Core.CaseBuilder
+import Core.LinearCheck
 import Core.Metadata
 import Core.Normalise
 import Core.Reflect
 
 import TTImp.Elab
 import TTImp.TTImp
+import TTImp.Utils
 
 import Data.List
 import Control.Catchable
@@ -119,6 +121,62 @@ combineLinear loc ((n, count) :: cs)
         = do newc <- combine c c'
              combineAll newc cs
 
+-- Return an extended environment. The 'SubVars' proof contains a proof that
+-- refers to the *inner* environment, so all the outer things are marked as
+-- 'DropCons'
+extend : Env Term extvs -> SubVars vs extvs ->
+         NestedNames extvs -> 
+         Term extvs -> Term extvs ->
+         Core annot (vars' ** (SubVars vs vars',
+                               Env Term vars', NestedNames vars', 
+                               Term vars', Term vars'))
+extend env p nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) with (nameEq n n')
+  extend env p nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) | Nothing 
+        = throw (InternalError "Names don't match in pattern type")
+  extend env p nest (Bind n (PVar c tmsc) sc) (Bind n (PVTy _ _) tysc) | (Just Refl) 
+        = extend (PVar c tmsc :: env) (DropCons p) (weaken nest) sc tysc
+extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) with (nameEq n n')
+  extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) | Nothing 
+        = throw (InternalError "Names don't match in pattern type")
+  -- PLet on the left becomes Let on the right, to give it computational force
+  extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n (PLet _ _ _) tysc) | (Just Refl) 
+        = extend (Let c tmv tmt :: env) (DropCons p) (weaken nest) sc tysc
+extend env p nest tm ty = pure (_ ** (p, env, nest, tm, ty))
+
+bindNotReq : Int -> Env Term vs -> (sub : SubVars pre vs) -> 
+             Term vs -> Term pre
+bindNotReq i [] SubRefl tm = embed tm
+bindNotReq i (b :: env) SubRefl tm 
+   = let tmptm = subst (Ref Bound (MN "arg" i)) tm 
+         btm = bindNotReq (1 + i) env SubRefl tmptm in
+         refToLocal (Just (multiplicity b)) (MN "arg" i) _ btm
+bindNotReq i (b :: env) (KeepCons p) tm 
+   = let tmptm = subst (Ref Bound (MN "arg" i)) tm 
+         btm = bindNotReq (1 + i) env p tmptm in
+         refToLocal (Just (multiplicity b)) (MN "arg" i) _ btm
+bindNotReq i (b :: env) (DropCons p) tm 
+   = bindNotReq i env p 
+       (Bind _ (Pi (multiplicity b) Explicit (binderType b)) tm)
+
+bindReq : Env Term vs -> (sub : SubVars pre vs) -> 
+          Term pre -> Maybe ClosedTerm -- (notreqInSub vs sub)
+bindReq env SubRefl tm = pure (bindEnv env tm)
+bindReq (b :: env) (KeepCons p) tm 
+   = do b' <- shrinkBinder b p
+        bindReq env p 
+           (Bind _ (Pi (multiplicity b) Explicit (binderType b')) tm)
+bindReq (b :: env) (DropCons p) tm = bindReq env p tm
+
+getReq : (vs : List Name) -> SubVars pre vs -> List Name
+getReq vs SubRefl = vs
+getReq _ (DropCons p) = getReq _ p
+getReq (v :: vs) (KeepCons p) = v :: getReq _ p
+
+getNotReq : (vs : List Name) -> SubVars pre vs -> List Name
+getNotReq vs SubRefl = []
+getNotReq (v :: vs) (DropCons p) = v :: getNotReq _ p
+getNotReq _ (KeepCons p) = getNotReq _ p
+
 export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -211,28 +269,168 @@ checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_
            do addHash lhspat
               addHash rhs
          pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
-  where
-    extend : Env Term extvs -> SubVars vs extvs ->
-             NestedNames extvs -> 
-             Term extvs -> Term extvs ->
-             Core annot (vars' ** (SubVars vs vars',
-                                   Env Term vars', NestedNames vars', 
-                                   Term vars', Term vars'))
-    extend env p nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) with (nameEq n n')
-      extend env p nest (Bind n (PVar c tmsc) sc) (Bind n' (PVTy _ _) tysc) | Nothing 
-            = throw (InternalError "Names don't match in pattern type")
-      extend env p nest (Bind n (PVar c tmsc) sc) (Bind n (PVTy _ _) tysc) | (Just Refl) 
-            = extend (PVar c tmsc :: env) (DropCons p) (weaken nest) sc tysc
-    extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) with (nameEq n n')
-      extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n' (PLet _ _ _) tysc) | Nothing 
-            = throw (InternalError "Names don't match in pattern type")
-      -- PLet on the left becomes Let on the right, to give it computational force
-      extend env p nest (Bind n (PLet c tmv tmt) sc) (Bind n (PLet _ _ _) tysc) | (Just Refl) 
-            = extend (Let c tmv tmt :: env) (DropCons p) (weaken nest) sc tysc
-    extend env p nest tm ty = pure (_ ** (p, env, nest, tm, ty))
+checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (WithClause loc lhs_raw_src wval_raw cs)
+    = do gam <- get Ctxt
+         lhs_raw_in <- lhsInCurrentNS nest lhs_raw_src
+         let lhs_raw = implicitsAs gam vars lhs_raw_in
+         log 5 ("Checking With LHS: " ++ show lhs_raw)
+         (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
+              inferTerm elab incase defining env nest
+                        PATTERN (InLHS mult) lhs_raw
+         -- Check there's no holes or constraints in the left hand side
+         -- we've just checked - they must be resolved now (that's what
+         -- True means)
+         gam <- get Ctxt
+         when (not incase) $
+           wrapError (InLHS loc defining) $ checkUserHoles True
+         -- Normalise the LHS to get any functions or let bindings evaluated
+         -- (this might be allowed, e.g. for 'fromInteger')
+         let lhs = normalise gam env lhs_in
+         let lhsty = normaliseHoles gam env lhsty_in
+         let linvars_in = findLinear gam 0 Rig1 lhs
+         log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
+                 show linvars_in
 
-checkClause {vars} elab incase mult hashit defining env nest (WithClause loc lhs_raw rhs_raw cs)
-    = throw (InternalError "with blocks not implemented")
+         linvars <- combineLinear loc linvars_in
+         let lhs' = setLinear linvars lhs
+         let lhsty' = setLinear linvars lhsty
+
+         -- Extend the environment with the names bound on the LHS, but also
+         -- remember the outer environment.  Everything there is treated as
+         -- parameters, and this is important when making types for case
+         -- expressions (we don't want to abstract over the outer environment
+         -- again)
+         (vs ** (prf, env', nest', lhspat, reqty)) <- extend env SubRefl nest lhs' lhsty'
+         log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
+         log 5 ("Checking with value: " ++ show wval_raw)
+         log 10 ("Old env: " ++ show env)
+         log 10 ("New env: " ++ show env')
+
+         setHoleLHS (bindEnv env lhs')
+         let mode
+               = case mult of
+                      Rig0 => InType -- treat as used in type only
+                      _ => InExpr
+         -- Up to here, it's the same as the normal pattern def - factor out?
+
+         (wval, wval_erased, wvalTy) <- wrapError (InRHS loc defining) $
+                inferTermEnv elab incase defining env' env prf nest' NONE mode wval_raw
+         clearHoleLHS
+
+         let (wevars ** withSub) = keepOldEnv prf (snd (findSubEnv env' wval))
+
+         let Just wval = shrinkTerm wval withSub
+             | Nothing => throw (InternalError "Impossible happened: With abstraction failure #1")
+         let Just wvalTy = shrinkTerm wvalTy withSub
+             | Nothing => throw (InternalError "Impossible happened: With abstraction failure #2")
+         log 5 ("With value: " ++ show wval ++ " : " ++ show wvalTy)
+         log 5 ("Uses env: " ++ show wevars)
+         log 5 ("Required type: " ++ show reqty)
+
+         -- TODO: Also abstract over 'wval' in the scope of bNotReq in order
+         -- to get the 'magic with' behaviour
+         let wargn = MN "warg" 0
+         let bNotReq = Bind wargn (Pi RigW Explicit wvalTy)
+                            (weaken (bindNotReq 0 env' withSub reqty))
+         log 10 ("Bound unrequired vars: " ++ show bNotReq)
+
+         let Just wtype = bindReq env' withSub bNotReq
+             | Nothing => throw (InternalError "Impossible happened: With abstraction failure #3")
+
+         -- list of argument names - 'Just' means we need to match the name
+         -- in the with clauses to find out what the pattern should be.
+         -- 'Nothing' means it's the with pattern (so wargn)
+         let wargNames 
+                 = map Just (reverse (getReq _ withSub)) ++ 
+                   Nothing :: reverse (map Just (getNotReq _ withSub))
+
+         log 5 ("With function type: " ++ show wtype ++ " " ++ show wargNames)
+         wname <- genWithName defining
+         addDef wname (newDef [] wtype Private None)
+         let rhs_in = apply (IVar loc wname)
+                        (map (maybe wval_raw (IVar loc)) wargNames)
+         log 10 ("With function RHS: " ++ show rhs_in)
+         (rhs, rhs_erased) <- wrapError (InRHS loc defining) $
+             checkTerm elab incase defining env' env prf nest' NONE mode rhs_in reqty
+             
+         cs' <- traverse (mkClauseWith 1 wname wargNames lhs_raw_src) cs
+         let wdef = IDef loc wname cs'
+         elab c u i m False env nest wdef
+
+         pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
+  where
+    -- If it's 'KeepCons/SubRefl' in 'outprf', that means it was in the outer
+    -- environment so we need to keep it in the same place in the 'with'
+    -- function. Hence, turn it to KeepCons whatever
+    keepOldEnv : (outprf : SubVars outer vs) -> SubVars vs' vs ->
+                 (vs'' : List Name ** SubVars vs'' vs)
+    keepOldEnv {vs} SubRefl p = (vs ** SubRefl)
+    keepOldEnv {vs} p SubRefl = (vs ** SubRefl)
+    keepOldEnv (DropCons p) (DropCons p')
+        = let (_ ** rest) = keepOldEnv p p' in
+              (_ ** DropCons rest)
+    keepOldEnv (DropCons p) (KeepCons p')
+        = let (_ ** rest) = keepOldEnv p p' in
+              (_ ** KeepCons rest)
+    keepOldEnv (KeepCons p) (DropCons p')
+        = let (_ ** rest) = keepOldEnv p p' in
+              (_ ** KeepCons rest)
+    keepOldEnv (KeepCons p) (KeepCons p')
+        = let (_ ** rest) = keepOldEnv p p' in
+              (_ ** KeepCons rest)
+
+    dropWithArgs : Nat -> RawImp annot -> 
+                   Core annot (RawImp annot, List (RawImp annot))
+    dropWithArgs Z tm = pure (tm, [])
+    dropWithArgs (S k) (IApp _ f arg)
+        = do (tm, rest) <- dropWithArgs k f
+             pure (tm, arg :: rest)
+    -- Shouldn't happen if parsed correctly, but there's no guarantee that
+    -- inputs come from parsed source so throw an error.
+    dropWithArgs _ _ = throw (GenericMsg loc "Badly formed 'with' clause")
+
+    -- Get the arguments for the rewritten pattern clause of a with by looking
+    -- up how the argument names matched
+    getArgMatch : RawImp annot -> List (String, RawImp annot) ->
+                  Maybe Name -> RawImp annot
+    getArgMatch warg ms Nothing = warg
+    getArgMatch warg ms (Just (UN n))
+        = case lookup n ms of
+               Nothing => Implicit loc
+               Just tm => tm
+    getArgMatch warg ms _ = Implicit loc
+
+    getNewLHS : annot -> (drop : Nat) -> Name -> List (Maybe Name) ->
+                RawImp annot -> RawImp annot -> Core annot (RawImp annot)
+    getNewLHS ploc drop wname wargnames lhs patlhs
+        = do (mlhs, wrest) <- dropWithArgs drop patlhs
+             let (warg :: rest) = reverse wrest
+                 | _ => throw (GenericMsg loc "Badly formed 'with' clause")
+             log 10 $ show lhs ++ " against " ++ show mlhs ++
+                     " dropping " ++ show (warg :: rest)
+             ms <- getMatch lhs mlhs
+             log 10 $ "Matches: " ++ show ms
+             let newlhs = apply (IVar ploc wname)
+                                (map (getArgMatch warg ms) wargnames ++ rest)
+             log 5 $ "New LHS: " ++ show newlhs
+             pure newlhs
+
+    -- Rewrite the clauses in the block to use an updated LHS.
+    -- 'drop' is the number of additional with arguments we expect (i.e.
+    -- the things to drop from the end before matching LHSs)
+    mkClauseWith : (drop : Nat) -> Name -> List (Maybe Name) ->
+                   RawImp annot -> ImpClause annot -> 
+                   Core annot (ImpClause annot)
+    mkClauseWith drop wname wargnames lhs (PatClause ploc patlhs rhs)
+        = do newlhs <- getNewLHS ploc drop wname wargnames lhs patlhs
+             pure (PatClause ploc newlhs rhs)
+    mkClauseWith drop wname wargnames lhs (WithClause ploc patlhs rhs ws)
+        = do newlhs <- getNewLHS ploc drop wname wargnames lhs patlhs
+             ws' <- traverse (mkClauseWith (S drop) wname wargnames lhs) ws
+             pure (WithClause ploc newlhs rhs ws')
+    mkClauseWith drop wname wargnames lhs (ImpossibleClause ploc patlhs)
+        = do newlhs <- getNewLHS ploc drop wname wargnames lhs patlhs
+             pure (ImpossibleClause ploc newlhs)
 
 nameListEq : (xs : List Name) -> (ys : List Name) -> Maybe (xs = ys)
 nameListEq [] [] = Just Refl

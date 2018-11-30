@@ -39,7 +39,8 @@ blodwenTests
        "perror001", "perror002", "perror003", "perror004", "perror005",
        "perror006",
        "prelude001",
-       "sugar001"]
+       "sugar001",
+       "with001"]
 
 chdir : String -> IO Bool
 chdir dir 

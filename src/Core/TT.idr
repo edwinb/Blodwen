@@ -864,6 +864,7 @@ absOthers {done} {vs = x :: vars} (b :: env) (DropCons sub) tm
 -- Would be handy if binders were Traversable...
 
 mutual
+  export
   shrinkBinder : Binder (Term vars) -> SubVars newvars vars -> 
                  Maybe (Binder (Term newvars))
   shrinkBinder (Lam c x ty) subprf 

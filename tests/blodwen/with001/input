@@ -1,0 +1,5 @@
+parity 4
+parity 5
+eqPair (2, 3) (4, 5)
+eqPair (2, 3) (2, 3)
+:q

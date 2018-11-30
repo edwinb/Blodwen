@@ -241,3 +241,52 @@ uniqueName defs used n
         = let (n, i) = nameNum str in
               n ++ "_" ++ show (i + 1)
 
+matchFail : annot -> Core annot a
+matchFail loc = throw (GenericMsg loc "Clauses do not match")
+
+mutual
+  export
+  getMatch : RawImp annot -> RawImp annot ->
+             Core annot (List (String, RawImp annot))
+  getMatch (IBindVar _ n) tm = pure [(n, tm)]
+  getMatch (Implicit _) tm = pure []
+  getMatch (Infer _) tm = pure []
+
+  getMatch (IVar _ n) (IVar loc n') 
+      = if n == n' then pure [] else matchFail loc
+  getMatch (IPi _ c p n arg ret) (IPi loc c' p' n' arg' ret')
+      = if c == c' && p == p' && n == n'
+           then matchAll [(arg, arg'), (ret, ret')]
+           else matchFail loc
+  -- TODO: Lam, Let, Case, Local, Update
+  getMatch (IApp _ f a) (IApp loc f' a')
+      = matchAll [(f, f'), (a, a')]
+  getMatch (IImplicitApp _ f n a) (IImplicitApp loc f' n' a')
+      = if n == n' 
+           then matchAll [(f, f'), (a, a')]
+           else matchFail loc
+  -- Alternatives are okay as long as all corresponding alternatives are okay
+  getMatch (IAlternative _ _ as) (IAlternative _ _ as')
+      = matchAll (zip as as')
+  -- TODO: IType, IAs (Q: how do as patterns work in 'with'???)
+  getMatch pat spec = matchFail (getAnnot pat)
+
+  matchAll : List (RawImp annot, RawImp annot) ->
+             Core annot (List (String, RawImp annot))
+  matchAll [] = pure []
+  matchAll ((x, y) :: ms)
+      = do matches <- matchAll ms
+           mxy <- getMatch x y
+           mergeMatches (mxy ++ matches)
+
+  mergeMatches : List (String, RawImp annot) ->
+                 Core annot (List (String, RawImp annot))
+  mergeMatches [] = pure []
+  mergeMatches ((n, tm) :: rest)
+      = do rest' <- mergeMatches rest
+           case lookup n rest' of
+                Nothing => pure ((n, tm) :: rest')
+                Just tm' =>
+                   do getMatch tm tm' -- just need to know it succeeds
+                      mergeMatches rest
+

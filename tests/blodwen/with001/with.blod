@@ -1,0 +1,28 @@
+import Data.Nat
+
+data Parity : Nat -> Type where
+     Even : (k : _) -> Parity (k + k)
+     Odd : (k : _) -> Parity (S (k + k))
+
+parity : (n : Nat) -> Parity n
+parity Z = Even Z
+parity (S k) with (parity k)
+  parity (S (l + l)) | Even l = Odd l
+  parity (S (S (k + k))) | Odd k 
+      = rewrite plusSuccRightSucc k k in Even (S k)
+
+eqNat : (x : Nat) -> (y : Nat) -> Maybe (x = y)
+eqNat Z Z = Just Refl
+eqNat Z (S k) = Nothing
+eqNat (S k) Z = Nothing
+eqNat (S k) (S j) with (eqNat k j)
+  eqNat (S k) (S k) | Just Refl = Just Refl
+  eqNat (S k) (S j) | Nothing = Nothing
+
+eqPair : (x : (Nat, Nat)) -> (y : (Nat, Nat)) -> Maybe (x = y)
+eqPair (x, y) (w, z) with (eqNat x w)
+  eqPair (x, y) (x, z) | Just Refl with (eqNat y z)
+    eqPair (x, y) (x, y) | Just Refl | Just Refl = Just Refl
+    eqPair (x, y) (x, z) | Just Refl | Nothing = Nothing
+  eqPair (x, y) (w, z) | Nothing = Nothing
+

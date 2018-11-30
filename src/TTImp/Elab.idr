@@ -178,6 +178,25 @@ inferTerm process incase defining env nest impmode elabmode tm
                impmode elabmode tm Unknown
 
 export
+inferTermEnv
+          : {auto c : Ref Ctxt Defs} ->
+            {auto u : Ref UST (UState annot)} ->
+            {auto i : Ref ImpST (ImpState annot)} ->
+            {auto m : Ref Meta (Metadata annot)} ->
+            Reflect annot =>
+            Elaborator annot -> 
+            Bool ->
+            Name ->
+            Env Term vars -> Env Term outer ->
+            SubVars outer vars -> NestedNames vars ->
+            ImplicitMode -> ElabMode ->
+            (term : RawImp annot) ->
+            Core annot (Term vars, Term vars, Term vars) 
+inferTermEnv process incase defining env env' sub nest impmode elabmode tm 
+    = elabTerm process incase defining env env' sub nest 
+               impmode elabmode tm Unknown
+
+export
 checkTerm : {auto c : Ref Ctxt Defs} ->
             {auto u : Ref UST (UState annot)} ->
             {auto i : Ref ImpST (ImpState annot)} ->
