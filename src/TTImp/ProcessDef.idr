@@ -177,6 +177,53 @@ getNotReq vs SubRefl = []
 getNotReq (v :: vs) (DropCons p) = v :: getNotReq _ p
 getNotReq _ (KeepCons p) = getNotReq _ p
 
+checkLHS : {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState annot)} ->
+           {auto i : Ref ImpST (ImpState annot)} ->
+           {auto m : Ref Meta (Metadata annot)} ->
+           Reflect annot =>
+           annot -> Elaborator annot ->
+           (incase : Bool) -> (mult : RigCount) -> (hashit : Bool) ->
+           Name ->
+           Env Term vars -> NestedNames vars -> RawImp annot ->
+           Core annot (vars' ** (SubVars vars vars',
+                                 Env Term vars', NestedNames vars', 
+                                 Term vars', Term vars'))
+checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
+    = do gam <- get Ctxt
+         lhs_raw_in <- lhsInCurrentNS nest lhs_raw
+         let lhs_raw = implicitsAs gam vars lhs_raw_in
+         log 5 ("Checking LHS: " ++ show lhs_raw)
+         (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
+              inferTerm elab incase defining env nest
+                        PATTERN (InLHS mult) lhs_raw
+         -- Check there's no holes or constraints in the left hand side
+         -- we've just checked - they must be resolved now (that's what
+         -- True means)
+         gam <- get Ctxt
+         when (not incase) $
+           wrapError (InLHS loc defining) $ checkUserHoles True
+         -- Normalise the LHS to get any functions or let bindings evaluated
+         -- (this might be allowed, e.g. for 'fromInteger')
+         let lhs = normalise gam env lhs_in
+         let lhsty = normaliseHoles gam env lhsty_in
+         let linvars_in = findLinear gam 0 Rig1 lhs
+         log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
+                 show linvars_in
+
+         linvars <- combineLinear loc linvars_in
+         let lhs' = setLinear linvars lhs
+         let lhsty' = setLinear linvars lhsty
+         log 3 ("LHS: " ++ show lhs' ++ " : " ++ show lhsty')
+         setHoleLHS (bindEnv env lhs')
+
+         -- Extend the environment with the names bound on the LHS, but also
+         -- remember the outer environment.  Everything there is treated as
+         -- parameters, and this is important when making types for case
+         -- expressions (we don't want to abstract over the outer environment
+         -- again)
+         extend env SubRefl nest lhs' lhsty'
+
 export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -207,43 +254,14 @@ checkClause elab incase mult hashit defining env nest (ImpossibleClause loc lhs_
                                     else throw (ValidCase loc env (Right err))
                        _ => throw (ValidCase loc env (Right err)))
 checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_raw rhs_raw)
-    = do gam <- get Ctxt
-         lhs_raw_in <- lhsInCurrentNS nest lhs_raw
-         let lhs_raw = implicitsAs gam vars lhs_raw_in
-         log 5 ("Checking LHS: " ++ show lhs_raw)
-         (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
-              inferTerm elab incase defining env nest
-                        PATTERN (InLHS mult) lhs_raw
-         -- Check there's no holes or constraints in the left hand side
-         -- we've just checked - they must be resolved now (that's what
-         -- True means)
+    = do (vs ** (prf, env', nest', lhspat, reqty)) <- 
+            checkLHS loc elab incase mult hashit defining env nest lhs_raw
          gam <- get Ctxt
-         when (not incase) $
-           wrapError (InLHS loc defining) $ checkUserHoles True
-         -- Normalise the LHS to get any functions or let bindings evaluated
-         -- (this might be allowed, e.g. for 'fromInteger')
-         let lhs = normalise gam env lhs_in
-         let lhsty = normaliseHoles gam env lhsty_in
-         let linvars_in = findLinear gam 0 Rig1 lhs
-         log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
-                 show linvars_in
 
-         linvars <- combineLinear loc linvars_in
-         let lhs' = setLinear linvars lhs
-         let lhsty' = setLinear linvars lhsty
-
-         -- Extend the environment with the names bound on the LHS, but also
-         -- remember the outer environment.  Everything there is treated as
-         -- parameters, and this is important when making types for case
-         -- expressions (we don't want to abstract over the outer environment
-         -- again)
-         (vs ** (prf, env', nest', lhspat, reqty)) <- extend env SubRefl nest lhs' lhsty'
-         log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
          log 5 ("Checking RHS: " ++ show rhs_raw)
          log 10 ("Old env: " ++ show env)
          log 10 ("New env: " ++ show env')
 
-         setHoleLHS (bindEnv env lhs')
          let mode
                = case mult of
                       Rig0 => InType -- treat as used in type only
@@ -260,7 +278,7 @@ checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_
                         Nothing => Public
 
          when (vis == Public) $ do
-           checkNameVisibility loc defining vis lhs
+           checkNameVisibility loc defining vis lhspat
            checkNameVisibility loc defining vis rhs
 
          addLHS (getAnnot lhs_raw) (length env) env' lhspat
@@ -270,43 +288,14 @@ checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_
               addHash rhs
          pure (Just (MkClause env' lhspat rhs, MkClause env' lhspat rhs_erased))
 checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (WithClause loc lhs_raw_src wval_raw cs)
-    = do gam <- get Ctxt
-         lhs_raw_in <- lhsInCurrentNS nest lhs_raw_src
-         let lhs_raw = implicitsAs gam vars lhs_raw_in
-         log 5 ("Checking With LHS: " ++ show lhs_raw)
-         (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
-              inferTerm elab incase defining env nest
-                        PATTERN (InLHS mult) lhs_raw
-         -- Check there's no holes or constraints in the left hand side
-         -- we've just checked - they must be resolved now (that's what
-         -- True means)
+    = do (vs ** (prf, env', nest', lhspat, reqty)) <- 
+            checkLHS loc elab incase mult hashit defining env nest lhs_raw_src
          gam <- get Ctxt
-         when (not incase) $
-           wrapError (InLHS loc defining) $ checkUserHoles True
-         -- Normalise the LHS to get any functions or let bindings evaluated
-         -- (this might be allowed, e.g. for 'fromInteger')
-         let lhs = normalise gam env lhs_in
-         let lhsty = normaliseHoles gam env lhsty_in
-         let linvars_in = findLinear gam 0 Rig1 lhs
-         log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
-                 show linvars_in
 
-         linvars <- combineLinear loc linvars_in
-         let lhs' = setLinear linvars lhs
-         let lhsty' = setLinear linvars lhsty
-
-         -- Extend the environment with the names bound on the LHS, but also
-         -- remember the outer environment.  Everything there is treated as
-         -- parameters, and this is important when making types for case
-         -- expressions (we don't want to abstract over the outer environment
-         -- again)
-         (vs ** (prf, env', nest', lhspat, reqty)) <- extend env SubRefl nest lhs' lhsty'
-         log 3 ("LHS: " ++ show lhs' ++ " : " ++ show reqty)
          log 5 ("Checking with value: " ++ show wval_raw)
          log 10 ("Old env: " ++ show env)
          log 10 ("New env: " ++ show env')
 
-         setHoleLHS (bindEnv env lhs')
          let mode
                = case mult of
                       Rig0 => InType -- treat as used in type only
@@ -353,7 +342,10 @@ checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (Wi
          (rhs, rhs_erased) <- wrapError (InRHS loc defining) $
              checkTerm elab incase defining env' env prf nest' NONE mode rhs_in reqty
              
+         -- Generate new clauses by rewriting the matched arguments
          cs' <- traverse (mkClauseWith 1 wname wargNames lhs_raw_src) cs
+
+         -- Elaborate the new definition here
          let wdef = IDef loc wname cs'
          elab c u i m False env nest wdef
 
