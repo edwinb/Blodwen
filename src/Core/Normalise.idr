@@ -437,3 +437,39 @@ mutual
         = convGen num defs env (evalClosure defs thunkx)
                                (evalClosure defs thunky)
 
+replace' : Int -> Defs -> Env Term vars ->
+           (lhs : NF vars) -> (parg : Term vars) -> (exp : NF vars) ->
+           Term vars
+replace' {vars} tmpi defs env lhs parg tm
+    = if convert defs env lhs tm
+         then parg
+         else repSub tm
+  where
+    repSub : NF vars -> Term vars
+    repSub (NBind x b scfn)
+       = let b' = map repSub b 
+             x' = MN "tmp" tmpi
+             sc' = replace' (tmpi + 1) defs env lhs parg 
+                            (scfn (toClosure defaultOpts env (Ref Bound x'))) in
+             Bind x b' (refToLocal (Just (multiplicity b)) x' x sc')
+    repSub (NApp hd args) 
+       = apply (quote (noGam defs) env (NApp hd []))
+                (map (replace' tmpi defs env lhs parg) 
+                     (map (evalClosure defs) args))
+    repSub (NDCon n t a args)
+       = apply (quote (noGam defs) env (NDCon n t a []))
+                (map (replace' tmpi defs env lhs parg) 
+                     (map (evalClosure defs) args))
+    repSub (NTCon n t a args)
+       = apply (quote (noGam defs) env (NTCon n t a []))
+                (map (replace' tmpi defs env lhs parg) 
+                     (map (evalClosure defs) args))
+    repSub tm = quote (noGam defs) env tm
+
+-- Replace any sub term which converts with 'orig' to 'new' in 'tm'.
+-- Doesn't normalise the result
+export
+replace : Defs -> Env Term vars ->
+          (orig : NF vars) -> (new : Term vars) -> (tm : NF vars) ->
+          Term vars
+replace = replace' 0

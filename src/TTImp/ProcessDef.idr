@@ -300,7 +300,6 @@ checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (Wi
                = case mult of
                       Rig0 => InType -- treat as used in type only
                       _ => InExpr
-         -- Up to here, it's the same as the normal pattern def - factor out?
 
          (wval, wval_erased, wvalTy) <- wrapError (InRHS loc defining) $
                 inferTermEnv elab incase defining env' env prf nest' NONE mode wval_raw

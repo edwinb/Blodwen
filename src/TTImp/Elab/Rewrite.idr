@@ -28,35 +28,6 @@ getRewriteTerms loc defs (NTCon eq t a args) err
 getRewriteTerms loc defs ty err
     = throw err
 
-replace : Int -> Defs -> Env Term vars ->
-          (lhs : NF vars) -> (parg : Name) -> (exp : NF vars) ->
-          Term vars
-replace {vars} tmpi defs env lhs parg tm
-    = if convert defs env lhs tm
-         then Ref Bound parg
-         else repSub tm
-  where
-    repSub : NF vars -> Term vars
-    repSub (NBind x b scfn)
-       = let b' = map repSub b 
-             x' = MN "tmp" tmpi
-             sc' = replace (tmpi + 1) defs env lhs parg 
-                           (scfn (toClosure defaultOpts env (Ref Bound x'))) in
-             Bind x b' (refToLocal (Just (multiplicity b)) x' x sc')
-    repSub (NApp hd args) 
-       = apply (quote (noGam defs) env (NApp hd []))
-                (map (replace tmpi defs env lhs parg) 
-                     (map (evalClosure defs) args))
-    repSub (NDCon n t a args)
-       = apply (quote (noGam defs) env (NDCon n t a []))
-                (map (replace tmpi defs env lhs parg) 
-                     (map (evalClosure defs) args))
-    repSub (NTCon n t a args)
-       = apply (quote (noGam defs) env (NTCon n t a []))
-                (map (replace tmpi defs env lhs parg) 
-                     (map (evalClosure defs) args))
-    repSub tm = quote (noGam defs) env tm
-
 -- Returns the rewriting lemma to use, and the predicate for passing to the
 -- rewriting lemma
 export
@@ -73,7 +44,7 @@ elabRewrite loc env expected rulety
          (lt, rt) <- getRewriteTerms loc defs tynf (NotRewriteRule loc env rulety)
          lemn <- findRewriteLemma loc rulety
 
-         let rwexp_sc = replace 0 defs env lt parg (nf defs env expected)
+         let rwexp_sc = replace defs env lt (Ref Bound parg) (nf defs env expected)
          let pred = Bind parg (Lam RigW Explicit Erased)
                           (refToLocal (Just RigW) parg parg rwexp_sc)
          let predty = Bind parg (Pi RigW Explicit Erased) Erased
