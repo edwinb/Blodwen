@@ -1240,6 +1240,10 @@ editCmd
          line <- intLit
          n <- name
          pure (MakeCase (fromInteger line) n)
+  <|> do replCmd ["mw", "makewith"]
+         line <- intLit
+         n <- name
+         pure (MakeWith (fromInteger line) n)
   <|> fatalError "Unrecognised command"
 
 export

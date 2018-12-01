@@ -94,6 +94,9 @@ process (LoadFile fname toline)
          resetContext
          errs <- buildDeps fname
          updateErrorLine errs
+         Right res <- coreLift (readFile fname)
+            | Left err => setSource ""
+         setSource res
          case errs of
               [] => printResult $ "Loaded " ++ fname
               _ => printError $ "Failed to load " ++ fname

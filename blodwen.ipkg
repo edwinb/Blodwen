@@ -20,6 +20,7 @@ modules = Idris.CommandLine,
 
           Idris.IDEMode.CaseSplit,
           Idris.IDEMode.Commands,
+          Idris.IDEMode.MakeClause,
           Idris.IDEMode.Parser,
           Idris.IDEMode.REPL,
           Idris.IDEMode.TokenLine

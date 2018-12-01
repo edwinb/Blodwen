@@ -20,6 +20,7 @@ import Idris.Desugar
 import Idris.Error
 import Idris.IDEMode.CaseSplit
 import Idris.IDEMode.Commands
+import Idris.IDEMode.MakeClause
 import Idris.ModTree
 import Idris.Parser
 import Idris.Resugar
@@ -324,7 +325,9 @@ processEdit (MakeLemma line name)
 processEdit (MakeCase line name)
     = printError "Not implemented yet"
 processEdit (MakeWith line name)
-    = printError "Not implemented yet"
+    = do Just l <- getSourceLine line
+              | Nothing => printError "Source line not available"
+         printResult (makeWith name l)
 
 export
 loadMainFile : {auto c : Ref Ctxt Defs} ->

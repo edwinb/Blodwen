@@ -50,3 +50,15 @@ getSource : {auto o : Ref ROpts REPLOpts} ->
 getSource 
     = do opts <- get ROpts
          pure (source opts)
+
+export
+getSourceLine : {auto o : Ref ROpts REPLOpts} ->
+                Int -> Core annot (Maybe String)
+getSourceLine l
+    = do src <- getSource
+         pure $ findLine (cast (l-1)) (lines src)
+  where
+    findLine : Nat -> List String -> Maybe String
+    findLine Z (l :: ls) = Just l
+    findLine (S k) (l :: ls) = findLine k ls
+    findLine _ [] = Nothing
