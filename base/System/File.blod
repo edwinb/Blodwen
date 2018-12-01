@@ -31,6 +31,14 @@ data FileError = GenericFileError Int -- errno
                | FileNotFound
                | PermissionDenied
 
+export
+Show FileError where
+  show FileReadError = "File Read Error"
+  show FileWriteError = "File Write Error"
+  show FileNotFound = "File Not Found"
+  show PermissionDenied = "Permission Denied"
+  show (GenericFileError errno) = "File error: " ++ show errno
+
 toFileError : Int -> FileError
 toFileError 1 = FileReadError
 toFileError 2 = FileWriteError

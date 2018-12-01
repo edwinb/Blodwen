@@ -22,6 +22,16 @@ export
 words : String -> List String
 words s = map pack (words' (unpack s))
 
+lines' : List Char -> List (List Char)
+lines' s = case dropWhile isNL s of
+            [] => []
+            s' => let (w, s'') = break isSpace s'
+                  in w :: lines' s''
+
+export
+lines : String -> List String
+lines s = map pack (lines' (unpack s))
+
 export
 ltrim : String -> String
 ltrim xs = pack (ltrimChars (unpack xs))
