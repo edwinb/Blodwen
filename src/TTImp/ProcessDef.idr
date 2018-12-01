@@ -311,6 +311,8 @@ checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (Wi
              | Nothing => throw (InternalError "Impossible happened: With abstraction failure #1")
          let Just wvalTy = shrinkTerm wvalTy withSub
              | Nothing => throw (InternalError "Impossible happened: With abstraction failure #2")
+         let Just wvalEnv = shrinkEnv env' withSub
+             | Nothing => throw (InternalError "Impossible happened: With abstraction failure #3")
          log 5 ("With value: " ++ show wval ++ " : " ++ show wvalTy)
          log 5 ("Uses env: " ++ show wevars)
          log 5 ("Required type: " ++ show reqty)
@@ -318,12 +320,17 @@ checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (Wi
          -- TODO: Also abstract over 'wval' in the scope of bNotReq in order
          -- to get the 'magic with' behaviour
          let wargn = MN "warg" 0
-         let bNotReq = Bind wargn (Pi RigW Explicit wvalTy)
-                            (weaken (bindNotReq 0 env' withSub reqty))
+         let scenv = Pi RigW Explicit wvalTy :: wvalEnv
+
+         let wtyScope = replace gam scenv (nf gam scenv (weaken wval))
+                            (Local (Just RigW) Here)
+                            (nf gam scenv 
+                                (weaken (bindNotReq 0 env' withSub reqty)))
+         let bNotReq = Bind wargn (Pi RigW Explicit wvalTy) wtyScope
          log 10 ("Bound unrequired vars: " ++ show bNotReq)
 
          let Just wtype = bindReq env' withSub bNotReq
-             | Nothing => throw (InternalError "Impossible happened: With abstraction failure #3")
+             | Nothing => throw (InternalError "Impossible happened: With abstraction failure #4")
 
          -- list of argument names - 'Just' means we need to match the name
          -- in the with clauses to find out what the pattern should be.

@@ -122,6 +122,9 @@ process (MakeLemma l n)
 process (MakeCase l n)
     = do Idris.REPL.process (Editing (MakeCase (fromInteger l) (UN n)))
          pure ()
+process (MakeWith l n)
+    = do Idris.REPL.process (Editing (MakeWith (fromInteger l) (UN n)))
+         pure ()
 
 processCatch : {auto c : Ref Ctxt Defs} ->
                {auto u : Ref UST (UState FC)} ->

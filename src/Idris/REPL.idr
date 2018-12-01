@@ -323,6 +323,8 @@ processEdit (MakeLemma line name)
               _ => printError "Can't make lifted definition"
 processEdit (MakeCase line name)
     = printError "Not implemented yet"
+processEdit (MakeWith line name)
+    = printError "Not implemented yet"
 
 export
 loadMainFile : {auto c : Ref Ctxt Defs} ->

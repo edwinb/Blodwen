@@ -319,6 +319,7 @@ data EditCmd : Type where
      GenerateDef : Int -> Name -> EditCmd
      MakeLemma : Int -> Name -> EditCmd
      MakeCase : Int -> Name -> EditCmd
+     MakeWith : Int -> Name -> EditCmd
 
 public export
 data REPLCmd : Type where
