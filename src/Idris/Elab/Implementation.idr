@@ -19,6 +19,8 @@ import TTImp.Utils
 
 import Control.Monad.State
 
+%default covering
+
 mkImpl : FC -> Name -> List (RawImp FC) -> Name
 mkImpl fc n ps = DN (show n ++ " implementation at " ++ show fc)
                  (MN ("__Impl_" ++ show n ++ "_" ++
@@ -315,6 +317,10 @@ elabImplementation {vars} fc vis pass env nest cons iname ps impln mbody
     updateClause ns (PatClause fc lhs rhs) 
         = do lhs' <- updateApp ns lhs
              pure (PatClause fc lhs' rhs)
+    updateClause ns (WithClause fc lhs wval cs)
+        = do lhs' <- updateApp ns lhs
+             cs' <- traverse (updateClause ns) cs
+             pure (WithClause fc lhs' wval cs')
     updateClause ns (ImpossibleClause fc lhs)
         = do lhs' <- updateApp ns lhs
              pure (ImpossibleClause fc lhs')

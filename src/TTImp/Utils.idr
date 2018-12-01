@@ -4,6 +4,8 @@ import Core.Context
 import Core.TT
 import TTImp.TTImp
 
+%default covering
+
 lowerFirst : String -> Bool
 lowerFirst "" = False
 lowerFirst str = assert_total (isLower (strHead str))
@@ -184,6 +186,10 @@ mutual
   substLocClause fc' (PatClause fc lhs rhs)
       = PatClause fc' (substLoc fc' lhs) 
                       (substLoc fc' rhs)
+  substLocClause fc' (WithClause fc lhs wval cs)
+      = WithClause fc' (substLoc fc' lhs)
+                       (substLoc fc' wval)
+                       (map (substLocClause fc') cs)
   substLocClause fc' (ImpossibleClause fc lhs)
       = ImpossibleClause fc' (substLoc fc' lhs)
 

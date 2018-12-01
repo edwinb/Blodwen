@@ -30,7 +30,7 @@ makeWith n srcline
           src = snd isrc 
           lhs = pack (readLHS 0 (unpack src)) in
           mkWithArg lit indent lhs ++ "\n" ++
-          mkWithPat lit indent lhs
+          mkWithPat lit indent lhs ++ "\n"
   where
     readLHS : (brackets : Nat) -> List Char -> List Char
     readLHS Z ('=' :: rest) = []
