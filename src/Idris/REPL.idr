@@ -303,21 +303,25 @@ processEdit (GenerateDef line name)
               Nothing => printError $ "Can't find declaration for " ++ show name
 processEdit (MakeLemma line name)
     = do gam <- get Ctxt
+         syn <- get Syn
+         let brack = elemBy (\x, y => dropNS x == dropNS y) name (bracketholes syn)
          case lookupDefTyName name (gamma gam) of
               [(n, Hole locs _ _, ty)] =>
                   do (lty, lapp) <- makeLemma replFC name locs ty
                      pty <- pterm lty
                      papp <- pterm lapp
                      opts <- get ROpts
+                     let pappstr = show (if brack
+                                            then addBracket replFC papp
+                                            else papp)
                      case idemode opts of
-                          REPL _ => printResult (show name ++ " : " ++ show pty ++ "\n" ++ 
-                                                 show papp)
+                          REPL _ => printResult (show name ++ " : " ++ show pty ++ "\n" ++ pappstr)
                           IDEMode i =>
                             send (SExpList [SymbolAtom "return", 
                                     SExpList [SymbolAtom "ok",
                                       SExpList [SymbolAtom "metavariable-lemma",
                                         SExpList [SymbolAtom "replace-metavariable",
-                                                  StringAtom (show papp)],
+                                                  StringAtom pappstr],
                                         SExpList [SymbolAtom "definition-type",
                                                   StringAtom (show name ++ " : " ++ show pty)]]],
                                             toSExp i])

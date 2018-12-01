@@ -36,13 +36,13 @@ bindableArg p (Bind _ (Pi _ _ ty) sc)
 bindableArg p _ = False
 
 getArgs : {auto c : Ref Ctxt Defs} ->
-          annot -> Env Term vars -> Term vars -> 
+          annot -> Env Term vars -> Nat -> Term vars -> 
           Core annot (List (Name, Maybe Name, PiInfo, RigCount, RawImp annot), RawImp annot)
-getArgs {vars} loc env (Bind x (Pi c p ty) sc)
+getArgs {vars} loc env (S k) (Bind x (Pi c p ty) sc)
     = do ty' <- unelab loc env ty
          defs <- get Ctxt
          let x' = UN (uniqueName defs (map nameRoot vars) (nameRoot x))
-         (sc', ty) <- getArgs loc (Pi c p ty :: env) (renameTop x' sc)
+         (sc', ty) <- getArgs loc (Pi c p ty :: env) k (renameTop x' sc)
          -- Don't need to use the name if it's not used in the scope type
          let mn = case c of
                        RigW => case shrinkTerm sc (DropCons SubRefl) of
@@ -53,7 +53,7 @@ getArgs {vars} loc env (Bind x (Pi c p ty) sc)
                      then Explicit
                      else Implicit
          pure ((x, mn, p', c, ty') :: sc', ty)
-getArgs loc env ty
+getArgs loc env k ty
       = do ty' <- unelab loc env ty
            pure ([], ty')
 
@@ -80,6 +80,6 @@ makeLemma : {auto m : Ref Meta (Metadata annot)} ->
             annot -> Name -> Nat -> ClosedTerm -> 
             Core annot (RawImp annot, RawImp annot)
 makeLemma loc n nlocs ty
-    = do (args, ret) <- getArgs loc [] ty
+    = do (args, ret) <- getArgs loc [] nlocs ty
          pure (mkType loc args ret, mkApp loc n args)
 

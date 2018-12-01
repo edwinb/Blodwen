@@ -1,0 +1,8 @@
+1/1: Building withlift (withlift.idr)
+Welcome to Blodwen. Good luck.
+Main> succNotZero : (S k) = Z -> Void
+succNotZero
+Main> recNotEqLift : (k = j -> Void) -> (S k) = (S j) -> Void
+(recNotEqLift contra)
+Main> recNotEq f Refl = f Refl
+Main> Bye for now!
