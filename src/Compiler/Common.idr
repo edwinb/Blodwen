@@ -9,11 +9,11 @@ import Core.TT
 import Data.CSet
 
 %include C "sys/stat.h"
-    
+
 public export
 record Codegen annot where
   constructor MkCG
-  compileExpr : Ref Ctxt Defs -> 
+  compileExpr : Ref Ctxt Defs ->
                 ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
   executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
 
