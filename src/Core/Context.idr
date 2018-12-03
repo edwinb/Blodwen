@@ -343,12 +343,12 @@ export
 newDef : List Name -> (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
 newDef = newRigDef RigW
 
--- A context of global definitions
+||| A context of global definitions
 public export
 Gamma : Type
 Gamma = Context GlobalDef
 
--- Everything needed to typecheck data types/functions
+||| Everything needed to typecheck data types/functions
 public export
 record Defs where
       constructor MkAllDefs
@@ -376,6 +376,7 @@ record Defs where
       nextVar	: Int
       ifaceHash : Int
 
+||| Clear the gamma from a definition
 export
 noGam : Defs -> Defs
 noGam = record { gamma = empty }

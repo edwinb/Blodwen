@@ -39,6 +39,7 @@ execute : {auto c : Ref Ctxt Defs} ->
           ClosedTerm -> Core annot ()
 execute {c} cg = executeExpr cg c
 
+||| Get al 
 getAllDesc : List Name -> SortedSet -> Gamma -> SortedSet
 getAllDesc [] ns g = ns
 getAllDesc (n :: rest) ns g
@@ -57,8 +58,8 @@ getDesc : Name -> Gamma -> List Name
 getDesc n g
     = CSet.toList $ getAllDesc [n] empty g
 
--- Find all the names which need compiling, from a given expression, and compile
--- them to CExp form (and update that in the Defs)
+||| Find all the names which need compiling, from a given expression, and compile
+||| them to CExp form (and update that in the Defs)
 export
 findUsedNames : {auto c : Ref Ctxt Defs} -> Term vars -> Core annot (List Name)
 findUsedNames tm
@@ -72,6 +73,7 @@ findUsedNames tm
 
 -- Some things missing from Prelude.File
 
+||| check to see if a given file exists
 export
 exists : String -> IO Bool
 exists f 
@@ -80,10 +82,12 @@ exists f
          closeFile ok
          pure True
 
+||| generate a temporary file/name
 export
 tmpName : IO String
 tmpName = foreign FFI_C "tmpnam" (Ptr -> IO String) null
 
+||| change the access rights for a file
 export
 chmod : String -> Int -> IO ()
 chmod f m = foreign FFI_C "chmod" (String -> Int -> IO ()) f m
