@@ -67,6 +67,7 @@ addLHS loc outerenvlen env tm
     toPat : Env Term vs -> Env Term vs
     toPat (Lam c p ty :: bs) = PVar c ty :: toPat bs
     toPat (b :: bs) = b :: toPat bs
+    toPat [] = []
 
 export
 addNameType : {auto m : Ref Meta (Metadata annot)} ->
