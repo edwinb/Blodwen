@@ -88,6 +88,7 @@ mutual
   chezExtPrim vs prim args 
       = schExtCommon chezExtPrim vs prim args
 
+||| Compile a Blodwen expression to chez scheme
 compileToSS : Ref Ctxt Defs ->
               ClosedTerm -> (outfile : String) -> Core annot ()
 compileToSS c tm outfile
@@ -106,6 +107,8 @@ compileToSS c tm outfile
          coreLift $ chmod outfile 0o755
          pure ()
 
+
+||| Chez Scheme implementation of the `compileExpr` interface.
 compileExpr : Ref Ctxt Defs ->
               ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
 compileExpr c tm outfile
@@ -114,6 +117,8 @@ compileExpr c tm outfile
          -- TODO: Compile to .so too?
          pure (Just outn)
 
+||| Chez Scheme implementation of the `executeExpr` interface.
+||| This implementation simply runs the usual compiler, saving it to a temp file, then interpreting it.
 executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
 executeExpr c tm
     = do tmp <- coreLift $ tmpName
@@ -123,6 +128,7 @@ executeExpr c tm
          coreLift $ system (chez ++ " --script " ++ outn)
          pure ()
 
+||| Codegen wrapper for Chez scheme implementation.
 export
 codegenChez : Codegen annot
 codegenChez = MkCG compileExpr executeExpr

@@ -70,12 +70,17 @@ dropNS : Name -> Name
 dropNS (NS _ n) = n
 dropNS n = n
 
+||| Intersperse a list of strings with a separator. e.g:
+||| `showSep '-' ["soup", "dragon", "clanger"]`
+||| produces
+||| `"soup-dragon-clanger"`
 export
 showSep : String -> List String -> String
 showSep sep [] = ""
 showSep sep [x] = x
 showSep sep (x :: xs) = x ++ sep ++ showSep sep xs
   
+||| Check whether a given character is a valid identifier character
 export
 identChar : Char -> Bool
 identChar x = isAlphaNum x || x == '_' || x == '\''

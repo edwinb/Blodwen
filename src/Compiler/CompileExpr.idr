@@ -37,9 +37,9 @@ etaExpand i Z exp args = mkApp exp (map mkLocal (reverse args))
     mkApp (CCon n t args) args' = CCon n t (args ++ args')
     mkApp (CExtPrim p args) args' = CExtPrim p (args ++ args')
     mkApp tm args = CApp tm args
-    
+
 etaExpand i (S k) exp args
-    = CLam (MN "x" i) (etaExpand (i + 1) k (weaken exp) 
+    = CLam (MN "x" i) (etaExpand (i + 1) k (weaken exp)
                          ((_ ** Here) :: map weakenEl args))
 
 expandToArity : Nat -> CExp vars -> List (CExp vars) -> CExp vars

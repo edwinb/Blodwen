@@ -10,19 +10,29 @@ import Data.CSet
 
 %include C "sys/stat.h"
 
+||| Generic interface to some code generator
+||| @annot Type of error/annotations in Core
 public export
 record Codegen annot where
   constructor MkCG
+  ||| Compile a Blodwen expression, saving it to a file.
   compileExpr : Ref Ctxt Defs ->
                 ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
+  ||| Execute a Blodwen expression directly.
   executeExpr : Ref Ctxt Defs -> ClosedTerm -> Core annot ()
 
+||| compile
+||| Given a value of type Codegen, produce a standalone function
+||| that executes the `compileExpr` method of the Codegen
 export
 compile : {auto c : Ref Ctxt Defs} ->
           Codegen annot ->
           ClosedTerm -> (outfile : String) -> Core annot (Maybe String)
 compile {c} cg = compileExpr cg c
 
+||| execute
+||| As with `compile`, produce a functon that executes
+||| the `executeExpr` method of the given Codegen
 export
 execute : {auto c : Ref Ctxt Defs} ->
           Codegen annot ->

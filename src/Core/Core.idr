@@ -253,6 +253,8 @@ export
 error : Error annot -> Either (Error annot) a
 error = Left
 
+-- Core
+-- Core is a wrapper around IO that is specialised for efficiency.
 export
 record Core annot t where
   constructor MkCore
