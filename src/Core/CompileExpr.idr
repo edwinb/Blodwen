@@ -16,7 +16,9 @@ mutual
   data CExp : List Name -> Type where
        CLocal : Elem x vars -> CExp vars
        CRef : Name -> CExp vars
+       -- Lambda expression
        CLam : (x : Name) -> CExp (x :: vars) -> CExp vars
+       -- Let bindings
        CLet : (x : Name) -> CExp vars -> CExp (x :: vars) -> CExp vars
        -- Application of a defined function. The length of the argument list is
        -- exactly the same length as expected by its definition (so saturate with
@@ -28,12 +30,18 @@ mutual
        COp : PrimFn arity -> Vect arity (CExp vars) -> CExp vars
        -- Externally defined primitive operations
        CExtPrim : (p : Name) -> List (CExp vars) -> CExp vars
+       -- A forced (evaluated) value (TODO: is this right?)
        CForce : CExp vars -> CExp vars
+       -- A delayed value (lazy? TODO: check)
        CDelay : CExp vars -> CExp vars
+       -- A case match statement
        CConCase : (sc : CExp vars) -> List (CConAlt vars) -> Maybe (CExp vars) -> CExp vars
        CConstCase : (sc : CExp vars) -> List (CConstAlt vars) -> Maybe (CExp vars) -> CExp vars
+       -- A primitive value
        CPrimVal : Constant -> CExp vars
+       -- An erased value
        CErased : CExp vars
+       -- Some sort of crash?
        CCrash : String -> CExp vars
 
   public export
