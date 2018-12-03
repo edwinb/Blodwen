@@ -31,6 +31,7 @@ data CLOpt
   | Package PkgCommand String
   | InputFile String
   | IdeMode
+  | BlodwenPaths
 
 ActType : List String -> Type
 ActType [] = List CLOpt
@@ -60,6 +61,8 @@ options = [MkOpt ["--check", "-c"] [] [CheckOnly]
 
            MkOpt ["--prefix"] [] [ShowPrefix]
               (Just "Show installation prefix"),
+           MkOpt ["--paths"] [] [BlodwenPaths]
+              (Just "Show paths"),
            MkOpt ["--build"] ["package file"] (\f => [Package Build f])
               (Just "Build modules/executable for the given package"),
            MkOpt ["--install"] ["package file"] (\f => [Package Install f])
@@ -77,7 +80,7 @@ optUsage : OptDesc -> String
 optUsage d
     = maybe "" -- Don't show anything if there's no help string (that means
                -- it's an internal option)
-        (\h => 
+        (\h =>
             let optshow = showSep "," (flags d) ++ " " ++
                     showSep " " (map (\x => "<" ++ x ++ ">") (argdescs d)) in
                 optshow ++ pack (List.replicate (minus 26 (length optshow)) ' ')
@@ -106,9 +109,9 @@ usage = versionMsg ++ "\n" ++
 processArgs : String -> (args : List String) -> List String -> ActType args ->
               Either String (List CLOpt, List String)
 processArgs flag [] xs f = Right (f, xs)
-processArgs flag (a :: as) [] f 
+processArgs flag (a :: as) [] f
     = Left $ "Missing argument <" ++ a ++ "> for flag " ++ flag
-processArgs flag (a :: as) (x :: xs) f 
+processArgs flag (a :: as) (x :: xs) f
     = processArgs flag as xs (f x)
 
 matchFlag : (d : OptDesc) -> List String ->
@@ -120,7 +123,7 @@ matchFlag d (x :: xs)
                  Right (Just args)
          else Right Nothing
 
-findMatch : List OptDesc -> List String -> 
+findMatch : List OptDesc -> List String ->
             Either String (List CLOpt, List String)
 findMatch [] [] = Right ([], [])
 findMatch [] (f :: args) = Right ([InputFile f], args)
@@ -146,4 +149,3 @@ getCmdOpts : IO (Either String (List CLOpt))
 getCmdOpts = do (_ :: opts) <- getArgs
                     | pure (Left "Invalid command line")
                 pure $ getOpts opts
-

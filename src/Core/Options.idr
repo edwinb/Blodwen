@@ -89,13 +89,22 @@ record Dirs where
   data_dirs : List String -- places to look for data file
 
 public export
+toString : Dirs -> String
+toString (MkDirs wdir bdir dfix edirs ddirs) =
+  unlines [ "+ Working Directory   :: " ++ show wdir
+          , "+ Build Directory     :: " ++ show bdir
+          , "+ Installation Prefix :: " ++ show dfix
+          , "+ Extra Directories :: " ++ show edirs
+          , "+ Data Directories :: " ++ show ddirs]
+
+public export
 record PPrinter where
   constructor MkPPOpts
   showImplicits : Bool
   fullNamespace : Bool
 
 public export
-data CG = Chez 
+data CG = Chez
         | Chicken
         | Racket
 
@@ -159,8 +168,8 @@ defaultSession = MkSessionOpts False Chez
 
 export
 defaults : Options
-defaults = MkOptions defaultDirs defaultPPrint defaultSession 
-                     Nothing Nothing Nothing 
+defaults = MkOptions defaultDirs defaultPPrint defaultSession
+                     Nothing Nothing Nothing
                      (MkPrimNs Nothing Nothing Nothing)
                      []
 
@@ -172,7 +181,7 @@ clearNames = record { laziness = Nothing,
                       rewritenames = Nothing,
                       primnames = MkPrimNs Nothing Nothing Nothing,
                       namedirectives = []
-                    } 
+                    }
 
 -- Some relevant options get stored in TTC; merge in the options from
 -- a TTC file
