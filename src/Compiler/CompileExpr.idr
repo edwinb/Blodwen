@@ -216,6 +216,7 @@ compileExp tm
     = do defs <- get Ctxt
          pure (toCExp defs (UN "main") tm)
 
+||| Given a name, look up an expression, and compile it to a CExp in the environment
 export
 compileDef : {auto c : Ref Ctxt Defs} -> Name -> Core annot ()
 compileDef n
