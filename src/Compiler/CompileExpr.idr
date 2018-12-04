@@ -11,6 +11,7 @@ import Data.Vect
 
 %default covering
 
+||| Extract the number of arguments from a term
 numArgs : Defs -> Term vars -> Nat
 numArgs defs (Ref (DataCon tag arity) n) = arity
 numArgs defs (Ref (TyCon tag arity) n) = arity
@@ -61,6 +62,7 @@ expandToArity (S k) fn (a :: args) = expandToArity k (addArg fn a) args
 -- Underapplied, saturate with lambdas
 expandToArity num fn [] = etaExpand 0 num fn []
 
+||| Search a list for a valid value of type `a`, else return the value `def`
 export
 cond : List (Lazy Bool, Lazy a) -> a -> a
 cond [] def = def
@@ -70,7 +72,7 @@ cond ((x, y) :: xs) def = if x then y else cond xs def
 specialApp : Defs -> Term vars -> List (CExp vars) -> Maybe (CExp vars)
 specialApp defs (Ref _ n) args
     = cond
-        [(isDelay n defs && not (isNil args), 
+        [(isDelay n defs && not (isNil args),
               case reverse (filter notErased args) of
                    [a] => Just (CDelay a)
                    _ => Nothing),
@@ -105,7 +107,7 @@ mutual
 
   toCExp : Defs -> Name -> Term vars -> CExp vars
   toCExp defs n tm with (unapply tm)
-    toCExp defs n (apply f args) | ArgsList 
+    toCExp defs n (apply f args) | ArgsList
         = let args' = map (toCExp defs n) args in
               maybe (expandToArity (numArgs defs f) (toCExpTm defs n f) args')
               id
@@ -136,7 +138,7 @@ mutual
             CExp (cargs ++ vars) -> CExp vars
   forceIn defs n exp [] tree = tree
   forceIn defs n exp [dexp] tree = CLet dexp (CForce exp) tree
-  forceIn defs n exp (d :: ds) tree 
+  forceIn defs n exp (d :: ds) tree
       = forceIn defs n exp ds (CLet d CErased tree)
 
   toCExpTree : Defs -> Name -> CaseTree vars -> CExp vars
@@ -145,15 +147,15 @@ mutual
            then forceIn defs n (CLocal x) args (toCExpTree defs n sc)
            else CConCase (CLocal x) (conCases defs n [ConCase cn t args sc])
                          Nothing
-  toCExpTree defs n (Case x scTy alts@(ConCase _ _ _ _ :: _)) 
+  toCExpTree defs n (Case x scTy alts@(ConCase _ _ _ _ :: _))
       = CConCase (CLocal x) (conCases defs n alts) (getDef defs n alts)
-  toCExpTree defs n (Case x scTy alts@(ConstCase _ _ :: _)) 
+  toCExpTree defs n (Case x scTy alts@(ConstCase _ _ :: _))
       = CConstCase (CLocal x) (constCases defs n alts) (getDef defs n alts)
-  toCExpTree defs n (Case x scTy alts@(DefaultCase sc :: _)) 
+  toCExpTree defs n (Case x scTy alts@(DefaultCase sc :: _))
       = toCExpTree defs n sc
   toCExpTree defs n (Case x scTy []) = CCrash $ "Missing case tree in " ++ show n
   toCExpTree defs n (STerm tm) = toCExp defs n tm
-  toCExpTree defs n (Unmatched msg) = CCrash msg 
+  toCExpTree defs n (Unmatched msg) = CCrash msg
   toCExpTree defs n Impossible = CCrash $ "Impossible case encountered in " ++ show n
 
 -- Need this for ensuring that argument list matches up to operator arity for
@@ -164,7 +166,7 @@ data ArgList : Nat -> List Name -> Type where
 
 mkArgList : Int -> (n : Nat) -> (ns ** ArgList n ns)
 mkArgList i Z = (_ ** NoArgs)
-mkArgList i (S k) 
+mkArgList i (S k)
     = let (_ ** rec) = mkArgList (i + 1) k in
           (_ ** ConsArg (MN "arg" i) rec)
 
@@ -172,7 +174,7 @@ toCDef : {auto c : Ref Ctxt Defs} -> Name -> Def -> Core annot CDef
 toCDef n None
     = pure $ MkError $ CCrash ("Encountered undefined name " ++ show n)
 toCDef n (PMDef _ args _ tree _)
-    = pure $ MkFun _ (toCExpTree !(get Ctxt) n tree) 
+    = pure $ MkFun _ (toCExpTree !(get Ctxt) n tree)
 toCDef n (ExternDef arity)
     = let (ns ** args) = mkArgList 0 arity in
           pure $ MkFun _ (CExtPrim n (map toArgExp (getVars args)))

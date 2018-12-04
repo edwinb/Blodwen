@@ -39,7 +39,7 @@ execute : {auto c : Ref Ctxt Defs} ->
           ClosedTerm -> Core annot ()
 execute {c} cg = executeExpr cg c
 
-||| Get al 
+||| Get all desc's from a set + gamma?
 getAllDesc : List Name -> SortedSet -> Gamma -> SortedSet
 getAllDesc [] ns g = ns
 getAllDesc (n :: rest) ns g
@@ -76,7 +76,7 @@ findUsedNames tm
 ||| check to see if a given file exists
 export
 exists : String -> IO Bool
-exists f 
+exists f
     = do Right ok <- openFile f Read
              | Left err => pure False
          closeFile ok
@@ -91,4 +91,3 @@ tmpName = foreign FFI_C "tmpnam" (Ptr -> IO String) null
 export
 chmod : String -> Int -> IO ()
 chmod f m = foreign FFI_C "chmod" (String -> Int -> IO ()) f m
-
