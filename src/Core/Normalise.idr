@@ -104,6 +104,8 @@ parameters (defs : Defs, opts : EvalOpts)
     -- namespace
     evalRef : Env Term free -> LocalEnv free vars -> Stack free ->
               NameType -> Name -> NF free
+    evalRef env loc stk (DataCon tag arity) fn = NDCon fn tag arity stk
+    evalRef env loc stk (TyCon tag arity) fn = NTCon fn tag arity stk
     evalRef env loc stk nt fn
         = case lookupGlobalExact fn (gamma defs) of
                Just def => 
