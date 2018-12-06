@@ -198,11 +198,6 @@ processMod srcf ttcf msg mod sourcecode
                            pure Nothing
                    else 
                      do iputStrLn msg
-                        let Right mod = runParser sourcecode 
-                                             (do p <- prog srcf
-                                                 eoi
-                                                 pure p)
-                            | Left err => pure (Just [ParseFail (getParseErrorLoc srcf err) err])
                         -- read imports here
                         -- Note: We should only import .ttc - assumption is that there's
                         -- a phase before this which builds the dependency graph
