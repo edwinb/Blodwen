@@ -206,10 +206,11 @@ doParse com xs (Empty val) = EmptyRes com val xs
 doParse com [] (Fail fatal str) = Failure com fatal str []
 doParse com (x :: xs) (Fail fatal str) = Failure com fatal str (x :: xs)
 doParse com xs Commit = EmptyRes True () xs
-doParse com xs (MustWork g) with (doParse com xs g)
-  doParse com xs (MustWork g) | Failure com' _ msg ts = Failure com' True msg ts
-  doParse com xs (MustWork g) | res = res
-
+doParse com xs (MustWork g) =
+  let p' = doParse com xs g in
+      case p' of
+           Failure com' _ msg ts => Failure com' True msg ts
+           res => res
 doParse com [] (Terminal err f) = Failure com False "End of input" []
 doParse com (x :: xs) (Terminal err f) 
       = maybe
@@ -224,20 +225,21 @@ doParse com (x :: xs) (NextIs err f)
       = if f x
            then EmptyRes com x (x :: xs)
            else Failure com False err (x :: xs)
-doParse com xs (Alt x y) with (doParse False xs x)
-  doParse com xs (Alt x y) | Failure com' fatal msg ts
-        = if com' || fatal
-                  -- If the alternative had committed, don't try the
-                  -- other branch (and reset commit flag)
-             then Failure com fatal msg ts
-             else weakenRes com (doParse False xs y)
+doParse com xs (Alt x y) 
+    = let p' = doParse False xs x in
+          case p' of
+               Failure com' fatal msg ts
+                  => if com' || fatal
+                            -- If the alternative had committed, don't try the
+                            -- other branch (and reset commit flag)
+                       then Failure com fatal msg ts
+                       else weakenRes com (doParse False xs y)
   -- Successfully parsed the first option, so use the outer commit flag
-  doParse com xs (Alt x y) | (EmptyRes _ val xs)
-        = EmptyRes com val xs
-  doParse com (z :: (ys ++ more)) (Alt x y) | (NonEmptyRes _ val more)
-        = NonEmptyRes com val more
+               EmptyRes _ val xs => EmptyRes com val xs
+               NonEmptyRes _ val more => NonEmptyRes com val more
 doParse com xs (SeqEmpty act next)
-        = case assert_total (doParse com xs act) of
+        = let p' = assert_total (doParse com xs act) in
+              case p' of
                Failure com fatal msg ts => Failure com fatal msg ts
                EmptyRes com val xs =>
                      case assert_total (doParse com xs (next val)) of
@@ -255,7 +257,8 @@ doParse com xs (SeqEat act next) with (doParse com xs act)
   doParse com xs (SeqEat act next) | Failure com' fatal msg ts
        = Failure com' fatal msg ts
   doParse com (x :: (ys ++ more)) (SeqEat act next) | (NonEmptyRes com' val more)
-       = case assert_total (doParse com' more (next val)) of
+       = let p' = assert_total (doParse com' more (next val)) in
+             case p' of
               Failure com' fatal msg ts => Failure com' fatal msg ts
               EmptyRes com' val _ => NonEmptyRes com' val more
               NonEmptyRes {x=x1} {xs=xs1} com' val more' =>
