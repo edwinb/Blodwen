@@ -644,6 +644,7 @@ mutual
                          put EST 
                              (record { linearUsed $= ((_ ** lv) :: ) } est)
                     let varty = binderType (getBinder lv env) 
+                    log 5 $ "Getting implicits " ++ show varty ++ " for " ++ show expected
                     (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                     let tytm = quote (noGam gam) env ty
                     addNameType loc (dropNS x) env tytm
@@ -696,6 +697,7 @@ mutual
                              DCon tag arity _ => DataCon tag arity
                              TCon tag arity _ _ _ => TyCon tag arity
                              _ => Func
+               log 5 $ "Getting implicits " ++ show varty ++ " for " ++ show expected
                (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                if topLevel elabinfo ||
                     defOK (dotted elabinfo) (elabMode elabinfo) nt
@@ -1149,7 +1151,10 @@ mutual
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) (NBind bn' (Pi c' AutoImplicit ty') sc') imps
       = pure (NBind bn (Pi c AutoImplicit ty) sc, reverse imps)
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c Implicit ty) sc) exp imps
-      = do tm <- makeImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
+      = do defs <- get Ctxt
+           log 10 $ "Making an implicit for " ++ show (quote (noGam defs) env (sc (toClosure defaultOpts env Erased))) ++ 
+                    " and " ++ show (quote (noGam defs) env exp)
+           tm <- makeImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            convertImps rigc process loc env nest elabinfo 
                        (sc (toClosure defaultOpts env tm)) exp (tm :: imps)
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) exp imps

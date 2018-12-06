@@ -128,11 +128,12 @@ mutual
   lcheck : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
            annot -> RigCount -> (erase : Bool) -> Env Term vars -> Term vars -> 
-           Core annot (Term vars, Term vars, Usage vars)
+           Core annot (Term vars, Lazy (NF vars), Usage vars)
   lcheck {vars} loc rig erase env (Local {x} r v) 
       = let (rigb, ty) = lookup v env in
-            do rigSafe rigb rig
-               pure (Local r v, ty, used rig)
+            do gam <- get Ctxt
+               rigSafe rigb rig
+               pure (Local r v, nf gam env ty, used rig)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
       rigSafe Rig1 RigW = throw (LinearMisuse loc x Rig1 RigW)
@@ -154,8 +155,8 @@ mutual
                 -- checking is concerned, update the type so that the binders
                 -- are in Rig0
                 Just (Hole locs _ _, ty) => 
-                     pure (Ref nt fn, embed (unusedHoleArgs locs ty), [])
-                Just (def, ty) => pure (Ref nt fn, embed ty, [])
+                     pure (Ref nt fn, nf gam env (embed (unusedHoleArgs locs ty)), [])
+                Just (def, ty) => pure (Ref nt fn, nf gam env (embed ty), [])
     where
       unusedHoleArgs : Nat -> Term vars -> Term vars
       unusedHoleArgs (S k) (Bind n (Pi _ e ty) sc)
@@ -174,7 +175,8 @@ mutual
            -- if there is none already
            checkUsageOK (if holeFound && used == 0 then 1 else used)
                         (rigMult (multiplicity b) rig)
-           pure $ discharge nm b' bt sc' sct (usedb ++ doneScope usedsc)
+           gam <- get Ctxt
+           pure $ discharge gam env nm b' bt sc' sct (usedb ++ doneScope usedsc)
     where
       rig : RigCount
       rig = case b of
@@ -192,26 +194,33 @@ mutual
   lcheck loc rig erase env (App f a)
       = do (f', fty, fused) <- lcheck loc rig erase env f
            gam <- get Ctxt
-           case nf gam env fty of
+           case fty of
                 NBind _ (Pi rigf _ ty) scdone =>
                    do (a', aty, aused) <- lcheck loc (rigMult rigf rig) erase env a
                       let sc' = scdone (toClosure defaultOpts env a')
                       let aerased = if erase && rigf == Rig0 then Erased else a'
-                      when (not (convert gam env (nf gam env aty) ty)) $
-                         throw (CantConvert loc env (quote (noGam gam) env ty) aty)
-                      pure (App f' aerased, quote (noGam gam) env sc', fused ++ aused)
+                      -- Possibly remove this check, or make it a compiler
+                      -- flag? It is a useful double check on the result of
+                      -- elaboration, but there are pathological cases where
+                      -- it makes the check very slow (id id id id ... id id etc
+                      -- for example) and there may be similar realistic cases.
+                      -- If elaboration is correct, this should never fail!
+                      when (not (convert gam env aty ty)) $
+                         throw (CantConvert loc env (quote (noGam gam) env ty) 
+                                                    (quote (noGam gam) env aty))
+                      pure (App f' aerased, sc', fused ++ aused)
                 _ => throw (InternalError ("Linearity checking failed on " ++ show f' ++ 
-                              " (" ++ show fty ++ " not a function type)"))
+                              " (" ++ show (quote gam env fty) ++ " not a function type)"))
 
-  lcheck loc rig erase env (PrimVal x) = pure (PrimVal x, Erased, [])
-  lcheck loc rig erase env Erased = pure (Erased, Erased, [])
-  lcheck loc rig erase env TType = pure (TType, TType, [])
+  lcheck loc rig erase env (PrimVal x) = pure (PrimVal x, NErased, [])
+  lcheck loc rig erase env Erased = pure (Erased, NErased, [])
+  lcheck loc rig erase env TType = pure (TType, NType, [])
 
   lcheckBinder : {auto c : Ref Ctxt Defs} ->
                  {auto u : Ref UST (UState annot)} ->
                  annot -> RigCount -> (erase : Bool) -> Env Term vars -> 
                  Binder (Term vars) -> 
-                 Core annot (Binder (Term vars), Term vars, Usage vars)
+                 Core annot (Binder (Term vars), Lazy (NF vars), Usage vars)
   lcheckBinder loc rig erase env (Lam c x ty)
       = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
            pure (Lam c x tyv, tyt, [])
@@ -233,20 +242,29 @@ mutual
       = do (tyv, tyt, _) <- lcheck loc Rig0 erase env ty
            pure (PVTy c tyv, tyt, [])
   
-  discharge : (nm : Name) -> Binder (Term vars) -> Term vars ->
-              Term (nm :: vars) -> Term (nm :: vars) -> Usage vars ->
-              (Term vars, Term vars, Usage vars)
-  discharge nm (Lam c x ty) bindty scope scopety used
-       = (Bind nm (Lam c x ty) scope, Bind nm (Pi c x ty) scopety, used)
-  discharge nm (Let c val ty) bindty scope scopety used
-       = (Bind nm (Let c val ty) scope, Bind nm (Let c val ty) scopety, used)
-  discharge nm (Pi c x ty) bindty scope scopety used
+  discharge : Defs -> Env Term vars ->
+              (nm : Name) -> Binder (Term vars) -> Lazy (NF vars) ->
+              Term (nm :: vars) -> Lazy (NF (nm :: vars)) -> Usage vars ->
+              (Term vars, Lazy (NF vars), Usage vars)
+  discharge gam env nm (Lam c x ty) bindty scope scopety used
+       = let sctytm = quote (noGam gam) (Pi c x ty :: env) scopety
+             bty = nf gam env (Bind nm (Pi c x ty) sctytm) in
+             (Bind nm (Lam c x ty) scope, bty, used)
+  discharge gam env nm (Let c val ty) bindty scope scopety used
+       = let sctytm = quote (noGam gam) (Let c val ty :: env) scopety
+             bty = nf gam env (Bind nm (Let c val ty) sctytm) in
+             (Bind nm (Let c val ty) scope, bty, used)
+  discharge gam env nm (Pi c x ty) bindty scope scopety used
        = (Bind nm (Pi c x ty) scope, bindty, used)
-  discharge nm (PVar c ty) bindty scope scopety used
-       = (Bind nm (PVar c ty) scope, Bind nm (PVTy c ty) scopety, used)
-  discharge nm (PLet c val ty) bindty scope scopety used
-       = (Bind nm (PLet c val ty) scope, Bind nm (PLet c val ty) scopety, used)
-  discharge nm (PVTy c ty) bindty scope scopety used
+  discharge gam env nm (PVar c ty) bindty scope scopety used
+       = let sctytm = quote (noGam gam) (PVTy c ty :: env) scopety
+             bty = nf gam env (Bind nm (PVTy c ty) sctytm) in
+             (Bind nm (PVar c ty) scope, bty, used)
+  discharge gam env nm (PLet c val ty) bindty scope scopety used
+       = let sctytm = quote (noGam gam) (PLet c val ty :: env) scopety
+             bty = nf gam env (Bind nm (PLet c val ty) sctytm) in
+             (Bind nm (PLet c val ty) scope, bty, used)
+  discharge gam env nm (PVTy c ty) bindty scope scopety used
        = (Bind nm (PVTy c ty) scope, bindty, used)
 
 checkEnvUsage : {auto c : Ref Ctxt Defs} ->

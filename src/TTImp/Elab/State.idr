@@ -752,6 +752,7 @@ bindImplicits : ImplicitMode ->
                 List (Name, Term vars) ->
                 List (Name, RigCount) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
+bindImplicits NONE game env hs asvs tm ty = (tm, ty)
 bindImplicits {vars} mode gam env hs asvs tm ty 
    = liftImps mode $ bindImplVars mode gam env (map nHoles hs) asvs
                              (normaliseHolesScope gam env tm)
