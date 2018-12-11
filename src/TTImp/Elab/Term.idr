@@ -257,7 +257,9 @@ mutual
                           Just varty => 
                              do let tyenv = useVars (getArgs tm) (embed varty)
                                 (ty_nf, imps) <- getImps rigc process loc env nest elabinfo (nf gam env tyenv) []
-                                let ty = quote (noGam gam) env ty_nf
+                                let ty = if isNil imps 
+                                            then tyenv
+                                            else quote (noGam gam) env ty_nf
                                 log 5 $ "Type of " ++ show n' ++ " : " ++ show ty
                                 log 5 $ "Term: " ++ show (apply tm imps)
                                 checkExp rigc process loc elabinfo env nest 
@@ -646,7 +648,9 @@ mutual
                     let varty = binderType (getBinder lv env) 
                     log 5 $ "Getting implicits " ++ show varty ++ " for " ++ show expected
                     (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
-                    let tytm = quote (noGam gam) env ty
+                    let tytm = if isNil imps
+                                  then varty
+                                  else quote (noGam gam) env ty
                     addNameType loc (dropNS x) env tytm
                     checkExp rigc process loc elabinfo env nest 
                          (apply (Local (Just rigb) lv) imps) tytm expected
@@ -701,7 +705,9 @@ mutual
                (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                if topLevel elabinfo ||
                     defOK (dotted elabinfo) (elabMode elabinfo) nt
-                  then do let tytm = quote (noGam gam) env ty
+                  then do let tytm = if isNil imps
+                                        then varty
+                                        else quote (noGam gam) env ty
                           addNameType loc (dropNS x) env tytm
                           checkExp rigc process loc elabinfo env nest 
                                        (apply (Ref nt n) imps) 

@@ -218,30 +218,28 @@ patternEnv env args
 instantiate : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               annot -> Env Term vars -> 
-              (metavar : Name) -> SubVars newvars vars -> 
+              (metavar : Name) -> (mty : ClosedTerm) ->
+              SubVars newvars vars -> 
               Term vars -> -- original, just for error message
               Term newvars -> -- shrunk environment
               Core annot ()
-instantiate loc env metavar smvs otm tm {newvars}
+instantiate loc env metavar ty smvs otm tm {newvars}
      = do gam <- get Ctxt
           -- If the name is user defined, it means we've solved a ?hole by
           -- unification, which is not what we want!
           when (isUserName metavar) $
                throw (SolvedNamedHole loc env metavar otm)
-          case lookupDefTyExact metavar (gamma gam) of
-               Nothing => ufail loc $ "No such metavariable " ++ show metavar
-               Just (_, ty) => 
-                    case mkRHS [] newvars (snocList newvars) CompatPre ty 
-                             (rewrite appendNilRightNeutral newvars in tm) of
-                         Nothing => ufail loc $ "Can't make solution for " ++ show metavar
-                         Just rhs => 
-                            do let soln = newDef [] ty Public 
-                                               (PMDef True [] (STerm rhs) (STerm rhs) [])
-                               log 5 $ "Instantiated: " ++ show metavar ++
-                                            " : " ++ show ty ++ 
-                                            " = " ++ show rhs
-                               addDef metavar soln
-                               removeHoleName metavar
+          case mkRHS [] newvars (snocList newvars) CompatPre ty 
+                   (rewrite appendNilRightNeutral newvars in tm) of
+               Nothing => ufail loc $ "Can't make solution for " ++ show metavar
+               Just rhs => 
+                  do let soln = newDef [] ty Public 
+                                     (PMDef True [] (STerm rhs) (STerm rhs) [])
+                     log 5 $ "Instantiated: " ++ show metavar ++
+                                  " : " ++ show ty ++ 
+                                  " = " ++ show rhs
+                     addDef metavar soln
+                     removeHoleName metavar
   where
     mkRHS : (got : List Name) -> (newvars : List Name) ->
             SnocList newvars ->
@@ -426,10 +424,11 @@ mutual
   isHoleApp _ _ = False
 
   isPatVar : Gamma -> Name -> Bool
-  isPatVar gam n
+  isPatVar gam n@(PV _ _)
       = case lookupDefExact n gam of
              Just (Hole _ pvar _) => pvar
              _ => False
+  isPatVar gam n = False
   
   isDefInvertible : Gamma -> Name -> Bool
   isDefInvertible gam n
@@ -496,10 +495,9 @@ mutual
       = do gam <- get Ctxt
            -- Get the types of the arguments to ensure that the rightmost
            -- argument types match up
-           let vty = lookupTyExact var (gamma gam)
-           let vargTys = maybe Nothing 
-                            (\ty => getArgTypes (nf gam env (embed ty)) args)
-                            vty
+           let Just vty = lookupTyExact var (gamma gam)
+                    | Nothing => ufail loc ("No such metavariable " ++ show var)
+           let vargTys = getArgTypes (nf gam env (embed vty)) args
            let nargTys = maybe Nothing 
                            (\ty => getArgTypes (nf gam env (embed ty)) args')
                            nty
@@ -554,7 +552,7 @@ mutual
                                 Just n =>
                                   do log 10 $ "Abstract argument " ++ show n
                                      unifyHole mode loc env 
-                                           nt var (reverse hargs)
+                                           nt var vty (reverse hargs)
                                            (NBind (MN "uvar" 0) 
                                                   (Lam RigW Explicit NErased)
                                                   (\v => con (replacePos n v args')))
@@ -632,9 +630,9 @@ mutual
   unifyHole : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               UnifyMode -> annot -> Env Term vars ->
-              NameType -> Name -> List (Closure vars) -> NF vars ->
+              NameType -> Name -> ClosedTerm -> List (Closure vars) -> NF vars ->
               Core annot (List Name)
-  unifyHole {vars} mode loc env nt var args tm
+  unifyHole {vars} mode loc env nt var hty args tm
    = do gam <- get Ctxt
         log 10 $ "Unifying: " ++ show var ++ " " ++
                                  show (map (\t => quote (noGam gam) env (evalClosure (noGam gam) t)) args) ++
@@ -684,7 +682,7 @@ mutual
                                                      (quote (noGam gam) env (NApp (NRef nt var) args)))
                                                  (normaliseHoles gam env
                                                      (quote (noGam gam) env tm)))
-                                      else do instantiate loc env var submv otm tm'
+                                      else do instantiate loc env var hty submv otm tm'
                                               pure []
            -- Not in the pattern fragment
            Nothing => do log 10 $ "Not in pattern fragment"
@@ -706,20 +704,22 @@ mutual
            if convert (noGam gam) env (NApp (NRef nt var) args) tm
               then pure []
               else
-               if isHoleNF (gamma gam) var
-                  then unifyHole mode loc env nt var args tm
-                  else if isPatVar (gamma gam) var
-                          then unifyPatVar mode loc env nt var args tm
-                          else unifyIfEq True loc env (NApp (NRef nt var) args) tm
+                case lookupDefTyExact var (gamma gam) of
+                     Just (Hole _ False _, ty) =>
+                          unifyHole mode loc env nt var ty args tm
+                     Just (Hole _ True _, ty) =>
+                          unifyPatVar mode loc env nt var args tm
+                     _ => unifyIfEq True loc env (NApp (NRef nt var) args) tm
   unifyApp swap mode loc env hd args (NApp (NRef nt var) args')
       = do gam <- get Ctxt
            if convert (noGam gam) env (NApp hd args) (NApp (NRef nt var) args')
               then pure []
               else
-                if isHoleNF (gamma gam) var
-                   then unifyHole mode loc env nt var args' (NApp hd args)
-                   else unifyIfEq True loc env (NApp hd args)
-                                               (NApp (NRef nt var) args')
+                case lookupDefTyExact var (gamma gam) of
+                     Just (Hole _ False _, ty) =>
+                       unifyHole mode loc env nt var ty args' (NApp hd args)
+                     _ => unifyIfEq True loc env (NApp hd args)
+                                                 (NApp (NRef nt var) args')
   unifyApp swap mode loc env (NLocal rx x) [] (NApp (NLocal ry y) [])
       = do gam <- get Ctxt
            if sameVar x y then pure []

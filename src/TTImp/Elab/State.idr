@@ -526,6 +526,7 @@ getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
             annot -> ElabMode -> ImplicitMode ->
             Env Term vars -> Term vars ->
             Core annot (List (Name, Term vars))
+getToBind loc elabmode NONE ent toptm = pure []
 getToBind {vars} loc elabmode impmode env toptm
     = do solveConstraints (case elabmode of
                                 InLHS _ => InLHS
