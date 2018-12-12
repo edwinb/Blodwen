@@ -2,6 +2,8 @@ module Data.StringMap
 
 -- Hand specialised map, for efficiency...
 
+%default covering
+
 Key : Type
 Key = String
 

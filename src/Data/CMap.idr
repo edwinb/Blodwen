@@ -4,6 +4,8 @@ module Data.CMap
 
 import public Core.Name
 
+%default covering
+
 public export
 Key : Type
 Key = Name

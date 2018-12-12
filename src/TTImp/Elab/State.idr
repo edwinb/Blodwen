@@ -408,18 +408,6 @@ clearToBind
          put EST (record { toBind = [] } (clearBindIfUnsolved est))
 
 export
-clearPatVars : {auto e : Ref EST (EState vs)} ->
-               {auto c : Ref Ctxt Defs} ->
-               Core annot ()
-clearPatVars
-    = do est <- get EST
-         traverse deleteDef (allPatVars est)
-         pure ()
-  where
-    deleteDef : Name -> Core annot ()
-    deleteDef n = updateDef n (const (Just None))
-
-export
 dropTmIn : List (a, (c, d)) -> List (a, d)
 dropTmIn = map (\ (n, (_, t)) => (n, t))
 

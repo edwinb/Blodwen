@@ -24,6 +24,8 @@ record Context a where
      constructor MkContext 
      -- for looking up by exact (completely qualified) names
      exactNames : SortedMap a 
+     -- for looking up hole and pattern names
+     holeNames : SortedMap a
      -- for looking up by name root or partially qualified (so possibly
      -- ambiguous) names. This doesn't store machine generated names.
      hierarchy : StringMap (List (Name, a))
@@ -35,10 +37,18 @@ record Context a where
 
 export
 empty : Context a
-empty = MkContext empty empty []
+empty = MkContext empty empty empty []
 
 export
 lookupCtxtExact : Name -> Context a -> Maybe a
+lookupCtxtExact n@(NS _ (MN _ _)) dict 
+    = case lookup n (holeNames dict) of
+           Nothing => lookup n (exactNames dict)
+           Just res => Just res
+lookupCtxtExact n@(PV _ _) dict
+    = case lookup n (holeNames dict) of
+           Nothing => lookup n (exactNames dict)
+           Just res => Just res
 lookupCtxtExact n dict = lookup n (exactNames dict)
 
 export
@@ -84,17 +94,53 @@ addToHier n val hier
 
 export
 addCtxt : Name -> a -> Context a -> Context a
-addCtxt n val (MkContext dict hier vis) 
+addCtxt n@(PV _ _) val (MkContext dict holes hier vis)
+     = let holes' = insert n val holes in
+           MkContext dict holes' hier vis
+addCtxt n@(NS _ (MN _ _)) val (MkContext dict holes hier vis)
+     = let holes' = insert n val holes in
+           MkContext dict holes' hier vis
+addCtxt n val (MkContext dict holes hier vis) 
      = let dict' = insert n val dict
            hier' = addToHier n val hier in
-           MkContext dict' hier' vis
+           MkContext dict' holes hier' vis
+
+-- Only deletes from hole name lookups, so only used for hole/pattern var
+-- names
+export
+deleteCtxt : Name -> Context a -> Context a
+deleteCtxt n (MkContext dict holes hier vis)
+    = let holes' = delete n holes in
+          MkContext dict holes' hier vis
+
+export
+deleteCtxtNames : List Name -> Context a -> Context a
+deleteCtxtNames ns (MkContext dict holes hier vis)
+    = let holes' = deleteNs ns holes in
+          MkContext dict holes' hier vis
+  where
+    deleteNs : List Name -> SortedMap a -> SortedMap a
+    deleteNs [] d = d
+    deleteNs (n :: ns) d = deleteNs ns (delete n d)
+
+-- Move the current set of holes to the exactNames list, since we probably
+-- don't need quick access when the definition they arise from is done.
+export
+promoteHoles : Context a -> Context a
+promoteHoles (MkContext dict holes hier vis)
+    = let dict' = insertHoles (toList holes) dict in
+          MkContext dict' empty hier vis
+  where
+    insertHoles : List (Name, a) -> SortedMap a -> SortedMap a
+    insertHoles [] dict = dict
+    insertHoles ((k, v) :: hs) dict = insertHoles hs (insert k v dict)
 
 -- Merge two contexts, with entries in the second overriding entries in
 -- the first
 export
 mergeContext : Context a -> Context a -> Context a
-mergeContext ctxt (MkContext exact hier vis)
-    = record { visibleNS $= (vis ++) } (insertFrom (toList exact) ctxt)
+mergeContext ctxt (MkContext exact holes hier vis)
+    = record { visibleNS $= (vis ++) } (insertFrom (toList exact ++ toList holes) ctxt)
   where
     insertFrom : List (Name, a) -> Context a -> Context a
     insertFrom [] ctxt = ctxt
@@ -104,8 +150,8 @@ mergeContext ctxt (MkContext exact hier vis)
 export
 mergeContextAs : List String -> List String ->
                  Context a -> Context a -> Context a
-mergeContextAs oldns newns ctxt (MkContext exact hier vis)
-    = record { visibleNS $= (vis ++) } (insertFrom (toList exact) ctxt)
+mergeContextAs oldns newns ctxt (MkContext exact holes hier vis)
+    = record { visibleNS $= (vis ++) } (insertFrom (toList exact ++ toList holes) ctxt)
   where
     insertFrom : List (Name, a) -> Context a -> Context a
     insertFrom [] ctxt = ctxt
@@ -123,7 +169,8 @@ toList = toList . exactNames
 
 export
 TTC annot a => TTC annot (Context a) where
-  toBuf b ctxt = toBuf b (toList (exactNames ctxt))
+  toBuf b ctxt = toBuf b (toList (exactNames ctxt) ++ 
+                          toList (holeNames ctxt))
   fromBuf s b
       = do xs <- fromBuf s b
            pure (fromList xs)
