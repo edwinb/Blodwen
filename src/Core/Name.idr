@@ -10,7 +10,8 @@ mutual
 
   public export
   data Name = UN String -- user given name
-            | MN String Int -- machine generated name
+            | MN String Int -- machine generated name; String is for display
+                            -- only, so Ints must be uniquely generated
             | NS (List String) Name -- a name in a hierarchical namespace 
                   -- namespaces are in reverse order (innermost name first)
             | HN String Int -- machine generated metavariable name
@@ -109,7 +110,7 @@ mutual
   Eq Name where
     (==) (UN x) (UN y) = x == y
     -- Put the arguments which are more likely to differ first
-    (==) (MN x y) (MN x' y') = y == y' && x == x'
+    (==) (MN x y) (MN x' y') = y == y'
     (==) (NS xs x) (NS xs' x') = x == x' && xs == xs'
     (==) (HN x y) (HN x' y') = y == y' && x == x'
     (==) (PV x y) (PV x' y') = x == x' && y == y'
@@ -200,9 +201,7 @@ mutual
   Ord Name where
     compare (UN x) (UN y) = compare x y
     compare (MN x y) (MN x' y') 
-        = case compare y y' of -- Do cheaper comparison first!
-               EQ => compare x x'
-               t => t
+        = compare y y'
     compare (NS x y) (NS x' y') 
         = case compare y y' of -- Compare base name first (more likely to differ)
                EQ => compare x x'

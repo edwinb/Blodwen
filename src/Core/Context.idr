@@ -1028,6 +1028,14 @@ genWithName root
          pure (GN (WithBlock root (nextVar ust)))
 
 export
+getNextVar : {auto x : Ref Ctxt Defs} ->
+			     	 Core annot Int
+getNextVar
+    = do ust <- get Ctxt
+         put Ctxt (record { nextVar $= (+1) } ust)
+         pure (nextVar ust)
+
+export
 setCtxt : {auto x : Ref Ctxt Defs} -> Gamma -> Core annot ()
 setCtxt gam
     = do st <- get Ctxt

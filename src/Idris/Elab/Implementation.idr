@@ -22,9 +22,10 @@ import Control.Monad.State
 %default covering
 
 mkImpl : FC -> Name -> List (RawImp FC) -> Name
-mkImpl fc n ps = DN (show n ++ " implementation at " ++ show fc)
-                 (MN ("__Impl_" ++ show n ++ "_" ++
-                  showSep "_" (map show ps)) 0)
+mkImpl fc n ps 
+    = DN (show n ++ " implementation at " ++ show fc)
+         (UN ("__Impl_" ++ show n ++ "_" ++
+          showSep "_" (map show ps)))
 
 bindConstraints : FC -> PiInfo -> 
                   List (Maybe Name, RawImp FC) -> RawImp FC -> RawImp FC
@@ -222,10 +223,10 @@ elabImplementation {vars} fc vis pass env nest cons iname ps impln mbody
 
     methName : Name -> Name
     methName (NS _ n) = methName n
-    methName n = DN (show n)
-                    (MN (show n ++ "_" ++ show iname ++ "_" ++
+    methName n 
+        = DN (show n) (UN (show n ++ "_" ++ show iname ++ "_" ++
                      maybe "" show impln ++ "_" ++
-                     showSep "_" (map show ps)) 0)
+                     showSep "_" (map show ps)))
     
     applyCon : Name -> Name -> Core FC (Name, RawImp FC)
     applyCon impl n = do mn <- inCurrentNS (methName n)
