@@ -1,5 +1,6 @@
 module Idris.Parser
 
+import Core.Options
 import Idris.Syntax
 import public Parser.Support
 import Parser.Lexer
@@ -276,11 +277,14 @@ mutual
   multiplicity
       = do c <- intLit
            pure (Just c)
+    <|> do symbol "&"
+           pure (Just 2)
     <|> pure Nothing
 
   getMult : Maybe Integer -> EmptyRule RigCount
   getMult (Just 0) = pure Rig0
-  getMult (Just 1) = pure Rig1
+  getMult (Just 1) = pure (Rig1 False)
+  getMult (Just 2) = pure (Rig1 True)
   getMult Nothing = pure RigW
   getMult _ = fatalError "Invalid multiplicity (must be 0 or 1)"
 
@@ -689,20 +693,20 @@ mutual
 mkTyConType : FC -> List Name -> PTerm
 mkTyConType fc [] = PType fc
 mkTyConType fc (x :: xs) 
-   = PPi fc Rig1 Explicit Nothing (PType fc) (mkTyConType fc xs)
+   = PPi fc rig1 Explicit Nothing (PType fc) (mkTyConType fc xs)
 
 mkDataConType : FC -> PTerm -> List (Either PTerm (Maybe Name, PTerm)) -> PTerm
 mkDataConType fc ret [] = ret
 mkDataConType fc ret (Left x :: xs)
-    = PPi fc Rig1 Explicit Nothing x (mkDataConType fc ret xs)
+    = PPi fc rig1 Explicit Nothing x (mkDataConType fc ret xs)
 mkDataConType fc ret (Right (n, PRef fc' x) :: xs)
     = if n == Just x
-         then PPi fc Rig1 Implicit n (PType fc') 
+         then PPi fc rig1 Implicit n (PType fc') 
                           (mkDataConType fc ret xs)
-         else PPi fc Rig1 Implicit n (PRef fc' x) 
+         else PPi fc rig1 Implicit n (PRef fc' x) 
                           (mkDataConType fc ret xs)
 mkDataConType fc ret (Right (n, x) :: xs)
-    = PPi fc Rig1 Implicit n x (mkDataConType fc ret xs)
+    = PPi fc rig1 Implicit n x (mkDataConType fc ret xs)
 
 simpleCon : FileName -> PTerm -> IndentInfo -> Rule PTypeDecl
 simpleCon fname ret indents
@@ -789,6 +793,11 @@ onoff
  <|> do exactIdent "off"
         pure False
 
+extension : Rule LangExt
+extension
+    = do exactIdent "Borrowing"
+         pure Borrowing
+
 directive : FileName -> IndentInfo -> Rule Directive
 directive fname indents
     = do exactIdent "hide"
@@ -822,26 +831,37 @@ directive fname indents
   <|> do keyword "rewrite"
          eq <- name
          rw <- name
+         atEnd indents
          pure (RewriteName eq rw)
   <|> do exactIdent "integerLit"
          n <- name
+         atEnd indents
          pure (PrimInteger n)
   <|> do exactIdent "stringLit"
          n <- name
+         atEnd indents
          pure (PrimString n)
   <|> do exactIdent "charLit"
          n <- name
+         atEnd indents
          pure (PrimChar n)
   <|> do exactIdent "name"
          n <- name
          ns <- sepBy1 (symbol ",") unqualifiedName
+         atEnd indents
          pure (Names n ns)
   <|> do exactIdent "start"
          e <- expr EqOK fname indents
+         atEnd indents
          pure (StartExpr e)
   <|> do exactIdent "allow_overloads"
          n <- name
+         atEnd indents
          pure (Overloadable n)
+  <|> do exactIdent "language"
+         e <- extension
+         atEnd indents
+         pure (Extension e)
 
 fix : Rule Fixity
 fix
@@ -1000,7 +1020,7 @@ fieldDecl fname indents
              ty <- expr EqOK fname indents
              end <- location
              pure (map (\n => MkField (MkFC fname start end)
-                                      Rig1 p (UN n) ty) ns)
+                                      rig1 p (UN n) ty) ns)
 
 recordDecl : FileName -> IndentInfo -> Rule PDecl
 recordDecl fname indents

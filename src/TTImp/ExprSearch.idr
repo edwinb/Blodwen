@@ -505,7 +505,7 @@ dropLinearErrors : {auto c : Ref Ctxt Defs} ->
                    Core annot (List ClosedTerm)
 dropLinearErrors loc [] = pure []
 dropLinearErrors loc (t :: ts)
-    = catch (do linearCheck loc Rig1 False [] t
+    = catch (do linearCheck loc rig1 False [] t
                 ts' <- dropLinearErrors loc ts
                 pure (t :: ts'))
             (\err => dropLinearErrors loc ts)

@@ -33,6 +33,13 @@ record PrimNames where
   fromStringName : Maybe Name
   fromCharName : Maybe Name
 
+public export
+data LangExt = Borrowing
+
+export
+Eq LangExt where
+  Borrowing == Borrowing = True
+
 export
 TTC annot LazyNames where
   toBuf b l
@@ -78,6 +85,15 @@ TTC annot PrimNames where
            str <- fromBuf s b
            c <- fromBuf s b
            pure (MkPrimNs i str c)
+
+export
+TTC annot LangExt where
+  toBuf b Borrowing = tag 0
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Borrowing
+             _ => corrupt "LangExt"
 
 public export
 record Dirs where
@@ -156,6 +172,7 @@ record Options where
   rewritenames : Maybe RewriteNames
   primnames : PrimNames
   namedirectives : List (Name, List String)
+  extensions : List LangExt
 
 defaultDirs : Dirs
 defaultDirs = MkDirs "." "build" "/usr/local" ["."] []
@@ -171,7 +188,7 @@ defaults : Options
 defaults = MkOptions defaultDirs defaultPPrint defaultSession
                      Nothing Nothing Nothing
                      (MkPrimNs Nothing Nothing Nothing)
-                     []
+                     [] []
 
 -- Reset the options which are set by source files
 export
@@ -228,3 +245,11 @@ setFromChar n = record { primnames->fromCharName = Just n }
 export
 addNameDirective : (Name, List String) -> Options -> Options
 addNameDirective nd = record { namedirectives $= (nd ::) }
+
+export
+setExtension : LangExt -> Options -> Options
+setExtension e = record { extensions $= (e ::) }
+
+export
+isExtension : LangExt -> Options -> Bool
+isExtension e opts = e `elem` extensions opts

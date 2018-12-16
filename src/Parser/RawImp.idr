@@ -120,7 +120,7 @@ mutual
 
   getMult : Constant -> EmptyRule RigCount
   getMult (BI 0) = pure Rig0
-  getMult (BI 1) = pure Rig1
+  getMult (BI 1) = pure rig1
   getMult _ = fail "Invalid multiplicity"
 
   multiplicity : EmptyRule RigCount

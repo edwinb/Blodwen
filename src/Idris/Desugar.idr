@@ -550,4 +550,5 @@ mutual
              Names n ns => pure [IPragma (\env, nest => addNameDirective fc n ns)]
              StartExpr tm => pure [IPragma (\env, nest => throw (InternalError "%start not implemented"))] -- TODO!
              Overloadable n => pure [IPragma (\env, nest => setNameFlag fc n Overloadable)]
+             Extension e => pure [IPragma (\env, nest => setExtension e)]
 

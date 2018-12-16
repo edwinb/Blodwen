@@ -59,7 +59,7 @@ notePatVar n
 
 bindRig : RigCount -> RigCount
 bindRig Rig0 = Rig0
-bindRig _ = Rig1
+bindRig _ = rig1
       
 rewriteErr : Error annot -> Bool
 rewriteErr (NotRewriteRule _ _ _) = True
@@ -642,7 +642,7 @@ mutual
              Just (rigb, lv) => 
                  do rigSafe rigb rigc
                     est <- get EST
-                    when (rigb == Rig1) $
+                    when (isLinear rigb && rigc /= Rig1 True) $
                          put EST 
                              (record { linearUsed $= ((_ ** lv) :: ) } est)
                     let varty = binderType (getBinder lv env) 
@@ -668,9 +668,9 @@ mutual
                                        (Just n, resolveRef n gdef gam)) ns)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
-      rigSafe Rig1 RigW = throw (LinearMisuse loc x Rig1 RigW)
+      rigSafe (Rig1 b) RigW = throw (LinearMisuse loc x (Rig1 b) RigW)
       rigSafe Rig0 RigW = throw (LinearMisuse loc x Rig0 RigW)
-      rigSafe Rig0 Rig1 = throw (LinearMisuse loc x Rig0 Rig1)
+      rigSafe Rig0 (Rig1 b) = throw (LinearMisuse loc x Rig0 (Rig1 b))
       rigSafe _ _ = pure ()
 
       defOK : Bool -> ElabMode -> NameType -> Bool
@@ -737,10 +737,10 @@ mutual
               (do c <- check RigW process elabinfo env nest scr (FnType [] scrtyv)
                   pure (fst c, snd c, RigW))
               (\err => case err of
-                            LinearMisuse _ _ Rig1 _
-                              => do c <- check Rig1 process elabinfo env nest scr 
+                            LinearMisuse _ _ (Rig1 x) _
+                              => do c <- check rig1 process elabinfo env nest scr 
                                                (FnType [] scrtyv)
-                                    pure (fst c, snd c, Rig1)
+                                    pure (fst c, snd c, rig1)
                             e => throw e)
            caseBlock rigc process elabinfo loc env nest scr scrtm_in scrty caseRig alts expected
 
@@ -770,7 +770,7 @@ mutual
       dropLinear : Env Term vs -> Env Term vs
       dropLinear [] = []
       dropLinear (b :: bs) 
-          = if multiplicity b == Rig1
+          = if isLinear (multiplicity b)
                then setMultiplicity b Rig0 :: dropLinear bs
                else b :: dropLinear bs
 
@@ -876,11 +876,18 @@ mutual
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
                                      (_, IMustUnify _ _ _, _) => arg
-                                     (InLHS Rig1, _, Rig0) => IMustUnify loc "Erased argument" arg
+                                     (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
+                     -- if the argument is borrowed, it's okay to use it in
+                     -- unrestricted context, because we'll be out of the
+                     -- application without spending it
+                     let checkRig = case (rigf, rigc) of
+                                         (Rig1 True, Rig0) => Rig0
+                                         (Rig1 True, _) => Rig1 True
+                                         _ => rigMult rigf rigc
                      log 5 $ "Checking argument of type " ++ show (quote (noGam gam) env ty)
-                                 ++ " at " ++ show (rigMult rigf rigc)
-                     (argtm, argty) <- check (rigMult rigf rigc)
+                                 ++ " at " ++ show checkRig
+                     (argtm, argty) <- check checkRig
                                              process (record { implicitsGiven = [] } elabinfo)
                                              env nest arg' 
                                              (FnType [] (quote (noGam gam) env ty))
@@ -958,7 +965,7 @@ mutual
              ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope (FnType [] (Bind bn (Pi c Explicit pty) psc))
-      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+      = do let rigc = if rigc_in == Rig0 then Rig0 else rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest ty (FnType [] TType)
            e' <- weakenedEState
@@ -976,7 +983,7 @@ mutual
                         (Bind n (Pi rigb plicity tyv) scopet)
                         (FnType [] (Bind bn (Pi rigb plicity pty) psc))
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope expected
-      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+      = do let rigc = if rigc_in == Rig0 then Rig0 else rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest ty (FnType [] TType)
            let rigb = rigl -- rigMult rigl rigc
@@ -1006,7 +1013,7 @@ mutual
              ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkLet rigc_in process elabinfo loc env nest rigl n ty val scope expected
-      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+      = do let rigc = if rigc_in == Rig0 then Rig0 else rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest ty (FnType [] TType)
            -- Try checking at the given multiplicity; if that doesn't work,
@@ -1017,11 +1024,11 @@ mutual
                                env nest val (FnType [] tyv)
                     pure (fst c, snd c, rigMult rigl rigc))
                 (\err => case err of
-                              LinearMisuse _ _ Rig1 _
-                                => do c <- check Rig1 process 
+                              LinearMisuse _ _ (Rig1 x) _
+                                => do c <- check rig1 process 
                                                  (record { topLevel = False } elabinfo) 
                                                  env nest val (FnType [] tyv)
-                                      pure (fst c, snd c, Rig1)
+                                      pure (fst c, snd c, rig1)
                               e => throw e)
            let env' : Env Term (n :: _) = Let rigb valv tyv :: env
            e' <- weakenedEState

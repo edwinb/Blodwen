@@ -108,9 +108,9 @@ combineLinear loc ((n, count) :: cs)
        = if n == n' then c :: lookupAll n cs else lookupAll n cs
 
     combine : RigCount -> RigCount -> Core annot RigCount
-    combine Rig1 Rig1 = throw (LinearUsed loc 2 n)
-    combine Rig1 RigW = throw (LinearUsed loc 2 n)
-    combine RigW Rig1 = throw (LinearUsed loc 2 n)
+    combine (Rig1 _) (Rig1 _) = throw (LinearUsed loc 2 n)
+    combine (Rig1 _) RigW = throw (LinearUsed loc 2 n)
+    combine RigW (Rig1 _) = throw (LinearUsed loc 2 n)
     combine RigW RigW = pure RigW
     combine Rig0 c = pure c
     combine c Rig0 = pure c
@@ -207,7 +207,7 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
          -- (this might be allowed, e.g. for 'fromInteger')
          let lhs = normalise gam env lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
-         let linvars_in = findLinear gam 0 Rig1 lhs
+         let linvars_in = findLinear gam 0 rig1 lhs
          log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
                  show linvars_in
 
@@ -466,7 +466,7 @@ processDef elab incase env nest loc n_in cs_raw
                            let hashit = visibility glob == Public
                            let mult = if multiplicity glob == Rig0
                                          then Rig0
-                                         else Rig1
+                                         else rig1
                            cs <- traverse (checkClause elab incase mult hashit n env nest) cs_raw
                            (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
                            (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))

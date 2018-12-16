@@ -32,6 +32,8 @@ data Error annot
     | BadDataConType annot Name Name
     | LinearUsed annot Nat Name
     | LinearMisuse annot Name RigCount RigCount
+    | BorrowPartial annot (Env Term vars) (Term vars) (Term vars)
+    | BorrowPartialType annot (Env Term vars) (Term vars)
     | AmbiguousName annot (List Name)
     | AmbiguousElab annot (Env Term vars) (List (Term vars))
     | AmbiguousSearch annot (Env Term vars) (List (Term vars))
@@ -114,13 +116,20 @@ Show annot => Show (Error annot) where
      where
        showRig : RigCount -> String
        showRig Rig0 = "irrelevant"
-       showRig Rig1 = "linear"
+       showRig (Rig1 False) = "linear"
+       showRig (Rig1 True) = "borrowed"
        showRig RigW = "unrestricted"
 
        showRel : RigCount -> String
        showRel Rig0 = "irrelevant"
-       showRel Rig1 = "relevant"
+       showRel (Rig1 False) = "relevant"
+       showRel (Rig1 True) = "borrowed"
        showRel RigW = "non-linear"
+  show (BorrowPartial fc env t arg)
+      = show fc ++ ":" ++ show t ++ " borrows argument " ++ show arg ++ 
+                   " so must be fully applied"
+  show (BorrowPartialType fc env t)
+      = show fc ++ ":" ++ show t ++ " borrows, so must return a concrete type"
 
   show (AmbiguousName fc ns) = show fc ++ ":Ambiguous name " ++ show ns
   show (AmbiguousElab fc env ts) = show fc ++ ":Ambiguous elaboration " ++ show ts

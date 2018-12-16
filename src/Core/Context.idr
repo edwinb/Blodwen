@@ -881,6 +881,16 @@ setPrefix dir
     = do defs <- get Ctxt
          put Ctxt (record { options->dirs->dir_prefix = dir } defs)
 
+export
+setExtension : {auto c : Ref Ctxt Defs} -> LangExt -> Core annot ()
+setExtension e
+    = do defs <- get Ctxt
+         put Ctxt (record { options $= setExtension e } defs)
+
+export
+isExtension : LangExt -> Defs -> Bool
+isExtension e defs = isExtension e (options defs)
+
 -- Set the default namespace for new definitions
 export
 setNS : {auto c : Ref Ctxt Defs} ->

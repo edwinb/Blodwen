@@ -123,7 +123,7 @@ validSymbol = some (oneOf opChars)
 export
 reservedSymbols : List String
 reservedSymbols
-    = symbols ++ ["%", "\\", ":", "=", "|", "<-", "->", "=>", "?"]
+    = symbols ++ ["%", "\\", ":", "=", "|", "<-", "->", "=>", "?", "&"]
 
 symbolChar : Char -> Bool
 symbolChar c = c `elem` unpack opChars

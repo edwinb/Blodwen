@@ -125,13 +125,13 @@ TTC annot PiInfo where
 export
 TTC annot RigCount where
   toBuf b Rig0 = tag 0
-  toBuf b Rig1 = tag 1
+  toBuf b (Rig1 x) = do tag 1; toBuf b x
   toBuf b RigW = tag 2
 
   fromBuf s b
       = case !getTag of
              0 => pure Rig0
-             1 => pure Rig1
+             1 => do x <- fromBuf s b; pure (Rig1 x)
              2 => pure RigW
              _ => corrupt "RigCount"
 

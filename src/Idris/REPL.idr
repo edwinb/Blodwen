@@ -58,7 +58,8 @@ isHole def
     
 showCount : RigCount -> String
 showCount Rig0 = " 0 "
-showCount Rig1 = " 1 "
+showCount (Rig1 False) = " 1 "
+showCount (Rig1 True) = " & "
 showCount RigW = "   "
 
 impBracket : Bool -> String -> String

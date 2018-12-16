@@ -163,57 +163,74 @@ Show PiInfo where
 
 -- Also need updating RawImp and PTerm syntax
 public export
-data RigCount = Rig0 | Rig1 | RigW
+data RigCount = Rig0 
+							| Rig1 Bool -- True = 'borrowed', i.e. call doesn't count as
+			                    -- spending the name
+			        | RigW
+
+export
+rig1 : RigCount
+rig1 = Rig1 False
+
+export
+rigb : RigCount
+rigb = Rig1 True
+
+export
+isLinear : RigCount -> Bool
+isLinear (Rig1 _) = True
+isLinear _ = False
 
 export
 Eq RigCount where
   (==) Rig0 Rig0 = True
-  (==) Rig1 Rig1 = True
+  (==) (Rig1 x) (Rig1 x') = x == x'
   (==) RigW RigW = True
   (==) _ _ = False
 
 export
 Ord RigCount where
   compare Rig0 Rig0 = EQ
-  compare Rig0 Rig1 = LT
+  compare Rig0 (Rig1 _) = LT
   compare Rig0 RigW = LT
 
-  compare Rig1 Rig0 = GT
-  compare Rig1 Rig1 = EQ
-  compare Rig1 RigW = LT
+  compare (Rig1 _) Rig0 = GT
+  compare (Rig1 x) (Rig1 x') = compare x x'
+  compare (Rig1 _) RigW = LT
 
   compare RigW Rig0 = GT
-  compare RigW Rig1 = GT
+  compare RigW (Rig1 _) = GT
   compare RigW RigW = EQ
 
 export
 Show RigCount where
   show Rig0 = "Rig0"
-  show Rig1 = "Rig1"
+  show (Rig1 False) = "Rig1"
+  show (Rig1 True) = "RigB"
   show RigW = "RigW"
 
 export
 rigPlus : RigCount -> RigCount -> RigCount
 rigPlus Rig0 Rig0 = Rig0
-rigPlus Rig0 Rig1 = Rig1
+rigPlus Rig0 (Rig1 x) = Rig1 x
 rigPlus Rig0 RigW = RigW
-rigPlus Rig1 Rig0 = Rig1
-rigPlus Rig1 Rig1 = RigW
-rigPlus Rig1 RigW = RigW
+rigPlus (Rig1 x) Rig0 = Rig1 x
+rigPlus (Rig1 _) (Rig1 _) = RigW
+rigPlus (Rig1 _) RigW = RigW
 rigPlus RigW Rig0 = RigW
-rigPlus RigW Rig1 = RigW
+rigPlus RigW (Rig1 _) = RigW
 rigPlus RigW RigW = RigW
 
 export
 rigMult : RigCount -> RigCount -> RigCount
 rigMult Rig0 Rig0 = Rig0
-rigMult Rig0 Rig1 = Rig0
+rigMult Rig0 (Rig1 _) = Rig0
 rigMult Rig0 RigW = Rig0
-rigMult Rig1 Rig0 = Rig0
-rigMult Rig1 Rig1 = Rig1
-rigMult Rig1 RigW = RigW
+rigMult (Rig1 _) Rig0 = Rig0
+rigMult (Rig1 x) (Rig1 x') = Rig1 (x || x')
+rigMult (Rig1 _) RigW = RigW
 rigMult RigW Rig0 = Rig0
-rigMult RigW Rig1 = RigW
+rigMult RigW (Rig1 _) = RigW
 rigMult RigW RigW = RigW
 
 public export
@@ -1071,7 +1088,7 @@ fnType arg scope = Bind (MN "_" 0) (Pi RigW Explicit arg) (weaken scope)
 
 export
 linFnType : Term vars -> Term vars -> Term vars
-linFnType arg scope = Bind (MN "_" 0) (Pi Rig1 Explicit arg) (weaken scope)
+linFnType arg scope = Bind (MN "_" 0) (Pi (Rig1 False) Explicit arg) (weaken scope)
 
 public export
 data Unapply : Term vars -> Type where
@@ -1152,7 +1169,8 @@ Show (Term vars) where
       where
         showCount : RigCount -> String
         showCount Rig0 = "0 "
-        showCount Rig1 = "1 "
+        showCount (Rig1 False) = "1 "
+        showCount (Rig1 True) = "& "
         showCount RigW = ""
 
         vCount : Elem x xs -> Nat

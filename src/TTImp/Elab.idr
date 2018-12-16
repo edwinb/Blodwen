@@ -43,7 +43,7 @@ doPLetRenames ns drops sc = sc
 getRigNeeded : ElabMode -> RigCount
 getRigNeeded InType = Rig0 -- unrestricted usage in types
 getRigNeeded (InLHS Rig0) = Rig0
-getRigNeeded _ = Rig1
+getRigNeeded _ = rig1
 
 deletableCurrentHoles : {auto u : Ref UST (UState annot)} -> 
                         {auto e : Ref EST (EState vars)} ->

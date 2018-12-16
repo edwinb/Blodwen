@@ -860,7 +860,7 @@ mutual
   
   -- Comparing multiplicities when converting pi binders
   subRig : RigCount -> RigCount -> Bool
-  subRig Rig1 RigW = True -- we can pass a linear function if a general one is expected
+  subRig (Rig1 _) RigW = True -- we can pass a linear function if a general one is expected
   subRig x y = x == y -- otherwise, the multiplicities need to match up
 
   unifyBothBinders
