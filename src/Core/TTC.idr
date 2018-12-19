@@ -306,19 +306,39 @@ TTC annot PartialReason where
              _ => corrupt "PartialReason"
 
 export
-TTC annot Totality where
-  toBuf b (Partial x) = do tag 0; toBuf b x
-  toBuf b Unchecked = tag 1
-  toBuf b Covering = tag 2
-  toBuf b Total = tag 3
+TTC annot Terminating where
+  toBuf b Unchecked = tag 0
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Unchecked
+             _ => corrupt "Terminating"
+
+export
+TTC annot Covering where
+  toBuf b IsCovering = tag 0
+  toBuf b (MissingCases ms) 
+      = do tag 1
+           toBuf b ms
+  toBuf b (NonCoveringCall n) = tag 2
 
   fromBuf s b 
       = case !getTag of
-             0 => do x <- fromBuf s b; pure (Partial x)
-             1 => pure Unchecked
-             2 => pure Covering
-             3 => pure Total
-             _ => corrupt "Totality"
+             0 => pure IsCovering
+             1 => do ms <- fromBuf s b
+                     pure (MissingCases ms)
+             2 => do n <- fromBuf s b
+                     pure (NonCoveringCall n)
+             _ => corrupt "Covering"
+
+export
+TTC annot Totality where
+  toBuf b (MkTotality term cov) = do toBuf b term; toBuf b cov
+
+  fromBuf s b
+      = do term <- fromBuf s b
+           cov <- fromBuf s b
+           pure (MkTotality term cov)
 
 export
 TTC annot (PrimFn n) where

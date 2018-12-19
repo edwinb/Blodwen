@@ -52,7 +52,7 @@ parameters (defs : Defs, opts : EvalOpts)
     evalLocal : Env Term free -> LocalEnv free vars -> Stack free -> 
                 Maybe RigCount -> Elem x (vars ++ free) -> NF free
     evalLocal {vars = []} env loc stk r p 
-        = if isLet p env
+        = if isLet p env && not (holesOnly opts)
              -- getBinder does a lot of work to weaken the types as
              -- necessary, so only do it if we really need to
              then case getBinder p env of

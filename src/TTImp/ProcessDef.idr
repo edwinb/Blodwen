@@ -1,13 +1,14 @@
 module TTImp.ProcessDef
 
-import Core.TT
-import Core.Unify
-import Core.Context
 import Core.CaseBuilder
+import Core.Context
+import Core.Coverage
 import Core.LinearCheck
 import Core.Metadata
 import Core.Normalise
 import Core.Reflect
+import Core.TT
+import Core.Unify
 
 import TTImp.Elab
 import TTImp.TTImp
@@ -194,6 +195,9 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
          lhs_raw_in <- lhsInCurrentNS nest lhs_raw
          let lhs_raw = implicitsAs gam vars lhs_raw_in
          log 5 ("Checking LHS: " ++ show lhs_raw)
+         case env of
+            [] => pure ()
+            _ => log 5 ("In environment: " ++ show env)
          (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
               inferTerm elab incase defining env nest
                         PATTERN (InLHS mult) lhs_raw
@@ -205,7 +209,7 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
            wrapError (InLHS loc defining) $ checkUserHoles True
          -- Normalise the LHS to get any functions or let bindings evaluated
          -- (this might be allowed, e.g. for 'fromInteger')
-         let lhs = normalise gam env lhs_in
+         let lhs = normalise gam (noLet env) lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
          let linvars_in = findLinear gam 0 rig1 lhs
          log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
@@ -214,6 +218,7 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
          linvars <- combineLinear loc linvars_in
          let lhs' = setLinear linvars lhs
          let lhsty' = setLinear linvars lhsty
+         log 3 ("LHS (before normalise): " ++ show lhs_in)
          log 3 ("LHS: " ++ show lhs' ++ " : " ++ show lhsty')
          setHoleLHS (bindEnv env lhs')
 
@@ -223,6 +228,11 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
          -- expressions (we don't want to abstract over the outer environment
          -- again)
          extend env SubRefl nest lhs' lhsty'
+  where
+    noLet : Env Term vs -> Env Term vs
+    noLet [] = []
+    noLet (Let c v t :: env) = Lam c Explicit t :: noLet env
+    noLet (b :: env) = b :: noLet env
 
 export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
@@ -486,4 +496,12 @@ processDef elab incase env nest loc n_in cs_raw
                                       "Run time tree\n" ++
                                       show args ++ " " ++ show tr
                                    _ => "No case tree for " ++ show n
+
+                           miss <- getMissing n 
+                           if isNil miss
+                              then pure ()
+                              else
+                                log 5 ("Initially missing in " ++ show n ++ ":\n" ++ 
+                                             showSep "\n" (map show miss))
+
                      _ => throw (AlreadyDefined loc n)

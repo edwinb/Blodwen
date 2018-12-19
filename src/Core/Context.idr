@@ -384,7 +384,7 @@ export
 newRigDef : RigCount -> List Name -> 
             (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
 newRigDef r vars ty vis def 
-   = MkGlobalDef ty r vars vis Unchecked [] def Nothing (getRefs def)
+   = MkGlobalDef ty r vars vis unchecked [] def Nothing (getRefs def)
 
 export
 newDef : List Name -> (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
@@ -1431,6 +1431,26 @@ setTotality loc n tot
                    addDef n (record { totality = tot } def)
 
 export
+setCovering : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Covering -> Core annot ()
+setCovering loc n tot
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { totality->isCovering = tot } def)
+
+export
+setTerminating : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Terminating -> Core annot ()
+setTerminating loc n tot
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { totality->isTerminating = tot } def)
+
+export
 getTotality : {auto x : Ref Ctxt Defs} ->
               annot -> Name -> Core annot Totality
 getTotality loc n
@@ -1479,9 +1499,8 @@ isTotal : {auto x : Ref Ctxt Defs} ->
 isTotal loc n
     = do t <- getTotality loc n
          case t of
-              Total => pure True
+              MkTotality _ IsCovering => pure True
               _ => pure False
-
 
 export
 addToTypeHints : Name -> Name -> Bool -> Defs -> Defs

@@ -659,9 +659,11 @@ public export
 Eq a => Eq (List a) where
   [] == [] = True
   x :: xs == y :: ys = x == y && xs == ys
+  _ == _ = False
 
 public export
 Ord a => Ord (List a) where
+  compare [] [] = EQ
   compare [] (x :: xs) = LT
   compare (x :: xs) [] = GT
   compare (x :: xs) (y ::ys) 

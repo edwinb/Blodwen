@@ -352,7 +352,33 @@ data PartialReason = NotCovering | NotStrictlyPositive
                    | Calling (List Name)
 
 public export
-data Totality = Partial PartialReason | Unchecked | Covering | Total 
+data Terminating = Unchecked -- termination check not yet implemented
+
+public export
+data Covering 
+       = IsCovering
+       | MissingCases (List (vars ** List (Term vars)))
+       | NonCoveringCall Name
+
+-- Totality status of a definition. We separate termination checking from
+-- coverage checking.
+public export
+record Totality where
+     constructor MkTotality
+     isTerminating : Terminating
+     isCovering : Covering
+
+export
+unchecked : Totality
+unchecked = MkTotality Unchecked IsCovering
+
+export
+isTotal : Totality
+isTotal = MkTotality Unchecked IsCovering
+
+export
+notCovering : Totality
+notCovering = MkTotality Unchecked (MissingCases [])
 
 data SameElem : Elem x xs -> Elem x' xs -> Type where
      SameHere : SameElem Here Here
