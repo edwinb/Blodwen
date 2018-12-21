@@ -296,12 +296,23 @@ TTC annot Def where
              _ => corrupt "Def"
 
 public export
+data TotalReq = Total | CoveringOnly | PartialOK
+
+public export
 data DefFlag 
     = TypeHint Name Bool -- True == direct hint
     | GlobalHint Bool -- True == always search (not a default hint)
     | Inline
     | Invertible -- assume safe to cancel arguments in unification
     | Overloadable -- allow ad-hoc overloads
+    | SetTotal TotalReq
+
+export
+Eq TotalReq where
+    (==) Total Total = True
+    (==) CoveringOnly CoveringOnly = True
+    (==) PartialOK PartialOK = True
+    (==) _ _ = False
 
 export
 Eq DefFlag where
@@ -310,7 +321,20 @@ Eq DefFlag where
     (==) Inline Inline = True
     (==) Invertible Invertible = True
     (==) Overloadable Overloadable = True
+    (==) (SetTotal x) (SetTotal y) = x == y
     (==) _ _ = False
+
+TTC annot TotalReq where
+  toBuf b Total = tag 0
+  toBuf b CoveringOnly = tag 1
+  toBuf b PartialOK = tag 2
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Total
+             1 => pure CoveringOnly
+             2 => pure PartialOK
+             _ => corrupt "TotalReq"
 
 TTC annot DefFlag where
   toBuf b (TypeHint x y) = do tag 0; toBuf b x; toBuf b y
@@ -318,6 +342,7 @@ TTC annot DefFlag where
   toBuf b Inline = tag 2
   toBuf b Invertible = tag 3
   toBuf b Overloadable = tag 4
+  toBuf b (SetTotal x) = do tag 5; toBuf b x
 
   fromBuf s b 
       = case !getTag of
@@ -326,6 +351,7 @@ TTC annot DefFlag where
              2 => pure Inline
              3 => pure Invertible
              4 => pure Overloadable
+             5 => do x <- fromBuf s b; pure (SetTotal x)
              _ => corrupt "DefFlag"
 
 -- *everything* about a definition goes here, so that we can save out the
@@ -422,6 +448,7 @@ record Defs where
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
       ifaceHash : Int
+      totalReq : TotalReq
 
 export
 noGam : Defs -> Defs
@@ -462,7 +489,8 @@ TTC annot Defs where
                                       primnames = prim,
                                       namedirectives = ndirs
                                     } defaults)
-                            empty imported [] [] [] empty [] hides ds 100 0 0 5381)
+                            empty imported [] [] [] empty [] hides ds 
+                            100 0 0 5381 CoveringOnly)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -471,7 +499,8 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] [] empty [] [] [] 100 0 0 5381
+initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] [] empty [] [] [] 
+                     100 0 0 5381 CoveringOnly
 
 export
 getSave : Defs -> List Name

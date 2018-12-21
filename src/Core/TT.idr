@@ -357,7 +357,7 @@ data Terminating = Unchecked -- termination check not yet implemented
 public export
 data Covering 
        = IsCovering
-       | MissingCases (List (vars ** List (Term vars)))
+       | MissingCases (List (Term []))
        | NonCoveringCall Name
 
 -- Totality status of a definition. We separate termination checking from

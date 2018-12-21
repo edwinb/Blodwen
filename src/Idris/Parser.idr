@@ -894,9 +894,17 @@ mutualDecls fname indents
          end <- location
          pure (PMutual (MkFC fname start end) (concat ds))
 
-
 fnOpt : Rule FnOpt
 fnOpt
+    = do keyword "partial"
+         pure PartialOK
+  <|> do keyword "total"
+         pure Total
+  <|> do keyword "covering"
+         pure Covering
+
+fnDirectOpt : Rule FnOpt
+fnDirectOpt
     = do exactIdent "hint"
          pure (Hint True)
   <|> do exactIdent "globalhint"
@@ -912,8 +920,10 @@ visOpt : Rule (Either Visibility FnOpt)
 visOpt
     = do vis <- visOption
          pure (Left vis)
+  <|> do tot <- fnOpt
+         pure (Right tot)
   <|> do symbol "%"
-         opt <- fnOpt
+         opt <- fnDirectOpt
          pure (Right opt)
 
 getVisibility : Maybe Visibility -> List (Either Visibility FnOpt) -> 
@@ -1303,6 +1313,12 @@ command
          pure Reload
   <|> do symbol ":"; replCmd ["e", "edit"]
          pure Edit
+  <|> do symbol ":"; replCmd ["miss", "missing"]
+         n <- name
+         pure (Missing n)
+  <|> do symbol ":"; replCmd ["total"]
+         n <- name
+         pure (Total n)
   <|> do symbol ":"; cmd <- editCmd
          pure (Editing cmd)
   <|> do tm <- expr EqOK "(interactive)" init

@@ -144,6 +144,9 @@ mutual
        ExternFn : FnOpt
        -- assume safe to cancel arguments in unification
        Invertible : FnOpt
+       Total : FnOpt
+       Covering : FnOpt
+       PartialOK : FnOpt
 
   export
   Show FnOpt where
@@ -152,6 +155,9 @@ mutual
     show (GlobalHint t) = "%globalhint " ++ show t
     show ExternFn = "%extern"
     show Invertible = "%invertible"
+    show Total = "total"
+    show Covering = "covering"
+    show PartialOK = "partial"
 
   export
   Eq FnOpt where
@@ -160,6 +166,9 @@ mutual
     (GlobalHint x) == (GlobalHint y) = x == y
     ExternFn == ExternFn = True
     Invertible == Invertible = True
+    Total == Total = True
+    Covering == Covering = True
+    PartialOK == PartialOK = True
     _ == _ = False
 
   public export
@@ -898,6 +907,9 @@ mutual
     toBuf b (GlobalHint t) = do tag 2; toBuf b t
     toBuf b ExternFn = tag 3
     toBuf b Invertible = tag 4
+    toBuf b Total = tag 5
+    toBuf b Covering = tag 6
+    toBuf b PartialOK = tag 7
 
     fromBuf s b
         = case !getTag of
@@ -906,6 +918,9 @@ mutual
                2 => do t <- fromBuf s b; pure (GlobalHint t)
                3 => pure ExternFn
                4 => pure Invertible
+               5 => pure Total
+               6 => pure Covering
+               7 => pure PartialOK
                _ => corrupt "FnOpt"
 
 

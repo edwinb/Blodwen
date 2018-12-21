@@ -36,6 +36,12 @@ processFnOpt loc ndef ExternFn
     = setFlag loc ndef Inline -- if externally defined, inline when compiling
 processFnOpt loc ndef Invertible
     = setFlag loc ndef Invertible
+processFnOpt loc ndef Total
+    = setFlag loc ndef (SetTotal Total)
+processFnOpt loc ndef Covering
+    = setFlag loc ndef (SetTotal CoveringOnly)
+processFnOpt loc ndef PartialOK
+    = setFlag loc ndef (SetTotal PartialOK)
 
 export
 processType : {auto c : Ref Ctxt Defs} ->

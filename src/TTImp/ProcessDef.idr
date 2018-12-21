@@ -453,6 +453,18 @@ toPats : (Clause, Clause) -> (List Name, ClosedTerm, ClosedTerm)
 toPats (MkClause {vars} env lhs rhs, _) 
     = (vars, bindEnv env lhs, bindEnv env rhs)
 
+checkCoverage : {auto c : Ref Ctxt Defs} ->
+                {auto u : Ref UST (UState annot)} ->
+                Name -> Core annot Covering
+checkCoverage n
+    = do miss <- getMissing n 
+         if isNil miss
+            then pure IsCovering -- TODO: Check calls are covering via 'refersTo'
+            else
+              do log 5 ("Initially missing in " ++ show n ++ ":\n" ++ 
+                           showSep "\n" (map show miss))
+                 pure (MissingCases miss)
+
 export
 processDef : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -497,11 +509,6 @@ processDef elab incase env nest loc n_in cs_raw
                                       show args ++ " " ++ show tr
                                    _ => "No case tree for " ++ show n
 
-                           miss <- getMissing n 
-                           if isNil miss
-                              then pure ()
-                              else
-                                log 5 ("Initially missing in " ++ show n ++ ":\n" ++ 
-                                             showSep "\n" (map show miss))
-
+                           cov <- checkCoverage n
+                           setCovering loc n cov
                      _ => throw (AlreadyDefined loc n)

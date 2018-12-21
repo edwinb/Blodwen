@@ -138,6 +138,14 @@ getEnvTerm (n :: ns) env (Bind x b sc)
          else (_ ** (env, Bind x b sc))
 getEnvTerm _ env tm = (_ ** (env, tm))
 
+displayTerm : {auto c : Ref Ctxt Defs} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              Defs -> ClosedTerm -> 
+              Core FC String
+displayTerm gam tm
+    = do ptm <- resugar [] (normaliseHoles gam [] tm)
+         pure (show ptm)
+
 displayClause : {auto c : Ref Ctxt Defs} ->
                 {auto s : Ref Syn SyntaxInfo} ->
                 Defs -> (List Name, ClosedTerm, ClosedTerm) -> 
@@ -447,6 +455,23 @@ process (ProofSearch n)
          itm <- resugar [] (normaliseHoles gam [] tm)
          coreLift (putStrLn (show itm))
          dumpConstraints 0 True
+         pure True
+process (Missing n)
+    = do defs <- get Ctxt 
+         case lookupGlobalName n (gamma defs) of
+              [] => throw (UndefinedName replFC n)
+              ts => do traverse (\fn =>
+                          do tot <- getTotality replFC fn
+                             the (Core _ ()) $ case isCovering tot of
+                                  MissingCases cs => 
+                                     do tms <- traverse (displayTerm defs) cs
+                                        printResult (show fn ++ ":\n" ++
+                                                        showSep "\n" tms)
+                                  _ => iputStrLn (show fn ++ ": All cases covered")) 
+                         (map fst ts)
+                       pure True
+process (Total n)
+    = do iputStrLn "Full totality check not yet implemented. Try :missing."
          pure True
 process (DebugInfo n)
     = do gam <- get Ctxt

@@ -337,6 +337,8 @@ data REPLCmd : Type where
      DebugInfo : Name -> REPLCmd
      SetOpt : REPLOpt -> REPLCmd
      CD : String -> REPLCmd
+     Missing : Name -> REPLCmd
+     Total : Name -> REPLCmd
      Editing : EditCmd -> REPLCmd
      Quit : REPLCmd
 
