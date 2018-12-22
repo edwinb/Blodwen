@@ -10,6 +10,49 @@ import Data.List
 
 %default covering
 
+-- Return whether any part of the type conflicts in such a way that they
+-- can't possibly be equal (i.e. mismatched constructor)
+conflict : Defs -> NF vars -> Name -> Bool
+conflict defs nfty n
+    = case lookupDefTyExact n (gamma defs) of
+           Just (DCon t arity _, dty)
+                => conflictNF nfty (nf defs [] dty)
+           _ => False
+  where
+    mutual
+      conflictArgs : List (Closure vars) -> List (Closure []) -> Bool
+      conflictArgs [] [] = False
+      conflictArgs (c :: cs) (c' :: cs')
+          = let cnf = evalClosure defs c
+                cnf' = evalClosure defs c' in
+                conflictNF cnf cnf'
+      conflictArgs _ _ = False
+
+      conflictNF : NF vars -> NF [] -> Bool
+      conflictNF t (NBind x b sc)
+          = conflictNF t (sc (toClosure defaultOpts [] Erased))
+      conflictNF (NDCon n t a args) (NDCon n' t' a' args')
+          = if t == t'
+               then conflictArgs args args'
+               else True
+      conflictNF (NTCon n t a args) (NTCon n' t' a' args')
+          = if n == n'
+               then conflictArgs args args'
+               else True
+      conflictNF (NPrimVal c) (NPrimVal c') = c /= c'
+      conflictNF _ _ = False
+
+-- Return whether the given type is definitely empty (due to there being
+-- no constructors which can possibly match it.)
+export
+isEmpty : Defs -> NF vars -> Bool
+isEmpty defs (NTCon n t a args)
+     = case lookupDefExact n (gamma defs) of
+            Just (TCon _ _ _ _ cons)
+                 => all (conflict defs (NTCon n t a args)) cons
+            _ => False
+isEmpty defs _ = False
+
 -- Need this to get a NF from a Term; the names are free in any case
 freeEnv : (vs : List Name) -> Env Term vs
 freeEnv [] = []

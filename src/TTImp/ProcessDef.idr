@@ -235,6 +235,16 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
     noLet (Let c v t :: env) = Lam c Explicit t :: noLet env
     noLet (b :: env) = b :: noLet env
 
+-- Return whether any of the pattern variables are in a trivially empty
+-- type, where trivally empty means one of:
+--  * No constructors
+--  * Every constructor of the family has a return type which conflicts with 
+--    the given constructor's type
+hasEmptyPat : Defs -> Env Term vars -> Term vars -> Bool
+hasEmptyPat defs env (Bind x (PVar c ty) sc)
+   = isEmpty defs (nf defs env ty) || hasEmptyPat defs (PVar c ty :: env) sc
+hasEmptyPat defs env _ = False
+
 export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -255,7 +265,9 @@ checkClause elab incase mult hashit defining env nest (ImpossibleClause loc lhs_
              gam <- get Ctxt
              let lhs = normaliseHoles gam env lhs_in
              let lhsty = normaliseHoles gam env lhsty_in
-             throw (ValidCase loc env (Left lhs)))
+             if hasEmptyPat gam env lhs
+                then pure Nothing
+                else throw (ValidCase loc env (Left lhs)))
          (\err => case err of
                        ValidCase _ _ _ => throw err
                        WhenUnifying _ env l r err
