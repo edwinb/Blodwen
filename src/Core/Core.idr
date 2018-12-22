@@ -7,6 +7,8 @@ import Parser.Support
 import public Control.Catchable
 import public Data.IORef
 
+%default covering
+
 public export
 data TTCErrorMsg
     = FormatOlder
@@ -30,6 +32,8 @@ data Error annot
     | InvisibleName annot Name
     | BadTypeConType annot Name 
     | BadDataConType annot Name Name
+    | MissingCases annot Name (List ClosedTerm)
+    | NotTotal annot Name PartialReason
     | LinearUsed annot Nat Name
     | LinearMisuse annot Name RigCount RigCount
     | BorrowPartial annot (Env Term vars) (Term vars) (Term vars)
@@ -108,6 +112,11 @@ Show annot => Show (Error annot) where
        = show fc ++ ":Return type of " ++ show n ++ " must be Type"
   show (BadDataConType fc n fam) 
        = show fc ++ ":Return type of " ++ show n ++ " must be in " ++ show fam
+  show (MissingCases fc n cs)
+       = show fc ++ ":" ++ show n ++ " has missing cases:\n\t" ++
+         showSep "\n\t" (map show cs)
+  show (NotTotal fc n r)
+       = show fc ++ ":" ++ show n ++ " is not total"
   show (LinearUsed fc count n)
       = show fc ++ ":There are " ++ show count ++ " uses of linear name " ++ show n
   show (LinearMisuse fc n exp ctx)
@@ -218,14 +227,21 @@ getAnnot (UndefinedName loc y) = Just loc
 getAnnot (InvisibleName loc y) = Just loc
 getAnnot (BadTypeConType loc y) = Just loc
 getAnnot (BadDataConType loc y z) = Just loc
+getAnnot (MissingCases loc _ _) = Just loc
+getAnnot (NotTotal loc _ _) = Just loc
 getAnnot (LinearUsed loc k y) = Just loc
 getAnnot (LinearMisuse loc y z w) = Just loc
+getAnnot (BorrowPartial loc _ _ _) = Just loc
+getAnnot (BorrowPartialType loc _ _) = Just loc
 getAnnot (AmbiguousName loc xs) = Just loc
 getAnnot (AmbiguousElab loc _ xs) = Just loc
 getAnnot (AmbiguousSearch loc _ xs) = Just loc
 getAnnot (AllFailed ((_, x) :: xs)) = getAnnot x
 getAnnot (AllFailed []) = Nothing
 getAnnot (RecordTypeNeeded loc _) = Just loc
+getAnnot (NotRecordField loc _ _) = Just loc
+getAnnot (NotRecordType loc _) = Just loc
+getAnnot (IncompatibleFieldUpdate loc _) = Just loc
 getAnnot (InvalidImplicit loc _ y tm) = Just loc
 getAnnot (CantSolveGoal loc tm) = Just loc
 getAnnot (DeterminingArg loc y env tm) = Just loc

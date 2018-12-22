@@ -33,38 +33,60 @@ mutual
       = do defs <- get Ctxt
            let Just glob = lookupGlobalExact n (gamma defs)
                 | Nothing => pure orig
-           let PMDef _ pargs _ _ pats = definition glob
+           let PMDef _ pargs treect _ pats = definition glob
+                | _ => pure orig
+           let Just argpos = findArgPos treect
                 | _ => pure orig
            if length args == length pargs
-              then mkCase pats (reverse args)
+              then mkCase pats argpos 0 args
               else pure orig
     where
-      lastArg : Env Term vars -> Term vars ->
+      pos : Elem v vs -> Nat
+      pos Here = 0
+      pos (There p) = S (pos p)
+
+      -- Need to find the position of the scrutinee to rebuild original
+      -- case correctly
+      findArgPos : CaseTree as -> Maybe Nat
+      findArgPos (Case el _ _) = Just (pos el)
+      findArgPos _ = Nothing
+
+      idxOrDefault : Nat -> a -> List a -> a
+      idxOrDefault Z def (x :: xs) = x
+      idxOrDefault (S k) def (_ :: xs) = idxOrDefault k def xs
+      idxOrDefault _ def [] = def
+
+      getNth : Nat -> Term vars -> Term vars
+      getNth n tm with (unapply tm)
+        getNth n (apply f args) | ArgsList = idxOrDefault n f args
+
+      nthArg : Env Term vars -> Nat -> Term vars ->
                 (vars' ** (Env Term vars', Term vars'))
-      lastArg env (App f a) = (_ ** (env, a))
-      lastArg env (Bind x b sc) = lastArg (b :: env) sc
-      lastArg env tm = (_ ** (env, Erased))
+      nthArg env drop (App f a) = (_ ** (env, getNth drop (App f a)))
+      nthArg env drop (Bind x b sc) = nthArg (b :: env) drop sc
+      nthArg env drop tm = (_ ** (env, Erased))
 
       dropEnv : List Name -> Env Term vars -> Term vars ->
                 (vars' ** (Env Term vars', Term vars'))
       dropEnv (n :: ns) env (Bind x b sc) = dropEnv ns (b :: env) sc
       dropEnv ns env tm = (_ ** (env, tm))
 
-      mkClause : annot -> (List Name, ClosedTerm, ClosedTerm) ->
+      mkClause : annot -> Nat -> (List Name, ClosedTerm, ClosedTerm) ->
                  Core annot (ImpClause annot)
-      mkClause loc (vs, lhs, rhs)
-          = do let (_ ** (env, pat)) = lastArg [] lhs
+      mkClause loc dropped (vs, lhs, rhs)
+          = do let (_ ** (env, pat)) = nthArg [] dropped lhs
                lhs' <- unelabTy True loc env pat
                let (_ ** (env, rhs)) = dropEnv vs [] rhs
                rhs' <- unelabTy True loc env rhs
                pure (PatClause loc (fst lhs') (fst rhs'))
 
       mkCase : List (List Name, ClosedTerm, ClosedTerm) ->
-               List (IArg annot) -> Core annot (RawImp annot)
-      mkCase pats (Exp loc tm :: _)
-          = do pats' <- traverse (mkClause loc) pats
+               Nat -> Nat -> List (IArg annot) -> Core annot (RawImp annot)
+      mkCase pats (S k) dropped (_ :: args) = mkCase pats k (S dropped) args
+      mkCase pats Z dropped (Exp loc tm :: _)
+          = do pats' <- traverse (mkClause loc dropped) pats
                pure $ ICase loc tm (Implicit loc) pats'
-      mkCase _ _ = pure orig
+      mkCase _ _ _ _ = pure orig
 
   getFnArgs : RawImp annot -> List (IArg annot) -> 
               (RawImp annot, List (IArg annot))

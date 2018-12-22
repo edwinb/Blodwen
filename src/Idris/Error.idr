@@ -58,6 +58,11 @@ perror (BadTypeConType fc n)
     = pure $ "Return type of " ++ show n ++ " must be Type"
 perror (BadDataConType fc n fam)
     = pure $ "Return type of " ++ show n ++ " must be in " ++ show fam
+perror (MissingCases fc n cs)
+    = pure $ (show n ++ " has missing cases:\n\t" ++
+             showSep "\n\t" !(traverse (pshow []) cs))
+perror (NotTotal fc n r)
+    = pure $ show n ++ " is not total"
 perror (LinearUsed fc count n)
     = pure $ "There are " ++ show count ++ " uses of linear name " ++ show n
 perror (LinearMisuse fc n exp ctx)
