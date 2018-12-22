@@ -195,12 +195,28 @@ buildArgs defs known not ps Impossible
 -- checked
 export
 getMissing : {auto c : Ref Ctxt Defs} ->
-             Name -> Core annot (List ClosedTerm)
-getMissing n
+             Name -> CaseTree vars -> Core annot (List ClosedTerm)
+getMissing n ctree
    = do defs <- get Ctxt
-        let Just (PMDef _ vars ctree _ _) = lookupDefExact n (gamma defs)
-            | _ => throw (InternalError ("No case tree for " ++ show n))
         let psIn = map (Ref Bound) vars
         let pats = buildArgs defs [] [] psIn ctree
         pure (map (apply (Ref Func n)) pats)
 
+-- For the given name, get the names it refers to which are not themselves
+-- covering
+export
+getNonCoveringRefs : {auto c : Ref Ctxt Defs} ->
+                     annot -> Name -> Core annot (List Name)
+getNonCoveringRefs loc n
+   = do defs <- get Ctxt
+        let Just d = lookupGlobalExact n (gamma defs)
+           | Nothing => throw (UndefinedName loc n)
+        pure $ filter (notCovering defs) (refersTo d)
+  where
+    notCovering : Defs -> Name -> Bool
+    notCovering defs n
+        = case lookupGlobalExact n (gamma defs) of
+               Just def => case isCovering (totality def) of
+                                IsCovering => False
+                                _ => True
+               _ => False

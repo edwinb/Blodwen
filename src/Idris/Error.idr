@@ -58,9 +58,17 @@ perror (BadTypeConType fc n)
     = pure $ "Return type of " ++ show n ++ " must be Type"
 perror (BadDataConType fc n fam)
     = pure $ "Return type of " ++ show n ++ " must be in " ++ show fam
-perror (MissingCases fc n cs)
-    = pure $ (show n ++ " has missing cases:\n\t" ++
-             showSep "\n\t" !(traverse (pshow []) cs))
+perror (NotCovering fc n IsCovering)
+    = pure $ "Internal error (Coverage of " ++ show n ++ ")"
+perror (NotCovering fc n (MissingCases cs))
+    = pure $ show n ++ " is not covering. Missing cases:\n\t" ++
+             showSep "\n\t" !(traverse (pshow []) cs)
+perror (NotCovering fc n (NonCoveringCall ns))
+    = pure $ show n ++ " is not covering:\n\t" ++
+                "Calls non covering function" 
+                   ++ case ns of
+                           [fn] => " " ++ show fn
+                           _ => "s: " ++ showSep ", " (map show ns)
 perror (NotTotal fc n r)
     = pure $ show n ++ " is not total"
 perror (LinearUsed fc count n)

@@ -146,6 +146,14 @@ displayTerm gam tm
     = do ptm <- resugar [] (normaliseHoles gam [] tm)
          pure (show ptm)
 
+displayPatTerm : {auto c : Ref Ctxt Defs} ->
+                 {auto s : Ref Syn SyntaxInfo} ->
+                 Defs -> ClosedTerm -> 
+                 Core FC String
+displayPatTerm gam tm
+    = do ptm <- resugarNoPatvars [] (normaliseHoles gam [] tm)
+         pure (show ptm)
+
 displayClause : {auto c : Ref Ctxt Defs} ->
                 {auto s : Ref Syn SyntaxInfo} ->
                 Defs -> (List Name, ClosedTerm, ClosedTerm) -> 
@@ -464,9 +472,15 @@ process (Missing n)
                           do tot <- getTotality replFC fn
                              the (Core _ ()) $ case isCovering tot of
                                   MissingCases cs => 
-                                     do tms <- traverse (displayTerm defs) cs
+                                     do tms <- traverse (displayPatTerm defs) cs
                                         printResult (show fn ++ ":\n" ++
                                                         showSep "\n" tms)
+                                  NonCoveringCall ns =>
+                                     printResult 
+                                         (show fn ++ ": Calls non covering function" 
+                                           ++ case ns of
+                                                   [fn] => " " ++ show fn
+                                                   _ => "s: " ++ showSep ", " (map show ns))
                                   _ => iputStrLn (show fn ++ ": All cases covered")) 
                          (map fst ts)
                        pure True

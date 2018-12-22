@@ -1,0 +1,7 @@
+1/1: Building total001 (total001.blod)
+Welcome to Blodwen. Good luck.
+Main> Main.lookup: All cases covered
+Main> Main.lookup':
+lookup' FZ _
+Main> Main.lookup'': Calls non covering function Main.lookup'
+Main> Bye for now!

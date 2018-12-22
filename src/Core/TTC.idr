@@ -320,15 +320,17 @@ TTC annot Covering where
   toBuf b (MissingCases ms) 
       = do tag 1
            toBuf b ms
-  toBuf b (NonCoveringCall n) = tag 2
+  toBuf b (NonCoveringCall ns) 
+      = do tag 2
+           toBuf b ns
 
   fromBuf s b 
       = case !getTag of
              0 => pure IsCovering
              1 => do ms <- fromBuf s b
                      pure (MissingCases ms)
-             2 => do n <- fromBuf s b
-                     pure (NonCoveringCall n)
+             2 => do ns <- fromBuf s b
+                     pure (NonCoveringCall ns)
              _ => corrupt "Covering"
 
 export

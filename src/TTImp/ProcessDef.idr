@@ -11,6 +11,7 @@ import Core.TT
 import Core.Unify
 
 import TTImp.Elab
+import TTImp.Elab.Unelab
 import TTImp.TTImp
 import TTImp.Utils
 
@@ -453,18 +454,6 @@ toPats : (Clause, Clause) -> (List Name, ClosedTerm, ClosedTerm)
 toPats (MkClause {vars} env lhs rhs, _) 
     = (vars, bindEnv env lhs, bindEnv env rhs)
 
-checkCoverage : {auto c : Ref Ctxt Defs} ->
-                {auto u : Ref UST (UState annot)} ->
-                Name -> Core annot Covering
-checkCoverage n
-    = do miss <- getMissing n 
-         if isNil miss
-            then pure IsCovering -- TODO: Check calls are covering via 'refersTo'
-            else
-              do log 5 ("Initially missing in " ++ show n ++ ":\n" ++ 
-                           showSep "\n" (map show miss))
-                 pure (MissingCases miss)
-
 export
 processDef : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
@@ -509,6 +498,36 @@ processDef elab incase env nest loc n_in cs_raw
                                       show args ++ " " ++ show tr
                                    _ => "No case tree for " ++ show n
 
-                           cov <- checkCoverage n
+                           cov <- checkCoverage n tree_comp
                            setCovering loc n cov
                      _ => throw (AlreadyDefined loc n)
+  where
+    -- Return 'Nothing' if the clause is impossible, otherwise return the
+    -- original
+    checkImpossible : Name -> ClosedTerm -> Core annot (Maybe ClosedTerm)
+    checkImpossible n tm
+        = do itm <- unelabNoPatvars loc [] tm
+             handleClause
+               (do ok <- checkClause elab False rig1 False n [] (MkNested [])
+                                (ImpossibleClause loc itm)
+                   maybe (pure Nothing) (\chktm => pure (Just tm)) ok)
+               (\err => case err of
+                             WhenUnifying _ env l r err
+                               => do gam <- get Ctxt
+                                     if impossibleOK gam (nf gam env l) (nf gam env r)
+                                        then pure Nothing
+                                        else pure (Just tm)
+                             _ => pure (Just tm))
+
+    checkCoverage : Name -> CaseTree vars -> Core annot Covering
+    checkCoverage n ctree
+        = do missCase <- getMissing n ctree
+             log 5 ("Initially missing in " ++ show n ++ ":\n" ++ 
+                               showSep "\n" (map show missCase))
+             missImp <- traverse (checkImpossible n) missCase
+             let miss = mapMaybe id missImp
+             if isNil miss
+                then do [] <- getNonCoveringRefs loc n
+                           | ns => pure (NonCoveringCall ns)
+                        pure IsCovering
+                else pure (MissingCases miss)

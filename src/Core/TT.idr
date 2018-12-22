@@ -358,7 +358,7 @@ public export
 data Covering 
        = IsCovering
        | MissingCases (List (Term []))
-       | NonCoveringCall Name
+       | NonCoveringCall (List Name)
 
 -- Totality status of a definition. We separate termination checking from
 -- coverage checking.

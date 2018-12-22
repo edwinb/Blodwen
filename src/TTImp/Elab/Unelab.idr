@@ -25,6 +25,14 @@ data IArg annot
    = Exp annot (RawImp annot)
    | Imp annot (Maybe Name) (RawImp annot)
 
+data UnelabMode = Full | NoSugar | ImplicitHoles
+
+Eq UnelabMode where
+   Full == Full = True
+   NoSugar == NoSugar = True
+   ImplicitHoles == ImplicitHoles = True
+   _ == _ = False
+
 mutual
   unelabCase : {auto c : Ref Ctxt Defs} ->
                Name -> List (IArg annot) -> RawImp annot ->
@@ -75,9 +83,9 @@ mutual
                  Core annot (ImpClause annot)
       mkClause loc dropped (vs, lhs, rhs)
           = do let (_ ** (env, pat)) = nthArg [] dropped lhs
-               lhs' <- unelabTy True loc env pat
+               lhs' <- unelabTy Full loc env pat
                let (_ ** (env, rhs)) = dropEnv vs [] rhs
-               rhs' <- unelabTy True loc env rhs
+               rhs' <- unelabTy Full loc env rhs
                pure (PatClause loc (fst lhs') (fst rhs'))
 
       mkCase : List (List Name, ClosedTerm, ClosedTerm) ->
@@ -95,11 +103,11 @@ mutual
   getFnArgs tm args = (tm, args)
 
   unelabSugar : {auto c : Ref Ctxt Defs} ->
-                (sugar : Bool) ->
+                (umode : UnelabMode) ->
                 (RawImp annot, Term vars) ->
                 Core annot (RawImp annot, Term vars)
-  unelabSugar False res = pure res
-  unelabSugar True (tm, ty) 
+  unelabSugar NoSugar res = pure res
+  unelabSugar _ (tm, ty) 
       = let (f, args) = getFnArgs tm [] in
             case f of
              IVar loc (GN (CaseBlock n i))
@@ -110,35 +118,40 @@ mutual
   -- unelaborated term so that we can work out where to put the implicit 
   -- applications
   unelabTy : {auto c : Ref Ctxt Defs} ->
-             (sugar : Bool) ->
+             (umode : UnelabMode) ->
              annot -> Env Term vars -> Term vars -> 
              Core annot (RawImp annot, Term vars)
-  unelabTy sugar loc env tm 
-      = unelabSugar sugar !(unelabTy' sugar loc env tm)
+  unelabTy umode loc env tm 
+      = unelabSugar umode !(unelabTy' umode loc env tm)
 
   unelabTy' : {auto c : Ref Ctxt Defs} ->
-              (sugar : Bool) ->
+              (umode : UnelabMode) ->
               annot -> Env Term vars -> Term vars -> 
               Core annot (RawImp annot, Term vars)
-  unelabTy' sugar loc env (Local {x} _ el) 
+  unelabTy' umode loc env (Local {x} _ el) 
       = pure (IVar loc x, binderType (getBinder el env))
-  unelabTy' sugar loc env (Ref nt n)
+  unelabTy' umode loc env (Ref nt n)
       = do defs <- get Ctxt
-           case lookupDefTyExact n (gamma defs) of
-                Nothing => pure (IHole loc (nameRoot n),
-                                 Erased) -- should never happen on a well typed term!
-                                    -- may happen in error messages where we haven't saved
-                                    -- holes in the context
-                Just (Hole _ False _, ty) => pure (IHole loc (nameRoot n), embed ty)
-                Just (_, ty) => pure (IVar loc n, embed ty)
-  unelabTy' sugar loc env (Bind x b sc)
-      = do (sc', scty) <- unelabTy sugar loc (b :: env) sc
-           unelabBinder sugar loc env x b sc sc' scty
-  unelabTy' sugar loc env (App fn arg)
-      = do (fn', fnty) <- unelabTy sugar loc env fn
+           case (umode, lookupDefTyExact n (gamma defs)) of
+                (ImplicitHoles, Nothing) 
+                     => pure (Implicit loc, Erased)
+                (_, Nothing)
+                     => pure (IHole loc (nameRoot n),
+                              Erased) -- should never happen on a well typed term!
+                                 -- may happen in error messages where we haven't saved
+                                 -- holes in the context
+                (_, Just (Hole _ False _, ty)) 
+                     => pure (IHole loc (nameRoot n), embed ty)
+                (_, Just (_, ty)) 
+                     => pure (IVar loc n, embed ty)
+  unelabTy' umode loc env (Bind x b sc)
+      = do (sc', scty) <- unelabTy umode loc (b :: env) sc
+           unelabBinder umode loc env x b sc sc' scty
+  unelabTy' umode loc env (App fn arg)
+      = do (fn', fnty) <- unelabTy umode loc env fn
            case fn' of
                IHole _ _ => pure (fn', Erased)
-               _ => do (arg', argty) <- unelabTy sugar loc env arg
+               _ => do (arg', argty) <- unelabTy umode loc env arg
                        defs <- get Ctxt
                        case nf defs env fnty of
                             NBind x (Pi rig Explicit ty) sc
@@ -148,50 +161,57 @@ mutual
                               => pure (IImplicitApp loc fn' (Just x) arg', 
                                        quote defs env (sc (toClosure defaultOpts env arg)))
                             _ => pure (IApp loc fn' arg', Erased)
-  unelabTy' sugar loc env (PrimVal c) = pure (IPrimVal loc c, Erased)
-  unelabTy' sugar loc env Erased = pure (Implicit loc, Erased)
-  unelabTy' sugar loc env TType = pure (IType loc, TType)
-  unelabTy' sugar loc _ _ = pure (Implicit loc, Erased)
+  unelabTy' umode loc env (PrimVal c) = pure (IPrimVal loc c, Erased)
+  unelabTy' umode loc env Erased = pure (Implicit loc, Erased)
+  unelabTy' umode loc env TType = pure (IType loc, TType)
+  unelabTy' umode loc _ _ = pure (Implicit loc, Erased)
 
   unelabBinder : {auto c : Ref Ctxt Defs} ->
-                 (sugar : Bool) ->
+                 (umode : UnelabMode) ->
                  annot -> Env Term vars -> (x : Name) ->
                  Binder (Term vars) -> Term (x :: vars) ->
                  RawImp annot -> Term (x :: vars) -> 
                  Core annot (RawImp annot, Term vars)
-  unelabBinder sugar loc env x (Lam rig p ty) sctm sc scty
-      = do (ty', _) <- unelabTy sugar loc env ty
+  unelabBinder umode loc env x (Lam rig p ty) sctm sc scty
+      = do (ty', _) <- unelabTy umode loc env ty
            pure (ILam loc rig p (Just x) ty' sc, Bind x (Pi rig p ty) scty)
-  unelabBinder sugar loc env x (Let rig val ty) sctm sc scty
-      = do (val', vty) <- unelabTy sugar loc env val
-           (ty', _) <- unelabTy sugar loc env ty
+  unelabBinder umode loc env x (Let rig val ty) sctm sc scty
+      = do (val', vty) <- unelabTy umode loc env val
+           (ty', _) <- unelabTy umode loc env ty
            pure (ILet loc rig x ty' val' sc, Bind x (Let rig val ty) scty)
-  unelabBinder sugar loc env x (Pi rig p ty) sctm sc scty 
-      = do (ty', _) <- unelabTy sugar loc env ty
+  unelabBinder umode loc env x (Pi rig p ty) sctm sc scty 
+      = do (ty', _) <- unelabTy umode loc env ty
            let nm = if used Here sctm || rig /= RigW
                        then Just x else Nothing
            pure (IPi loc rig p nm ty' sc, TType)
-  unelabBinder sugar loc env x (PVar rig ty) sctm sc scty
-      = do (ty', _) <- unelabTy sugar loc env ty
+  unelabBinder umode loc env x (PVar rig ty) sctm sc scty
+      = do (ty', _) <- unelabTy umode loc env ty
            pure (sc, Bind x (PVTy rig ty) scty)
-  unelabBinder sugar loc env x (PLet rig val ty) sctm sc scty
-      = do (val', vty) <- unelabTy sugar loc env val
-           (ty', _) <- unelabTy sugar loc env ty
+  unelabBinder umode loc env x (PLet rig val ty) sctm sc scty
+      = do (val', vty) <- unelabTy umode loc env val
+           (ty', _) <- unelabTy umode loc env ty
            pure (ILet loc rig x ty' val' sc, Bind x (PLet rig val ty) scty)
-  unelabBinder sugar loc env x (PVTy rig ty) sctm sc scty
-      = do (ty', _) <- unelabTy sugar loc env ty
+  unelabBinder umode loc env x (PVTy rig ty) sctm sc scty
+      = do (ty', _) <- unelabTy umode loc env ty
            pure (sc, TType)
 
 export
 unelabNoSugar : {auto c : Ref Ctxt Defs} ->
          annot -> Env Term vars -> Term vars -> Core annot (RawImp annot)
 unelabNoSugar loc env tm
-    = do tm' <- unelabTy False loc env tm
+    = do tm' <- unelabTy NoSugar loc env tm
+         pure $ fst tm'
+
+export
+unelabNoPatvars : {auto c : Ref Ctxt Defs} ->
+         annot -> Env Term vars -> Term vars -> Core annot (RawImp annot)
+unelabNoPatvars loc env tm
+    = do tm' <- unelabTy ImplicitHoles loc env tm
          pure $ fst tm'
 
 export
 unelab : {auto c : Ref Ctxt Defs} ->
          annot -> Env Term vars -> Term vars -> Core annot (RawImp annot)
 unelab loc env tm
-    = do tm' <- unelabTy True loc env tm
+    = do tm' <- unelabTy Full loc env tm
          pure $ fst tm'

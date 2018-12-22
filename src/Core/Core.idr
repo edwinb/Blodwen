@@ -32,7 +32,7 @@ data Error annot
     | InvisibleName annot Name
     | BadTypeConType annot Name 
     | BadDataConType annot Name Name
-    | MissingCases annot Name (List ClosedTerm)
+    | NotCovering annot Name Covering
     | NotTotal annot Name PartialReason
     | LinearUsed annot Nat Name
     | LinearMisuse annot Name RigCount RigCount
@@ -112,9 +112,17 @@ Show annot => Show (Error annot) where
        = show fc ++ ":Return type of " ++ show n ++ " must be Type"
   show (BadDataConType fc n fam) 
        = show fc ++ ":Return type of " ++ show n ++ " must be in " ++ show fam
-  show (MissingCases fc n cs)
-       = show fc ++ ":" ++ show n ++ " has missing cases:\n\t" ++
-         showSep "\n\t" (map show cs)
+  show (NotCovering fc n cov)
+       = show fc ++ ":" ++ show n ++ " is not covering:\n\t" ++
+            case cov of
+                 IsCovering => "Oh yes it is (Internal error!)"
+                 MissingCases cs => "Missing cases:\n\t" ++
+                                           showSep "\n\t" (map show cs)
+                 NonCoveringCall ns => "Calls non covering function" 
+                                           ++ (case ns of
+                                                   [fn] => " " ++ show fn
+                                                   _ => "s: " ++ showSep ", " (map show ns))
+
   show (NotTotal fc n r)
        = show fc ++ ":" ++ show n ++ " is not total"
   show (LinearUsed fc count n)
@@ -227,7 +235,7 @@ getAnnot (UndefinedName loc y) = Just loc
 getAnnot (InvisibleName loc y) = Just loc
 getAnnot (BadTypeConType loc y) = Just loc
 getAnnot (BadDataConType loc y z) = Just loc
-getAnnot (MissingCases loc _ _) = Just loc
+getAnnot (NotCovering loc _ _) = Just loc
 getAnnot (NotTotal loc _ _) = Just loc
 getAnnot (LinearUsed loc k y) = Just loc
 getAnnot (LinearMisuse loc y z w) = Just loc
