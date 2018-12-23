@@ -23,16 +23,16 @@ firstExists [] = pure Nothing
 firstExists (x :: xs) = if !(exists x) then pure (Just x) else firstExists xs
 
 findChez : IO String
-findChez 
+findChez
     = do e <- firstExists [p ++ x | p <- ["/usr/bin/", "/usr/local/bin/"],
-                                    x <- ["scheme", "chez"]]
+                                    x <- ["scheme", "chez", "chezscheme9.5"]]
          maybe (pure "/usr/bin/env scheme") pure e
 
 findLibs : List String -> List String
 findLibs = mapMaybe (isLib . trim)
   where
     isLib : String -> Maybe String
-    isLib d 
+    isLib d
         = if isPrefixOf "lib" d
              then Just (trim (substr 3 (length d) d))
              else Nothing
@@ -50,13 +50,13 @@ schHeader chez libs
 
 schFooter : String
 schFooter = ")"
-  
+
 mutual
   tySpec : CExp vars -> Core annot String
   tySpec (CPrimVal IntType) = pure "int"
   tySpec (CPrimVal StringType) = pure "string"
   tySpec (CPrimVal DoubleType) = pure "double"
-  tySpec (CCon (NS _ n) _ []) 
+  tySpec (CCon (NS _ n) _ [])
      = cond [(n == UN "Unit", pure "void"),
              (n == UN "Ptr", pure "void*")]
           (throw (InternalError ("Can't pass argument of type " ++ show n ++ " to foreign function")))
@@ -83,9 +83,9 @@ mutual
   chezExtPrim vs CCall [ret, fn, args, world]
       = pure "(error \"bad ffi call\")"
       -- throw (InternalError ("C FFI calls must be to statically known functions (" ++ show fn ++ ")"))
-  chezExtPrim vs GetStr [world] 
+  chezExtPrim vs GetStr [world]
       = pure $ mkWorld "(get-line (current-input-port))"
-  chezExtPrim vs prim args 
+  chezExtPrim vs prim args
       = schExtCommon chezExtPrim vs prim args
 
 compileToSS : Ref Ctxt Defs ->
@@ -126,4 +126,3 @@ executeExpr c tm
 export
 codegenChez : Codegen annot
 codegenChez = MkCG compileExpr executeExpr
-
