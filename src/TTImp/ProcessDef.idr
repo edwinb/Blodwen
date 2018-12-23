@@ -510,18 +510,33 @@ processDef elab incase env nest loc n_in cs_raw
                                       show args ++ " " ++ show tr
                                    _ => "No case tree for " ++ show n
 
-                           cov <- checkCoverage n tree_comp
+                           cov <- checkCoverage n cs tree_comp
                            setCovering loc n cov
                      _ => throw (AlreadyDefined loc n)
   where
+    simplePat : Term vars -> Bool
+    simplePat (Local _ _) = True
+    simplePat Erased = True
+    simplePat _ = False
+
+    -- Is the clause returned from 'checkClause' a catch all clause, i.e.
+    -- one where all the arguments are variables? If so, no need to do the
+    -- (potentially expensive) coverage check
+    catchAll : Maybe (Clause, Clause) -> Bool
+    catchAll Nothing = False
+    catchAll (Just (MkClause env lhs _, _))
+       = all simplePat (getArgs lhs)
+
     -- Return 'Nothing' if the clause is impossible, otherwise return the
     -- original
     checkImpossible : Name -> ClosedTerm -> Core annot (Maybe ClosedTerm)
     checkImpossible n tm
         = do itm <- unelabNoPatvars loc [] tm
              handleClause
-               (do ok <- checkClause elab False rig1 False n [] (MkNested [])
+               (do ctxt <- get Ctxt
+                   ok <- checkClause elab False rig1 False n [] (MkNested [])
                                 (ImpossibleClause loc itm)
+                   put Ctxt ctxt
                    maybe (pure Nothing) (\chktm => pure (Just tm)) ok)
                (\err => case err of
                              WhenUnifying _ env l r err
@@ -531,10 +546,14 @@ processDef elab incase env nest loc n_in cs_raw
                                         else pure (Just tm)
                              _ => pure (Just tm))
 
-    checkCoverage : Name -> CaseTree vars -> Core annot Covering
-    checkCoverage n ctree
-        = do missCase <- getMissing n ctree
-             log 5 ("Initially missing in " ++ show n ++ ":\n" ++ 
+    checkCoverage : Name -> List (Maybe (Clause, Clause)) ->
+                    CaseTree vars -> Core annot Covering
+    checkCoverage n cs ctree
+        = do missCase <- if any catchAll cs
+                            then do log 3 $ "Catch all case in " ++ show n
+                                    pure []
+                            else getMissing n ctree
+             log 3 ("Initially missing in " ++ show n ++ ":\n" ++ 
                                showSep "\n" (map show missCase))
              missImp <- traverse (checkImpossible n) missCase
              let miss = mapMaybe id missImp
