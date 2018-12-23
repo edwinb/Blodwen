@@ -25,7 +25,7 @@ conflict defs nfty n
       conflictArgs (c :: cs) (c' :: cs')
           = let cnf = evalClosure defs c
                 cnf' = evalClosure defs c' in
-                conflictNF cnf cnf'
+                conflictNF cnf cnf' || conflictArgs cs cs'
       conflictArgs _ _ = False
 
       conflictNF : NF vars -> NF [] -> Bool
@@ -79,7 +79,7 @@ mutual
   matchArgs defs (c :: cs) (c' :: cs') 
       = let cnf = evalClosure defs c 
             cnf' = evalClosure defs c' in
-            matchNF defs cnf cnf'
+            matchNF defs cnf cnf' && matchArgs defs cs cs'
   matchArgs defs _ _ = False
 
   -- Is the first type a possible match for a constructor of the second type?
@@ -110,6 +110,16 @@ altMatch _ _ = False
 -- Given a type and a list of case alternatives, return the
 -- well-typed alternatives which were *not* in the list
 getMissingAlts : Defs -> NF vars -> List (CaseAlt vars) -> List (CaseAlt vars)
+-- If it's a primitive, there's too many to reasonably check, so require a 
+-- catch all
+getMissingAlts defs (NPrimVal c) alts
+    = if any isDefault alts
+         then []
+         else [DefaultCase (Unmatched "Coverage check")]
+  where
+    isDefault : CaseAlt vars -> Bool
+    isDefault (DefaultCase _) = True
+    isDefault _ = False
 getMissingAlts defs nfty alts  
     = let allCons = getCons defs nfty 
           validCons = filter (\x => matchNF defs nfty (fst x)) allCons in
@@ -163,6 +173,9 @@ tagIsNot ts (DefaultCase _) = False
 -- This is easier than checking whether a default is needed when traversing
 -- the tree (just one constructor lookup up front).
 replaceDefaults : Defs -> NF vars -> List (CaseAlt vars) -> List (CaseAlt vars)
+-- Leave it alone if it's a primitive type though, since we need the catch
+-- all case there
+replaceDefaults defs (NPrimVal _) cs = cs
 replaceDefaults defs nfty cs = dropRep (concatMap rep cs)
   where
     rep : CaseAlt vars -> List (CaseAlt vars)
