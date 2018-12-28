@@ -181,12 +181,13 @@ data Def : Type where
      PMDef : (ishole : Bool) -> (args : List Name) -> 
              (treeCT : CaseTree args) -> -- Compile time case tree
              (treeRT : CaseTree args) -> -- Run time case tree (0 multiplicities erased)
-             (pats : List (List Name, ClosedTerm, ClosedTerm)) ->
+             (pats : List (vs ** (Env Term vs, Term vs, Term vs))) ->
                       -- original checked patterns (lhs/rhs) with the
                       -- names in the environment
-                      -- Patterns are used for display purposes only, and will
-                      -- only be there for definitions arising from the
-                      -- TTImp elaborator
+                      -- Patterns will only be there for definitions arising
+                      -- from the TTImp elaborator; they are used for display
+                      -- purposes, and for finding size changes in the
+                      -- termination checker
              Def
      ExternDef : (arity : Nat) -> Def
      Builtin : PrimFn arity -> Def
@@ -354,6 +355,46 @@ TTC annot DefFlag where
              5 => do x <- fromBuf s b; pure (SetTotal x)
              _ => corrupt "DefFlag"
 
+public export
+data SizeChange = Smaller | Same | Unknown
+
+export
+Show SizeChange where
+  show Smaller = "Smaller"
+  show Same = "Same"
+  show Unknown = "Unknown"
+
+public export
+record SCCall where
+     constructor MkSCCall
+     fnCall : Name -- Function called
+     fnArgs : List (Maybe (Nat, SizeChange))
+        -- relationship to arguments of calling function; argument position
+        -- (in the calling function), and how its size changed in the call.
+        -- 'Nothing' if it's not related to any of the calling function's
+        -- arguments
+
+export
+TTC annot SizeChange where
+  toBuf b Smaller = tag 0
+  toBuf b Same = tag 1
+  toBuf b Unknown = tag 2
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Smaller
+             1 => pure Same
+             2 => pure Unknown
+             _ => corrupt "SizeChange"
+
+export
+TTC annot SCCall where
+  toBuf b c = do toBuf b (fnCall c); toBuf b (fnArgs c)
+  fromBuf s b
+      = do fn <- fromBuf s b
+           args <- fromBuf s b
+           pure (MkSCCall fn args)
+
 -- *everything* about a definition goes here, so that we can save out the
 -- type checked code "simply" by writing out a list of GlobalDefs
 public export
@@ -368,6 +409,7 @@ record GlobalDef where
      definition : Def
      compexpr : Maybe CDef
      refersTo : List Name
+     sizeChange : List SCCall
 
 TTC annot GlobalDef where
   toBuf b def
@@ -380,6 +422,7 @@ TTC annot GlobalDef where
            toBuf b (definition def)
            toBuf b (compexpr def)
            toBuf b (refersTo def)
+           toBuf b (sizeChange def)
 
   fromBuf s b
       = do ty <- fromBuf s b
@@ -391,7 +434,8 @@ TTC annot GlobalDef where
            def <- fromBuf s b
            exp <- fromBuf s b
            ref <- fromBuf s b
-           pure (MkGlobalDef ty mult vars vis tot flgs def exp ref)
+           sc <- fromBuf s b
+           pure (MkGlobalDef ty mult vars vis tot flgs def exp ref sc)
 
 getRefs : Def -> List Name
 getRefs None = []
@@ -410,7 +454,7 @@ export
 newRigDef : RigCount -> List Name -> 
             (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
 newRigDef r vars ty vis def 
-   = MkGlobalDef ty r vars vis unchecked [] def Nothing (getRefs def)
+   = MkGlobalDef ty r vars vis unchecked [] def Nothing (getRefs def) []
 
 export
 newDef : List Name -> (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
@@ -1108,7 +1152,7 @@ addBuiltin : {auto x : Ref Ctxt Defs} ->
              Name -> ClosedTerm -> Totality ->
              PrimFn arity -> Core annot ()
 addBuiltin n ty tot op 
-    = addDef n (MkGlobalDef ty RigW [] Public tot [Inline] (Builtin op) Nothing [])
+    = addDef n (MkGlobalDef ty RigW [] Public tot [Inline] (Builtin op) Nothing [] [])
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->
@@ -1177,7 +1221,7 @@ checkNameVisibility loc n vis tm
 export
 addFnDef : {auto x : Ref Ctxt Defs} ->
 					 annot -> Name -> CaseTree args -> CaseTree args -> 
-           List (List Name, ClosedTerm, ClosedTerm) -> Core annot ()
+           List (vs ** (Env Term vs, Term vs, Term vs)) -> Core annot ()
 addFnDef loc n treeCT treeRT pats
     = do ctxt <- get Ctxt
          case lookupGlobalExact n (gamma ctxt) of

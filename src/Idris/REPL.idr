@@ -13,6 +13,7 @@ import Core.InitPrimitives
 import Core.Metadata
 import Core.Normalise
 import Core.Options
+import Core.Termination
 import Core.TT
 import Core.Unify
 
@@ -156,13 +157,11 @@ displayPatTerm gam tm
 
 displayClause : {auto c : Ref Ctxt Defs} ->
                 {auto s : Ref Syn SyntaxInfo} ->
-                Defs -> (List Name, ClosedTerm, ClosedTerm) -> 
+                Defs -> (vs ** (Env Term vs, Term vs, Term vs)) -> 
                 Core FC String
-displayClause gam (vs, lhs, rhs)
-    = do let (_ ** (env, lhsenv)) = getEnvTerm vs [] lhs
-         lhstm <- resugar env (normaliseHoles gam env lhsenv)
-         let (_ ** (env, rhsenv)) = getEnvTerm vs [] rhs
-         rhstm <- resugar env (normaliseHoles gam env rhsenv)
+displayClause gam (vs ** (env, lhs, rhs))
+    = do lhstm <- resugar env (normaliseHoles gam env lhs)
+         rhstm <- resugar env (normaliseHoles gam env rhs)
          pure (show lhstm ++ " = " ++ show rhstm)
 
 displayPats : {auto c : Ref Ctxt Defs} ->
@@ -485,8 +484,16 @@ process (Missing n)
                          (map fst ts)
                        pure True
 process (Total n)
-    = do iputStrLn "Full totality check not yet implemented. Try :missing."
-         pure True
+    = do defs <- get Ctxt
+         case lookupGlobalName n (gamma defs) of
+              [] => throw (UndefinedName replFC n)
+              ts => do traverse (\fn =>
+                          do sc <- calculateSizeChange replFC fn
+                             let scinfo = map (\s => show (fnCall s) ++ ": " ++ show (fnArgs s)) sc
+                             iputStrLn ("Size change: " ++ showSep ", " scinfo)
+                             ) 
+                               (map fst ts)
+                       pure True
 process (DebugInfo n)
     = do gam <- get Ctxt
          traverse showInfo (lookupGlobalName n (gamma gam))

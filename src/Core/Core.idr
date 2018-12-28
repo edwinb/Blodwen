@@ -383,4 +383,8 @@ export %inline
 put : (x : label) -> {auto ref : Ref x a} -> a -> Core annot ()
 put x {ref = MkRef io} val = coreLift (writeIORef io val)
 
+export
+cond : List (Lazy Bool, Lazy a) -> a -> a
+cond [] def = def
+cond ((x, y) :: xs) def = if x then y else cond xs def
 

@@ -1316,7 +1316,7 @@ command
   <|> do symbol ":"; replCmd ["miss", "missing"]
          n <- name
          pure (Missing n)
-  <|> do symbol ":"; replCmd ["total"]
+  <|> do symbol ":"; keyword "total"
          n <- name
          pure (Total n)
   <|> do symbol ":"; cmd <- editCmd

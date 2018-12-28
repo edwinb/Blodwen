@@ -61,11 +61,6 @@ expandToArity (S k) fn (a :: args) = expandToArity k (addArg fn a) args
 -- Underapplied, saturate with lambdas
 expandToArity num fn [] = etaExpand 0 num fn []
 
-export
-cond : List (Lazy Bool, Lazy a) -> a -> a
-cond [] def = def
-cond ((x, y) :: xs) def = if x then y else cond xs def
-
 -- Compiling external primitives, laziness, etc
 specialApp : Defs -> Term vars -> List (CExp vars) -> Maybe (CExp vars)
 specialApp defs (Ref _ n) args

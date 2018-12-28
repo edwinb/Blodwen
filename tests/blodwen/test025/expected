@@ -1,0 +1,5 @@
+1/1: Building casedep (casedep.blod)
+Welcome to Blodwen. Good luck.
+Main> Main.foo : Nat -> (x : Bool) -> IntOrChar x -> String
+foo num x i = if x then show num else show i
+Main> Bye for now!

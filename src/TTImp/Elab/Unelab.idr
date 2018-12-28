@@ -68,27 +68,20 @@ mutual
       getNth n tm with (unapply tm)
         getNth n (apply f args) | ArgsList = idxOrDefault n f args
 
-      nthArg : Env Term vars -> Nat -> Term vars ->
-                (vars' ** (Env Term vars', Term vars'))
-      nthArg env drop (App f a) = (_ ** (env, getNth drop (App f a)))
-      nthArg env drop (Bind x b sc) = nthArg (b :: env) drop sc
-      nthArg env drop tm = (_ ** (env, Erased))
+      nthArg : Nat -> Term vars -> Term vars 
+      nthArg drop (App f a) = getNth drop (App f a)
+      nthArg drop tm = Erased
 
-      dropEnv : List Name -> Env Term vars -> Term vars ->
-                (vars' ** (Env Term vars', Term vars'))
-      dropEnv (n :: ns) env (Bind x b sc) = dropEnv ns (b :: env) sc
-      dropEnv ns env tm = (_ ** (env, tm))
-
-      mkClause : annot -> Nat -> (List Name, ClosedTerm, ClosedTerm) ->
+      mkClause : annot -> Nat -> 
+                 (vs ** (Env Term vs, Term vs, Term vs)) ->
                  Core annot (ImpClause annot)
-      mkClause loc dropped (vs, lhs, rhs)
-          = do let (_ ** (env, pat)) = nthArg [] dropped lhs
+      mkClause loc dropped (vs ** (env, lhs, rhs))
+          = do let pat = nthArg dropped lhs
                lhs' <- unelabTy Full loc env pat
-               let (_ ** (env, rhs)) = dropEnv vs [] rhs
                rhs' <- unelabTy Full loc env rhs
                pure (PatClause loc (fst lhs') (fst rhs'))
 
-      mkCase : List (List Name, ClosedTerm, ClosedTerm) ->
+      mkCase : List (vs ** (Env Term vs, Term vs, Term vs)) ->
                Nat -> Nat -> List (IArg annot) -> Core annot (RawImp annot)
       mkCase pats (S k) dropped (_ :: args) = mkCase pats k (S dropped) args
       mkCase pats Z dropped (Exp loc tm :: _)

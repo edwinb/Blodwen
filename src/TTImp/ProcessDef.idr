@@ -462,9 +462,9 @@ nameListEq (x :: xs) (y :: ys) with (nameEq x y)
   nameListEq (x :: xs) (y :: ys) | Nothing = Nothing
 nameListEq _ _ = Nothing
 
-toPats : (Clause, Clause) -> (List Name, ClosedTerm, ClosedTerm)
+toPats : (Clause, Clause) -> (vs ** (Env Term vs, Term vs, Term vs))
 toPats (MkClause {vars} env lhs rhs, _) 
-    = (vars, bindEnv env lhs, bindEnv env rhs)
+    = (_ ** (env, lhs, rhs))
 
 export
 processDef : {auto c : Ref Ctxt Defs} ->

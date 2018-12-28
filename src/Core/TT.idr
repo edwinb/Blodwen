@@ -421,7 +421,7 @@ Eq a => Eq (Binder a) where
 
 export
 Eq (Term vars) where
-  (Local c p) == (Local c' p')      = c == c' && sameVar p p'
+  (Local c p) == (Local c' p')      = sameVar p p'
   (Ref _ fn) == (Ref _ fn')         = fn == fn'
   (Bind x b sc) == (Bind x' b' sc') 
       -- We could set this up a bit differently and not need the 'believe_me'
