@@ -7,6 +7,7 @@ import Core.LinearCheck
 import Core.Metadata
 import Core.Normalise
 import Core.Reflect
+import Core.Termination
 import Core.TT
 import Core.Unify
 
@@ -510,6 +511,8 @@ processDef elab incase env nest loc n_in cs_raw
                                       show args ++ " " ++ show tr
                                    _ => "No case tree for " ++ show n
 
+                           sc <- calculateSizeChange loc n
+                           setSizeChange loc n sc
                            cov <- checkCoverage n cs tree_comp
                            setCovering loc n cov
                      _ => throw (AlreadyDefined loc n)

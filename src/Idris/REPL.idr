@@ -488,7 +488,7 @@ process (Total n)
          case lookupGlobalName n (gamma defs) of
               [] => throw (UndefinedName replFC n)
               ts => do traverse (\fn =>
-                          do sc <- calculateSizeChange replFC fn
+                          do sc <- getSizeChange replFC fn
                              let scinfo = map (\s => show (fnCall s) ++ ": " ++ show (fnArgs s)) sc
                              iputStrLn ("Size change: " ++ showSep ", " scinfo)
                              ) 

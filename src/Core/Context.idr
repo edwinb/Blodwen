@@ -1503,6 +1503,16 @@ hasFlag loc n fl
               Just def => pure (fl `elem` flags def)
 
 export
+setSizeChange : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> List SCCall -> Core annot ()
+setSizeChange loc n sc
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { sizeChange = sc } def)
+
+export
 setTotality : {auto x : Ref Ctxt Defs} ->
               annot -> Name -> Totality -> Core annot ()
 setTotality loc n tot
@@ -1540,6 +1550,15 @@ getTotality loc n
          case lookupGlobalExact n ctxt of
               Nothing => throw (UndefinedName loc n)
               Just def => pure $ totality def
+
+export
+getSizeChange : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot (List SCCall)
+getSizeChange loc n
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure $ sizeChange def
 
 export
 setVisibility : {auto x : Ref Ctxt Defs} ->
