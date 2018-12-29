@@ -704,6 +704,13 @@ isForce n defs
            Just l => active l && n == force l
 
 export
+isInfinite : Name -> Defs -> Bool
+isInfinite n defs
+    = case laziness (options defs) of
+           Nothing => False
+           Just l => active l && n == infinite l
+
+export
 delayName : Defs -> Maybe Name
 delayName defs
     = do l <- laziness (options defs)
@@ -804,13 +811,15 @@ checkUnambig loc n
 export
 setLazy : {auto c : Ref Ctxt Defs} ->
           annot -> (delayType : Name) -> (delay : Name) -> (force : Name) ->
+          (infinite : Name) ->
           Core annot ()
-setLazy loc ty d f
+setLazy loc ty d f i
     = do defs <- get Ctxt
          ty' <- checkUnambig loc ty
          d' <- checkUnambig loc d
          f' <- checkUnambig loc f
-         put Ctxt (record { options $= setLazy ty' d' f' } defs)
+         i' <- checkUnambig loc i
+         put Ctxt (record { options $= setLazy ty' d' f' i' } defs)
 
 export
 lazyActive : {auto c : Ref Ctxt Defs} ->

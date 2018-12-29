@@ -90,12 +90,40 @@ mutual
       = [MkSCCall fn (expandToArity arity (map (mkChange pats) args))] 
            ++ concatMap (findSC defs env pats) args
 
+-- Remove all laziness annotations which are nothing to do with coinduction,
+-- meaning that all only Force/Delay left is to guard coinductive calls.
+delazy : Defs -> Term vars -> Term vars
+delazy defs tm with (unapply tm)
+  delazy defs (apply (Ref nt fn) args) | ArgsList
+      = cond
+           [(isDelayType fn defs && all notInf args, 
+                 takeLast args (Ref Func fn)),
+            (isDelay fn defs && all notInf args, 
+                 takeLast args (Ref Func fn)),
+            (isForce fn defs && all notInf args, 
+                 takeLast args (Ref Func fn))]
+           (apply (Ref nt fn) (map (delazy defs) args))
+    where
+      notInf : Term vars -> Bool
+      notInf (Ref _ fn') = not (isInfinite fn' defs)
+      notInf _ = True
+
+      takeLast : List (Term vars) -> Term vars -> Term vars
+      takeLast [] def = def
+      takeLast [x] def = delazy defs x
+      takeLast (x :: xs) def = takeLast xs def
+  delazy defs (apply f args) | ArgsList
+      = apply (delazyFn f) (map (delazy defs) args)
+    where
+      delazyFn : Term vars -> Term vars
+      delazyFn (Bind x b sc) = Bind x (map (delazy defs) b) (delazy defs sc)
+      delazyFn tm = tm
 
 findCalls : Defs -> (vars ** (Env Term vars, Term vars, Term vars)) -> List SCCall
 findCalls defs (_ ** (env, lhs, rhs))
-     -- TODO: Remove 'Lazy' annotations
-   = let pargs = getArgs lhs in
-         findSC defs env (zip (take (length pargs) [0..]) pargs) rhs
+   = let pargs = getArgs (delazy defs lhs) in
+         findSC defs env 
+                (zip (take (length pargs) [0..]) pargs) (delazy defs rhs)
 
 getSC : Defs -> Def -> List SCCall
 getSC defs (PMDef _ args _ _ pats) 

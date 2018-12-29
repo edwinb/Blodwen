@@ -38,9 +38,12 @@ Run the elaborator reflection expression `<expr>`, which must be of type
 
 ### %lazy
 
-Syntax: `%lazy <lazy_name> <delay_name> <force_name>`
+Syntax: `%lazy <lazy_name> <delay_name> <force_name> <infinite_name>`
 
-Use the given names for implicit insertion of laziness annotations.
+Use the given names for implicit insertion of laziness annotations. The
+`infinite_name` is so that the totality checker can tell the difference between
+laziness used for coinduction, and other forms (which are just ignored in
+totality checking).
 
 ### %pair
 

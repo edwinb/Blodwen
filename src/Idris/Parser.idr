@@ -816,8 +816,9 @@ directive fname indents
          ty <- name
          d <- name
          f <- name
+         i <- name
          atEnd indents
-         pure (LazyNames ty d f)
+         pure (LazyNames ty d f i)
   <|> do exactIdent "auto_lazy"
          b <- onoff
          atEnd indents

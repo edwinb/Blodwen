@@ -12,6 +12,7 @@ record LazyNames where
   delayType : Name
   delay : Name
   force : Name
+  infinite : Name
 
 public export
 record PairNames where
@@ -46,11 +47,13 @@ TTC annot LazyNames where
       = do toBuf b (delayType l)
            toBuf b (delay l)
            toBuf b (force l)
+           toBuf b (infinite l)
   fromBuf s b
       = do ty <- fromBuf s b
            d <- fromBuf s b
            f <- fromBuf s b
-           pure (MkLazy True ty d f)
+           i <- fromBuf s b
+           pure (MkLazy True ty d f i)
 
 export
 TTC annot PairNames where
@@ -218,8 +221,8 @@ mergeOptions ttcopts opts
 
 export
 setLazy : (delayType : Name) -> (delay : Name) -> (force : Name) ->
-          Options -> Options
-setLazy ty d f = record { laziness = Just (MkLazy True ty d f) }
+          (infinite : Name) -> Options -> Options
+setLazy ty d f i = record { laziness = Just (MkLazy True ty d f i) }
 
 export
 setPair : (pairType : Name) -> (fstn : Name) -> (sndn : Name) ->

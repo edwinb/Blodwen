@@ -17,7 +17,7 @@ Force (Delay x) = x
 
 -- This directive tells the elaborator how to implicitly insert 
 -- laziness annotations
-%lazy Delayed Delay Force
+%lazy Delayed Delay Force Infinite
 
 public export
 Lazy : Type -> Type
