@@ -1,0 +1,37 @@
+package blodwen
+
+modules = Idris.CommandLine,
+          Idris.Desugar,
+          Idris.Error,
+          Idris.ModTree,
+          Idris.SetOptions,
+          Idris.Syntax,
+          Idris.Package,
+          Idris.Parser,
+          Idris.ProcessIdr,
+          Idris.REPL,
+          Idris.REPLCommon,
+          Idris.REPLOpts,
+          Idris.Resugar,
+
+          Idris.Elab.Implementation,
+          Idris.Elab.Interface,
+          Idris.Elab.Record,
+
+          Idris.IDEMode.CaseSplit,
+          Idris.IDEMode.Commands,
+          Idris.IDEMode.MakeClause,
+          Idris.IDEMode.Parser,
+          Idris.IDEMode.REPL,
+          Idris.IDEMode.TokenLine
+
+sourcedir = src
+
+executable = blodwenjvmout
+
+opts = "--partial-eval --portable-codegen jvm"
+
+pkgs = idrisjvmffi
+
+main = Idris.Main
+

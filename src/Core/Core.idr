@@ -5,7 +5,7 @@ import Core.CaseTree
 import Parser.Support
 
 import public Control.Catchable
-import public Data.IORef
+import public CompilerRuntime
 
 %default covering
 
@@ -288,11 +288,11 @@ getAnnot (InRHS x y err) = getAnnot err
 export
 record Core annot t where
   constructor MkCore
-  runCore : IO (Either (Error annot) t)
+  runCore : BIO (Either (Error annot) t)
 
 export
-coreRun : Core annot a -> 
-          (Error annot -> IO b) -> (a -> IO b) -> IO b
+coreRun : Core annot a ->
+          (Error annot -> BIO b) -> (a -> BIO b) -> BIO b
 coreRun (MkCore act) err ok = either err ok !act
 
 export
@@ -310,7 +310,7 @@ wrapError fe (MkCore prog)
 -- This would be better if we restrict it to a limited set of IO operations
 export
 %inline
-coreLift : IO a -> Core annot a
+coreLift : BIO a -> Core annot a
 coreLift op = MkCore $ map Right op
 
 {- Monad, Applicative, Traversable are specialised by hand for Core.
@@ -366,7 +366,7 @@ traverse f xs = traverse' f xs []
 
 export
 data Ref : label -> Type -> Type where
-	   MkRef : IORef a -> Ref x a
+	   MkRef : BIORef a -> Ref x a
 
 export
 newRef : (x : label) -> t -> Core annot (Ref x t)

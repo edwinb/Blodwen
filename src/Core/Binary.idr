@@ -16,7 +16,7 @@ import Core.UnifyState
 
 import public Utils.Binary
 
-import Data.Buffer
+import CompilerRuntime
 
 %default covering
 

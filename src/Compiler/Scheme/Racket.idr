@@ -16,16 +16,18 @@ import Data.Vect
 import System
 import System.Info
 
+import CompilerRuntime
+
 %default covering
 
-firstExists : List String -> IO (Maybe String)
+firstExists : List String -> BIO (Maybe String)
 firstExists [] = pure Nothing
 firstExists (x :: xs) = if !(exists x) then pure (Just x) else firstExists xs
 
-findRacket : IO String
+findRacket : BIO String
 findRacket = pure "/usr/bin/env racket"
 
-findRacoExe : IO String
+findRacoExe : BIO String
 findRacoExe = pure "raco exe"
 
 schHeader : String

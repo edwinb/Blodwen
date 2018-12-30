@@ -11,6 +11,8 @@ import Data.CSet
 import Data.List
 import Data.List.Views
 
+import CompilerRuntime
+
 %default covering
 
 public export

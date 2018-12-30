@@ -3,6 +3,8 @@ module Idris.IDEMode.Commands
 import Core.Core
 import Core.Name
 
+import CompilerRuntime
+
 %default covering
 
 public export
@@ -146,8 +148,8 @@ export
 version : Int -> Int -> SExp
 version maj min = toSExp (SymbolAtom "protocol-version", maj, min)
 
-hex : Int -> IO ()
-hex num = foreign FFI_C "printf" (String -> Int -> IO ()) "%06x" num
+hex : Int -> BIO ()
+hex num = hexNum num
 
 export
 send : SExpable a => a -> Core annot ()

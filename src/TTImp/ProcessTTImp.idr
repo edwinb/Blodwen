@@ -94,7 +94,7 @@ process : {auto c : Ref Ctxt Defs} ->
           {auto m : Ref Meta (Metadata ())} ->
           String -> Core () Bool
 process file
-    = do Right res <- coreLift (readFile file)
+    = do Right res <- coreLift (bReadFile file)
                | Left err => do coreLift (putStrLn ("File error: " ++ show err))
                                 pure False
          case runParser res (do p <- prog; eoi; pure p) of

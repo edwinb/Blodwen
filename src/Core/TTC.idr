@@ -9,7 +9,11 @@ import Utils.Binary
 import Data.List
 import Data.Vect
 
+import CompilerRuntime
+
 %default total
+%hide Language.Reflection.NameType
+%hide Language.Reflection.Binder
 
 -- TTC instances for TT primitives
 

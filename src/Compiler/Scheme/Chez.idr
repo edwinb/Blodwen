@@ -17,14 +17,16 @@ import Data.Vect
 import System
 import System.Info
 
+import CompilerRuntime
+
 %default covering
 
-firstExists : List String -> IO (Maybe String)
+firstExists : List String -> BIO (Maybe String)
 firstExists [] = pure Nothing
 firstExists (x :: xs) = if !(exists x) then pure (Just x) else firstExists xs
 
-findChez : IO String
-findChez
+findChez : BIO String
+findChez 
     = do e <- firstExists [p ++ x | p <- ["/usr/bin/", "/usr/local/bin/"],
                                     x <- ["scheme", "chez", "chezscheme9.5"]]
          maybe (pure "/usr/bin/env scheme") pure e

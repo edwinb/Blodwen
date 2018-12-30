@@ -17,6 +17,8 @@ import Data.StringMap
 import Data.CSet
 import Data.List
 
+import CompilerRuntime
+
 %default total
 
 public export
@@ -970,7 +972,7 @@ export
 setWorkingDir : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
 setWorkingDir dir
     = do defs <- get Ctxt
-         coreLift $ changeDir dir
+         coreLift $ bChangeDir dir
          cdir <- coreLift $ currentDir
          put Ctxt (record { options->dirs->working_dir = cdir } defs)
 
@@ -1486,9 +1488,9 @@ setDetermining loc tn args
                            ++ showSep ", " (map show ns)))
 
 export
-runWithCtxt : Show annot => Core annot () -> IO ()
+runWithCtxt : Show annot => Core annot () -> BIO ()
 runWithCtxt prog = coreRun prog 
-                           (\err => printLn err)
+                           (\err => bPrintLn err)
                            (\ok => pure ())
 
 -- Return whether an argument to the given term would be a forced argument

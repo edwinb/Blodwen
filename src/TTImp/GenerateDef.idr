@@ -7,6 +7,8 @@ import Core.Metadata
 import Core.Normalise
 import Core.TT
 import Core.Unify
+import Control.Monad.StateE
+import Control.Catchable
 
 import TTImp.CaseSplit
 import TTImp.Elab

@@ -17,16 +17,18 @@ import Data.Vect
 import System
 import System.Info
 
+import CompilerRuntime
+
 %default covering
 
-firstExists : List String -> IO (Maybe String)
+firstExists : List String -> BIO (Maybe String)
 firstExists [] = pure Nothing
 firstExists (x :: xs) = if !(exists x) then pure (Just x) else firstExists xs
 
-findCSI : IO String
+findCSI : BIO String
 findCSI = pure "/usr/bin/env csi"
 
-findCSC : IO String
+findCSC : BIO String
 findCSC = pure "/usr/bin/env csc"
 
 schHeader : List String -> String
