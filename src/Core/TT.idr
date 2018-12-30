@@ -348,17 +348,47 @@ Ord Visibility where
   compare Public Export = GT
 
 public export
-data PartialReason = NotCovering | NotStrictlyPositive 
-                   | Calling (List Name)
+data PartialReason 
+       = NotStrictlyPositive 
+       | BadCall (List Name)
+       | RecPath (List Name)
+
+export
+Show PartialReason where
+  show NotStrictlyPositive = "not strictly positive"
+  show (BadCall [n]) 
+	   = "not terminating due to call to " ++ show n
+  show (BadCall ns) 
+	   = "not terminating due to calls to " ++ showSep ", " (map show ns) 
+  show (RecPath ns) 
+	   = "not terminating due to recursive path " ++ showSep " -> " (map show ns) 
 
 public export
-data Terminating = Unchecked -- termination check not yet implemented
+data Terminating
+       = Unchecked
+       | IsTerminating
+       | NotTerminating PartialReason
+
+export
+Show Terminating where
+  show Unchecked = "not yet checked"
+  show IsTerminating = "terminating"
+  show (NotTerminating p) = show p
 
 public export
 data Covering 
        = IsCovering
        | MissingCases (List (Term []))
        | NonCoveringCall (List Name)
+
+export
+Show Covering where
+  show IsCovering = "covering"
+  show (MissingCases c) = "not covering all cases"
+  show (NonCoveringCall [f]) 
+     = "not covering due to call to function " ++ show f
+  show (NonCoveringCall cs) 
+     = "not covering due to calls to functions " ++ showSep ", " (map show cs)
 
 -- Totality status of a definition. We separate termination checking from
 -- coverage checking.
@@ -367,6 +397,19 @@ record Totality where
      constructor MkTotality
      isTerminating : Terminating
      isCovering : Covering
+
+export
+Show Totality where
+  show tot
+    = let t	= isTerminating tot
+          c = isCovering tot in
+        showTot t c
+    where
+      showTot : Terminating -> Covering -> String
+      showTot IsTerminating IsCovering = "total"
+      showTot IsTerminating c = show c
+      showTot t IsCovering = show t
+      showTot t c = show c ++ "; " ++ show t
 
 export
 unchecked : Totality

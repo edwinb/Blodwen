@@ -138,3 +138,95 @@ calculateSizeChange loc n
          case lookupGlobalExact n (gamma defs) of
               Nothing => throw (UndefinedName loc n)
               Just def => pure (getSC defs (definition def))
+
+Arg : Type
+Arg = Int
+
+firstArg : Arg
+firstArg = 0
+
+nextArg : Arg -> Arg
+nextArg x = x + 1
+
+-- Traverse the size change graph. When we reach a point we've seen before,
+-- at least one of the arguments must have got smaller, otherwise it's
+-- potentially non-terminating
+checkSC : Defs -> 
+          Name -> -- function we're checking
+          List (Maybe (Arg, SizeChange)) -> -- functions arguments and change
+          List (Name, List (Maybe Arg)) -> -- calls we've seen so far
+          Terminating
+checkSC defs f args path
+   = let pos = (f, map (map fst) args) in
+         if pos `elem` path
+            then checkDesc (mapMaybe (map snd) args) path
+            else case lookupGlobalExact f (gamma defs) of
+                      Nothing => IsTerminating
+                      Just def => continue (sizeChange def) (pos :: path)
+  where
+    -- Look for something descending in the list of size changes
+    checkDesc : List SizeChange -> List (Name, List (Maybe Arg)) -> Terminating
+    checkDesc [] path = NotTerminating (RecPath (reverse (map fst path)))
+    checkDesc (Smaller :: _) _ = IsTerminating
+    checkDesc (_ :: xs) path = checkDesc xs path
+
+    getPos : List a -> Nat -> Maybe a
+    getPos [] _ = Nothing
+    getPos (x :: xs) Z = Just x
+    getPos (x :: xs) (S k) = getPos xs k
+
+    updateArg : SizeChange -> Maybe (Arg, SizeChange) -> Maybe (Arg, SizeChange)
+    updateArg c Nothing = Nothing
+    updateArg c arg@(Just (i, Unknown)) = arg
+    updateArg Unknown (Just (i, _)) = Just (i, Unknown)
+    updateArg c (Just (i, Same)) = Just (i, c)
+    updateArg c arg = arg
+
+    mkArgs : List (Maybe (Nat, SizeChange)) -> List (Maybe (Arg, SizeChange))
+    mkArgs [] = []
+    mkArgs (Nothing :: xs) = Nothing :: mkArgs xs
+    mkArgs (Just (pos, c) :: xs)
+        = case getPos args pos of
+               Nothing => Nothing :: mkArgs xs
+               Just arg => updateArg c arg :: mkArgs xs
+
+    checkCall : List (Name, List (Maybe Arg)) -> SCCall -> Terminating
+    checkCall path sc
+        = checkSC defs (fnCall sc) (mkArgs (fnArgs sc)) path
+
+    getWorst : Terminating -> List Terminating -> Terminating
+    getWorst term [] = term
+    getWorst term (IsTerminating :: xs) = getWorst term xs
+    getWorst term (Unchecked :: xs) = getWorst Unchecked xs
+    getWorst term (bad :: xs) = bad
+
+    continue : List SCCall -> List (Name, List (Maybe Arg)) -> Terminating
+    continue scs path
+        = let allTerm = map (checkCall path) scs in
+              getWorst IsTerminating allTerm
+
+initArgs : Arg -> Nat -> List (Maybe (Arg, SizeChange))
+initArgs arg Z = []
+initArgs arg (S k) = Just (arg, Same) :: initArgs (nextArg arg) k
+
+calcTerminating : {auto c : Ref Ctxt Defs} ->
+                  annot -> Name -> Core annot Terminating
+calcTerminating loc n 
+    = do defs <- get Ctxt
+         case lookupTyExact n (gamma defs) of
+              Nothing => throw (UndefinedName loc n)
+              Just ty => 
+                let args = initArgs firstArg (getArity defs [] ty) in
+                    pure (checkSC defs n args [])
+
+export
+checkTerminating : {auto c : Ref Ctxt Defs} ->
+                   annot -> Name -> Core annot Terminating
+checkTerminating loc n
+    = do tot <- getTotality loc n
+         case isTerminating tot of
+              Unchecked => 
+                 do tot' <- calcTerminating loc n
+                    setTerminating loc n tot'
+                    pure tot'
+              t => pure t

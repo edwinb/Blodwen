@@ -293,25 +293,31 @@ TTC annot Visibility where
 
 export
 TTC annot PartialReason where
-  toBuf b NotCovering = tag 0
-  toBuf b NotStrictlyPositive = tag 1
-  toBuf b (Calling xs) = do tag 2; toBuf b xs
+  toBuf b NotStrictlyPositive = tag 0
+  toBuf b (BadCall xs) = do tag 1; toBuf b xs
+  toBuf b (RecPath xs) = do tag 2; toBuf b xs
 
   fromBuf s b 
       = case !getTag of
-             0 => pure NotCovering
-             1 => pure NotStrictlyPositive
+             0 => pure NotStrictlyPositive
+             1 => do xs <- fromBuf s b
+                     pure (BadCall xs)
              2 => do xs <- fromBuf s b
-                     pure (Calling xs)
+                     pure (RecPath xs)
              _ => corrupt "PartialReason"
 
 export
 TTC annot Terminating where
   toBuf b Unchecked = tag 0
+  toBuf b IsTerminating = tag 1
+  toBuf b (NotTerminating p) = do tag 2; toBuf b p
 
   fromBuf s b
       = case !getTag of
              0 => pure Unchecked
+             1 => pure IsTerminating
+             2 => do p <- fromBuf s b
+                     pure (NotTerminating p)
              _ => corrupt "Terminating"
 
 export
