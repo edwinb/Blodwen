@@ -5,6 +5,7 @@ import Core.Context
 import Core.Normalise
 import Core.TT
 
+import Control.Monad.State
 import Data.List
 
 %default covering
@@ -120,8 +121,9 @@ delazy defs tm with (unapply tm)
       delazyFn tm = tm
 
 findCalls : Defs -> (vars ** (Env Term vars, Term vars, Term vars)) -> List SCCall
-findCalls defs (_ ** (env, lhs, rhs))
-   = let pargs = getArgs (delazy defs lhs) in
+findCalls defs (_ ** (env, lhs, rhs_in))
+   = let pargs = getArgs (delazy defs lhs) 
+         rhs = normaliseOpts tcOnly defs env rhs_in in
          findSC defs env 
                 (zip (take (length pargs) [0..]) pargs) (delazy defs rhs)
 
@@ -148,6 +150,14 @@ firstArg = 0
 nextArg : Arg -> Arg
 nextArg x = x + 1
 
+initArgs : Nat -> State Arg (List (Maybe (Arg, SizeChange)))
+initArgs Z = pure []
+initArgs (S k) 
+    = do arg <- get
+         put (nextArg arg)
+         args' <- initArgs k
+         pure (Just (arg, Same) :: args')
+
 -- Traverse the size change graph. When we reach a point we've seen before,
 -- at least one of the arguments must have got smaller, otherwise it's
 -- potentially non-terminating
@@ -155,13 +165,13 @@ checkSC : Defs ->
           Name -> -- function we're checking
           List (Maybe (Arg, SizeChange)) -> -- functions arguments and change
           List (Name, List (Maybe Arg)) -> -- calls we've seen so far
-          Terminating
+          State Arg Terminating
 checkSC defs f args path
    = let pos = (f, map (map fst) args) in
          if pos `elem` path
-            then checkDesc (mapMaybe (map snd) args) path
+            then pure $ checkDesc (mapMaybe (map snd) args) path
             else case lookupGlobalExact f (gamma defs) of
-                      Nothing => IsTerminating
+                      Nothing => pure IsTerminating
                       Just def => continue (sizeChange def) (pos :: path)
   where
     -- Look for something descending in the list of size changes
@@ -190,9 +200,21 @@ checkSC defs f args path
                Nothing => Nothing :: mkArgs xs
                Just arg => updateArg c arg :: mkArgs xs
 
-    checkCall : List (Name, List (Maybe Arg)) -> SCCall -> Terminating
+    checkCall : List (Name, List (Maybe Arg)) -> SCCall -> State Arg Terminating
     checkCall path sc
-        = checkSC defs (fnCall sc) (mkArgs (fnArgs sc)) path
+        = do let inpath = fnCall sc `elem` map fst path
+             term <- checkSC defs (fnCall sc) (mkArgs (fnArgs sc)) path
+             if not inpath
+                then case term of
+                       NotTerminating (RecPath _) =>
+                          -- might have lost information while assuming this
+                          -- was mutually recursive, so start again with new 
+                          -- arguments (that is, where we'd start if the
+                          -- function was the top level thing we were checking)
+                          do args' <- initArgs (length (fnArgs sc))
+                             checkSC defs (fnCall sc) args' path
+                       t => pure t
+                else pure term
 
     getWorst : Terminating -> List Terminating -> Terminating
     getWorst term [] = term
@@ -200,14 +222,10 @@ checkSC defs f args path
     getWorst term (Unchecked :: xs) = getWorst Unchecked xs
     getWorst term (bad :: xs) = bad
 
-    continue : List SCCall -> List (Name, List (Maybe Arg)) -> Terminating
+    continue : List SCCall -> List (Name, List (Maybe Arg)) -> State Arg Terminating
     continue scs path
-        = let allTerm = map (checkCall path) scs in
-              getWorst IsTerminating allTerm
-
-initArgs : Arg -> Nat -> List (Maybe (Arg, SizeChange))
-initArgs arg Z = []
-initArgs arg (S k) = Just (arg, Same) :: initArgs (nextArg arg) k
+        = do allTerm <- traverse (checkCall path) scs
+             pure (getWorst IsTerminating allTerm)
 
 calcTerminating : {auto c : Ref Ctxt Defs} ->
                   annot -> Name -> Core annot Terminating
@@ -216,8 +234,9 @@ calcTerminating loc n
          case lookupTyExact n (gamma defs) of
               Nothing => throw (UndefinedName loc n)
               Just ty => 
-                let args = initArgs firstArg (getArity defs [] ty) in
-                    pure (checkSC defs n args [])
+                pure $ evalState 
+                         (do args <- initArgs (getArity defs [] ty)
+                             checkSC defs n args []) firstArg
 
 export
 checkTerminating : {auto c : Ref Ctxt Defs} ->

@@ -306,6 +306,14 @@ data DefFlag
     | Inline
     | Invertible -- assume safe to cancel arguments in unification
     | Overloadable -- allow ad-hoc overloads
+    | TCInline -- always inline before totality checking
+         -- (in practice, this means it's reduced in 'normaliseHoles')
+         -- This means the function gets inlined when calculating the size
+         -- change graph, but otherwise not. It's only safe if the function
+         -- being inlined is terminating no matter what, and is really a bit
+         -- of a hack to make sure interface dictionaries are properly inlined
+         -- (otherwise they look potentially non terminating) so use with
+         -- care!
     | SetTotal TotalReq
 
 export
@@ -322,6 +330,7 @@ Eq DefFlag where
     (==) Inline Inline = True
     (==) Invertible Invertible = True
     (==) Overloadable Overloadable = True
+    (==) TCInline TCInline = True
     (==) (SetTotal x) (SetTotal y) = x == y
     (==) _ _ = False
 
@@ -343,7 +352,8 @@ TTC annot DefFlag where
   toBuf b Inline = tag 2
   toBuf b Invertible = tag 3
   toBuf b Overloadable = tag 4
-  toBuf b (SetTotal x) = do tag 5; toBuf b x
+  toBuf b TCInline = tag 5
+  toBuf b (SetTotal x) = do tag 6; toBuf b x
 
   fromBuf s b 
       = case !getTag of
@@ -352,7 +362,8 @@ TTC annot DefFlag where
              2 => pure Inline
              3 => pure Invertible
              4 => pure Overloadable
-             5 => do x <- fromBuf s b; pure (SetTotal x)
+             5 => pure TCInline
+             6 => do x <- fromBuf s b; pure (SetTotal x)
              _ => corrupt "DefFlag"
 
 public export

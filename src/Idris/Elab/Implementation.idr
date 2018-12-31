@@ -153,6 +153,7 @@ elabImplementation {vars} fc vis pass env nest cons iname ps impln mbody
                let impFn = IDef fc impName [PatClause fc ilhs irhs]
                log 5 $ "Implementation record: " ++ show impFn
                traverse (processDecl False env nest) [impFn]
+               setFlag fc impName TCInline
 
                -- 4. (TODO: Order method bodies to be in declaration order, in
                --    case of dependencies)

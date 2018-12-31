@@ -106,7 +106,8 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, opts
           ty_constr = substNames vars (map applyCon allmeths) ty
           ty_imp = bindTypeNames vars (bindIFace fc ity ty_constr)
           tydecl = IClaim fc RigW vis (if d then [Inline, Invertible]
-                                            else [Inline]) (MkImpTy fc n ty_imp) 
+                                            else [Inline]) 
+                                      (MkImpTy fc n ty_imp) 
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
                        map (IBindVar fc) (map bindName allmeths))
@@ -154,21 +155,22 @@ getConstraintHint : {auto c : Ref Ctxt Defs} ->
                     (constraints : List Name) ->
                     (allmeths : List Name) ->
                     (params : List Name) ->
-                    (Name, RawImp FC) -> List (ImpDecl FC)
+                    (Name, RawImp FC) -> (Name, List (ImpDecl FC))
 getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, con)
     = let ity = apply (IVar fc iname) (map (IVar fc) params)
           fty = IPi fc RigW Explicit Nothing ity con
           ty_imp = bindTypeNames (meths ++ vars) fty 
           hintname = DN ("Constraint " ++ show con)
                         (UN ("__" ++ show iname ++ "_" ++ show con))
-          tydecl = IClaim fc RigW vis [Inline, Hint False] (MkImpTy fc hintname ty_imp)
+          tydecl = IClaim fc RigW vis [Inline, Hint False] 
+                          (MkImpTy fc hintname ty_imp)
           conapp = apply (IVar fc cname)
                       (map (IBindVar fc) (map bindName constraints) ++
                        map (const (Implicit fc)) meths) 
           fnclause = PatClause fc (IApp fc (IVar fc hintname) conapp)
                                   (IVar fc (constName cn))
           fndef = IDef fc hintname [fnclause] in
-          [tydecl, fndef]
+          (hintname, [tydecl, fndef])
   where
     bindName : Name -> String
     bindName (UN n) = "__bind_" ++ n
@@ -276,6 +278,8 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                                                   (map fst params)) meth_sigs
              log 5 $ "Top level methods: " ++ show fns
              traverse (processDecl False env nest) fns
+             traverse (\n => do mn <- inCurrentNS n
+                                setFlag fc mn TCInline) meth_names
              pure ()
 
     -- Check that a default definition is correct. We just discard it here once
@@ -324,11 +328,13 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                           Core FC ()
     elabConstraintHints conName meth_names
         = do let nconstraints = nameCons 0 constraints
-             let chints = concatMap (getConstraintHint fc env vis iname conName
-                                                       (map fst nconstraints)
-                                                       meth_names
-                                                       (map fst params)) nconstraints
+             let chints = map (getConstraintHint fc env vis iname conName
+                                                 (map fst nconstraints)
+                                                 meth_names
+                                                 (map fst params)) nconstraints
              log 5 $ "Constraint hints from " ++ show constraints ++ ": " ++ show chints
-             traverse (processDecl False env nest) chints
+             traverse (processDecl False env nest) (concatMap snd chints)
+             traverse (\n => do mn <- inCurrentNS n
+                                setFlag fc mn TCInline) (map fst chints)
              pure ()
 

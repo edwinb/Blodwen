@@ -513,20 +513,25 @@ bindEnv (b :: env) tm
 public export
 record EvalOpts where
   constructor MkEvalOpts
-  holesOnly : Bool
-  evalAll : Bool
+  holesOnly : Bool -- only evaluate hole solutions
+  evalAll : Bool -- evaluate everything, including private names
+  tcInline : Bool -- inline for totality checking
 
 export
 defaultOpts : EvalOpts
-defaultOpts = MkEvalOpts False False
+defaultOpts = MkEvalOpts False False False
 
 export
 withHoles : EvalOpts
-withHoles = MkEvalOpts True False
+withHoles = MkEvalOpts True False False
 
 export
 withAll : EvalOpts
-withAll = MkEvalOpts False True
+withAll = MkEvalOpts False True False
+
+export
+tcOnly : EvalOpts
+tcOnly = MkEvalOpts True False True
 
 
 -- Closures are terms linked with the environment they evaluate in.

@@ -81,6 +81,7 @@ processFlags n (GlobalHint t :: fs) defs
 processFlags n (TypeHint ty d :: fs) defs
   = processFlags n fs (addToTypeHints ty n d defs)
 processFlags n (Inline :: fs) defs = processFlags n fs defs
+processFlags n (TCInline :: fs) defs = processFlags n fs defs
 processFlags n (Invertible :: fs) defs = processFlags n fs defs
 processFlags n (Overloadable :: fs) defs = processFlags n fs defs
 processFlags n (SetTotal t :: fs) defs = processFlags n fs defs

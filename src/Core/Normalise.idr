@@ -83,9 +83,10 @@ parameters (defs : Defs, opts : EvalOpts)
                _ => NApp (NRef nt n) stk
                    
     evalDef : Env Term free -> LocalEnv free vars -> Stack free ->
-              NameType -> Name -> Def -> NF free
-    evalDef env loc stk nt fn (PMDef h args tree _ _)
-        = if h || not (holesOnly opts) then
+              NameType -> Name -> List DefFlag -> Def -> NF free
+    evalDef env loc stk nt fn flags (PMDef h args tree _ _)
+        = if h || not (holesOnly opts) || 
+                  (tcInline opts && elem TCInline flags) then
              case extendFromStack args loc stk of
                   Nothing => NApp (NRef nt fn) stk
                   Just (loc', stk') => 
@@ -95,10 +96,10 @@ parameters (defs : Defs, opts : EvalOpts)
              else NApp (NRef nt fn) stk
     -- Don't check 'holesOnly' here - effectively, this gives us constant
     -- folding f the stack happens to be appropriate
-    evalDef env loc stk nt fn (Builtin op) = evalOp (getOp op) nt fn stk
-    evalDef env loc stk nt fn (DCon tag arity _) = NDCon fn tag arity stk
-    evalDef env loc stk nt fn (TCon tag arity _ _ _) = NTCon fn tag arity stk
-    evalDef env loc stk nt fn _ = NApp (NRef nt fn) stk
+    evalDef env loc stk nt fn flags (Builtin op) = evalOp (getOp op) nt fn stk
+    evalDef env loc stk nt fn flags (DCon tag arity _) = NDCon fn tag arity stk
+    evalDef env loc stk nt fn flags (TCon tag arity _ _ _) = NTCon fn tag arity stk
+    evalDef env loc stk nt fn flags _ = NApp (NRef nt fn) stk
 
     -- Only evaluate the name if its definition is visible in the current 
     -- namespace
@@ -111,7 +112,7 @@ parameters (defs : Defs, opts : EvalOpts)
                Just def => 
                     if evalAll opts ||
                          reducibleIn (currentNS defs) fn (visibility def)
-                       then evalDef env loc stk nt fn (definition def)
+                       then evalDef env loc stk nt fn (flags def) (definition def)
                        else toRef (definition def) stk
                _ => NApp (NRef nt fn) stk
       where
@@ -219,6 +220,10 @@ export
 nf : Defs -> Env Term free -> Term free -> NF free
 nf defs env tm = eval defs defaultOpts env [] [] tm
 
+export
+nfOpts : EvalOpts -> Defs -> Env Term free -> Term free -> NF free
+nfOpts opts defs env tm = eval defs opts env [] [] tm
+
 -- Only evaluate names which stand for solved holes
 export
 nfHoles : Defs -> Env Term free -> Term free -> NF free
@@ -323,6 +328,10 @@ Quote Closure where
 export
 normalise : Defs -> Env Term free -> Term free -> Term free
 normalise defs env tm = quote defs env (nf defs env tm)
+
+export
+normaliseOpts : EvalOpts -> Defs -> Env Term free -> Term free -> Term free
+normaliseOpts opts defs env tm = quote defs env (nfOpts opts defs env tm)
 
 export
 normaliseHoles : Defs -> Env Term free -> Term free -> Term free

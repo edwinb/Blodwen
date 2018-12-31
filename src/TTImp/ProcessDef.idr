@@ -512,6 +512,9 @@ processDef elab incase env nest loc n_in cs_raw
                                    _ => "No case tree for " ++ show n
 
                            sc <- calculateSizeChange loc n
+                           log 3 $
+                             let scinfo = map (\s => show (fnCall s) ++ ": " ++ show (fnArgs s)) sc in
+                                 "Size change: " ++ showSep ", " scinfo
                            setSizeChange loc n sc
                            cov <- checkCoverage n cs tree_comp
                            setCovering loc n cov
