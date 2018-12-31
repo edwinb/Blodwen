@@ -10,10 +10,8 @@ import Data.List
 
 %default covering
 
--- TODO: After the basics, still to handle:
+-- TODO: Still to handle:
 -- case functions
--- 'assert_total'
--- 'assert_smaller'
 -- Delay for corecursive calls
 
 mutual
@@ -53,22 +51,45 @@ mutual
   -- Return whether first argument is structurally smaller than the second.
   -- TODO: Can't be smaller than a delayed infinite thing
   smaller : Bool -> -- Have we gone under a constructor yet?
-            Term vars -> Term vars -> Bool
-  smaller inc _ Erased = False -- Never smaller than an erased thing!
-  smaller True s t
+            Maybe (Term vars) -> -- Asserted bigger thing
+            Term vars -> -- Term we're checking
+            Term vars -> -- Argument it might be smaller than
+            Bool
+  smaller inc big _ Erased = False -- Never smaller than an erased thing!
+  smaller True big s t
       = if s == t
            then True
-           else smallerArg True s t
-  smaller inc s t = smallerArg inc s t
+           else smallerArg True big s t
+  smaller inc big s t = smallerArg inc big s t
 
-  smallerArg : Bool -> Term vars -> Term vars -> Bool
-  smallerArg inc s tm 
-      = case getFnArgs tm of
-             (Ref (DataCon t a) cn, args) 
-                 => any (smaller True s) args
-             _ => case s of
-                       App f _ => smaller inc f tm -- Higher order recursive argument
-                       _ => False
+  assertedSmaller : Maybe (Term vars) -> Term vars -> Bool
+  assertedSmaller (Just b) a = b == a
+  assertedSmaller _ _ = False
+
+  smallerArg : Bool -> Maybe (Term vars) -> Term vars -> Term vars -> Bool
+  smallerArg inc big s tm
+        -- If we hit a pattern that is equal to a thing we've asserted_smaller,
+        -- the argument must be smaller
+      = if assertedSmaller big tm
+           then True
+           else case getFnArgs tm of
+                     (Ref (DataCon t a) cn, args) 
+                         => any (smaller True big s) args
+                     _ => case s of
+                               App f _ => smaller inc big f tm 
+                                            -- Higher order recursive argument
+                               _ => False
+
+  -- if the argument is an 'assert_smaller', return the thing it's smaller than,
+  -- and the real argument
+  asserted : Term vars -> Maybe (Term vars)
+  asserted tm 
+       = case getFnArgs tm of
+              (Ref nt fn, [_, _, b, arg]) 
+                   => if fn == NS ["Builtin"] (UN "assert_smaller")
+                         then Just b
+                         else Nothing
+              _ => Nothing
 
   -- Calculate the size change for the given argument.
   -- i.e., return the size relationship of the given argument with an entry 
@@ -78,18 +99,21 @@ mutual
              (arg : Term vars) ->
              Maybe (Nat, SizeChange)
   mkChange [] arg = Nothing
-  mkChange ((i, parg) :: pats) arg 
-      -- TODO: assert_smaller
+  mkChange ((i, parg) :: pats) arg
       = cond [(arg == parg, Just (i, Same)),
-              (smaller False arg parg, Just (i, Smaller))]
-            (mkChange pats arg)
+              (smaller False (asserted arg) arg parg, Just (i, Smaller))]
+          (mkChange pats arg)
 
   findSCcall : Defs -> Env Term vars -> List (Nat, Term vars) ->
                Name -> Nat -> List (Term vars) ->
                List SCCall
   findSCcall defs env pats fn arity args 
-      = [MkSCCall fn (expandToArity arity (map (mkChange pats) args))] 
-           ++ concatMap (findSC defs env pats) args
+        -- Under 'assert_total' we assume that all calls are fine, so leave
+        -- the size change list empty
+      = if fn == NS ["Builtin"] (UN "assert_total")
+           then []
+           else [MkSCCall fn (expandToArity arity (map (mkChange pats) args))] 
+                   ++ concatMap (findSC defs env pats) args
 
 -- Remove all laziness annotations which are nothing to do with coinduction,
 -- meaning that all only Force/Delay left is to guard coinductive calls.

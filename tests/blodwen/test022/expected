@@ -1,3 +1,3 @@
 1/1: Building Fin (Fin.blod)
 Fin.blod:33:7--35:1:While processing right hand side of Main.bar at Fin.blod:33:1--35:1:
-Can't find an implementation for IsJust (integerToFin 8 (S (fromInteger (prim__sub_Integer 5 (fromInteger 1)))))
+Can't find an implementation for IsJust (integerToFin 8 (S (assert_total (fromInteger (prim__sub_Integer 5 (fromInteger 1))))))
