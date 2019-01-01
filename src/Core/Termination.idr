@@ -8,11 +8,13 @@ import Core.TT
 import Control.Monad.State
 import Data.List
 
+import Debug.Trace
+
 %default covering
 
 -- TODO: Still to handle:
--- case functions
 -- Delay for corecursive calls
+-- Positivity check for data types
 
 mutual
   findSC : Defs -> Env Term vars ->
@@ -104,16 +106,58 @@ mutual
               (smaller False (asserted arg) arg parg, Just (i, Smaller))]
           (mkChange pats arg)
 
+  -- Given a name of a case function, and a list of the arguments being
+  -- passed to it, return all the right hand sides as they match against those
+  -- arguments.
+  -- This way, we can build case blocks directly into the size change graph
+  -- rather than treating the definitions separately.
+  getCasePats : Defs -> Name -> List (Term vars) ->
+                Maybe (List (Term vars))
+  getCasePats {vars} defs n args
+      = case lookupDefExact n (gamma defs) of
+             Just (PMDef _ _ _ _ pdefs)
+                => Just (map matchArgs pdefs)
+             _ => Nothing
+    where
+      updateRHS : List (Term vs, Term vs') -> Term vs -> Term vs'
+      updateRHS {vs} {vs'} ms tm
+          = case lookup tm ms of
+                 Nothing => urhs tm
+                 Just t => t
+        where
+          urhs : Term vs -> Term vs'
+          urhs (Local _ _) = Erased
+          urhs (Ref nt f) = Ref nt f
+          urhs (App f a) = App (updateRHS ms f) (updateRHS ms a)
+          urhs (Bind x b sc)
+              = Bind x (map (updateRHS ms) b) 
+                  (updateRHS (map (\vt => (weaken (fst vt), weaken (snd vt))) ms) sc)
+          urhs (PrimVal v) = PrimVal v
+          urhs Erased = Erased
+          urhs TType = TType
+
+      matchArgs : (vs ** (Env Term vs, Term vs, Term vs)) -> Term vars
+      matchArgs (_ ** (_, lhs, rhs))
+         = let lhsMatch = zip (getArgs lhs) args in
+               updateRHS lhsMatch rhs
+
+  caseFn : Name -> Bool
+  caseFn (GN (CaseBlock _ _)) = True
+  caseFn (NS _ n) = caseFn n
+  caseFn _ = False
+
   findSCcall : Defs -> Env Term vars -> List (Nat, Term vars) ->
                Name -> Nat -> List (Term vars) ->
                List SCCall
   findSCcall defs env pats fn arity args 
         -- Under 'assert_total' we assume that all calls are fine, so leave
         -- the size change list empty
-      = if fn == NS ["Builtin"] (UN "assert_total")
-           then []
-           else [MkSCCall fn (expandToArity arity (map (mkChange pats) args))] 
-                   ++ concatMap (findSC defs env pats) args
+      = cond [(fn == NS ["Builtin"] (UN "assert_total"), []),
+              (caseFn fn, case getCasePats defs fn args of
+                               Nothing => []
+                               Just ps => concatMap (findSC defs env pats) ps)]
+             ([MkSCCall fn (expandToArity arity (map (mkChange pats) args))] 
+                   ++ concatMap (findSC defs env pats) args)
 
 -- Remove all laziness annotations which are nothing to do with coinduction,
 -- meaning that all only Force/Delay left is to guard coinductive calls.
@@ -185,6 +229,8 @@ initArgs (S k)
 -- Traverse the size change graph. When we reach a point we've seen before,
 -- at least one of the arguments must have got smaller, otherwise it's
 -- potentially non-terminating
+-- TODO: If we encounter a name where we already know its termination status,
+-- use that rather than continuing to traverse the graph!
 checkSC : Defs -> 
           Name -> -- function we're checking
           List (Maybe (Arg, SizeChange)) -> -- functions arguments and change

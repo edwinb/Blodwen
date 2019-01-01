@@ -41,7 +41,7 @@ blodwenTests
        "perror006",
        "prelude001",
        "sugar001",
-       "total001", "total002", "total003",
+       "total001", "total002", "total003", "total004",
        "with001"]
 
 chdir : String -> IO Bool
