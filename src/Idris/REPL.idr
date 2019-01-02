@@ -488,10 +488,9 @@ process (Total n)
          case lookupGlobalName n (gamma defs) of
               [] => throw (UndefinedName replFC n)
               ts => do traverse (\fn =>
-                          do checkTerminating replFC fn
+                          do checkTotal replFC fn
                              tot <- getTotality replFC fn
-                             iputStrLn (show fn ++ " is " ++ show tot)
-                             ) 
+                             iputStrLn (show fn ++ " is " ++ show tot)) 
                                (map fst ts)
                        pure True
 process (DebugInfo n)

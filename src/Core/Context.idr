@@ -196,6 +196,7 @@ data Def : Type where
 			                         -- forced by the constructors type
 			       Def
      TCon  : (tag : Int) -> (arity : Nat) -> 
+             (mwith : List Name) -> -- defined mutually with these
 						 (parampos : List Nat) -> -- argument positions which are parametric
              (detpos : List Nat) -> -- argument postitions for determining auto search
 						 (datacons : List Name) -> 
@@ -234,8 +235,9 @@ Show Def where
       = "<<external definition with " ++ show arity ++ " arguments>>"
   show (Builtin {arity} f)
       = "<<builtin with " ++ show arity ++ " arguments>>"
-  show (TCon tag arity params dets cons)
-	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ "; params " ++
+  show (TCon tag arity mwith params dets cons)
+	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ 
+        "; with " ++ show mwith ++ "; params " ++
         show params ++ "; determining " ++ show dets ++ 
         "; constructors " ++ show cons
   show (DCon tag arity forced)
@@ -262,8 +264,8 @@ TTC annot Def where
       = throw (InternalError "Trying to serialise a Builtin")
   toBuf b (DCon t arity forcedpos) 
       = do tag 3; toBuf b t; toBuf b arity; toBuf b forcedpos
-  toBuf b (TCon t arity parampos detpos datacons) 
-      = do tag 4; toBuf b t; toBuf b arity; toBuf b parampos; 
+  toBuf b (TCon t arity mwith parampos detpos datacons) 
+      = do tag 4; toBuf b t; toBuf b arity; toBuf b mwith; toBuf b parampos; 
            toBuf b detpos; toBuf b datacons
   toBuf b (Hole numlocs pvar inv) 
       = do tag 5; toBuf b numlocs; toBuf b pvar; toBuf b inv
@@ -285,8 +287,9 @@ TTC annot Def where
                      pure (ExternDef a)
              3 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (DCon x y z)
-             4 => do v <- fromBuf s b; w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
-                     pure (TCon v w x y z)
+             4 => do u <- fromBuf s b; v <- fromBuf s b; w <- fromBuf s b; 
+                     x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+                     pure (TCon u v w x y z)
              5 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (Hole x y z)
              6 => do x <- fromBuf s b; y <- fromBuf s b
@@ -454,7 +457,7 @@ getRefs (PMDef ishole args sc _ _) = getRefs sc
 getRefs (ExternDef _) = []
 getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
-getRefs (TCon tag arity params dets datacons) = []
+getRefs (TCon tag arity mwith params dets datacons) = []
 getRefs (Hole numlocs _ _) = []
 getRefs (BySearch _ _) = []
 getRefs ImpBind = []
@@ -481,6 +484,7 @@ public export
 record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
+      mutData : List Name -- Currently declared but undefined data types
       currentNS : List String -- namespace for current definitions
       options : Options
       toSave : SortedSet -- Definitions to write out as .tti
@@ -537,7 +541,7 @@ TTC annot Defs where
            ndirs <- fromBuf s b
            hides <- fromBuf s b
            ds <- fromBuf s b
-           pure (MkAllDefs (insertFrom ns empty) modNS 
+           pure (MkAllDefs (insertFrom ns empty) [] modNS 
                             (record { laziness = lazy,
                                       pairnames = pair,
                                       rewritenames = rw,
@@ -554,7 +558,7 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] [] empty [] [] [] 
+initCtxt = MkAllDefs empty [] ["Main"] defaults empty [] [] [] [] empty [] [] [] 
                      100 0 0 5381 CoveringOnly
 
 export
@@ -1340,7 +1344,7 @@ addData : {auto x : Ref Ctxt Defs} ->
 addData vs vis (MkData (MkCon tyn arity tycon) datacons)
     = do gam <- getCtxt 
          tag <- getNextTypeTag 
-         let tydef = newDef vs tycon vis (TCon tag arity 
+         let tydef = newDef vs tycon vis (TCon tag arity []
                                          (paramPos tyn (map type datacons))
                                          (allDet arity)
                                          (map name datacons))
@@ -1402,7 +1406,7 @@ getSearchData : {auto x : Ref Ctxt Defs} ->
 getSearchData loc a target
     = do defs <- get Ctxt
          case lookupDefExact target (gamma defs) of
-              Just (TCon _ _ _ dets cons) => 
+              Just (TCon _ _ _ _ dets cons) => 
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
@@ -1422,6 +1426,35 @@ getSearchData loc a target
               map snd (filter (\t => fst t == a) hs)
 
 export
+setMutWith : {auto x : Ref Ctxt Defs} ->
+             annot -> Name -> List Name -> Core annot ()
+setMutWith loc tn tns
+    = do defs <- get Ctxt
+         case lookupGlobalExact tn (gamma defs) of
+              Just g =>
+                   case definition g of
+                        TCon t a _ ps dets cons =>
+                          do let g' = record { definition = 
+                                                TCon t a tns ps dets cons } g
+                             put Ctxt (record { gamma $= addCtxt tn g' } defs)
+                        _ => throw (UndefinedName loc tn)
+              _ => throw (UndefinedName loc tn)
+
+export
+addMutData : {auto x : Ref Ctxt Defs} ->
+             Name -> Core annot ()
+addMutData n
+    = do defs <- get Ctxt
+         put Ctxt (record { mutData $= (n ::) } defs)
+
+export
+dropMutData : {auto x : Ref Ctxt Defs} ->
+             Name -> Core annot ()
+dropMutData n
+    = do defs <- get Ctxt
+         put Ctxt (record { mutData $= filter (/= n) } defs)
+
+export
 setDetermining : {auto x : Ref Ctxt Defs} ->
                  annot -> Name -> List Name -> Core annot ()
 setDetermining loc tn args
@@ -1429,10 +1462,10 @@ setDetermining loc tn args
          case lookupGlobalExact tn (gamma defs) of
               Just g =>
                    case definition g of
-                        TCon t a ps _ cons =>
+                        TCon t a mw ps _ cons =>
                           do apos <- getPos 0 args (type g)
                              let g' = record { definition = 
-                                                TCon t a ps apos cons } g
+                                                TCon t a mw ps apos cons } g
                              put Ctxt (record { gamma $= addCtxt tn g' } defs)
                         _ => throw (UndefinedName loc tn)
               _ => throw (UndefinedName loc tn)

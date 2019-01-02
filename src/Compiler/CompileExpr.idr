@@ -190,7 +190,7 @@ toCDef n (Builtin {arity} op)
     getVars (ConsArg a rest) = (a ** Here) :: map weakenEl (getVars rest)
 toCDef n (DCon tag arity _)
     = pure $ MkCon tag arity
-toCDef n (TCon tag arity _ _ _)
+toCDef n (TCon tag arity _ _ _ _)
     = pure $ MkCon tag arity
 -- We do want to be able to compile these, but also report an error at run time
 -- (and, TODO: warn at compile time)

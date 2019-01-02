@@ -8,6 +8,7 @@
 :total pfoom
 :total even
 :total vtrans
+:total GTree
 :total size
 :total qsortBad
 :total qsort

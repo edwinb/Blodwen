@@ -19,7 +19,7 @@ getCon : Defs -> Name -> Maybe (Term vars)
 getCon defs n
     = case lookupDefExact n (gamma defs) of
            Just (DCon t a _) => pure (Ref (DataCon t a) n)
-           Just (TCon t a _ _ _) => pure (Ref (TyCon t a) n)
+           Just (TCon t a _ _ _ _) => pure (Ref (TyCon t a) n)
            Just _ => pure (Ref Func n)
            _ => Nothing
 

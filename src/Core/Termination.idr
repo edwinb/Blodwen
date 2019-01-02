@@ -308,6 +308,7 @@ calcTerminating loc n
                          (do args <- initArgs (getArity defs [] ty)
                              checkSC defs n args []) firstArg
 
+-- Check whether a function is terminating, and record in the context
 export
 checkTerminating : {auto c : Ref Ctxt Defs} ->
                    annot -> Name -> Core annot Terminating
@@ -319,3 +320,109 @@ checkTerminating loc n
                     setTerminating loc n tot'
                     pure tot'
               t => pure t
+
+nameIn : Defs -> List Name -> NF [] -> Bool
+nameIn defs tyns (NBind x b sc)
+    = nameIn defs tyns (binderType b) ||
+      nameIn defs tyns (sc (toClosure defaultOpts [] Erased))
+nameIn defs tyns (NApp _ args)
+    = any (nameIn defs tyns) (map (evalClosure defs) args)
+nameIn defs tyns (NTCon n _ _ args)
+    = if n `elem` tyns
+         then True
+         else any (nameIn defs tyns) (map (evalClosure defs) args)
+nameIn defs tyns (NDCon n _ _ args)
+    = any (nameIn defs tyns) (map (evalClosure defs) args)
+nameIn defs tyns _ = False
+
+-- Check an argument type doesn't contain a negative occurrence of any of
+-- the given type names
+posArg : Defs -> List Name -> NF [] -> Terminating
+-- a tyn can only appear in the parameter positions of
+-- tc; report positivity failure if it appears anywhere else
+posArg defs tyns (NTCon tc _ _ args) 
+    = let testargs : List (Closure [])
+             = case lookupDefExact tc (gamma defs) of
+                    Just (TCon _ _ _ params _ _) => dropParams 0 params args
+                    _ => args in
+          if any (nameIn defs tyns) (map (evalClosure defs) testargs)
+             then NotTerminating NotStrictlyPositive
+             else IsTerminating
+  where
+    dropParams : Nat -> List Nat -> List (Closure []) -> List (Closure [])
+    dropParams i ps [] = []
+    dropParams i ps (x :: xs)
+        = if i `elem` ps
+             then dropParams (S i) ps xs
+             else x :: dropParams (S i) ps xs
+-- a tyn can not appear as part of ty
+posArg defs tyns (NBind x (Pi c e ty) sc) 
+    = if nameIn defs tyns ty
+         then NotTerminating NotStrictlyPositive
+         else posArg defs tyns (sc (toClosure defaultOpts [] Erased))
+posArg defs tyn _ = IsTerminating
+
+checkPosArgs : Defs -> List Name -> NF [] -> Terminating
+checkPosArgs defs tyns (NBind x (Pi c e ty) sc) 
+    = case posArg defs tyns ty of
+           IsTerminating => checkPosArgs defs tyns 
+                                    (sc (toClosure defaultOpts [] Erased))
+           bad => bad
+checkPosArgs defs tyns _ = IsTerminating
+
+checkCon : Defs -> List Name -> Name -> Terminating
+checkCon defs tyns cn 
+    = case lookupTyExact cn (gamma defs) of
+           Nothing => Unchecked
+           Just ty => checkPosArgs defs tyns (nf defs [] ty)
+
+checkData : Defs -> List Name -> List Name -> Terminating
+checkData defs tyns [] = IsTerminating
+checkData defs tyns (c :: cs)
+    = case checkCon defs tyns c of
+           IsTerminating => checkData defs tyns cs
+           bad => bad
+
+-- Calculate whether a type satisfies the strict positivity condition, and
+-- return whether it's terminating, along with its data constructors
+calcPositive : {auto c : Ref Ctxt Defs} ->
+               annot -> Name -> Core annot (Terminating, List Name)
+calcPositive loc n 
+    = do defs <- get Ctxt
+         case lookupDefExact n (gamma defs) of
+              Just (TCon _ _ tns _ _ dcons) => 
+                  pure (checkData defs (n :: tns) dcons, dcons)
+              Just _ => throw (GenericMsg loc (show n ++ " not a data type"))
+              Nothing => throw (UndefinedName loc n)
+
+-- Check whether a data type satisfies the strict positivity condition, and
+-- record in the context
+export
+checkPositive : {auto c : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot Terminating
+checkPositive loc n 
+    = do tot <- getTotality loc n
+         case isTerminating tot of
+              Unchecked =>
+                  do (tot', cons) <- calcPositive loc n
+                     setTerminating loc n tot'
+                     traverse (\c => setTerminating loc c tot') cons
+                     pure tot'
+              t => pure t
+
+-- Check and record totality of the given name; positivity if it's a data
+-- type, termination if it's a function                                                              
+export
+checkTotal : {auto c : Ref Ctxt Defs} ->
+             annot -> Name -> Core annot Terminating
+checkTotal loc n
+    = do tot <- getTotality loc n
+         defs <- get Ctxt
+         case isTerminating tot of
+              Unchecked =>
+                  case lookupDefTyExact n (gamma defs) of
+                       Just (TCon _ _ _ _ _ _, _)
+                           => checkPositive loc n
+                       _ => checkTerminating loc n
+              t => pure t
+

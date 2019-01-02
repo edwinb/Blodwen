@@ -699,7 +699,7 @@ mutual
                         = case def of
                              PMDef _ _ _ _ _ => Func
                              DCon tag arity _ => DataCon tag arity
-                             TCon tag arity _ _ _ => TyCon tag arity
+                             TCon tag arity _ _ _ _ => TyCon tag arity
                              _ => Func
                log 5 $ "Getting implicits " ++ show varty ++ " for " ++ show expected
                (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []

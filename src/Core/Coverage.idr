@@ -48,7 +48,7 @@ export
 isEmpty : Defs -> NF vars -> Bool
 isEmpty defs (NTCon n t a args)
      = case lookupDefExact n (gamma defs) of
-            Just (TCon _ _ _ _ cons)
+            Just (TCon _ _ _ _ _ cons)
                  => all (conflict defs (NTCon n t a args)) cons
             _ => False
 isEmpty defs _ = False
@@ -63,7 +63,7 @@ freeEnv (n :: ns) = PVar RigW Erased :: freeEnv ns
 getCons : Defs -> NF vars -> List (NF [], Name, Int, Nat)
 getCons defs (NTCon tn _ _ _)
     = case lookupDefExact tn (gamma defs) of
-           Just (TCon _ _ _ _ cons) => mapMaybe addTy cons
+           Just (TCon _ _ _ _ _ cons) => mapMaybe addTy cons
            _ => []
   where
     addTy : Name -> Maybe (NF [], Name, Int, Nat)

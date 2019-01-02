@@ -98,7 +98,7 @@ parameters (defs : Defs, opts : EvalOpts)
     -- folding f the stack happens to be appropriate
     evalDef env loc stk nt fn flags (Builtin op) = evalOp (getOp op) nt fn stk
     evalDef env loc stk nt fn flags (DCon tag arity _) = NDCon fn tag arity stk
-    evalDef env loc stk nt fn flags (TCon tag arity _ _ _) = NTCon fn tag arity stk
+    evalDef env loc stk nt fn flags (TCon tag arity _ _ _ _) = NTCon fn tag arity stk
     evalDef env loc stk nt fn flags _ = NApp (NRef nt fn) stk
 
     -- Only evaluate the name if its definition is visible in the current 
@@ -118,7 +118,7 @@ parameters (defs : Defs, opts : EvalOpts)
       where
         toRef : Def -> Stack free -> NF free
         toRef (DCon t a _) stk = NDCon fn t a stk
-        toRef (TCon t a _ _ _) stk = NTCon fn t a stk
+        toRef (TCon t a _ _ _ _) stk = NTCon fn t a stk
         toRef _ stk = NApp (NRef nt fn) stk
 
     -- Take arguments from the stack, as long as there's enough.

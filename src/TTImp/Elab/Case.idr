@@ -221,7 +221,7 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
           = if sameVar var x then ppos else True
       asParam gam ppos var (apply (Ref nt n) args) | ArgsList
           = case lookupDefExact n gam of
-                 Just (TCon _ _ ps _ _)
+                 Just (TCon _ _ _ ps _ _)
                    => asParamArgs gam var 0 ps args
                  _ => all (asParam gam False var) args
         where

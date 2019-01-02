@@ -3,6 +3,7 @@ module TTImp.ProcessData
 import Core.Context
 import Core.Metadata
 import Core.Normalise
+import Core.Termination
 import Core.TT
 import Core.Reflect
 import Core.Unify
@@ -117,7 +118,11 @@ processData {vars} elab env nest vis (MkImpLater loc n_in ty_raw)
          let arity = getArity gam [] ty'
 
          -- Add the type constructor as a placeholder
-         addDef n (newDef vars ty' Public (TCon 0 arity [] [] []))
+         addDef n (newDef vars ty' Public (TCon 0 arity [] [] [] []))
+         addMutData n
+         gam <- get Ctxt
+         traverse (\n => setMutWith loc n (mutData gam)) (mutData gam)
+
          case vis of
               Private => pure ()
               _ => do addHash n
@@ -140,18 +145,20 @@ processData {vars} elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
          let arity = getArity gam [] ty'
 
          -- If n exists, check it's the same type as we have here, and is
-         -- a data constructor
-         case lookupDefTyExact n (gamma gam) of
-              Just (TCon _ _ [] [] [], ty_old) =>
-                   if convert gam [] ty' ty_old
-                      then pure ()
-                      else throw (AlreadyDefined loc n)
-              Just (_, _) => throw (AlreadyDefined loc n)
-              Nothing => pure ()
+         -- a data constructor.
+         -- When looking up, note the data types which were undefined at the
+         -- point of declaration.
+         mw <- case lookupDefTyExact n (gamma gam) of
+                    Just (TCon _ _ mw [] [] [], ty_old) =>
+                         if convert gam [] ty' ty_old
+                            then pure mw
+                            else throw (AlreadyDefined loc n)
+                    Just (_, _) => throw (AlreadyDefined loc n)
+                    Nothing => pure []
 
          -- Add a temporary type constructor, to use while checking
          -- data constructors (tag is meaningless here, so just set to 0)
-         addDef n (newDef vars ty' Public (TCon 0 arity [] [] []))
+         addDef n (newDef vars ty' Public (TCon 0 arity mw [] [] []))
          
          -- Constructors are private if the data type as a whole is
          -- export
@@ -165,7 +172,16 @@ processData {vars} elab env nest vis (MkImpData loc n_in ty_raw dopts cons_raw)
               do addHash n
                  addHash ty'
         
+         -- Type is defined mutually with every data type undefined at the
+         -- point it was declared, and every data type undefined right now
+         gam <- get Ctxt
+         let mutWith = nub (mw ++ mutData gam)
+         log 3 $ show n ++ " defined in a mutual block with " ++ show mw
+         setMutWith loc n mw
+
          traverse (processDataOpt loc n) dopts
+         dropMutData n
+
          when (not (NoHints `elem` dopts)) $
               do traverse (\x => addHintFor loc n x True) (map conName cons)
                  pure ()
