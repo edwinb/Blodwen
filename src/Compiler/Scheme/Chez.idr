@@ -37,6 +37,13 @@ findLibs = mapMaybe (isLib . trim)
              then Just (trim (substr 3 (length d) d))
              else Nothing
 
+escapeQuotes : String -> String
+escapeQuotes s = pack $ foldr escape [] $ unpack s
+  where
+    escape : Char -> List Char -> List Char
+    escape '"' cs = '\\' :: '\"' :: cs
+    escape c   cs = c :: cs
+
 schHeader : String -> List String -> String
 schHeader chez libs
   = "#!" ++ chez ++ " --script\n\n" ++
@@ -45,7 +52,7 @@ schHeader chez libs
     "  [(i3le ti3le a6le ta6le) (load-shared-object \"libc.so.6\")]\n" ++
     "  [(i3osx ti3osx a6osx ta6osx) (load-shared-object \"libc.dylib\")]\n" ++
     "  [else (load-shared-object \"libc.so\")])\n\n" ++
-    showSep "\n" (map (\x => "(load-shared-object \"" ++ x ++ "\")") libs) ++ "\n\n" ++
+    showSep "\n" (map (\x => "(load-shared-object \"" ++ escapeQuotes x ++ "\")") libs) ++ "\n\n" ++
     "(let ()\n"
 
 schFooter : String
