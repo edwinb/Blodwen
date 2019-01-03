@@ -12,33 +12,52 @@ import Debug.Trace
 
 %default covering
 
--- TODO: Still to handle:
--- Delay for corecursive calls
--- Positivity check for data types
+data Guardedness = Toplevel | Unguarded | Guarded | InDelay
 
 mutual
-  findSC : Defs -> Env Term vars ->
+  findSC : Defs -> Env Term vars -> Guardedness ->
            List (Nat, Term vars) -> -- LHS args and their position
            Term vars -> -- Right hand side
            List SCCall 
-  findSC {vars} defs env pats (Bind n b sc) 
+  findSC {vars} defs env g pats (Bind n b sc) 
        = findSCbinder b ++
-         findSC defs (b :: env) (map (\ (p, tm) => (p, weaken tm)) pats) sc
+         findSC defs (b :: env) g (map (\ (p, tm) => (p, weaken tm)) pats) sc
     where
       findSCbinder : Binder (Term vars) -> List SCCall
-      findSCbinder (Let c val ty) = findSC defs env pats val
+      findSCbinder (Let c val ty) = findSC defs env g pats val
       findSCbinder b = [] -- only types, no need to look
 
-  findSC defs env pats tm with (unapply tm)
-    findSC defs env pats (apply (Ref Func fn) args) | ArgsList 
+  findSC defs env g pats tm with (unapply tm)
+    -- If we're InDelay and find a constructor (or a function call which is
+    -- guaranteed to return a constructor; AllGuarded set), continue as InDelay
+    findSC defs env InDelay pats (apply (Ref (DataCon _ _) _) args) | ArgsList
+       = concatMap (findSC defs env InDelay pats) args
+    -- If we're InDelay otherwise, just check the arguments
+    findSC defs env InDelay pats (apply f args) | ArgsList
+       = concatMap (findSC defs env Unguarded pats) args
+
+    -- If we're Guarded and find a Delay, continue with the argument as InDelay
+    -- If we're Toplevel or Guarded and find a constructor, continue with the
+    -- arguments as Guarded
+    findSC defs env Guarded pats (apply (Ref (DataCon _ _) cn) args) | ArgsList
+       = if isDelay cn defs
+            then concatMap (findSC defs env InDelay pats) args
+            else concatMap (findSC defs env Guarded pats) args
+    findSC defs env Toplevel pats (apply (Ref (DataCon _ _) cn) args) | ArgsList
+       = concatMap (findSC defs env Guarded pats) args
+
+    -- If we find a function where all branches return a constructor (i.e.
+    -- AllGuarded set) continue as Guarded (AllGuarded option is still TODO)
+    -- If we find a function, calculate a size change as normal
+    findSC defs env g pats (apply (Ref Func fn) args) | ArgsList 
        = let arity 
                 = case lookupTyExact fn (gamma defs) of
                        Just ty => getArity defs [] ty
                        _ => 0 in
-             findSCcall defs env pats fn arity args
+             findSCcall defs env Unguarded pats fn arity args
     -- Just look in the arguments, we already know 'f' isn't a function ref
-    findSC defs env pats (apply f args) | ArgsList 
-       = concatMap (findSC defs env pats) args
+    findSC defs env g pats (apply f args) | ArgsList 
+       = concatMap (findSC defs env Unguarded pats) args
 
   -- Expand the size change argument list with 'Nothing' to match the given
   -- arity (i.e. the arity of the function we're calling) to ensure that
@@ -51,34 +70,39 @@ mutual
   expandToArity (S k) [] = Nothing :: expandToArity k []
 
   -- Return whether first argument is structurally smaller than the second.
-  -- TODO: Can't be smaller than a delayed infinite thing
   smaller : Bool -> -- Have we gone under a constructor yet?
+            Defs ->
             Maybe (Term vars) -> -- Asserted bigger thing
             Term vars -> -- Term we're checking
             Term vars -> -- Argument it might be smaller than
             Bool
-  smaller inc big _ Erased = False -- Never smaller than an erased thing!
-  smaller True big s t
+  smaller inc defs big _ Erased = False -- Never smaller than an erased thing!
+  smaller True defs big s t
       = if s == t
            then True
-           else smallerArg True big s t
-  smaller inc big s t = smallerArg inc big s t
+           else smallerArg True defs big s t
+  smaller inc defs big s t = smallerArg inc defs big s t
 
   assertedSmaller : Maybe (Term vars) -> Term vars -> Bool
   assertedSmaller (Just b) a = b == a
   assertedSmaller _ _ = False
 
-  smallerArg : Bool -> Maybe (Term vars) -> Term vars -> Term vars -> Bool
-  smallerArg inc big s tm
+  smallerArg : Bool -> Defs ->
+               Maybe (Term vars) -> Term vars -> Term vars -> Bool
+  smallerArg inc defs big s tm
         -- If we hit a pattern that is equal to a thing we've asserted_smaller,
         -- the argument must be smaller
       = if assertedSmaller big tm
            then True
            else case getFnArgs tm of
                      (Ref (DataCon t a) cn, args) 
-                         => any (smaller True big s) args
+                         => if not (isDelay cn defs)
+                               then any (smaller True defs big s) args
+                               else False -- Can't be smaller than a delayed
+                                          -- thing (which will be 'Infinite')
+                                          -- since all others are erased
                      _ => case s of
-                               App f _ => smaller inc big f tm 
+                               App f _ => smaller inc defs big f tm 
                                             -- Higher order recursive argument
                                _ => False
 
@@ -97,14 +121,15 @@ mutual
   -- i.e., return the size relationship of the given argument with an entry 
   -- in 'pats'; the position in 'pats' and the size change.
   -- Nothing if there is no relation with any of them.
-  mkChange : (pats : List (Nat, Term vars)) -> 
+  mkChange : Defs ->
+             (pats : List (Nat, Term vars)) -> 
              (arg : Term vars) ->
              Maybe (Nat, SizeChange)
-  mkChange [] arg = Nothing
-  mkChange ((i, parg) :: pats) arg
+  mkChange defs [] arg = Nothing
+  mkChange defs ((i, parg) :: pats) arg
       = cond [(arg == parg, Just (i, Same)),
-              (smaller False (asserted arg) arg parg, Just (i, Smaller))]
-          (mkChange pats arg)
+              (smaller False defs (asserted arg) arg parg, Just (i, Smaller))]
+          (mkChange defs pats arg)
 
   -- Given a name of a case function, and a list of the arguments being
   -- passed to it, return all the right hand sides as they match against those
@@ -146,18 +171,19 @@ mutual
   caseFn (NS _ n) = caseFn n
   caseFn _ = False
 
-  findSCcall : Defs -> Env Term vars -> List (Nat, Term vars) ->
+  findSCcall : Defs -> Env Term vars -> Guardedness ->
+               List (Nat, Term vars) ->
                Name -> Nat -> List (Term vars) ->
                List SCCall
-  findSCcall defs env pats fn arity args 
+  findSCcall defs env g pats fn arity args 
         -- Under 'assert_total' we assume that all calls are fine, so leave
         -- the size change list empty
       = cond [(fn == NS ["Builtin"] (UN "assert_total"), []),
               (caseFn fn, case getCasePats defs fn args of
                                Nothing => []
-                               Just ps => concatMap (findSC defs env pats) ps)]
-             ([MkSCCall fn (expandToArity arity (map (mkChange pats) args))] 
-                   ++ concatMap (findSC defs env pats) args)
+                               Just ps => concatMap (findSC defs env g pats) ps)]
+             ([MkSCCall fn (expandToArity arity (map (mkChange defs pats) args))] 
+                   ++ concatMap (findSC defs env g pats) args)
 
 -- Remove all laziness annotations which are nothing to do with coinduction,
 -- meaning that all only Force/Delay left is to guard coinductive calls.
@@ -192,7 +218,7 @@ findCalls : Defs -> (vars ** (Env Term vars, Term vars, Term vars)) -> List SCCa
 findCalls defs (_ ** (env, lhs, rhs_in))
    = let pargs = getArgs (delazy defs lhs) 
          rhs = normaliseOpts tcOnly defs env rhs_in in
-         findSC defs env 
+         findSC defs env Toplevel
                 (zip (take (length pargs) [0..]) pargs) (delazy defs rhs)
 
 getSC : Defs -> Def -> List SCCall

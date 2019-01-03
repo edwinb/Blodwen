@@ -1,0 +1,9 @@
+1/1: Building total006 (total006.blod)
+Welcome to Blodwen. Good luck.
+Main> Main.count is total
+Main> Main.badCount is not terminating due to recursive path Main.badCount -> {D:Functor implementation at Prelude.blod:729:1--733:1:__Impl_Functor_Stream} -> {D:map:map_Functor__Stream}
+Main> Main.process is total
+Main> Main.badProcess is not terminating due to recursive path Main.badProcess -> Main.badProcess -> Main.badProcess
+Main> Main.doubleInt is total
+Main> Main.main is total
+Main> Bye for now!
