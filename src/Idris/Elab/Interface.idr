@@ -261,8 +261,8 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
              let dt = mkIfaceData fc vis env consts iname conName params 
                                   dets meths
              log 10 $ "Methods: " ++ show meths
+             log 5 $ "Making interface data type " ++ show dt
              processDecls env nest [dt]
-             log 5 $ "Made interface data type " ++ show dt
       where
         notData : (n, t) -> (n, (Bool, t))
         notData (x, y) = (x, (False, y))

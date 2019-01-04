@@ -118,8 +118,8 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          checkDots
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'
-         fullImps <- getToBind (getAnnot tm) elabmode impmode env chktm
-         clearToBind -- remove the bound holes
+         fullImps <- getToBind (getAnnot tm) elabmode impmode env [] chktm
+         clearToBind [] -- remove the bound holes
          gam <- get Ctxt
          log 5 $ "Binding implicits " ++ show fullImps ++
                  " in " ++ show chktm

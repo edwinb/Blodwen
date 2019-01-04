@@ -532,16 +532,19 @@ mutual
            let oldenv = outerEnv est
            let oldsub = subEnv est
            let oldbif = bindIfUnsolved est
+           let dontbind = map fst (toBind est)
            -- Set the binding environment in the elab state - unbound
            -- implicits should have access to whatever is in scope here
            put EST (updateEnv env SubRefl [] est)
            (tmv, tmt) <- check rigc process elabinfo env nest tm expected
-           gam <- get Ctxt
+           solveConstraints (case elabMode elabinfo of
+                                  InLHS c => InLHS
+                                  _ => InTerm) Normal
            argImps <- getToBind loc 
                                 (elabMode elabinfo)
                                 (implicitMode elabinfo)
-                                env tmv
-           clearToBind
+                                env dontbind tmv
+           clearToBind dontbind
            gam <- get Ctxt
            est <- get EST
            put EST (updateEnv oldenv oldsub oldbif 

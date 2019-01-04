@@ -400,12 +400,14 @@ mkOuterHole loc n patvar topenv _
          tm <- addBoundName loc n patvar env ty
          pure (embedSub sub tm, embedSub sub ty)
 
+-- Clear the 'toBind' list, except for the names given
 export
 clearToBind : {auto e : Ref EST (EState vs)} ->
-              Core annot ()
-clearToBind
+              (excepts : List Name) -> Core annot ()
+clearToBind excepts
     = do est <- get EST
-         put EST (record { toBind = [] } (clearBindIfUnsolved est))
+         put EST (record { toBind $= filter (\x => fst x `elem` excepts) } 
+                         (clearBindIfUnsolved est))
 
 export
 dropTmIn : List (a, (c, d)) -> List (a, d)
@@ -512,10 +514,10 @@ export
 getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
             {auto u : Ref UST (UState annot)} ->
             annot -> ElabMode -> ImplicitMode ->
-            Env Term vars -> Term vars ->
+            Env Term vars -> (excepts : List Name) -> Term vars ->
             Core annot (List (Name, Term vars))
-getToBind loc elabmode NONE ent toptm = pure []
-getToBind {vars} loc elabmode impmode env toptm
+getToBind loc elabmode NONE ent excepts toptm = pure []
+getToBind {vars} loc elabmode impmode env excepts toptm
     = do solveConstraints (case elabmode of
                                 InLHS _ => InLHS
                                 _ => InTerm) Normal
@@ -532,7 +534,8 @@ getToBind {vars} loc elabmode impmode env toptm
          est <- get EST
          ust <- get UST
 
-         let tob = reverse $ toBind est
+         let tob = reverse $ filter (\x => not (fst x `elem` excepts)) $
+                             toBind est
 
          log 10 $ "With holes " ++ show (map snd (holes ust))
          res <- normImps gam [] tob
