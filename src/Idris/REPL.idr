@@ -50,6 +50,11 @@ showInfo (n, d)
               Nothing => pure ()
               Just expr => coreLift $ putStrLn ("Compiled: " ++ show expr)
          coreLift $ putStrLn ("Refers to: " ++ show (refersTo d))
+         when (not (isNil (sizeChange d))) $ 
+            let scinfo = map (\s => show (fnCall s) ++ ": " ++ 
+                                    show (fnArgs s)) (sizeChange d) in
+                coreLift $ putStrLn $
+                        "Size change: " ++ showSep ", " scinfo
 
 isHole : GlobalDef -> Maybe Nat
 isHole def

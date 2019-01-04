@@ -6,11 +6,30 @@ import Core.Normalise
 import Core.TT
 
 import Control.Monad.State
+import Data.CSet
 import Data.List
 
 import Debug.Trace
 
 %default covering
+
+totRefs : Defs -> List Name -> Terminating
+totRefs defs [] = IsTerminating
+totRefs defs (n :: ns)
+    = let rest = totRefs defs ns in
+          case lookupGlobalExact n (gamma defs) of
+               Just d =>
+                    case isTerminating (totality d) of
+                         IsTerminating => rest
+                         Unchecked => rest
+                         bad => case rest of
+                                     NotTerminating (BadCall ns)
+                                        => NotTerminating (BadCall (n :: ns))
+                                     _ => NotTerminating (BadCall [n])
+               Nothing => rest
+
+totRefsIn : Defs -> Term vars -> Terminating
+totRefsIn defs ty = totRefs defs (toList (getRefs ty))
 
 data Guardedness = Toplevel | Unguarded | Guarded | InDelay
 
@@ -30,7 +49,7 @@ mutual
   findSC defs env g pats tm with (unapply tm)
     -- If we're InDelay and find a constructor (or a function call which is
     -- guaranteed to return a constructor; AllGuarded set), continue as InDelay
-    findSC defs env InDelay pats (apply (Ref (DataCon _ _) _) args) | ArgsList
+    findSC defs env InDelay pats (apply (Ref (DataCon _ _) n) args) | ArgsList
        = concatMap (findSC defs env InDelay pats) args
     -- If we're InDelay otherwise, just check the arguments
     findSC defs env InDelay pats (apply f args) | ArgsList
@@ -327,12 +346,25 @@ calcTerminating : {auto c : Ref Ctxt Defs} ->
                   annot -> Name -> Core annot Terminating
 calcTerminating loc n 
     = do defs <- get Ctxt
-         case lookupTyExact n (gamma defs) of
+         case lookupGlobalExact n (gamma defs) of
               Nothing => throw (UndefinedName loc n)
-              Just ty => 
-                pure $ evalState 
-                         (do args <- initArgs (getArity defs [] ty)
-                             checkSC defs n args []) firstArg
+              Just def => 
+                case totRefs defs (nub (addCases defs (refersTo def))) of
+                     IsTerminating =>
+                        let ty = type def in
+                            pure $ evalState 
+                                 (do args <- initArgs (getArity defs [] ty)
+                                     checkSC defs n args []) firstArg
+                     bad => pure bad
+  where
+    addCases : Defs -> List Name -> List Name
+    addCases defs [] = []
+    addCases defs (n :: ns)
+        = if caseFn n
+             then case lookupGlobalExact n (gamma defs) of
+                       Just def => n :: refersTo def ++ addCases defs ns
+                       Nothing => n :: addCases defs ns
+             else n :: addCases defs ns
 
 -- Check whether a function is terminating, and record in the context
 export
@@ -400,7 +432,10 @@ checkCon : Defs -> List Name -> Name -> Terminating
 checkCon defs tyns cn 
     = case lookupTyExact cn (gamma defs) of
            Nothing => Unchecked
-           Just ty => checkPosArgs defs tyns (nf defs [] ty)
+           Just ty => 
+                case totRefsIn defs ty of
+                     IsTerminating => checkPosArgs defs tyns (nf defs [] ty)
+                     bad => bad
 
 checkData : Defs -> List Name -> List Name -> Terminating
 checkData defs tyns [] = IsTerminating
@@ -415,9 +450,11 @@ calcPositive : {auto c : Ref Ctxt Defs} ->
                annot -> Name -> Core annot (Terminating, List Name)
 calcPositive loc n 
     = do defs <- get Ctxt
-         case lookupDefExact n (gamma defs) of
-              Just (TCon _ _ tns _ _ dcons) => 
-                  pure (checkData defs (n :: tns) dcons, dcons)
+         case lookupDefTyExact n (gamma defs) of
+              Just (TCon _ _ tns _ _ dcons, ty) => 
+                  case totRefsIn defs ty of
+                       IsTerminating => pure (checkData defs (n :: tns) dcons, dcons)
+                       bad => pure (bad, dcons)
               Just _ => throw (GenericMsg loc (show n ++ " not a data type"))
               Nothing => throw (UndefinedName loc n)
 
@@ -446,8 +483,8 @@ checkTotal loc n
          defs <- get Ctxt
          case isTerminating tot of
               Unchecked =>
-                  case lookupDefTyExact n (gamma defs) of
-                       Just (TCon _ _ _ _ _ _, _)
+                  case lookupDefExact n (gamma defs) of
+                       Just (TCon _ _ _ _ _ _)
                            => checkPositive loc n
                        _ => checkTerminating loc n
               t => pure t
