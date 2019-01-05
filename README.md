@@ -78,11 +78,9 @@ Information about external dependencies are presented in [Install.md](Install.md
 Things still missing
 ====================
 
-+ Some high level syntax, notably record update syntax, dependent pairs, and
-  numeric ranges
++ Some high level syntax, notably dependent pairs, and numeric ranges
 + 'parameters' blocks
 + Cumulativity
-+ Codata (or rather, you can have it, but there's no productivity check...)
 + 'rewrite' doesn't yet work on dependent types
 + Some details of 'with' not yet done (notably recursive with call syntax)
 + Parts of the ide-mode
