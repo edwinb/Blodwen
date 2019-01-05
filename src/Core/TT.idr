@@ -869,6 +869,7 @@ data SubVars : List Name -> List Name -> Type where
      DropCons : SubVars xs ys -> SubVars xs (y :: ys)
      KeepCons : SubVars xs ys -> SubVars (x :: xs) (x :: ys)
 
+export
 subElem : Elem x xs -> SubVars ys xs -> Maybe (Elem x ys)
 subElem prf SubRefl = Just prf
 subElem Here (DropCons ds) = Nothing

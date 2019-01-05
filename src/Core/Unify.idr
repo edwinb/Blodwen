@@ -199,17 +199,34 @@ toSubVars (n :: ns) xs
    to which the metavariable is applied. If this environment is enough
    to check the term we're unifying with, and that term doesn't use the
    metavariable name, we can safely apply the rule.
+
+   Also, return the list of arguments the metavariable was applied to, to
+   make sure we use them in the right order when we build the solution.
 -}
 patternEnv : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->
              Env Term vars -> List (Closure vars) -> 
-             Core annot (Maybe (newvars ** SubVars newvars vars))
+             Core annot (Maybe (newvars ** (List (x ** Elem x newvars),
+                                            SubVars newvars vars)))
 patternEnv env args
     = do defs <- get Ctxt
          let args' = map (evalClosure (noGam defs)) args
          case getVars args' of
               Nothing => pure Nothing
-              Just vs => pure (Just (toSubVars _ vs))
+              Just vs => 
+                let (newvars ** svs) = toSubVars _ vs in
+                    pure (Just (newvars ** (updateVars vs svs, svs)))
+  where
+    -- Update the variable list to point into the sub environment
+    -- (All of these will succeed because the SubVars we have comes from
+    -- the list of variable uses! It's not stated in the type, though.)
+    updateVars : List (x ** Elem x vars) -> SubVars newvars vars ->
+                 List (x ** Elem x newvars)
+    updateVars [] svs = []
+    updateVars ((_ ** p) :: ps) svs
+        = case subElem p svs of
+               Nothing => updateVars ps svs
+               Just p' => (_ ** p') :: updateVars ps svs
 
 -- Instantiate a metavariable by binding the variables in 'newvars'
 -- and returning the term
@@ -219,18 +236,21 @@ instantiate : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
               annot -> Env Term vars -> 
               (metavar : Name) -> (mty : ClosedTerm) ->
-              SubVars newvars vars -> 
+              List (x ** Elem x newvars) -> -- Variable each argument maps to
               Term vars -> -- original, just for error message
               Term newvars -> -- shrunk environment
               Core annot ()
-instantiate loc env metavar ty smvs otm tm {newvars}
+instantiate loc env metavar ty els otm tm {newvars}
      = do gam <- get Ctxt
           -- If the name is user defined, it means we've solved a ?hole by
           -- unification, which is not what we want!
           when (isUserName metavar) $
                throw (SolvedNamedHole loc env metavar otm)
-          case mkRHS [] newvars (snocList newvars) CompatPre ty 
-                   (rewrite appendNilRightNeutral newvars in tm) of
+          log 5 $ "Instantiating " ++ show tm ++ " in " ++ show newvars 
+                     ++ " with " ++ show (map fst els)
+          case mkDef [] newvars (snocList newvars) CompatPre
+                     (rewrite appendNilRightNeutral newvars in els)
+                     (rewrite appendNilRightNeutral newvars in tm) ty of
                Nothing => ufail loc $ "Can't make solution for " ++ show metavar
                Just rhs => 
                   do let soln = newDef [] ty Public 
@@ -241,17 +261,52 @@ instantiate loc env metavar ty smvs otm tm {newvars}
                      addDef metavar soln
                      removeHoleName metavar
   where
-    mkRHS : (got : List Name) -> (newvars : List Name) ->
-            SnocList newvars ->
+    updateEl : List (x ** Elem x vs) -> Elem v vs' -> 
+               Maybe (x ** Elem x vs)
+    updateEl [] el = Nothing
+    updateEl (p :: ps) Here = Just p
+    updateEl (p :: ps) (There prf) = updateEl ps prf
+
+    -- Since the order of variables is not necessarily the same in the solution,
+    -- this is to make sure the variables point to the right argument, given
+    -- the argument list we got from the application of the hole.
+    updateEls : List (x ** Elem x vs) -> Term vs -> Maybe (Term vs)
+    updateEls els (Local r p)
+        = do (_ ** p') <- updateEl els p
+             Just (Local r p')
+    updateEls {vs} els (Bind x b sc)
+        = do b' <- updateElsB b
+             sc' <- updateEls 
+                       ((_ ** Here) :: map (\ (_ ** p) => (_ ** There p)) els) 
+                       sc
+             Just (Bind x b' sc')
+      where
+        updateElsB : Binder (Term vs) -> Maybe (Binder (Term vs))
+        updateElsB (Lam c p t) = Just (Lam c p !(updateEls els t))
+        updateElsB (Let c v t) = Just (Let c !(updateEls els v) !(updateEls els t))
+        updateElsB (Pi c p t) = Just (Pi c p !(updateEls els t))
+        updateElsB (PVar c t) = Just (PVar c !(updateEls els t))
+        updateElsB (PLet c v t) = Just (PLet c !(updateEls els v) !(updateEls els t))
+        updateElsB (PVTy c t) = Just (PVTy c !(updateEls els t))
+
+    updateEls els (App f a)
+        = Just (App !(updateEls els f) !(updateEls els a))
+    updateEls els tm = Just tm
+
+    mkDef : (got : List Name) -> (vs : List Name) -> SnocList vs ->
             CompatibleVars got rest ->
-            Term rest -> Term (newvars ++ got) -> Maybe (Term rest)
-    mkRHS got [] Empty cvs ty tm = Just (renameVars cvs tm)
-    mkRHS got (ns ++ [n]) (Snoc rec) cvs (Bind x (Pi c _ ty) sc) tm 
-         = do sc' <- mkRHS (n :: got) ns rec (CompatExt cvs) sc 
-                         (rewrite appendAssociative ns [n] got in tm)
-              pure (Bind x (Lam c Explicit ty) sc')
-      -- Run out of variables to bind
-    mkRHS got (ns ++ [n]) (Snoc rec) cvs ty tm = Nothing
+            List (x ** Elem x (vs ++ got)) -> Term (vs ++ got) -> 
+            Term rest -> Maybe (Term rest)
+    mkDef got [] Empty cvs els tm ty 
+        = do tm' <- updateEls (reverse els) tm
+             pure (renameVars cvs tm')
+    mkDef got (vs ++ [v]) (Snoc rec) cvs els tm (Bind x (Pi c _ ty) sc) 
+        = do sc' <- mkDef (v :: got) vs rec (CompatExt cvs)
+                       (rewrite appendAssociative vs [v] got in els)
+                       (rewrite appendAssociative vs [v] got in tm)
+                       sc
+             pure (Bind x (Lam c Explicit ty) sc')
+    mkDef got (vs ++ [v]) (Snoc rec) cvs els tm ty = Nothing
 
 export
 implicitBind : {auto c : Ref Ctxt Defs} ->
@@ -638,7 +693,7 @@ mutual
                                  show (map (\t => quote (noGam gam) env (evalClosure (noGam gam) t)) args) ++
                  " with " ++ show (quote (noGam gam) env tm)
         case !(patternEnv env args) of
-           Just (newvars ** submv) =>
+           Just (newvars ** (els, submv)) =>
                 do log 10 $ "Progress: " ++ show newvars
                    gam <- get Ctxt
 --                    tm' <- shrinkHoles loc env (map (quote gam env) args) 
@@ -682,7 +737,7 @@ mutual
                                                      (quote (noGam gam) env (NApp (NRef nt var) args)))
                                                  (normaliseHoles gam env
                                                      (quote (noGam gam) env tm)))
-                                      else do instantiate loc env var hty submv otm tm'
+                                      else do instantiate loc env var hty els otm tm'
                                               pure []
            -- Not in the pattern fragment
            Nothing => do log 10 $ "Not in pattern fragment"

@@ -151,7 +151,9 @@ mutual
                  let ctynf = nf defs env cty
                  case exp of
                       FnType args ret => 
-                           unifyFnArgs ctynf ctynf (reverse args) ret
+                           if safeRetTy Z env cty
+                              then unifyFnArgs ctynf ctynf (reverse args) ret
+                              else log 10 $ "Can't unifyFnArgs for " ++ show cty
                       _ => pure ()
                  case nf defs env cty of
                       NTCon n _ _ _ =>
@@ -180,13 +182,14 @@ mutual
       -- easier. If it fails, it might be due to an error elsewhere (or it might
       -- be that there is a dependency in the type we haven't refined yet), in
       -- which case we'll get a more precise error later.
+
       unifyFnArgs : NF vars -> NF vars -> List (Name, Term vars) -> 
                     Term vars -> Core annot ()
       unifyFnArgs fty topty [] ret
           = do defs <- get Ctxt
                log 2 $ "Converting in fnapp: " ++
                        show (quote defs env topty) ++ " and " ++
-                       show (ret)
+                       show ret
                try (do [] <- convert loc (elabMode elabinfo) env topty (nf defs env ret) 
                              | _ => throw (InternalError "No such luck")
                        pure ())
@@ -195,6 +198,24 @@ mutual
           = unifyFnArgs (scf (toClosure defaultOpts env Erased)) topty 
                         args (Bind an (Pi c p argty) (weaken ret))
       unifyFnArgs _ _ _ _ = pure ()
+      
+      -- The above doesn't work if any of the arguments appear in the return 
+      -- type, because we have to unify without any assumptions about what the
+      -- functions arguments will be.
+      -- So, safeRetTy checks for that.
+      safeRetTy : Nat -> Env Term vs -> Term vs -> Bool
+      safeRetTy n env (Bind _ b sc) = safeRetTy (S n) (b :: env) sc
+      safeRetTy Z env tm = True
+      safeRetTy n env tm
+          = not (any (under n) (findUsedLocs env tm))
+        where
+          under' : Nat -> Elem x vs -> Bool
+          under' Z el = False
+          under' (S k) Here = True
+          under' (S k) (There p) = under' k p
+
+          under : Nat -> (x ** Elem x vs) -> Bool
+          under n (_ ** el) = under' n el
 
   delayError : Defs -> Error annot -> Bool
   delayError defs ForceNeeded = True
@@ -437,6 +458,7 @@ mutual
                                           solveConstraints (case elabMode elabinfo of
                                                                  InLHS c => InLHS
                                                                  _ => InTerm) Normal
+                                          log 10 $ show (getName t) ++ " success"
                                           pure res)) alts'))
     where
       holeIn : Gamma -> ExpType (Term vars) -> Bool
@@ -995,13 +1017,19 @@ mutual
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} rigc process 
                                      (record { topLevel = False } elabinfo) 
-                                     env' (weaken nest') scope Unknown
+                                     env' (weaken nest') scope (dropArg expected)
            st' <- strengthenedEState False loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
                         expected
-  
+    where
+      dropArg : ExpType (Term vars) -> ExpType (Term (x :: vars))
+      dropArg Unknown = Unknown
+      dropArg (FnType (a :: as) ret) 
+         = FnType (map (\ (x, t) => (x, weaken t)) as) (weaken ret)
+      dropArg (FnType _ _) = Unknown
+
   checkLet : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
@@ -1202,6 +1230,7 @@ mutual
              Core annot (Term vars, Term vars) 
   checkExp rigc process loc elabinfo env nest tm got (FnType [] exp) 
       = do gam <- get Ctxt
+           log 10 $ "Checking conversion " ++ show got ++ " and " ++ show exp
            let expnf = nf gam env exp
            (got', imps) <- convertImps rigc process loc env nest elabinfo (nf gam env got) expnf []
            constr <- convert loc (elabMode elabinfo) env got' expnf

@@ -881,6 +881,7 @@ successful elabmode ((tm, elab) :: elabs)
          init_st <- getAllState
          Right res <- tryError elab
                | Left err => do rest <- successful elabmode elabs
+                                log 10 $ show tm ++ " failure"
                                 pure (Left (tm, err) :: rest)
 
          elabState <- getAllState -- save state at end of successful elab
