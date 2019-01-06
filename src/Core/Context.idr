@@ -23,7 +23,9 @@ public export
 record Context a where
      constructor MkContext
      -- for looking up by exact (completely qualified) names
-     exactNames : SortedMap a
+     exactNames : SortedMap a 
+     -- for looking up hole and pattern names
+     holeNames : SortedMap a
      -- for looking up by name root or partially qualified (so possibly
      -- ambiguous) names. This doesn't store machine generated names.
      hierarchy : StringMap (List (Name, a))
@@ -35,11 +37,19 @@ record Context a where
 
 export
 empty : Context a
-empty = MkContext empty empty []
+empty = MkContext empty empty empty []
 
 ||| Given a Name, and a Context, look up that name exactly
 export
 lookupCtxtExact : Name -> Context a -> Maybe a
+lookupCtxtExact n@(NS _ (MN _ _)) dict 
+    = case lookup n (holeNames dict) of
+           Nothing => lookup n (exactNames dict)
+           Just res => Just res
+lookupCtxtExact n@(PV _ _) dict
+    = case lookup n (holeNames dict) of
+           Nothing => lookup n (exactNames dict)
+           Just res => Just res
 lookupCtxtExact n dict = lookup n (exactNames dict)
 
 export
@@ -85,17 +95,53 @@ addToHier n val hier
 
 export
 addCtxt : Name -> a -> Context a -> Context a
-addCtxt n val (MkContext dict hier vis)
+addCtxt n@(PV _ _) val (MkContext dict holes hier vis)
+     = let holes' = insert n val holes in
+           MkContext dict holes' hier vis
+addCtxt n@(NS _ (MN _ _)) val (MkContext dict holes hier vis)
+     = let holes' = insert n val holes in
+           MkContext dict holes' hier vis
+addCtxt n val (MkContext dict holes hier vis) 
      = let dict' = insert n val dict
            hier' = addToHier n val hier in
-           MkContext dict' hier' vis
+           MkContext dict' holes hier' vis
+
+-- Only deletes from hole name lookups, so only used for hole/pattern var
+-- names
+export
+deleteCtxt : Name -> Context a -> Context a
+deleteCtxt n (MkContext dict holes hier vis)
+    = let holes' = delete n holes in
+          MkContext dict holes' hier vis
+
+export
+deleteCtxtNames : List Name -> Context a -> Context a
+deleteCtxtNames ns (MkContext dict holes hier vis)
+    = let holes' = deleteNs ns holes in
+          MkContext dict holes' hier vis
+  where
+    deleteNs : List Name -> SortedMap a -> SortedMap a
+    deleteNs [] d = d
+    deleteNs (n :: ns) d = deleteNs ns (delete n d)
+
+-- Move the current set of holes to the exactNames list, since we probably
+-- don't need quick access when the definition they arise from is done.
+export
+promoteHoles : Context a -> Context a
+promoteHoles (MkContext dict holes hier vis)
+    = let dict' = insertHoles (toList holes) dict in
+          MkContext dict' empty hier vis
+  where
+    insertHoles : List (Name, a) -> SortedMap a -> SortedMap a
+    insertHoles [] dict = dict
+    insertHoles ((k, v) :: hs) dict = insertHoles hs (insert k v dict)
 
 -- Merge two contexts, with entries in the second overriding entries in
 -- the first
 export
 mergeContext : Context a -> Context a -> Context a
-mergeContext ctxt (MkContext exact hier vis)
-    = record { visibleNS $= (vis ++) } (insertFrom (toList exact) ctxt)
+mergeContext ctxt (MkContext exact holes hier vis)
+    = record { visibleNS $= (vis ++) } (insertFrom (toList exact ++ toList holes) ctxt)
   where
     insertFrom : List (Name, a) -> Context a -> Context a
     insertFrom [] ctxt = ctxt
@@ -105,8 +151,8 @@ mergeContext ctxt (MkContext exact hier vis)
 export
 mergeContextAs : List String -> List String ->
                  Context a -> Context a -> Context a
-mergeContextAs oldns newns ctxt (MkContext exact hier vis)
-    = record { visibleNS $= (vis ++) } (insertFrom (toList exact) ctxt)
+mergeContextAs oldns newns ctxt (MkContext exact holes hier vis)
+    = record { visibleNS $= (vis ++) } (insertFrom (toList exact ++ toList holes) ctxt)
   where
     insertFrom : List (Name, a) -> Context a -> Context a
     insertFrom [] ctxt = ctxt
@@ -124,7 +170,8 @@ toList = toList . exactNames
 
 export
 TTC annot a => TTC annot (Context a) where
-  toBuf b ctxt = toBuf b (toList (exactNames ctxt))
+  toBuf b ctxt = toBuf b (toList (exactNames ctxt) ++ 
+                          toList (holeNames ctxt))
   fromBuf s b
       = do xs <- fromBuf s b
            pure (fromList xs)
@@ -135,12 +182,13 @@ data Def : Type where
      PMDef : (ishole : Bool) -> (args : List Name) ->
              (treeCT : CaseTree args) -> -- Compile time case tree
              (treeRT : CaseTree args) -> -- Run time case tree (0 multiplicities erased)
-             (pats : List (List Name, ClosedTerm, ClosedTerm)) ->
+             (pats : List (vs ** (Env Term vs, Term vs, Term vs))) ->
                       -- original checked patterns (lhs/rhs) with the
                       -- names in the environment
-                      -- Patterns are used for display purposes only, and will
-                      -- only be there for definitions arising from the
-                      -- TTImp elaborator
+                      -- Patterns will only be there for definitions arising
+                      -- from the TTImp elaborator; they are used for display
+                      -- purposes, and for finding size changes in the
+                      -- termination checker
              Def
      ExternDef : (arity : Nat) -> Def
      Builtin : PrimFn arity -> Def
@@ -148,7 +196,8 @@ data Def : Type where
 						 (forcedpos : List Nat) -> -- argument positions whose value is
 			                         -- forced by the constructors type
 			       Def
-     TCon  : (tag : Int) -> (arity : Nat) ->
+     TCon  : (tag : Int) -> (arity : Nat) -> 
+             (mwith : List Name) -> -- defined mutually with these
 						 (parampos : List Nat) -> -- argument positions which are parametric
              (detpos : List Nat) -> -- argument postitions for determining auto search
 						 (datacons : List Name) ->
@@ -187,8 +236,9 @@ Show Def where
       = "<<external definition with " ++ show arity ++ " arguments>>"
   show (Builtin {arity} f)
       = "<<builtin with " ++ show arity ++ " arguments>>"
-  show (TCon tag arity params dets cons)
-	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ "; params " ++
+  show (TCon tag arity mwith params dets cons)
+	    = "TyCon " ++ show tag ++ "; arity " ++ show arity ++ 
+        "; with " ++ show mwith ++ "; params " ++
         show params ++ "; determining " ++ show dets ++
         "; constructors " ++ show cons
   show (DCon tag arity forced)
@@ -215,8 +265,8 @@ TTC annot Def where
       = throw (InternalError "Trying to serialise a Builtin")
   toBuf b (DCon t arity forcedpos)
       = do tag 3; toBuf b t; toBuf b arity; toBuf b forcedpos
-  toBuf b (TCon t arity parampos detpos datacons)
-      = do tag 4; toBuf b t; toBuf b arity; toBuf b parampos;
+  toBuf b (TCon t arity mwith parampos detpos datacons) 
+      = do tag 4; toBuf b t; toBuf b arity; toBuf b mwith; toBuf b parampos; 
            toBuf b detpos; toBuf b datacons
   toBuf b (Hole numlocs pvar inv)
       = do tag 5; toBuf b numlocs; toBuf b pvar; toBuf b inv
@@ -238,8 +288,9 @@ TTC annot Def where
                      pure (ExternDef a)
              3 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (DCon x y z)
-             4 => do v <- fromBuf s b; w <- fromBuf s b; x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
-                     pure (TCon v w x y z)
+             4 => do u <- fromBuf s b; v <- fromBuf s b; w <- fromBuf s b; 
+                     x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
+                     pure (TCon u v w x y z)
              5 => do x <- fromBuf s b; y <- fromBuf s b; z <- fromBuf s b
                      pure (Hole x y z)
              6 => do x <- fromBuf s b; y <- fromBuf s b
@@ -250,12 +301,31 @@ TTC annot Def where
              _ => corrupt "Def"
 
 public export
-data DefFlag
+data TotalReq = Total | CoveringOnly | PartialOK
+
+public export
+data DefFlag 
     = TypeHint Name Bool -- True == direct hint
     | GlobalHint Bool -- True == always search (not a default hint)
     | Inline
     | Invertible -- assume safe to cancel arguments in unification
     | Overloadable -- allow ad-hoc overloads
+    | TCInline -- always inline before totality checking
+         -- (in practice, this means it's reduced in 'normaliseHoles')
+         -- This means the function gets inlined when calculating the size
+         -- change graph, but otherwise not. It's only safe if the function
+         -- being inlined is terminating no matter what, and is really a bit
+         -- of a hack to make sure interface dictionaries are properly inlined
+         -- (otherwise they look potentially non terminating) so use with
+         -- care!
+    | SetTotal TotalReq
+
+export
+Eq TotalReq where
+    (==) Total Total = True
+    (==) CoveringOnly CoveringOnly = True
+    (==) PartialOK PartialOK = True
+    (==) _ _ = False
 
 export
 Eq DefFlag where
@@ -264,7 +334,21 @@ Eq DefFlag where
     (==) Inline Inline = True
     (==) Invertible Invertible = True
     (==) Overloadable Overloadable = True
+    (==) TCInline TCInline = True
+    (==) (SetTotal x) (SetTotal y) = x == y
     (==) _ _ = False
+
+TTC annot TotalReq where
+  toBuf b Total = tag 0
+  toBuf b CoveringOnly = tag 1
+  toBuf b PartialOK = tag 2
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Total
+             1 => pure CoveringOnly
+             2 => pure PartialOK
+             _ => corrupt "TotalReq"
 
 TTC annot DefFlag where
   toBuf b (TypeHint x y) = do tag 0; toBuf b x; toBuf b y
@@ -272,6 +356,8 @@ TTC annot DefFlag where
   toBuf b Inline = tag 2
   toBuf b Invertible = tag 3
   toBuf b Overloadable = tag 4
+  toBuf b TCInline = tag 5
+  toBuf b (SetTotal x) = do tag 6; toBuf b x
 
   fromBuf s b
       = case !getTag of
@@ -280,7 +366,49 @@ TTC annot DefFlag where
              2 => pure Inline
              3 => pure Invertible
              4 => pure Overloadable
+             5 => pure TCInline
+             6 => do x <- fromBuf s b; pure (SetTotal x)
              _ => corrupt "DefFlag"
+
+public export
+data SizeChange = Smaller | Same | Unknown
+
+export
+Show SizeChange where
+  show Smaller = "Smaller"
+  show Same = "Same"
+  show Unknown = "Unknown"
+
+public export
+record SCCall where
+     constructor MkSCCall
+     fnCall : Name -- Function called
+     fnArgs : List (Maybe (Nat, SizeChange))
+        -- relationship to arguments of calling function; argument position
+        -- (in the calling function), and how its size changed in the call.
+        -- 'Nothing' if it's not related to any of the calling function's
+        -- arguments
+
+export
+TTC annot SizeChange where
+  toBuf b Smaller = tag 0
+  toBuf b Same = tag 1
+  toBuf b Unknown = tag 2
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Smaller
+             1 => pure Same
+             2 => pure Unknown
+             _ => corrupt "SizeChange"
+
+export
+TTC annot SCCall where
+  toBuf b c = do toBuf b (fnCall c); toBuf b (fnArgs c)
+  fromBuf s b
+      = do fn <- fromBuf s b
+           args <- fromBuf s b
+           pure (MkSCCall fn args)
 
 -- *everything* about a definition goes here, so that we can save out the
 -- type checked code "simply" by writing out a list of GlobalDefs
@@ -296,6 +424,7 @@ record GlobalDef where
      definition : Def
      compexpr : Maybe CDef
      refersTo : List Name
+     sizeChange : List SCCall
 
 TTC annot GlobalDef where
   toBuf b def
@@ -308,6 +437,7 @@ TTC annot GlobalDef where
            toBuf b (definition def)
            toBuf b (compexpr def)
            toBuf b (refersTo def)
+           toBuf b (sizeChange def)
 
   fromBuf s b
       = do ty <- fromBuf s b
@@ -319,7 +449,8 @@ TTC annot GlobalDef where
            def <- fromBuf s b
            exp <- fromBuf s b
            ref <- fromBuf s b
-           pure (MkGlobalDef ty mult vars vis tot flgs def exp ref)
+           sc <- fromBuf s b
+           pure (MkGlobalDef ty mult vars vis tot flgs def exp ref sc)
 
 getRefs : Def -> List Name
 getRefs None = []
@@ -327,7 +458,7 @@ getRefs (PMDef ishole args sc _ _) = getRefs sc
 getRefs (ExternDef _) = []
 getRefs (Builtin _) = []
 getRefs (DCon tag arity forced) = []
-getRefs (TCon tag arity params dets datacons) = []
+getRefs (TCon tag arity mwith params dets datacons) = []
 getRefs (Hole numlocs _ _) = []
 getRefs (BySearch _ _) = []
 getRefs ImpBind = []
@@ -337,8 +468,8 @@ getRefs Delayed = []
 export
 newRigDef : RigCount -> List Name ->
             (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
-newRigDef r vars ty vis def
-   = MkGlobalDef ty r vars vis Unchecked [] def Nothing (getRefs def)
+newRigDef r vars ty vis def 
+   = MkGlobalDef ty r vars vis unchecked [] def Nothing (getRefs def) []
 
 export
 newDef : List Name -> (ty : ClosedTerm) -> (vis : Visibility) -> Def -> GlobalDef
@@ -354,6 +485,7 @@ public export
 record Defs where
       constructor MkAllDefs
       gamma : Gamma -- All the definitions
+      mutData : List Name -- Currently declared but undefined data types
       currentNS : List String -- namespace for current definitions
       options : Options
       toSave : SortedSet -- Definitions to write out as .tti
@@ -376,6 +508,7 @@ record Defs where
       nextHole : Int -- next hole/constraint id
       nextVar	: Int
       ifaceHash : Int
+      totalReq : TotalReq
 
 ||| Clear the gamma from a definition
 export
@@ -410,14 +543,15 @@ TTC annot Defs where
            ndirs <- fromBuf s b
            hides <- fromBuf s b
            ds <- fromBuf s b
-           pure (MkAllDefs (insertFrom ns empty) modNS
+           pure (MkAllDefs (insertFrom ns empty) [] modNS 
                             (record { laziness = lazy,
                                       pairnames = pair,
                                       rewritenames = rw,
                                       primnames = prim,
                                       namedirectives = ndirs
                                     } defaults)
-                            empty imported [] [] [] empty [] hides ds 100 0 0 5381)
+                            empty imported [] [] [] empty [] hides ds 
+                            100 0 0 5381 CoveringOnly)
     where
       insertFrom : List (Name, GlobalDef) -> Gamma -> Gamma
       insertFrom [] ctxt = ctxt
@@ -426,7 +560,8 @@ TTC annot Defs where
 
 export
 initCtxt : Defs
-initCtxt = MkAllDefs empty ["Main"] defaults empty [] [] [] [] empty [] [] [] 100 0 0 5381
+initCtxt = MkAllDefs empty [] ["Main"] defaults empty [] [] [] [] empty [] [] [] 
+                     100 0 0 5381 CoveringOnly
 
 export
 getSave : Defs -> List Name
@@ -586,6 +721,13 @@ isForce n defs
            Just l => active l && n == force l
 
 export
+isInfinite : Name -> Defs -> Bool
+isInfinite n defs
+    = case laziness (options defs) of
+           Nothing => False
+           Just l => active l && n == infinite l
+
+export
 delayName : Defs -> Maybe Name
 delayName defs
     = do l <- laziness (options defs)
@@ -686,13 +828,15 @@ checkUnambig loc n
 export
 setLazy : {auto c : Ref Ctxt Defs} ->
           annot -> (delayType : Name) -> (delay : Name) -> (force : Name) ->
+          (infinite : Name) ->
           Core annot ()
-setLazy loc ty d f
+setLazy loc ty d f i
     = do defs <- get Ctxt
          ty' <- checkUnambig loc ty
          d' <- checkUnambig loc d
          f' <- checkUnambig loc f
-         put Ctxt (record { options $= setLazy ty' d' f' } defs)
+         i' <- checkUnambig loc i
+         put Ctxt (record { options $= setLazy ty' d' f' i' } defs)
 
 export
 lazyActive : {auto c : Ref Ctxt Defs} ->
@@ -835,6 +979,16 @@ setPrefix : {auto c : Ref Ctxt Defs} -> String -> Core annot ()
 setPrefix dir
     = do defs <- get Ctxt
          put Ctxt (record { options->dirs->dir_prefix = dir } defs)
+
+export
+setExtension : {auto c : Ref Ctxt Defs} -> LangExt -> Core annot ()
+setExtension e
+    = do defs <- get Ctxt
+         put Ctxt (record { options $= setExtension e } defs)
+
+export
+isExtension : LangExt -> Defs -> Bool
+isExtension e defs = isExtension e (options defs)
 
 -- Set the default namespace for new definitions
 export
@@ -983,6 +1137,14 @@ genWithName root
          pure (GN (WithBlock root (nextVar ust)))
 
 export
+getNextVar : {auto x : Ref Ctxt Defs} ->
+			     	 Core annot Int
+getNextVar
+    = do ust <- get Ctxt
+         put Ctxt (record { nextVar $= (+1) } ust)
+         pure (nextVar ust)
+
+export
 setCtxt : {auto x : Ref Ctxt Defs} -> Gamma -> Core annot ()
 setCtxt gam
     = do st <- get Ctxt
@@ -1015,8 +1177,8 @@ export
 addBuiltin : {auto x : Ref Ctxt Defs} ->
              Name -> ClosedTerm -> Totality ->
              PrimFn arity -> Core annot ()
-addBuiltin n ty tot op
-    = addDef n (MkGlobalDef ty RigW [] Public tot [Inline] (Builtin op) Nothing [])
+addBuiltin n ty tot op 
+    = addDef n (MkGlobalDef ty RigW [] Public tot [Inline] (Builtin op) Nothing [] [])
 
 export
 updateDef : {auto x : Ref Ctxt Defs} ->
@@ -1084,8 +1246,8 @@ checkNameVisibility loc n vis tm
 -- Add a function definition, as long as the type exists already
 export
 addFnDef : {auto x : Ref Ctxt Defs} ->
-					 annot -> Name -> CaseTree args -> CaseTree args ->
-           List (List Name, ClosedTerm, ClosedTerm) -> Core annot ()
+					 annot -> Name -> CaseTree args -> CaseTree args -> 
+           List (vs ** (Env Term vs, Term vs, Term vs)) -> Core annot ()
 addFnDef loc n treeCT treeRT pats
     = do ctxt <- get Ctxt
          case lookupGlobalExact n (gamma ctxt) of
@@ -1182,9 +1344,9 @@ export
 addData : {auto x : Ref Ctxt Defs} ->
 					List Name -> Visibility -> DataDef -> Core annot ()
 addData vs vis (MkData (MkCon tyn arity tycon) datacons)
-    = do gam <- getCtxt
-         tag <- getNextTypeTag
-         let tydef = newDef vs tycon vis (TCon tag arity
+    = do gam <- getCtxt 
+         tag <- getNextTypeTag 
+         let tydef = newDef vs tycon vis (TCon tag arity []
                                          (paramPos tyn (map type datacons))
                                          (allDet arity)
                                          (map name datacons))
@@ -1246,7 +1408,7 @@ getSearchData : {auto x : Ref Ctxt Defs} ->
 getSearchData loc a target
     = do defs <- get Ctxt
          case lookupDefExact target (gamma defs) of
-              Just (TCon _ _ _ dets cons) =>
+              Just (TCon _ _ _ _ dets cons) => 
                    do let hs = case lookupCtxtExact target (typeHints defs) of
                                     Nothing => []
                                     Just ns => ns
@@ -1266,6 +1428,35 @@ getSearchData loc a target
               map snd (filter (\t => fst t == a) hs)
 
 export
+setMutWith : {auto x : Ref Ctxt Defs} ->
+             annot -> Name -> List Name -> Core annot ()
+setMutWith loc tn tns
+    = do defs <- get Ctxt
+         case lookupGlobalExact tn (gamma defs) of
+              Just g =>
+                   case definition g of
+                        TCon t a _ ps dets cons =>
+                          do let g' = record { definition = 
+                                                TCon t a tns ps dets cons } g
+                             put Ctxt (record { gamma $= addCtxt tn g' } defs)
+                        _ => throw (UndefinedName loc tn)
+              _ => throw (UndefinedName loc tn)
+
+export
+addMutData : {auto x : Ref Ctxt Defs} ->
+             Name -> Core annot ()
+addMutData n
+    = do defs <- get Ctxt
+         put Ctxt (record { mutData $= (n ::) } defs)
+
+export
+dropMutData : {auto x : Ref Ctxt Defs} ->
+             Name -> Core annot ()
+dropMutData n
+    = do defs <- get Ctxt
+         put Ctxt (record { mutData $= filter (/= n) } defs)
+
+export
 setDetermining : {auto x : Ref Ctxt Defs} ->
                  annot -> Name -> List Name -> Core annot ()
 setDetermining loc tn args
@@ -1273,10 +1464,10 @@ setDetermining loc tn args
          case lookupGlobalExact tn (gamma defs) of
               Just g =>
                    case definition g of
-                        TCon t a ps _ cons =>
+                        TCon t a mw ps _ cons =>
                           do apos <- getPos 0 args (type g)
-                             let g' = record { definition =
-                                                TCon t a ps apos cons } g
+                             let g' = record { definition = 
+                                                TCon t a mw ps apos cons } g
                              put Ctxt (record { gamma $= addCtxt tn g' } defs)
                         _ => throw (UndefinedName loc tn)
               _ => throw (UndefinedName loc tn)
@@ -1358,6 +1549,16 @@ hasFlag loc n fl
               Just def => pure (fl `elem` flags def)
 
 export
+setSizeChange : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> List SCCall -> Core annot ()
+setSizeChange loc n sc
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { sizeChange = sc } def)
+
+export
 setTotality : {auto x : Ref Ctxt Defs} ->
               annot -> Name -> Totality -> Core annot ()
 setTotality loc n tot
@@ -1368,6 +1569,26 @@ setTotality loc n tot
                    addDef n (record { totality = tot } def)
 
 export
+setCovering : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Covering -> Core annot ()
+setCovering loc n tot
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { totality->isCovering = tot } def)
+
+export
+setTerminating : {auto x : Ref Ctxt Defs} ->
+              annot -> Name -> Terminating -> Core annot ()
+setTerminating loc n tot
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => 
+                   addDef n (record { totality->isTerminating = tot } def)
+
+export
 getTotality : {auto x : Ref Ctxt Defs} ->
               annot -> Name -> Core annot Totality
 getTotality loc n
@@ -1375,6 +1596,15 @@ getTotality loc n
          case lookupGlobalExact n ctxt of
               Nothing => throw (UndefinedName loc n)
               Just def => pure $ totality def
+
+export
+getSizeChange : {auto x : Ref Ctxt Defs} ->
+                annot -> Name -> Core annot (List SCCall)
+getSizeChange loc n
+    = do ctxt <- getCtxt
+         case lookupGlobalExact n ctxt of
+              Nothing => throw (UndefinedName loc n)
+              Just def => pure $ sizeChange def
 
 export
 setVisibility : {auto x : Ref Ctxt Defs} ->
@@ -1416,9 +1646,8 @@ isTotal : {auto x : Ref Ctxt Defs} ->
 isTotal loc n
     = do t <- getTotality loc n
          case t of
-              Total => pure True
+              MkTotality _ IsCovering => pure True
               _ => pure False
-
 
 export
 addToTypeHints : Name -> Name -> Bool -> Defs -> Defs

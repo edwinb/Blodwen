@@ -163,57 +163,74 @@ Show PiInfo where
 
 -- Also need updating RawImp and PTerm syntax
 public export
-data RigCount = Rig0 | Rig1 | RigW
+data RigCount = Rig0 
+							| Rig1 Bool -- True = 'borrowed', i.e. call doesn't count as
+			                    -- spending the name
+			        | RigW
+
+export
+rig1 : RigCount
+rig1 = Rig1 False
+
+export
+rigb : RigCount
+rigb = Rig1 True
+
+export
+isLinear : RigCount -> Bool
+isLinear (Rig1 _) = True
+isLinear _ = False
 
 export
 Eq RigCount where
   (==) Rig0 Rig0 = True
-  (==) Rig1 Rig1 = True
+  (==) (Rig1 x) (Rig1 x') = x == x'
   (==) RigW RigW = True
   (==) _ _ = False
 
 export
 Ord RigCount where
   compare Rig0 Rig0 = EQ
-  compare Rig0 Rig1 = LT
+  compare Rig0 (Rig1 _) = LT
   compare Rig0 RigW = LT
 
-  compare Rig1 Rig0 = GT
-  compare Rig1 Rig1 = EQ
-  compare Rig1 RigW = LT
+  compare (Rig1 _) Rig0 = GT
+  compare (Rig1 x) (Rig1 x') = compare x x'
+  compare (Rig1 _) RigW = LT
 
   compare RigW Rig0 = GT
-  compare RigW Rig1 = GT
+  compare RigW (Rig1 _) = GT
   compare RigW RigW = EQ
 
 export
 Show RigCount where
   show Rig0 = "Rig0"
-  show Rig1 = "Rig1"
+  show (Rig1 False) = "Rig1"
+  show (Rig1 True) = "RigB"
   show RigW = "RigW"
 
 export
 rigPlus : RigCount -> RigCount -> RigCount
 rigPlus Rig0 Rig0 = Rig0
-rigPlus Rig0 Rig1 = Rig1
+rigPlus Rig0 (Rig1 x) = Rig1 x
 rigPlus Rig0 RigW = RigW
-rigPlus Rig1 Rig0 = Rig1
-rigPlus Rig1 Rig1 = RigW
-rigPlus Rig1 RigW = RigW
+rigPlus (Rig1 x) Rig0 = Rig1 x
+rigPlus (Rig1 _) (Rig1 _) = RigW
+rigPlus (Rig1 _) RigW = RigW
 rigPlus RigW Rig0 = RigW
-rigPlus RigW Rig1 = RigW
+rigPlus RigW (Rig1 _) = RigW
 rigPlus RigW RigW = RigW
 
 export
 rigMult : RigCount -> RigCount -> RigCount
 rigMult Rig0 Rig0 = Rig0
-rigMult Rig0 Rig1 = Rig0
+rigMult Rig0 (Rig1 _) = Rig0
 rigMult Rig0 RigW = Rig0
-rigMult Rig1 Rig0 = Rig0
-rigMult Rig1 Rig1 = Rig1
-rigMult Rig1 RigW = RigW
+rigMult (Rig1 _) Rig0 = Rig0
+rigMult (Rig1 x) (Rig1 x') = Rig1 (x || x')
+rigMult (Rig1 _) RigW = RigW
 rigMult RigW Rig0 = Rig0
-rigMult RigW Rig1 = RigW
+rigMult RigW (Rig1 _) = RigW
 rigMult RigW RigW = RigW
 
 public export
@@ -331,11 +348,80 @@ Ord Visibility where
   compare Public Export = GT
 
 public export
-data PartialReason = NotCovering | NotStrictlyPositive 
-                   | Calling (List Name)
+data PartialReason 
+       = NotStrictlyPositive 
+       | BadCall (List Name)
+       | RecPath (List Name)
+
+export
+Show PartialReason where
+  show NotStrictlyPositive = "not strictly positive"
+  show (BadCall [n]) 
+	   = "not terminating due to call to " ++ show n
+  show (BadCall ns) 
+	   = "not terminating due to calls to " ++ showSep ", " (map show ns) 
+  show (RecPath ns) 
+	   = "not terminating due to recursive path " ++ showSep " -> " (map show ns) 
 
 public export
-data Totality = Partial PartialReason | Unchecked | Covering | Total 
+data Terminating
+       = Unchecked
+       | IsTerminating
+       | NotTerminating PartialReason
+
+export
+Show Terminating where
+  show Unchecked = "not yet checked"
+  show IsTerminating = "terminating"
+  show (NotTerminating p) = show p
+
+public export
+data Covering 
+       = IsCovering
+       | MissingCases (List (Term []))
+       | NonCoveringCall (List Name)
+
+export
+Show Covering where
+  show IsCovering = "covering"
+  show (MissingCases c) = "not covering all cases"
+  show (NonCoveringCall [f]) 
+     = "not covering due to call to function " ++ show f
+  show (NonCoveringCall cs) 
+     = "not covering due to calls to functions " ++ showSep ", " (map show cs)
+
+-- Totality status of a definition. We separate termination checking from
+-- coverage checking.
+public export
+record Totality where
+     constructor MkTotality
+     isTerminating : Terminating
+     isCovering : Covering
+
+export
+Show Totality where
+  show tot
+    = let t	= isTerminating tot
+          c = isCovering tot in
+        showTot t c
+    where
+      showTot : Terminating -> Covering -> String
+      showTot IsTerminating IsCovering = "total"
+      showTot IsTerminating c = show c
+      showTot t IsCovering = show t
+      showTot t c = show c ++ "; " ++ show t
+
+export
+unchecked : Totality
+unchecked = MkTotality Unchecked IsCovering
+
+export
+isTotal : Totality
+isTotal = MkTotality Unchecked IsCovering
+
+export
+notCovering : Totality
+notCovering = MkTotality Unchecked (MissingCases [])
 
 data SameElem : Elem x xs -> Elem x' xs -> Type where
      SameHere : SameElem Here Here
@@ -378,7 +464,7 @@ Eq a => Eq (Binder a) where
 
 export
 Eq (Term vars) where
-  (Local c p) == (Local c' p')      = c == c' && sameVar p p'
+  (Local c p) == (Local c' p')      = sameVar p p'
   (Ref _ fn) == (Ref _ fn')         = fn == fn'
   (Bind x b sc) == (Bind x' b' sc') 
       -- We could set this up a bit differently and not need the 'believe_me'
@@ -427,20 +513,26 @@ bindEnv (b :: env) tm
 public export
 record EvalOpts where
   constructor MkEvalOpts
-  holesOnly : Bool
-  evalAll : Bool
+  holesOnly : Bool -- only evaluate hole solutions
+  evalAll : Bool -- evaluate everything, including private names
+  tcInline : Bool -- inline for totality checking
+  fuel : Maybe Nat -- Limit for recursion depth
 
 export
 defaultOpts : EvalOpts
-defaultOpts = MkEvalOpts False False
+defaultOpts = MkEvalOpts False False False (Just 100000)
 
 export
 withHoles : EvalOpts
-withHoles = MkEvalOpts True False
+withHoles = MkEvalOpts True False False (Just 100)
 
 export
 withAll : EvalOpts
-withAll = MkEvalOpts False True
+withAll = MkEvalOpts False True False Nothing
+
+export
+tcOnly : EvalOpts
+tcOnly = MkEvalOpts True False True (Just 100)
 
 
 -- Closures are terms linked with the environment they evaluate in.
@@ -777,6 +869,7 @@ data SubVars : List Name -> List Name -> Type where
      DropCons : SubVars xs ys -> SubVars xs (y :: ys)
      KeepCons : SubVars xs ys -> SubVars (x :: xs) (x :: ys)
 
+export
 subElem : Elem x xs -> SubVars ys xs -> Maybe (Elem x ys)
 subElem prf SubRefl = Just prf
 subElem Here (DropCons ds) = Nothing
@@ -1071,7 +1164,7 @@ fnType arg scope = Bind (MN "_" 0) (Pi RigW Explicit arg) (weaken scope)
 
 export
 linFnType : Term vars -> Term vars -> Term vars
-linFnType arg scope = Bind (MN "_" 0) (Pi Rig1 Explicit arg) (weaken scope)
+linFnType arg scope = Bind (MN "_" 0) (Pi (Rig1 False) Explicit arg) (weaken scope)
 
 public export
 data Unapply : Term vars -> Type where
@@ -1152,7 +1245,8 @@ Show (Term vars) where
       where
         showCount : RigCount -> String
         showCount Rig0 = "0 "
-        showCount Rig1 = "1 "
+        showCount (Rig1 False) = "1 "
+        showCount (Rig1 True) = "& "
         showCount RigW = ""
 
         vCount : Elem x xs -> Nat

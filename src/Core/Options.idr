@@ -12,6 +12,7 @@ record LazyNames where
   delayType : Name
   delay : Name
   force : Name
+  infinite : Name
 
 public export
 record PairNames where
@@ -33,17 +34,26 @@ record PrimNames where
   fromStringName : Maybe Name
   fromCharName : Maybe Name
 
+public export
+data LangExt = Borrowing
+
+export
+Eq LangExt where
+  Borrowing == Borrowing = True
+
 export
 TTC annot LazyNames where
   toBuf b l
       = do toBuf b (delayType l)
            toBuf b (delay l)
            toBuf b (force l)
+           toBuf b (infinite l)
   fromBuf s b
       = do ty <- fromBuf s b
            d <- fromBuf s b
            f <- fromBuf s b
-           pure (MkLazy True ty d f)
+           i <- fromBuf s b
+           pure (MkLazy True ty d f i)
 
 export
 TTC annot PairNames where
@@ -78,6 +88,15 @@ TTC annot PrimNames where
            str <- fromBuf s b
            c <- fromBuf s b
            pure (MkPrimNs i str c)
+
+export
+TTC annot LangExt where
+  toBuf b Borrowing = tag 0
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Borrowing
+             _ => corrupt "LangExt"
 
 public export
 record Dirs where
@@ -156,6 +175,7 @@ record Options where
   rewritenames : Maybe RewriteNames
   primnames : PrimNames
   namedirectives : List (Name, List String)
+  extensions : List LangExt
 
 defaultDirs : Dirs
 defaultDirs = MkDirs "." "build" "/usr/local" ["."] []
@@ -171,7 +191,7 @@ defaults : Options
 defaults = MkOptions defaultDirs defaultPPrint defaultSession
                      Nothing Nothing Nothing
                      (MkPrimNs Nothing Nothing Nothing)
-                     []
+                     [] []
 
 -- Reset the options which are set by source files
 export
@@ -201,8 +221,8 @@ mergeOptions ttcopts opts
 
 export
 setLazy : (delayType : Name) -> (delay : Name) -> (force : Name) ->
-          Options -> Options
-setLazy ty d f = record { laziness = Just (MkLazy True ty d f) }
+          (infinite : Name) -> Options -> Options
+setLazy ty d f i = record { laziness = Just (MkLazy True ty d f i) }
 
 export
 setPair : (pairType : Name) -> (fstn : Name) -> (sndn : Name) ->
@@ -228,3 +248,11 @@ setFromChar n = record { primnames->fromCharName = Just n }
 export
 addNameDirective : (Name, List String) -> Options -> Options
 addNameDirective nd = record { namedirectives $= (nd ::) }
+
+export
+setExtension : LangExt -> Options -> Options
+setExtension e = record { extensions $= (e ::) }
+
+export
+isExtension : LangExt -> Options -> Bool
+isExtension e opts = e `elem` extensions opts

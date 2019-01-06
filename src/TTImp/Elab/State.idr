@@ -400,24 +400,14 @@ mkOuterHole loc n patvar topenv _
          tm <- addBoundName loc n patvar env ty
          pure (embedSub sub tm, embedSub sub ty)
 
+-- Clear the 'toBind' list, except for the names given
 export
 clearToBind : {auto e : Ref EST (EState vs)} ->
-              Core annot ()
-clearToBind
+              (excepts : List Name) -> Core annot ()
+clearToBind excepts
     = do est <- get EST
-         put EST (record { toBind = [] } (clearBindIfUnsolved est))
-
-export
-clearPatVars : {auto e : Ref EST (EState vs)} ->
-               {auto c : Ref Ctxt Defs} ->
-               Core annot ()
-clearPatVars
-    = do est <- get EST
-         traverse deleteDef (allPatVars est)
-         pure ()
-  where
-    deleteDef : Name -> Core annot ()
-    deleteDef n = updateDef n (const (Just None))
+         put EST (record { toBind $= filter (\x => fst x `elem` excepts) } 
+                         (clearBindIfUnsolved est))
 
 export
 dropTmIn : List (a, (c, d)) -> List (a, d)
@@ -524,9 +514,10 @@ export
 getToBind : {auto c : Ref Ctxt Defs} -> {auto e : Ref EST (EState vars)} ->
             {auto u : Ref UST (UState annot)} ->
             annot -> ElabMode -> ImplicitMode ->
-            Env Term vars -> Term vars ->
+            Env Term vars -> (excepts : List Name) -> Term vars ->
             Core annot (List (Name, Term vars))
-getToBind {vars} loc elabmode impmode env toptm
+getToBind loc elabmode NONE ent excepts toptm = pure []
+getToBind {vars} loc elabmode impmode env excepts toptm
     = do solveConstraints (case elabmode of
                                 InLHS _ => InLHS
                                 _ => InTerm) Normal
@@ -543,7 +534,8 @@ getToBind {vars} loc elabmode impmode env toptm
          est <- get EST
          ust <- get UST
 
-         let tob = reverse $ toBind est
+         let tob = reverse $ filter (\x => not (fst x `elem` excepts)) $
+                             toBind est
 
          log 10 $ "With holes " ++ show (map snd (holes ust))
          res <- normImps gam [] tob
@@ -752,10 +744,9 @@ bindImplicits : ImplicitMode ->
                 List (Name, Term vars) ->
                 List (Name, RigCount) ->
                 Term vars -> Term vars -> (Term vars, Term vars)
+bindImplicits NONE game env hs asvs tm ty = (tm, ty)
 bindImplicits {vars} mode gam env hs asvs tm ty 
-   = liftImps mode $ bindImplVars mode gam env (map nHoles hs) asvs
-                             (normaliseHolesScope gam env tm)
-                             (normaliseHolesScope gam env ty)
+   = liftImps mode $ bindImplVars mode gam env (map nHoles hs) asvs tm ty
   where
     nHoles : (Name, Term vars) -> (Name, Term vars)
     nHoles (n, ty) = (n, normaliseHolesScope gam env ty)
@@ -890,6 +881,7 @@ successful elabmode ((tm, elab) :: elabs)
          init_st <- getAllState
          Right res <- tryError elab
                | Left err => do rest <- successful elabmode elabs
+                                log 10 $ show tm ++ " failure"
                                 pure (Left (tm, err) :: rest)
 
          elabState <- getAllState -- save state at end of successful elab

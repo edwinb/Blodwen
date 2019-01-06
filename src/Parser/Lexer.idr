@@ -96,7 +96,8 @@ keywords = ["data", "module", "where", "let", "in", "do", "record",
             "using", "interface", "implementation", "open", "import",
             "public", "export", "private",
             "infixl", "infixr", "infix", "prefix",
-            "Type", "Int", "Integer", "String", "Char", "Double"]
+            "Type", "Int", "Integer", "String", "Char", "Double",
+            "total", "partial", "covering"]
 
 -- Reserved words for internal syntax
 special : List String
@@ -123,10 +124,10 @@ validSymbol = some (oneOf opChars)
 export
 reservedSymbols : List String
 reservedSymbols
-    = symbols ++ ["\\", ":", "=", "|", "<-", "->", "=>", "?"]
+    = symbols ++ ["%", "\\", ":", "=", "|", "<-", "->", "=>", "?", "&"]
 
 symbolChar : Char -> Bool
-symbolChar c = c `elem` unpack ":!#$%&*+./<=>?@\\^|-~"
+symbolChar c = c `elem` unpack opChars
 
 rawTokens : TokenMap Token
 rawTokens = 

@@ -90,7 +90,7 @@ findCons n lhs
                                          ("Can't find type of " ++ show n ++ " in LHS")))
                       Just tyn =>
                           case lookupDefExact tyn (gamma defs) of
-                               Just (TCon _ _ _ _ cons) => pure (OK (fn, tyn, cons))
+                               Just (TCon _ _ _ _ _ cons) => pure (OK (fn, tyn, cons))
                                res => pure (SplitFail 
                                             (CantSplitThis n 
                                                ("Not a type constructor " ++ 
@@ -267,7 +267,7 @@ mkCase {c} {u} fn orig lhs_raw
            (do (lhs, _, _) <- inferTerm {c} {u} {i} {m}
                                         (\c, u, i, m => processDecl {c} {u} {i} {m})
                                         False fn [] (MkNested [])
-                                        PATTERN (InLHS Rig1) lhs_raw
+                                        PATTERN (InLHS rig1) lhs_raw
                put Ctxt defs -- reset the context, we don't want any updates
                put UST ust
 

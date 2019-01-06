@@ -1,5 +1,6 @@
 module Idris.Parser
 
+import Core.Options
 import Idris.Syntax
 import public Parser.Support
 import Parser.Lexer
@@ -159,18 +160,20 @@ mutual
   opExpr q fname indents
       = do start <- location
            l <- appExpr fname indents
-           (do continue indents
-               op <- iOperator
-               r <- opExpr q fname indents
-               end <- location
-               pure (POp (MkFC fname start end) op l r))
-             <|> (if q == EqOK
-                     then do continue indents
-                             symbol "=" 
-                             r <- opExpr EqOK fname indents
-                             end <- location
-                             pure (POp (MkFC fname start end) (UN "=") l r)
-                     else fail "= not allowed")
+           (if q == EqOK
+               then do continue indents
+                       symbol "=" 
+                       r <- opExpr EqOK fname indents
+                       end <- location
+                       pure (POp (MkFC fname start end) (UN "=") l r)
+               else fail "= not allowed")
+             <|> 
+             (do continue indents
+                 op <- iOperator
+                 middle <- location
+                 r <- opExpr q fname indents
+                 end <- location
+                 pure (POp (MkFC fname start end) op l r))
                <|> pure l
 
   bracketedExpr : FileName -> FilePos -> IndentInfo -> Rule PTerm
@@ -274,11 +277,14 @@ mutual
   multiplicity
       = do c <- intLit
            pure (Just c)
+    <|> do symbol "&"
+           pure (Just 2)
     <|> pure Nothing
 
   getMult : Maybe Integer -> EmptyRule RigCount
   getMult (Just 0) = pure Rig0
-  getMult (Just 1) = pure Rig1
+  getMult (Just 1) = pure (Rig1 False)
+  getMult (Just 2) = pure (Rig1 True)
   getMult Nothing = pure RigW
   getMult _ = fatalError "Invalid multiplicity (must be 0 or 1)"
 
@@ -585,18 +591,19 @@ mutual
 
   binder : FileName -> IndentInfo -> Rule PTerm
   binder fname indents
-      = autoImplicitPi fname indents
+      = let_ fname indents
+    <|> autoImplicitPi fname indents
     <|> forall_ fname indents
     <|> implicitPi fname indents
     <|> explicitPi fname indents
     <|> lam fname indents
-    <|> let_ fname indents
 
   typeExpr : EqOp -> FileName -> IndentInfo -> Rule PTerm
   typeExpr q fname indents
       = do start <- location
            arg <- opExpr q fname indents
-           (do rest <- some (do exp <- bindSymbol
+           (do continue indents
+               rest <- some (do exp <- bindSymbol
                                 op <- opExpr EqOK fname indents
                                 pure (exp, op))
                end <- location
@@ -644,12 +651,12 @@ mutual
              FileName -> FilePos -> IndentInfo -> (lhs : PTerm) -> Rule PClause
   parseRHS withArgs fname start indents lhs
        = do symbol "="
-            commit
-            rhs <- expr EqOK fname indents
-            ws <- option [] (whereBlock fname)
-            atEnd indents
-            end <- location
-            pure (MkPatClause (MkFC fname start end) lhs rhs ws)
+            mustWork $
+              do rhs <- expr EqOK fname indents
+                 ws <- option [] (whereBlock fname)
+                 atEnd indents
+                 end <- location
+                 pure (MkPatClause (MkFC fname start end) lhs rhs ws)
      <|> do keyword "with"
             wstart <- location
             symbol "("
@@ -669,7 +676,7 @@ mutual
            extra <- many parseWithArg
            if (withArgs /= length extra)
               then fatalError "Wrong number of 'with' arguments"
-              else mustWork (parseRHS withArgs fname start indents (applyArgs lhs extra))
+              else parseRHS withArgs fname start indents (applyArgs lhs extra)
     where
       applyArgs : PTerm -> List (FC, PTerm) -> PTerm
       applyArgs f [] = f
@@ -686,20 +693,20 @@ mutual
 mkTyConType : FC -> List Name -> PTerm
 mkTyConType fc [] = PType fc
 mkTyConType fc (x :: xs) 
-   = PPi fc Rig1 Explicit Nothing (PType fc) (mkTyConType fc xs)
+   = PPi fc rig1 Explicit Nothing (PType fc) (mkTyConType fc xs)
 
 mkDataConType : FC -> PTerm -> List (Either PTerm (Maybe Name, PTerm)) -> PTerm
 mkDataConType fc ret [] = ret
 mkDataConType fc ret (Left x :: xs)
-    = PPi fc Rig1 Explicit Nothing x (mkDataConType fc ret xs)
+    = PPi fc rig1 Explicit Nothing x (mkDataConType fc ret xs)
 mkDataConType fc ret (Right (n, PRef fc' x) :: xs)
     = if n == Just x
-         then PPi fc Rig1 Implicit n (PType fc') 
+         then PPi fc rig1 Implicit n (PType fc') 
                           (mkDataConType fc ret xs)
-         else PPi fc Rig1 Implicit n (PRef fc' x) 
+         else PPi fc rig1 Implicit n (PRef fc' x) 
                           (mkDataConType fc ret xs)
 mkDataConType fc ret (Right (n, x) :: xs)
-    = PPi fc Rig1 Implicit n x (mkDataConType fc ret xs)
+    = PPi fc rig1 Implicit n x (mkDataConType fc ret xs)
 
 simpleCon : FileName -> PTerm -> IndentInfo -> Rule PTypeDecl
 simpleCon fname ret indents
@@ -786,6 +793,11 @@ onoff
  <|> do exactIdent "off"
         pure False
 
+extension : Rule LangExt
+extension
+    = do exactIdent "Borrowing"
+         pure Borrowing
+
 directive : FileName -> IndentInfo -> Rule Directive
 directive fname indents
     = do exactIdent "hide"
@@ -804,8 +816,9 @@ directive fname indents
          ty <- name
          d <- name
          f <- name
+         i <- name
          atEnd indents
-         pure (LazyNames ty d f)
+         pure (LazyNames ty d f i)
   <|> do exactIdent "auto_lazy"
          b <- onoff
          atEnd indents
@@ -819,26 +832,37 @@ directive fname indents
   <|> do keyword "rewrite"
          eq <- name
          rw <- name
+         atEnd indents
          pure (RewriteName eq rw)
   <|> do exactIdent "integerLit"
          n <- name
+         atEnd indents
          pure (PrimInteger n)
   <|> do exactIdent "stringLit"
          n <- name
+         atEnd indents
          pure (PrimString n)
   <|> do exactIdent "charLit"
          n <- name
+         atEnd indents
          pure (PrimChar n)
   <|> do exactIdent "name"
          n <- name
          ns <- sepBy1 (symbol ",") unqualifiedName
+         atEnd indents
          pure (Names n ns)
   <|> do exactIdent "start"
          e <- expr EqOK fname indents
+         atEnd indents
          pure (StartExpr e)
   <|> do exactIdent "allow_overloads"
          n <- name
+         atEnd indents
          pure (Overloadable n)
+  <|> do exactIdent "language"
+         e <- extension
+         atEnd indents
+         pure (Extension e)
 
 fix : Rule Fixity
 fix
@@ -871,9 +895,17 @@ mutualDecls fname indents
          end <- location
          pure (PMutual (MkFC fname start end) (concat ds))
 
-
 fnOpt : Rule FnOpt
 fnOpt
+    = do keyword "partial"
+         pure PartialOK
+  <|> do keyword "total"
+         pure Total
+  <|> do keyword "covering"
+         pure Covering
+
+fnDirectOpt : Rule FnOpt
+fnDirectOpt
     = do exactIdent "hint"
          pure (Hint True)
   <|> do exactIdent "globalhint"
@@ -889,8 +921,10 @@ visOpt : Rule (Either Visibility FnOpt)
 visOpt
     = do vis <- visOption
          pure (Left vis)
+  <|> do tot <- fnOpt
+         pure (Right tot)
   <|> do symbol "%"
-         opt <- fnOpt
+         opt <- fnDirectOpt
          pure (Right opt)
 
 getVisibility : Maybe Visibility -> List (Either Visibility FnOpt) -> 
@@ -997,7 +1031,7 @@ fieldDecl fname indents
              ty <- expr EqOK fname indents
              end <- location
              pure (map (\n => MkField (MkFC fname start end)
-                                      Rig1 p (UN n) ty) ns)
+                                      rig1 p (UN n) ty) ns)
 
 recordDecl : FileName -> IndentInfo -> Rule PDecl
 recordDecl fname indents
@@ -1063,6 +1097,10 @@ directiveDecl fname indents
 topDecl fname indents
     = do d <- dataDecl fname indents
          pure [d]
+  <|> do d <- claim fname indents
+         pure [d]
+  <|> do d <- definition fname indents
+         pure [d]
   <|> do d <- namespaceDecl fname indents
          pure [d]
   <|> do d <- mutualDecls fname indents
@@ -1084,10 +1122,6 @@ topDecl fname indents
   <|> do d <- implDecl fname indents
          pure [d]
   <|> do d <- recordDecl fname indents
-         pure [d]
-  <|> do d <- claim fname indents
-         pure [d]
-  <|> do d <- definition fname indents
          pure [d]
   <|> fatalError "Couldn't parse declaration"
 
@@ -1280,6 +1314,12 @@ command
          pure Reload
   <|> do symbol ":"; replCmd ["e", "edit"]
          pure Edit
+  <|> do symbol ":"; replCmd ["miss", "missing"]
+         n <- name
+         pure (Missing n)
+  <|> do symbol ":"; keyword "total"
+         n <- name
+         pure (Total n)
   <|> do symbol ":"; cmd <- editCmd
          pure (Editing cmd)
   <|> do tm <- expr EqOK "(interactive)" init

@@ -101,11 +101,12 @@ scan (Lookahead positive r) idx str
     = if isJust (scan r idx str) == positive
          then Just idx
          else Nothing
-scan (Pred f) idx str
-    = do c <- strIndex str idx
-         if f c
-            then Just (idx + 1)
-            else Nothing
+scan (Pred f) idx (MkStrLen str len)
+    = if cast {to = Integer} idx >= cast len
+         then Nothing
+         else if f (assert_total (prim__strIndex str (cast idx)))
+                 then Just (idx + 1)
+                 else Nothing
 scan (SeqEat r1 r2) idx str
     = do idx' <- scan r1 idx str
          -- TODO: Can we prove totality instead by showing idx has increased?
@@ -114,9 +115,7 @@ scan (SeqEmpty r1 r2) idx str
     = do idx' <- scan r1 idx str
          scan r2 idx' str
 scan (Alt r1 r2) idx str
-    = case scan r1 idx str of
-           Nothing => scan r2 idx str
-           Just idx => Just idx
+    = maybe (scan r2 idx str) Just (scan r1 idx str)
 
 takeToken : Lexer -> StrLen -> Maybe (String, StrLen)
 takeToken lex str

@@ -39,7 +39,7 @@ getRefs sc = CSet.toList (getSet empty sc)
   where
     mutual
       getAltSet : SortedSet -> CaseAlt vars -> SortedSet
-      getAltSet ns (ConCase n t args sc) = getSet ns sc
+      getAltSet ns (ConCase n t args sc) = getSet (insert n ns) sc
       getAltSet ns (ConstCase i sc) = getSet ns sc
       getAltSet ns (DefaultCase sc) = getSet ns sc
 

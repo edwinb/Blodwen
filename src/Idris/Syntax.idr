@@ -4,6 +4,7 @@ import public Core.Binary
 import public Core.Context
 import public Core.Core
 import public Core.Normalise
+import public Core.Options
 import public Core.Reflect
 import public Core.TTC
 import public Core.TT
@@ -207,7 +208,7 @@ mutual
   data Directive : Type where
        Hide : Bool -> Name -> Directive
        Logging : Nat -> Directive
-       LazyNames : Name -> Name -> Name -> Directive
+       LazyNames : Name -> Name -> Name -> Name -> Directive
        LazyOn : Bool -> Directive
        PairNames : Name -> Name -> Name -> Directive
        RewriteName : Name -> Name -> Directive
@@ -218,6 +219,7 @@ mutual
        Names : Name -> List String -> Directive
        StartExpr : PTerm -> Directive
        Overloadable : Name -> Directive
+       Extension : LangExt -> Directive
 
   public export
   data PField : Type where
@@ -335,6 +337,8 @@ data REPLCmd : Type where
      DebugInfo : Name -> REPLCmd
      SetOpt : REPLOpt -> REPLCmd
      CD : String -> REPLCmd
+     Missing : Name -> REPLCmd
+     Total : Name -> REPLCmd
      Editing : EditCmd -> REPLCmd
      Quit : REPLCmd
 
@@ -356,7 +360,8 @@ record Module where
 
 showCount : RigCount -> String
 showCount Rig0 = "0 "
-showCount Rig1 = "1 "
+showCount (Rig1 False) = "1 "
+showCount (Rig1 True) = "& "
 showCount RigW = ""
       
 mutual

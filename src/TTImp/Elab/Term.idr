@@ -59,7 +59,7 @@ notePatVar n
 
 bindRig : RigCount -> RigCount
 bindRig Rig0 = Rig0
-bindRig _ = Rig1
+bindRig _ = rig1
       
 rewriteErr : Error annot -> Bool
 rewriteErr (NotRewriteRule _ _ _) = True
@@ -151,7 +151,9 @@ mutual
                  let ctynf = nf defs env cty
                  case exp of
                       FnType args ret => 
-                           unifyFnArgs ctynf ctynf (reverse args) ret
+                           if safeRetTy Z env cty
+                              then unifyFnArgs ctynf ctynf (reverse args) ret
+                              else log 10 $ "Can't unifyFnArgs for " ++ show cty
                       _ => pure ()
                  case nf defs env cty of
                       NTCon n _ _ _ =>
@@ -180,13 +182,14 @@ mutual
       -- easier. If it fails, it might be due to an error elsewhere (or it might
       -- be that there is a dependency in the type we haven't refined yet), in
       -- which case we'll get a more precise error later.
+
       unifyFnArgs : NF vars -> NF vars -> List (Name, Term vars) -> 
                     Term vars -> Core annot ()
       unifyFnArgs fty topty [] ret
           = do defs <- get Ctxt
                log 2 $ "Converting in fnapp: " ++
                        show (quote defs env topty) ++ " and " ++
-                       show (ret)
+                       show ret
                try (do [] <- convert loc (elabMode elabinfo) env topty (nf defs env ret) 
                              | _ => throw (InternalError "No such luck")
                        pure ())
@@ -195,6 +198,24 @@ mutual
           = unifyFnArgs (scf (toClosure defaultOpts env Erased)) topty 
                         args (Bind an (Pi c p argty) (weaken ret))
       unifyFnArgs _ _ _ _ = pure ()
+      
+      -- The above doesn't work if any of the arguments appear in the return 
+      -- type, because we have to unify without any assumptions about what the
+      -- functions arguments will be.
+      -- So, safeRetTy checks for that.
+      safeRetTy : Nat -> Env Term vs -> Term vs -> Bool
+      safeRetTy n env (Bind _ b sc) = safeRetTy (S n) (b :: env) sc
+      safeRetTy Z env tm = True
+      safeRetTy n env tm
+          = not (any (under n) (findUsedLocs env tm))
+        where
+          under' : Nat -> Elem x vs -> Bool
+          under' Z el = False
+          under' (S k) Here = True
+          under' (S k) (There p) = under' k p
+
+          under : Nat -> (x ** Elem x vs) -> Bool
+          under n (_ ** el) = under' n el
 
   delayError : Defs -> Error annot -> Bool
   delayError defs ForceNeeded = True
@@ -257,7 +278,9 @@ mutual
                           Just varty => 
                              do let tyenv = useVars (getArgs tm) (embed varty)
                                 (ty_nf, imps) <- getImps rigc process loc env nest elabinfo (nf gam env tyenv) []
-                                let ty = quote (noGam gam) env ty_nf
+                                let ty = if isNil imps 
+                                            then tyenv
+                                            else quote (noGam gam) env ty_nf
                                 log 5 $ "Type of " ++ show n' ++ " : " ++ show ty
                                 log 5 $ "Term: " ++ show (apply tm imps)
                                 checkExp rigc process loc elabinfo env nest 
@@ -435,6 +458,7 @@ mutual
                                           solveConstraints (case elabMode elabinfo of
                                                                  InLHS c => InLHS
                                                                  _ => InTerm) Normal
+                                          log 10 $ show (getName t) ++ " success"
                                           pure res)) alts'))
     where
       holeIn : Gamma -> ExpType (Term vars) -> Bool
@@ -530,16 +554,19 @@ mutual
            let oldenv = outerEnv est
            let oldsub = subEnv est
            let oldbif = bindIfUnsolved est
+           let dontbind = map fst (toBind est)
            -- Set the binding environment in the elab state - unbound
            -- implicits should have access to whatever is in scope here
            put EST (updateEnv env SubRefl [] est)
            (tmv, tmt) <- check rigc process elabinfo env nest tm expected
-           gam <- get Ctxt
+           solveConstraints (case elabMode elabinfo of
+                                  InLHS c => InLHS
+                                  _ => InTerm) Normal
            argImps <- getToBind loc 
                                 (elabMode elabinfo)
                                 (implicitMode elabinfo)
-                                env tmv
-           clearToBind
+                                env dontbind tmv
+           clearToBind dontbind
            gam <- get Ctxt
            est <- get EST
            put EST (updateEnv oldenv oldsub oldbif 
@@ -640,12 +667,15 @@ mutual
              Just (rigb, lv) => 
                  do rigSafe rigb rigc
                     est <- get EST
-                    when (rigb == Rig1) $
+                    when (isLinear rigb && rigc /= Rig1 True) $
                          put EST 
                              (record { linearUsed $= ((_ ** lv) :: ) } est)
                     let varty = binderType (getBinder lv env) 
+                    log 5 $ "Getting implicits " ++ show varty ++ " for " ++ show expected
                     (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
-                    let tytm = quote (noGam gam) env ty
+                    let tytm = if isNil imps
+                                  then varty
+                                  else quote (noGam gam) env ty
                     addNameType loc (dropNS x) env tytm
                     checkExp rigc process loc elabinfo env nest 
                          (apply (Local (Just rigb) lv) imps) tytm expected
@@ -663,9 +693,9 @@ mutual
                                        (Just n, resolveRef n gdef gam)) ns)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
-      rigSafe Rig1 RigW = throw (LinearMisuse loc x Rig1 RigW)
+      rigSafe (Rig1 b) RigW = throw (LinearMisuse loc x (Rig1 b) RigW)
       rigSafe Rig0 RigW = throw (LinearMisuse loc x Rig0 RigW)
-      rigSafe Rig0 Rig1 = throw (LinearMisuse loc x Rig0 Rig1)
+      rigSafe Rig0 (Rig1 b) = throw (LinearMisuse loc x Rig0 (Rig1 b))
       rigSafe _ _ = pure ()
 
       defOK : Bool -> ElabMode -> NameType -> Bool
@@ -694,12 +724,15 @@ mutual
                         = case def of
                              PMDef _ _ _ _ _ => Func
                              DCon tag arity _ => DataCon tag arity
-                             TCon tag arity _ _ _ => TyCon tag arity
+                             TCon tag arity _ _ _ _ => TyCon tag arity
                              _ => Func
+               log 5 $ "Getting implicits " ++ show varty ++ " for " ++ show expected
                (ty, imps) <- getImps rigc process loc env nest elabinfo (nf gam env varty) []
                if topLevel elabinfo ||
                     defOK (dotted elabinfo) (elabMode elabinfo) nt
-                  then do let tytm = quote (noGam gam) env ty
+                  then do let tytm = if isNil imps
+                                        then varty
+                                        else quote (noGam gam) env ty
                           addNameType loc (dropNS x) env tytm
                           checkExp rigc process loc elabinfo env nest 
                                        (apply (Ref nt n) imps) 
@@ -729,10 +762,10 @@ mutual
               (do c <- check RigW process elabinfo env nest scr (FnType [] scrtyv)
                   pure (fst c, snd c, RigW))
               (\err => case err of
-                            LinearMisuse _ _ Rig1 _
-                              => do c <- check Rig1 process elabinfo env nest scr 
+                            LinearMisuse _ _ (Rig1 x) _
+                              => do c <- check rig1 process elabinfo env nest scr 
                                                (FnType [] scrtyv)
-                                    pure (fst c, snd c, Rig1)
+                                    pure (fst c, snd c, rig1)
                             e => throw e)
            caseBlock rigc process elabinfo loc env nest scr scrtm_in scrty caseRig alts expected
 
@@ -762,7 +795,7 @@ mutual
       dropLinear : Env Term vs -> Env Term vs
       dropLinear [] = []
       dropLinear (b :: bs) 
-          = if multiplicity b == Rig1
+          = if isLinear (multiplicity b)
                then setMultiplicity b Rig0 :: dropLinear bs
                else b :: dropLinear bs
 
@@ -868,11 +901,18 @@ mutual
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
                                      (_, IMustUnify _ _ _, _) => arg
-                                     (InLHS Rig1, _, Rig0) => IMustUnify loc "Erased argument" arg
+                                     (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
+                     -- if the argument is borrowed, it's okay to use it in
+                     -- unrestricted context, because we'll be out of the
+                     -- application without spending it
+                     let checkRig = case (rigf, rigc) of
+                                         (Rig1 True, Rig0) => Rig0
+                                         (Rig1 True, _) => Rig1 True
+                                         _ => rigMult rigf rigc
                      log 5 $ "Checking argument of type " ++ show (quote (noGam gam) env ty)
-                                 ++ " at " ++ show (rigMult rigf rigc)
-                     (argtm, argty) <- check (rigMult rigf rigc)
+                                 ++ " at " ++ show checkRig
+                     (argtm, argty) <- check checkRig
                                              process (record { implicitsGiven = [] } elabinfo)
                                              env nest arg' 
                                              (FnType [] (quote (noGam gam) env ty))
@@ -950,7 +990,7 @@ mutual
              ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope (FnType [] (Bind bn (Pi c Explicit pty) psc))
-      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+      = do let rigc = if rigc_in == Rig0 then Rig0 else rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest ty (FnType [] TType)
            e' <- weakenedEState
@@ -968,7 +1008,7 @@ mutual
                         (Bind n (Pi rigb plicity tyv) scopet)
                         (FnType [] (Bind bn (Pi rigb plicity pty) psc))
   checkLam rigc_in process elabinfo loc env nest rigl plicity n ty scope expected
-      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+      = do let rigc = if rigc_in == Rig0 then Rig0 else rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest ty (FnType [] TType)
            let rigb = rigl -- rigMult rigl rigc
@@ -977,13 +1017,19 @@ mutual
            let nest' = dropName n nest -- if we see 'n' from here, it's the one we just bound
            (scopev, scopet) <- check {e=e'} rigc process 
                                      (record { topLevel = False } elabinfo) 
-                                     env' (weaken nest') scope Unknown
+                                     env' (weaken nest') scope (dropArg expected)
            st' <- strengthenedEState False loc env'
            put EST st'
            checkExp rigc process loc elabinfo env nest (Bind n (Lam rigb plicity tyv) scopev)
                         (Bind n (Pi rigb plicity tyv) scopet)
                         expected
-  
+    where
+      dropArg : ExpType (Term vars) -> ExpType (Term (x :: vars))
+      dropArg Unknown = Unknown
+      dropArg (FnType (a :: as) ret) 
+         = FnType (map (\ (x, t) => (x, weaken t)) as) (weaken ret)
+      dropArg (FnType _ _) = Unknown
+
   checkLet : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
              {auto e : Ref EST (EState vars)} ->
              {auto i : Ref ImpST (ImpState annot)} ->
@@ -998,7 +1044,7 @@ mutual
              ExpType (Term vars) ->
              Core annot (Term vars, Term vars) 
   checkLet rigc_in process elabinfo loc env nest rigl n ty val scope expected
-      = do let rigc = if rigc_in == Rig0 then Rig0 else Rig1
+      = do let rigc = if rigc_in == Rig0 then Rig0 else rig1
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest ty (FnType [] TType)
            -- Try checking at the given multiplicity; if that doesn't work,
@@ -1009,11 +1055,11 @@ mutual
                                env nest val (FnType [] tyv)
                     pure (fst c, snd c, rigMult rigl rigc))
                 (\err => case err of
-                              LinearMisuse _ _ Rig1 _
-                                => do c <- check Rig1 process 
+                              LinearMisuse _ _ (Rig1 x) _
+                                => do c <- check rig1 process 
                                                  (record { topLevel = False } elabinfo) 
                                                  env nest val (FnType [] tyv)
-                                      pure (fst c, snd c, Rig1)
+                                      pure (fst c, snd c, rig1)
                               e => throw e)
            let env' : Env Term (n :: _) = Let rigb valv tyv :: env
            e' <- weakenedEState
@@ -1149,7 +1195,10 @@ mutual
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) (NBind bn' (Pi c' AutoImplicit ty') sc') imps
       = pure (NBind bn (Pi c AutoImplicit ty) sc, reverse imps)
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c Implicit ty) sc) exp imps
-      = do tm <- makeImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
+      = do defs <- get Ctxt
+           log 10 $ "Making an implicit for " ++ show (quote (noGam defs) env (sc (toClosure defaultOpts env Erased))) ++ 
+                    " and " ++ show (quote (noGam defs) env exp)
+           tm <- makeImplicit (rigMult rigc c) process loc env nest elabinfo bn ty
            convertImps rigc process loc env nest elabinfo 
                        (sc (toClosure defaultOpts env tm)) exp (tm :: imps)
   convertImps rigc process loc env nest elabinfo (NBind bn (Pi c AutoImplicit ty) sc) exp imps
@@ -1181,6 +1230,7 @@ mutual
              Core annot (Term vars, Term vars) 
   checkExp rigc process loc elabinfo env nest tm got (FnType [] exp) 
       = do gam <- get Ctxt
+           log 10 $ "Checking conversion " ++ show got ++ " and " ++ show exp
            let expnf = nf gam env exp
            (got', imps) <- convertImps rigc process loc env nest elabinfo (nf gam env got) expnf []
            constr <- convert loc (elabMode elabinfo) env got' expnf

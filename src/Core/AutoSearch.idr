@@ -430,7 +430,7 @@ abandonIfCycle tm (ty :: tys)
 normaliseScope : Defs -> Env Term vars -> Term vars -> Term vars
 normaliseScope defs env (Bind n b sc) 
     = Bind n b (normaliseScope defs (b :: env) sc)
-normaliseScope defs env tm = normaliseHoles defs env tm
+normaliseScope defs env tm = normalise defs env tm
 
 searchHole : {auto c : Ref Ctxt Defs} ->
              {auto u : Ref UST (UState annot)} ->

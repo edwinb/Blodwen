@@ -736,6 +736,17 @@ export
 getPMDef : {auto x : Ref Ctxt Defs} ->
            annot -> Name -> ClosedTerm -> List Clause -> 
            Core annot (args ** CaseTree args)
+-- If there's no clauses, make a definition with the right number of arguments
+-- for the type, which we can use in coverage checking to ensure that one of
+-- the arguments has an empty type
+getPMDef loc fn ty []
+    = do defs <- get Ctxt
+         pure (getArgs 0 (nf defs [] ty) ** Unmatched "No clauses")
+  where
+    getArgs : Int -> NF [] -> List Name
+    getArgs i (NBind x (Pi _ _ _) sc)
+        = MN "arg" i :: getArgs i (sc (toClosure defaultOpts [] Erased))
+    getArgs i _ = []
 getPMDef loc fn ty clauses
     = do defs <- get Ctxt
          let cs = map (toClosed defs) clauses

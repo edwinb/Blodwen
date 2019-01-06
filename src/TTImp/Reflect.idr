@@ -57,6 +57,12 @@ Reify FnOpt where
       = pure ExternFn
   reify defs (NDCon (NS ["Reflect"] (UN "Invertible")) _ _ [])
       = pure Invertible
+  reify defs (NDCon (NS ["Reflect"] (UN "Total")) _ _ [])
+      = pure Total
+  reify defs (NDCon (NS ["Reflect"] (UN "Covering")) _ _ [])
+      = pure Covering
+  reify defs (NDCon (NS ["Reflect"] (UN "PartialOK")) _ _ [])
+      = pure PartialOK
   reify defs _ = Nothing
 
 export
@@ -70,6 +76,9 @@ Reflect FnOpt where
            appCon defs (NS ["Reflect"] (UN "GlobalHint")) [t']
   reflect defs env ExternFn = getCon defs (NS ["Reflect"] (UN "ExternFn"))
   reflect defs env Invertible = getCon defs (NS ["Reflect"] (UN "Invertible"))
+  reflect defs env Total = getCon defs (NS ["Reflect"] (UN "Total"))
+  reflect defs env Covering = getCon defs (NS ["Reflect"] (UN "Covering"))
+  reflect defs env PartialOK = getCon defs (NS ["Reflect"] (UN "PartialOK"))
 
 export
 Reify annot => Reify (ImpTy annot) where

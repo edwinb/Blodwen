@@ -38,6 +38,14 @@ dropWhile p []      = []
 dropWhile p (x::xs) = if p x then dropWhile p xs else x::xs
 
 public export
+filter : (p : a -> Bool) -> List a -> List a
+filter p [] = []
+filter p (x :: xs) 
+   = if p x
+        then x :: filter p xs
+        else filter p xs
+
+public export
 span : (a -> Bool) -> List a -> (List a, List a)
 span p []      = ([], [])
 span p (x::xs) =

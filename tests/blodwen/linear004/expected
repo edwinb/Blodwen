@@ -4,7 +4,7 @@ Welcome to Blodwen. Good luck.
 Main> S Z
 Main> S (S Z)
 Main> S Z
-Main> (interactive):1:15--1:16:Trying to use irrelevant name x in relevant context
+Main> Trying to use irrelevant name x in relevant context
 Main> When unifying Nat -> Nat -> Nat and (0 x : Nat) -> Nat -> Nat
 Mismatch between:
 	Nat -> Nat -> Nat
@@ -15,7 +15,7 @@ Mismatch between:
 	(1 x : Nat) -> Nat -> Nat
 and
 	(0 x : Nat) -> Nat -> Nat
-Main> (interactive):1:20--1:22:Trying to use irrelevant name x in non-linear context
+Main> Trying to use irrelevant name x in non-linear context
 Main> S (S Z)
 Main> S (S Z)
 Main> When unifying (0 x : Nat) -> Nat -> Nat and Nat -> Nat -> Nat

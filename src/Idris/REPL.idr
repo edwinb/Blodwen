@@ -13,6 +13,7 @@ import Core.InitPrimitives
 import Core.Metadata
 import Core.Normalise
 import Core.Options
+import Core.Termination
 import Core.TT
 import Core.Unify
 
@@ -49,6 +50,11 @@ showInfo (n, d)
               Nothing => pure ()
               Just expr => coreLift $ putStrLn ("Compiled: " ++ show expr)
          coreLift $ putStrLn ("Refers to: " ++ show (refersTo d))
+         when (not (isNil (sizeChange d))) $ 
+            let scinfo = map (\s => show (fnCall s) ++ ": " ++ 
+                                    show (fnArgs s)) (sizeChange d) in
+                coreLift $ putStrLn $
+                        "Size change: " ++ showSep ", " scinfo
 
 isHole : GlobalDef -> Maybe Nat
 isHole def
@@ -58,7 +64,8 @@ isHole def
     
 showCount : RigCount -> String
 showCount Rig0 = " 0 "
-showCount Rig1 = " 1 "
+showCount (Rig1 False) = " 1 "
+showCount (Rig1 True) = " & "
 showCount RigW = "   "
 
 impBracket : Bool -> String -> String
@@ -137,15 +144,29 @@ getEnvTerm (n :: ns) env (Bind x b sc)
          else (_ ** (env, Bind x b sc))
 getEnvTerm _ env tm = (_ ** (env, tm))
 
+displayTerm : {auto c : Ref Ctxt Defs} ->
+              {auto s : Ref Syn SyntaxInfo} ->
+              Defs -> ClosedTerm -> 
+              Core FC String
+displayTerm gam tm
+    = do ptm <- resugar [] (normaliseHoles gam [] tm)
+         pure (show ptm)
+
+displayPatTerm : {auto c : Ref Ctxt Defs} ->
+                 {auto s : Ref Syn SyntaxInfo} ->
+                 Defs -> ClosedTerm -> 
+                 Core FC String
+displayPatTerm gam tm
+    = do ptm <- resugarNoPatvars [] (normaliseHoles gam [] tm)
+         pure (show ptm)
+
 displayClause : {auto c : Ref Ctxt Defs} ->
                 {auto s : Ref Syn SyntaxInfo} ->
-                Defs -> (List Name, ClosedTerm, ClosedTerm) -> 
+                Defs -> (vs ** (Env Term vs, Term vs, Term vs)) -> 
                 Core FC String
-displayClause gam (vs, lhs, rhs)
-    = do let (_ ** (env, lhsenv)) = getEnvTerm vs [] lhs
-         lhstm <- resugar env (normaliseHoles gam env lhsenv)
-         let (_ ** (env, rhsenv)) = getEnvTerm vs [] rhs
-         rhstm <- resugar env (normaliseHoles gam env rhsenv)
+displayClause gam (vs ** (env, lhs, rhs))
+    = do lhstm <- resugar env (normaliseHoles gam env lhs)
+         rhstm <- resugar env (normaliseHoles gam env rhs)
          pure (show lhstm ++ " = " ++ show rhstm)
 
 displayPats : {auto c : Ref Ctxt Defs} ->
@@ -447,6 +468,36 @@ process (ProofSearch n)
          coreLift (putStrLn (show itm))
          dumpConstraints 0 True
          pure True
+process (Missing n)
+    = do defs <- get Ctxt 
+         case lookupGlobalName n (gamma defs) of
+              [] => throw (UndefinedName replFC n)
+              ts => do traverse (\fn =>
+                          do tot <- getTotality replFC fn
+                             the (Core _ ()) $ case isCovering tot of
+                                  MissingCases cs => 
+                                     do tms <- traverse (displayPatTerm defs) cs
+                                        printResult (show fn ++ ":\n" ++
+                                                        showSep "\n" tms)
+                                  NonCoveringCall ns =>
+                                     printResult 
+                                         (show fn ++ ": Calls non covering function" 
+                                           ++ case ns of
+                                                   [fn] => " " ++ show fn
+                                                   _ => "s: " ++ showSep ", " (map show ns))
+                                  _ => iputStrLn (show fn ++ ": All cases covered")) 
+                         (map fst ts)
+                       pure True
+process (Total n)
+    = do defs <- get Ctxt
+         case lookupGlobalName n (gamma defs) of
+              [] => throw (UndefinedName replFC n)
+              ts => do traverse (\fn =>
+                          do checkTotal replFC fn
+                             tot <- getTotality replFC fn
+                             iputStrLn (show fn ++ " is " ++ show tot)) 
+                               (map fst ts)
+                       pure True
 process (DebugInfo n)
     = do gam <- get Ctxt
          traverse showInfo (lookupGlobalName n (gamma gam))

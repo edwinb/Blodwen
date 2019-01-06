@@ -320,6 +320,14 @@ resugar env tm
          toPTerm startPrec tti
         
 export
+resugarNoPatvars : {auto c : Ref Ctxt Defs} ->
+                   {auto s : Ref Syn SyntaxInfo} ->
+                   Env Term vars -> Term vars -> Core FC PTerm
+resugarNoPatvars env tm
+    = do tti <- unelabNoPatvars emptyFC env tm
+         toPTerm startPrec tti
+        
+export
 pterm : {auto c : Ref Ctxt Defs} ->
         {auto s : Ref Syn SyntaxInfo} ->
         RawImp FC -> Core FC PTerm

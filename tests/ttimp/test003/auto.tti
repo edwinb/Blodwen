@@ -86,7 +86,7 @@ namespace List
     public export
     test3 : (a : Type) -> mkTy a;
     test3 = %search; -- ?help3;
-   
+
     the : (a : Type) -> a -> a
     the _ x = x
 

@@ -17,7 +17,7 @@ import TTImp.TTImp
 addUsage : {auto e : Ref EST (EState vars)} ->
            {auto c : Ref Ctxt Defs} ->
            Env Term vars -> annot -> Elem x vars -> Term vars -> Core annot Bool
-addUsage env loc p (Local (Just Rig1) p')
+addUsage env loc p (Local (Just (Rig1 _)) p')
     = do est <- get EST
          if sameVar p p'
             then do put EST (record { linearUsed $= ((_ ** p) :: ) } est)
@@ -75,7 +75,7 @@ mutual
            -- is linear... if it's linear, add whether it's used to the
            -- state, then when we get to the delayed elaborators for case
            -- blocks the usage information will be up to date
-           when (multiplicity b == Rig1) $
+           when (isLinear (multiplicity b)) $
                 do addUsage {e=e'} env' loc Here sc
                    pure ()
            sc' <- retryDelayedIn {e=e'} env' loc sc

@@ -1,8 +1,8 @@
 PREFIX = ${HOME}/.blodwen
-export BLODWEN_PATH = ${CURDIR}/prelude/build
+export BLODWEN_PATH = ${CURDIR}/prelude/build:${CURDIR}/base/build
 export BLODWEN_DATA = ${CURDIR}/support
 
-.PHONY: ttimp blodwen prelude test base lib_clean
+.PHONY: ttimp blodwen prelude test base clean lib_clean
 
 all: ttimp blodwen prelude base test
 
@@ -22,6 +22,13 @@ base: prelude
 	make -C base BLODWEN=../blodwen
 
 libs : prelude base
+
+clean: lib_clean
+	make -C src clean
+	make -C tests clean
+	rm -f blodwen
+	rm -f runtests
+	rm -f ttimp
 
 lib_clean:
 	make -C prelude clean

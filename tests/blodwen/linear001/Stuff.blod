@@ -31,7 +31,7 @@ public export
 Force : {0 t, a : _} -> Delayed t a -> a
 Force (Delay x) = x
 
-%lazy Delayed Delay Force
+%lazy Delayed Delay Force Infinite
 
 public export
 Lazy : Type -> Type

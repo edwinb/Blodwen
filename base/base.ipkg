@@ -1,6 +1,8 @@
 package base
 
-modules = Data.Buffer,
+modules = Control.WellFounded,
+
+          Data.Buffer,
           Data.Nat,
           Data.IORef,
           Data.List,

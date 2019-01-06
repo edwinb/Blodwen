@@ -18,7 +18,7 @@ mutual
   data Name =
     ||| A user provided name
     UN String |
-    ||| A machine generated name
+    ||| A machine generated name; String is for display only, so Ints must be uniquely generated. 
     MN String Int  |
     ||| A name in a hierarchical namespace, namespaces are in reverse order (innermost name first)
     NS (List String) Name  |
@@ -135,7 +135,7 @@ mutual
   Eq Name where
     (==) (UN x) (UN y) = x == y
     -- Put the arguments which are more likely to differ first
-    (==) (MN x y) (MN x' y') = y == y' && x == x'
+    (==) (MN x y) (MN x' y') = y == y'
     (==) (NS xs x) (NS xs' x') = x == x' && xs == xs'
     (==) (HN x y) (HN x' y') = y == y' && x == x'
     (==) (PV x y) (PV x' y') = x == x' && y == y'
@@ -225,10 +225,8 @@ mutual
   export
   Ord Name where
     compare (UN x) (UN y) = compare x y
-    compare (MN x y) (MN x' y')
-        = case compare y y' of -- Do cheaper comparison first!
-               EQ => compare x x'
-               t => t
+    compare (MN x y) (MN x' y') 
+        = compare y y'
     compare (NS x y) (NS x' y')
         = case compare y y' of -- Compare base name first (more likely to differ)
                EQ => compare x x'

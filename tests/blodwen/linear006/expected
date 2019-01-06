@@ -1,12 +1,16 @@
 1/2: Building Linear (Linear.blod)
 2/2: Building Door (Door.blod)
 Welcome to Blodwen. Good luck.
-Door>  0 m : Type -> Type
+Door>    lam : ()
+   lam : ()
+ 0 m : Type -> Type
  1 d : Door Open
  0 res : Res Bool (\r => (Door (if r then Open else Closed)))
 -------------------------------------
 foo : Use Many m ()
-Door>  0 m : Type -> Type
+Door>    lam : ()
+   lam : ()
+ 0 m : Type -> Type
  1 d : Door Closed
  0 res : Res Bool (\r => (Door (if r then Open else Closed)))
 -------------------------------------

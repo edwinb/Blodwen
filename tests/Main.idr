@@ -18,7 +18,7 @@ blodwenTests
        "test006", "test007", "test008", "test009", "test010",
        "test011", "test012", "test013", "test014", "test015",
        "test016", "test017", "test018", "test019", "test020",
-       "test021", "test022", "test023", "test024",
+       "test021", "test022", "test023", "test024", "test025",
        "chez001", "chez002", "chez003", "chez004", "chez005",
        "chez006",
        "chicken001", "chicken002",
@@ -33,6 +33,7 @@ blodwenTests
        "interface009", "interface010",
        "lazy001","lazy002",
        "linear001", "linear002", "linear003", "linear004", "linear005",
+       "linear006",
        "record001", "record002",
        "reflect001",
        "perf001",
@@ -40,6 +41,8 @@ blodwenTests
        "perror006",
        "prelude001",
        "sugar001",
+       "total001", "total002", "total003", "total004", "total005",
+       "total006",
        "with001"]
 
 chdir : String -> IO Bool

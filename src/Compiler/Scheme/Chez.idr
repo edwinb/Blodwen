@@ -23,19 +23,26 @@ firstExists [] = pure Nothing
 firstExists (x :: xs) = if !(exists x) then pure (Just x) else firstExists xs
 
 findChez : IO String
-findChez 
+findChez
     = do e <- firstExists [p ++ x | p <- ["/usr/bin/", "/usr/local/bin/"],
-                                    x <- ["scheme", "chez"]]
+                                    x <- ["scheme", "chez", "chezscheme9.5"]]
          maybe (pure "/usr/bin/env scheme") pure e
 
 findLibs : List String -> List String
 findLibs = mapMaybe (isLib . trim)
   where
     isLib : String -> Maybe String
-    isLib d 
+    isLib d
         = if isPrefixOf "lib" d
              then Just (trim (substr 3 (length d) d))
              else Nothing
+
+escapeQuotes : String -> String
+escapeQuotes s = pack $ foldr escape [] $ unpack s
+  where
+    escape : Char -> List Char -> List Char
+    escape '"' cs = '\\' :: '\"' :: cs
+    escape c   cs = c :: cs
 
 schHeader : String -> List String -> String
 schHeader chez libs
@@ -45,18 +52,18 @@ schHeader chez libs
     "  [(i3le ti3le a6le ta6le) (load-shared-object \"libc.so.6\")]\n" ++
     "  [(i3osx ti3osx a6osx ta6osx) (load-shared-object \"libc.dylib\")]\n" ++
     "  [else (load-shared-object \"libc.so\")])\n\n" ++
-    showSep "\n" (map (\x => "(load-shared-object \"" ++ x ++ "\")") libs) ++ "\n\n" ++
+    showSep "\n" (map (\x => "(load-shared-object \"" ++ escapeQuotes x ++ "\")") libs) ++ "\n\n" ++
     "(let ()\n"
 
 schFooter : String
 schFooter = ")"
-  
+
 mutual
   tySpec : CExp vars -> Core annot String
   tySpec (CPrimVal IntType) = pure "int"
   tySpec (CPrimVal StringType) = pure "string"
   tySpec (CPrimVal DoubleType) = pure "double"
-  tySpec (CCon (NS _ n) _ []) 
+  tySpec (CCon (NS _ n) _ [])
      = cond [(n == UN "Unit", pure "void"),
              (n == UN "Ptr", pure "void*")]
           (throw (InternalError ("Can't pass argument of type " ++ show n ++ " to foreign function")))
@@ -83,9 +90,9 @@ mutual
   chezExtPrim vs CCall [ret, fn, args, world]
       = pure "(error \"bad ffi call\")"
       -- throw (InternalError ("C FFI calls must be to statically known functions (" ++ show fn ++ ")"))
-  chezExtPrim vs GetStr [world] 
+  chezExtPrim vs GetStr [world]
       = pure $ mkWorld "(get-line (current-input-port))"
-  chezExtPrim vs prim args 
+  chezExtPrim vs prim args
       = schExtCommon chezExtPrim vs prim args
 
 ||| Compile a Blodwen expression to chez scheme
@@ -132,4 +139,3 @@ executeExpr c tm
 export
 codegenChez : Codegen annot
 codegenChez = MkCG compileExpr executeExpr
-

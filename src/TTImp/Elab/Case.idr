@@ -221,7 +221,7 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
           = if sameVar var x then ppos else True
       asParam gam ppos var (apply (Ref nt n) args) | ArgsList
           = case lookupDefExact n gam of
-                 Just (TCon _ _ ps _ _)
+                 Just (TCon _ _ _ ps _ _)
                    => asParamArgs gam var 0 ps args
                  _ => all (asParam gam False var) args
         where
@@ -261,7 +261,7 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
     toRig1 : Elem x vs -> Env Term vs -> Env Term vs
     toRig1 Here (b :: bs) 
         = if multiplicity b == Rig0
-             then setMultiplicity b Rig1 :: bs
+             then setMultiplicity b rig1 :: bs
              else b :: bs
     toRig1 (There p) (b :: bs) = b :: toRig1 p bs
 
@@ -279,15 +279,15 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
     setToZero ns [] = []
     setToZero ns ((::) {x} b env)
         = case multiplicity b of
-               Rig1 => if not (x `elem` ns)
-                          then setMultiplicity b Rig0 :: setToZero ns env
-                          else b :: setToZero ns env
+               Rig1 _ => if not (x `elem` ns)
+                            then setMultiplicity b Rig0 :: setToZero ns env
+                            else b :: setToZero ns env
                _ => b :: setToZero ns env
 
     mkLocalEnv : Env Term vs -> Env Term vs
     mkLocalEnv [] = []
     mkLocalEnv (b :: bs) 
-        = let b' = if multiplicity b == Rig1
+        = let b' = if isLinear (multiplicity b)
                       then setMultiplicity b Rig0
                       else b in
               b' :: mkLocalEnv bs
@@ -297,7 +297,7 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
     abstractOver [] tm = tm
     abstractOver (b :: env) tm 
         = let c = case multiplicity b of
-                       Rig1 => Rig0
+                       Rig1 _ => Rig0
                        r => r in
           abstractOver env (Bind _ 
                 (Pi c Explicit (binderType b)) tm)

@@ -7,6 +7,8 @@ import Parser.Support
 import public Control.Catchable
 import public Data.IORef
 
+%default covering
+
 public export
 data TTCErrorMsg
     = FormatOlder
@@ -30,8 +32,12 @@ data Error annot
     | InvisibleName annot Name
     | BadTypeConType annot Name 
     | BadDataConType annot Name Name
+    | NotCovering annot Name Covering
+    | NotTotal annot Name PartialReason
     | LinearUsed annot Nat Name
     | LinearMisuse annot Name RigCount RigCount
+    | BorrowPartial annot (Env Term vars) (Term vars) (Term vars)
+    | BorrowPartialType annot (Env Term vars) (Term vars)
     | AmbiguousName annot (List Name)
     | AmbiguousElab annot (Env Term vars) (List (Term vars))
     | AmbiguousSearch annot (Env Term vars) (List (Term vars))
@@ -106,6 +112,19 @@ Show annot => Show (Error annot) where
        = show fc ++ ":Return type of " ++ show n ++ " must be Type"
   show (BadDataConType fc n fam) 
        = show fc ++ ":Return type of " ++ show n ++ " must be in " ++ show fam
+  show (NotCovering fc n cov)
+       = show fc ++ ":" ++ show n ++ " is not covering:\n\t" ++
+            case cov of
+                 IsCovering => "Oh yes it is (Internal error!)"
+                 MissingCases cs => "Missing cases:\n\t" ++
+                                           showSep "\n\t" (map show cs)
+                 NonCoveringCall ns => "Calls non covering function" 
+                                           ++ (case ns of
+                                                   [fn] => " " ++ show fn
+                                                   _ => "s: " ++ showSep ", " (map show ns))
+
+  show (NotTotal fc n r)
+       = show fc ++ ":" ++ show n ++ " is not total"
   show (LinearUsed fc count n)
       = show fc ++ ":There are " ++ show count ++ " uses of linear name " ++ show n
   show (LinearMisuse fc n exp ctx)
@@ -114,13 +133,20 @@ Show annot => Show (Error annot) where
      where
        showRig : RigCount -> String
        showRig Rig0 = "irrelevant"
-       showRig Rig1 = "linear"
+       showRig (Rig1 False) = "linear"
+       showRig (Rig1 True) = "borrowed"
        showRig RigW = "unrestricted"
 
        showRel : RigCount -> String
        showRel Rig0 = "irrelevant"
-       showRel Rig1 = "relevant"
+       showRel (Rig1 False) = "relevant"
+       showRel (Rig1 True) = "borrowed"
        showRel RigW = "non-linear"
+  show (BorrowPartial fc env t arg)
+      = show fc ++ ":" ++ show t ++ " borrows argument " ++ show arg ++ 
+                   " so must be fully applied"
+  show (BorrowPartialType fc env t)
+      = show fc ++ ":" ++ show t ++ " borrows, so must return a concrete type"
 
   show (AmbiguousName fc ns) = show fc ++ ":Ambiguous name " ++ show ns
   show (AmbiguousElab fc env ts) = show fc ++ ":Ambiguous elaboration " ++ show ts
@@ -209,14 +235,21 @@ getAnnot (UndefinedName loc y) = Just loc
 getAnnot (InvisibleName loc y) = Just loc
 getAnnot (BadTypeConType loc y) = Just loc
 getAnnot (BadDataConType loc y z) = Just loc
+getAnnot (NotCovering loc _ _) = Just loc
+getAnnot (NotTotal loc _ _) = Just loc
 getAnnot (LinearUsed loc k y) = Just loc
 getAnnot (LinearMisuse loc y z w) = Just loc
+getAnnot (BorrowPartial loc _ _ _) = Just loc
+getAnnot (BorrowPartialType loc _ _) = Just loc
 getAnnot (AmbiguousName loc xs) = Just loc
 getAnnot (AmbiguousElab loc _ xs) = Just loc
 getAnnot (AmbiguousSearch loc _ xs) = Just loc
 getAnnot (AllFailed ((_, x) :: xs)) = getAnnot x
 getAnnot (AllFailed []) = Nothing
 getAnnot (RecordTypeNeeded loc _) = Just loc
+getAnnot (NotRecordField loc _ _) = Just loc
+getAnnot (NotRecordType loc _) = Just loc
+getAnnot (IncompatibleFieldUpdate loc _) = Just loc
 getAnnot (InvalidImplicit loc _ y tm) = Just loc
 getAnnot (CantSolveGoal loc tm) = Just loc
 getAnnot (DeterminingArg loc y env tm) = Just loc
@@ -352,4 +385,8 @@ export %inline
 put : (x : label) -> {auto ref : Ref x a} -> a -> Core annot ()
 put x {ref = MkRef io} val = coreLift (writeIORef io val)
 
+export
+cond : List (Lazy Bool, Lazy a) -> a -> a
+cond [] def = def
+cond ((x, y) :: xs) def = if x then y else cond xs def
 

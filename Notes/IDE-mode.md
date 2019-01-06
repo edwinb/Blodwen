@@ -41,3 +41,8 @@ declared with the given name, on the given line. It will only return the
 first definition it finds, as a list of pattern clauses. This works via a
 combination of case splitting and expression search.
 
+To-Do
+-------
+
+Currently the IDE protocol does not support socket mode. This will be advantageous 
+for integrating with [emacs idris-mode](https://github.com/idris-hackers/idris-mode/issues/489).

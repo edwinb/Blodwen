@@ -26,6 +26,13 @@ evalClosure : Defs -> Closure free -> NF free
 Stack : List Name -> Type
 Stack vars = List (Closure vars)
 
+-- Use this to change the parameters in the block below. Needs to be forward
+-- declared because it needs to be used within the block but has to be
+-- defined outside it!
+evalWithOpts : Defs -> EvalOpts ->
+               Env Term free -> LocalEnv free vars -> Stack free ->
+               Term (vars ++ free) -> NF free
+
 parameters (defs : Defs, opts : EvalOpts)
   mutual
     eval : Env Term free -> LocalEnv free vars -> Stack free ->
@@ -52,7 +59,7 @@ parameters (defs : Defs, opts : EvalOpts)
     evalLocal : Env Term free -> LocalEnv free vars -> Stack free -> 
                 Maybe RigCount -> Elem x (vars ++ free) -> NF free
     evalLocal {vars = []} env loc stk r p 
-        = if isLet p env
+        = if isLet p env && not (holesOnly opts)
              -- getBinder does a lot of work to weaken the types as
              -- necessary, so only do it if we really need to
              then case getBinder p env of
@@ -83,39 +90,40 @@ parameters (defs : Defs, opts : EvalOpts)
                _ => NApp (NRef nt n) stk
                    
     evalDef : Env Term free -> LocalEnv free vars -> Stack free ->
-              NameType -> Name -> Def -> NF free
-    evalDef env loc stk nt fn (PMDef h args tree _ _)
-        = if h || not (holesOnly opts) then
+              NameType -> Name -> List DefFlag -> Def -> NF free
+    evalDef env loc stk nt fn flags (PMDef h args tree _ _)
+        = if h || not (holesOnly opts) || 
+                  (tcInline opts && elem TCInline flags) then
              case extendFromStack args loc stk of
                   Nothing => NApp (NRef nt fn) stk
                   Just (loc', stk') => 
-                       case evalTree env loc' stk' tree of
-                            Nothing => NApp (NRef nt fn) stk
-                            Just val => val
+                       evalTree env loc' stk' tree (NApp (NRef nt fn) stk)
              else NApp (NRef nt fn) stk
     -- Don't check 'holesOnly' here - effectively, this gives us constant
     -- folding f the stack happens to be appropriate
-    evalDef env loc stk nt fn (Builtin op) = evalOp (getOp op) nt fn stk
-    evalDef env loc stk nt fn (DCon tag arity _) = NDCon fn tag arity stk
-    evalDef env loc stk nt fn (TCon tag arity _ _ _) = NTCon fn tag arity stk
-    evalDef env loc stk nt fn _ = NApp (NRef nt fn) stk
+    evalDef env loc stk nt fn flags (Builtin op) = evalOp (getOp op) nt fn stk
+    evalDef env loc stk nt fn flags (DCon tag arity _) = NDCon fn tag arity stk
+    evalDef env loc stk nt fn flags (TCon tag arity _ _ _ _) = NTCon fn tag arity stk
+    evalDef env loc stk nt fn flags _ = NApp (NRef nt fn) stk
 
     -- Only evaluate the name if its definition is visible in the current 
     -- namespace
     evalRef : Env Term free -> LocalEnv free vars -> Stack free ->
               NameType -> Name -> NF free
+    evalRef env loc stk (DataCon tag arity) fn = NDCon fn tag arity stk
+    evalRef env loc stk (TyCon tag arity) fn = NTCon fn tag arity stk
     evalRef env loc stk nt fn
         = case lookupGlobalExact fn (gamma defs) of
                Just def => 
                     if evalAll opts ||
                          reducibleIn (currentNS defs) fn (visibility def)
-                       then evalDef env loc stk nt fn (definition def)
+                       then evalDef env loc stk nt fn (flags def) (definition def)
                        else toRef (definition def) stk
                _ => NApp (NRef nt fn) stk
       where
         toRef : Def -> Stack free -> NF free
         toRef (DCon t a _) stk = NDCon fn t a stk
-        toRef (TCon t a _ _ _) stk = NTCon fn t a stk
+        toRef (TCon t a _ _ _ _) stk = NTCon fn t a stk
         toRef _ stk = NApp (NRef nt fn) stk
 
     -- Take arguments from the stack, as long as there's enough.
@@ -157,58 +165,65 @@ parameters (defs : Defs, opts : EvalOpts)
     tryAlt : Env Term free ->
              LocalEnv free (more ++ vars) ->
              Stack free -> NF free -> CaseAlt more ->
-             Maybe (NF free)
-    tryAlt {more} {vars} env loc stk (NDCon nm tag' arity args') (ConCase x tag args sc) 
+             (default : NF free) -> NF free
+    tryAlt {more} {vars} env loc stk (NDCon nm tag' arity args') (ConCase x tag args sc) def
          = if tag == tag'
-              then do bound <- getCaseBound args' args loc
-                      let loc' : LocalEnv _ ((args ++ more) ++ vars) 
-                          = rewrite sym (appendAssociative args more vars) in
-                                    bound
-                      evalTree env loc' stk sc
-              else Nothing
-    tryAlt env loc stk (NPrimVal c') (ConstCase c sc) 
-         = if c == c' then evalTree env loc stk sc
-                      else Nothing
-    tryAlt env loc stk val (DefaultCase sc) 
+              then maybe def
+                         (\bound => 
+                            let loc' : LocalEnv _ ((args ++ more) ++ vars) 
+                                = rewrite sym (appendAssociative args more vars) in
+                                          bound in
+                              evalTree env loc' stk sc def)
+                     (getCaseBound args' args loc)
+              else def
+    tryAlt env loc stk (NPrimVal c') (ConstCase c sc) def
+         = if c == c' then evalTree env loc stk sc def
+                      else def
+    tryAlt env loc stk val (DefaultCase sc) def
          = if concrete val 
-              then evalTree env loc stk sc
-              else Nothing
+              then evalTree env loc stk sc def
+              else def
       where
         concrete : NF free -> Bool
         concrete (NDCon _ _ _ _) = True
         concrete (NPrimVal _) = True
         concrete _ = False
-    tryAlt _ _ _ _ _ = Nothing
+    tryAlt _ _ _ _ _ def = def
 
 
     findAlt : Env Term free ->
               LocalEnv free (args ++ vars) ->
               Stack free -> NF free -> List (CaseAlt args) ->
-              Maybe (NF free)
-    findAlt env loc stk val [] = Nothing
-    findAlt env loc stk val (x :: xs) 
-         = case tryAlt env loc stk val x of
-                Nothing => findAlt env loc stk val xs
-                Just x => Just x
+              (default : NF free) -> NF free
+    findAlt env loc stk val [] def = def
+    findAlt env loc stk val (x :: xs) def
+         = tryAlt env loc stk val x (findAlt env loc stk val xs def)
 
     evalTree : Env Term free ->
                LocalEnv free (args ++ vars) -> Stack free -> 
-               CaseTree args ->
-               Maybe (NF free)
-    evalTree {args} {vars} {free} env loc stk (Case x _ alts) 
+               CaseTree args -> 
+               (default : NF free) -> NF free
+    evalTree {args} {vars} {free} env loc stk (Case x _ alts) def
       = let x' : List.Elem _ ((args ++ vars) ++ free) 
                = rewrite sym (appendAssociative args vars free) in
                          elemExtend x
             xval = evalLocal env loc [] Nothing x' in
-                   findAlt env loc stk xval alts
-    evalTree {args} {vars} {free} env loc stk (STerm tm) 
+                   findAlt env loc stk xval alts def
+    evalTree {args} {vars} {free} env loc stk (STerm tm) def 
           = let tm' : Term ((args ++ vars) ++ free) 
                     = rewrite sym (appendAssociative args vars free) in
                               embed tm in
-            Just (eval env loc stk tm')
-    evalTree env loc stk (Unmatched msg) = Nothing
-    evalTree env loc stk Impossible = Nothing
+            case fuel opts of
+                 Nothing => eval env loc stk tm'
+                 Just Z => def
+                 Just (S k) => 
+                      let opts' = record { fuel = Just k } opts in
+                          evalWithOpts defs opts' env loc stk tm'
+    evalTree env loc stk (Unmatched msg) def = def
+    evalTree env loc stk Impossible def = def
     
+evalWithOpts = eval
+
 evalClosure defs (MkClosure h loc env tm)
     = eval defs h env loc [] tm
     
@@ -216,6 +231,10 @@ evalClosure defs (MkClosure h loc env tm)
 export
 nf : Defs -> Env Term free -> Term free -> NF free
 nf defs env tm = eval defs defaultOpts env [] [] tm
+
+export
+nfOpts : EvalOpts -> Defs -> Env Term free -> Term free -> NF free
+nfOpts opts defs env tm = eval defs opts env [] [] tm
 
 -- Only evaluate names which stand for solved holes
 export
@@ -321,6 +340,10 @@ Quote Closure where
 export
 normalise : Defs -> Env Term free -> Term free -> Term free
 normalise defs env tm = quote defs env (nf defs env tm)
+
+export
+normaliseOpts : EvalOpts -> Defs -> Env Term free -> Term free -> Term free
+normaliseOpts opts defs env tm = quote defs env (nfOpts opts defs env tm)
 
 export
 normaliseHoles : Defs -> Env Term free -> Term free -> Term free

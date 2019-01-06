@@ -125,13 +125,13 @@ TTC annot PiInfo where
 export
 TTC annot RigCount where
   toBuf b Rig0 = tag 0
-  toBuf b Rig1 = tag 1
+  toBuf b (Rig1 x) = do tag 1; toBuf b x
   toBuf b RigW = tag 2
 
   fromBuf s b
       = case !getTag of
              0 => pure Rig0
-             1 => pure Rig1
+             1 => do x <- fromBuf s b; pure (Rig1 x)
              2 => pure RigW
              _ => corrupt "RigCount"
 
@@ -293,32 +293,60 @@ TTC annot Visibility where
 
 export
 TTC annot PartialReason where
-  toBuf b NotCovering = tag 0
-  toBuf b NotStrictlyPositive = tag 1
-  toBuf b (Calling xs) = do tag 2; toBuf b xs
+  toBuf b NotStrictlyPositive = tag 0
+  toBuf b (BadCall xs) = do tag 1; toBuf b xs
+  toBuf b (RecPath xs) = do tag 2; toBuf b xs
 
   fromBuf s b 
       = case !getTag of
-             0 => pure NotCovering
-             1 => pure NotStrictlyPositive
+             0 => pure NotStrictlyPositive
+             1 => do xs <- fromBuf s b
+                     pure (BadCall xs)
              2 => do xs <- fromBuf s b
-                     pure (Calling xs)
+                     pure (RecPath xs)
              _ => corrupt "PartialReason"
 
 export
-TTC annot Totality where
-  toBuf b (Partial x) = do tag 0; toBuf b x
-  toBuf b Unchecked = tag 1
-  toBuf b Covering = tag 2
-  toBuf b Total = tag 3
+TTC annot Terminating where
+  toBuf b Unchecked = tag 0
+  toBuf b IsTerminating = tag 1
+  toBuf b (NotTerminating p) = do tag 2; toBuf b p
+
+  fromBuf s b
+      = case !getTag of
+             0 => pure Unchecked
+             1 => pure IsTerminating
+             2 => do p <- fromBuf s b
+                     pure (NotTerminating p)
+             _ => corrupt "Terminating"
+
+export
+TTC annot Covering where
+  toBuf b IsCovering = tag 0
+  toBuf b (MissingCases ms) 
+      = do tag 1
+           toBuf b ms
+  toBuf b (NonCoveringCall ns) 
+      = do tag 2
+           toBuf b ns
 
   fromBuf s b 
       = case !getTag of
-             0 => do x <- fromBuf s b; pure (Partial x)
-             1 => pure Unchecked
-             2 => pure Covering
-             3 => pure Total
-             _ => corrupt "Totality"
+             0 => pure IsCovering
+             1 => do ms <- fromBuf s b
+                     pure (MissingCases ms)
+             2 => do ns <- fromBuf s b
+                     pure (NonCoveringCall ns)
+             _ => corrupt "Covering"
+
+export
+TTC annot Totality where
+  toBuf b (MkTotality term cov) = do toBuf b term; toBuf b cov
+
+  fromBuf s b
+      = do term <- fromBuf s b
+           cov <- fromBuf s b
+           pure (MkTotality term cov)
 
 export
 TTC annot (PrimFn n) where

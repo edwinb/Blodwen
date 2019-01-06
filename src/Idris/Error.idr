@@ -58,21 +58,43 @@ perror (BadTypeConType fc n)
     = pure $ "Return type of " ++ show n ++ " must be Type"
 perror (BadDataConType fc n fam)
     = pure $ "Return type of " ++ show n ++ " must be in " ++ show fam
+perror (NotCovering fc n IsCovering)
+    = pure $ "Internal error (Coverage of " ++ show n ++ ")"
+perror (NotCovering fc n (MissingCases cs))
+    = pure $ show n ++ " is not covering. Missing cases:\n\t" ++
+             showSep "\n\t" !(traverse (pshow []) cs)
+perror (NotCovering fc n (NonCoveringCall ns))
+    = pure $ show n ++ " is not covering:\n\t" ++
+                "Calls non covering function" 
+                   ++ case ns of
+                           [fn] => " " ++ show fn
+                           _ => "s: " ++ showSep ", " (map show ns)
+perror (NotTotal fc n r)
+    = pure $ show n ++ " is not total"
 perror (LinearUsed fc count n)
     = pure $ "There are " ++ show count ++ " uses of linear name " ++ show n
 perror (LinearMisuse fc n exp ctx)
-    = pure $ show fc ++ ":Trying to use " ++ showRig exp ++ " name " ++ show n ++
+    = pure $ "Trying to use " ++ showRig exp ++ " name " ++ show n ++
                  " in " ++ showRel ctx ++ " context"
   where
     showRig : RigCount -> String
     showRig Rig0 = "irrelevant"
-    showRig Rig1 = "linear"
+    showRig (Rig1 False) = "linear"
+    showRig (Rig1 True) = "borrowed"
     showRig RigW = "unrestricted"
 
     showRel : RigCount -> String
     showRel Rig0 = "irrelevant"
-    showRel Rig1 = "relevant"
+    showRel (Rig1 False) = "relevant"
+    showRel (Rig1 True) = "borrowed"
     showRel RigW = "non-linear"
+perror (BorrowPartial fc env tm arg)
+    = pure $ !(pshow env tm) ++ 
+             " borrows argument " ++ !(pshow env arg) ++ 
+             " so must be fully applied"
+perror (BorrowPartialType fc env tm)
+    = pure $ !(pshow env tm) ++ 
+             " borrows, so must return a concrete type"
 perror (AmbiguousName fc ns) = pure $ "Ambiguous name " ++ show ns
 perror (AmbiguousElab fc env ts)
     = do pp <- getPPrint

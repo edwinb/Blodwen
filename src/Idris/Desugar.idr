@@ -539,7 +539,7 @@ mutual
       = case d of
              Hide e n => pure [IPragma (\env, nest => hide fc e n)]
              Logging i => pure [ILog i]
-             LazyNames ty d f => pure [IPragma (\env, nest => setLazy fc ty d f)]
+             LazyNames ty d f i => pure [IPragma (\env, nest => setLazy fc ty d f i)]
              LazyOn a => pure [IPragma (\env, nest => lazyActive a)]
              PairNames ty f s => pure [IPragma (\env, nest => setPair fc ty f s)]
              RewriteName eq rw => pure [IPragma (\env, next => setRewrite fc eq rw)]
@@ -550,4 +550,5 @@ mutual
              Names n ns => pure [IPragma (\env, nest => addNameDirective fc n ns)]
              StartExpr tm => pure [IPragma (\env, nest => throw (InternalError "%start not implemented"))] -- TODO!
              Overloadable n => pure [IPragma (\env, nest => setNameFlag fc n Overloadable)]
+             Extension e => pure [IPragma (\env, nest => setExtension e)]
 

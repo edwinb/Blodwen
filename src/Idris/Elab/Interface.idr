@@ -84,7 +84,7 @@ bindIFace _ ity (IPi fc rig Implicit n ty sc)
        = IPi fc rig Implicit n ty (bindIFace fc ity sc)
 bindIFace _ ity (IPi fc rig AutoImplicit n ty sc)
        = IPi fc rig AutoImplicit n ty (bindIFace fc ity sc)
-bindIFace fc ity sc = IPi fc RigW AutoImplicit (Just (MN "__con" 0)) ity sc
+bindIFace fc ity sc = IPi fc RigW AutoImplicit (Just (UN "__con")) ity sc
 
 
 -- Get the top level function for implementing a method 
@@ -106,14 +106,15 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, opts
           ty_constr = substNames vars (map applyCon allmeths) ty
           ty_imp = bindTypeNames vars (bindIFace fc ity ty_constr)
           tydecl = IClaim fc RigW vis (if d then [Inline, Invertible]
-                                            else [Inline]) (MkImpTy fc n ty_imp) 
+                                            else [Inline]) 
+                                      (MkImpTy fc n ty_imp) 
           conapp = apply (IVar fc cname)
                       (map (const (Implicit fc)) constraints ++
                        map (IBindVar fc) (map bindName allmeths))
           argns = getExplicitArgs 0 ty
           -- eta expand the RHS so that we put implicits in the right place
           fnclause = PatClause fc (IImplicitApp fc (IVar fc n) 
-                                                   (Just (MN "__con" 0))
+                                                   (Just (UN "__con"))
                                                    conapp)
                                   (mkLam argns 
                                     (apply (IVar fc (methName n))
@@ -123,7 +124,7 @@ getMethToplevel {vars} env vis iname cname constraints allmeths params (fc, opts
   where
     applyCon : Name -> (Name, RawImp FC)
     applyCon n = (n, IImplicitApp fc (IVar fc n) 
-                             (Just (MN "__con" 0)) (IVar fc (MN "__con" 0)))
+                             (Just (UN "__con")) (IVar fc (UN "__con")))
 
     getExplicitArgs : Int -> RawImp FC -> List Name
     getExplicitArgs i (IPi _ _ Explicit n _ sc)
@@ -154,21 +155,22 @@ getConstraintHint : {auto c : Ref Ctxt Defs} ->
                     (constraints : List Name) ->
                     (allmeths : List Name) ->
                     (params : List Name) ->
-                    (Name, RawImp FC) -> List (ImpDecl FC)
+                    (Name, RawImp FC) -> (Name, List (ImpDecl FC))
 getConstraintHint {vars} fc env vis iname cname constraints meths params (cn, con)
     = let ity = apply (IVar fc iname) (map (IVar fc) params)
           fty = IPi fc RigW Explicit Nothing ity con
           ty_imp = bindTypeNames (meths ++ vars) fty 
           hintname = DN ("Constraint " ++ show con)
-                        (MN ("__" ++ show iname ++ "_" ++ show con) 0)
-          tydecl = IClaim fc RigW vis [Inline, Hint False] (MkImpTy fc hintname ty_imp)
+                        (UN ("__" ++ show iname ++ "_" ++ show con))
+          tydecl = IClaim fc RigW vis [Inline, Hint False] 
+                          (MkImpTy fc hintname ty_imp)
           conapp = apply (IVar fc cname)
                       (map (IBindVar fc) (map bindName constraints) ++
                        map (const (Implicit fc)) meths) 
           fnclause = PatClause fc (IApp fc (IVar fc hintname) conapp)
                                   (IVar fc (constName cn))
           fndef = IDef fc hintname [fnclause] in
-          [tydecl, fndef]
+          (hintname, [tydecl, fndef])
   where
     bindName : Name -> String
     bindName (UN n) = "__bind_" ++ n
@@ -188,8 +190,8 @@ getDefault (IDef fc n cs) = Just (fc, [], n, cs)
 getDefault _ = Nothing
 
 mkCon : FC -> Name -> Name
-mkCon loc (NS ns (UN n)) = NS ns (DN (n ++ " at " ++ show loc) (MN ("__mk" ++ n) 0))
-mkCon loc n = DN (show n ++ " at " ++ show loc) (MN ("__mk" ++ show n) 0)
+mkCon loc (NS ns (UN n)) = NS ns (DN (n ++ " at " ++ show loc) (UN ("__mk" ++ n)))
+mkCon loc n = DN (show n ++ " at " ++ show loc) (UN ("__mk" ++ show n))
 
 updateIfaceSyn : {auto s : Ref Syn SyntaxInfo} ->
                  Name -> Name -> List Name -> List (RawImp FC) ->
@@ -259,8 +261,8 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
              let dt = mkIfaceData fc vis env consts iname conName params 
                                   dets meths
              log 10 $ "Methods: " ++ show meths
+             log 5 $ "Making interface data type " ++ show dt
              processDecls env nest [dt]
-             log 5 $ "Made interface data type " ++ show dt
       where
         notData : (n, t) -> (n, (Bool, t))
         notData (x, y) = (x, (False, y))
@@ -276,6 +278,8 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                                                   (map fst params)) meth_sigs
              log 5 $ "Top level methods: " ++ show fns
              traverse (processDecl False env nest) fns
+             traverse (\n => do mn <- inCurrentNS n
+                                setFlag fc mn TCInline) meth_names
              pure ()
 
     -- Check that a default definition is correct. We just discard it here once
@@ -324,11 +328,13 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
                           Core FC ()
     elabConstraintHints conName meth_names
         = do let nconstraints = nameCons 0 constraints
-             let chints = concatMap (getConstraintHint fc env vis iname conName
-                                                       (map fst nconstraints)
-                                                       meth_names
-                                                       (map fst params)) nconstraints
+             let chints = map (getConstraintHint fc env vis iname conName
+                                                 (map fst nconstraints)
+                                                 meth_names
+                                                 (map fst params)) nconstraints
              log 5 $ "Constraint hints from " ++ show constraints ++ ": " ++ show chints
-             traverse (processDecl False env nest) chints
+             traverse (processDecl False env nest) (concatMap snd chints)
+             traverse (\n => do mn <- inCurrentNS n
+                                setFlag fc mn TCInline) (map fst chints)
              pure ()
 

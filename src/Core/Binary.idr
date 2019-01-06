@@ -25,7 +25,7 @@ import Data.Buffer
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 export
 ttcVersion : Int
-ttcVersion = 23
+ttcVersion = 28
 
 export
 checkTTCVersion : Int -> Int -> Core annot ()
@@ -81,8 +81,10 @@ processFlags n (GlobalHint t :: fs) defs
 processFlags n (TypeHint ty d :: fs) defs
   = processFlags n fs (addToTypeHints ty n d defs)
 processFlags n (Inline :: fs) defs = processFlags n fs defs
+processFlags n (TCInline :: fs) defs = processFlags n fs defs
 processFlags n (Invertible :: fs) defs = processFlags n fs defs
 processFlags n (Overloadable :: fs) defs = processFlags n fs defs
+processFlags n (SetTotal t :: fs) defs = processFlags n fs defs
 
 -- For every name (from 'toSave' in defs), add its definition and any
 -- information from its flags to the new set of Defs that we'll write out

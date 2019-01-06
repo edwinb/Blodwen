@@ -43,7 +43,24 @@ doPLetRenames ns drops sc = sc
 getRigNeeded : ElabMode -> RigCount
 getRigNeeded InType = Rig0 -- unrestricted usage in types
 getRigNeeded (InLHS Rig0) = Rig0
-getRigNeeded _ = Rig1
+getRigNeeded _ = rig1
+
+deletableCurrentHoles : {auto u : Ref UST (UState annot)} -> 
+                        {auto e : Ref EST (EState vars)} ->
+                        {auto c : Ref Ctxt Defs} ->
+                        Core annot (List Name)
+deletableCurrentHoles
+    = do hs <- getCurrentHoleNames
+         est <- get EST
+         gam <- getCtxt
+         pure (filter (solved gam) (hs ++ allPatVars est))
+  where
+    solved : Gamma -> Name -> Bool
+    solved gam n
+        = case lookupDefExact n gam of
+               Just ImpBind => True
+               Just (PMDef _ _ _ _ _) => True
+               _ => False
 
 elabTerm : {auto c : Ref Ctxt Defs} ->
            {auto u : Ref UST (UState annot)} ->
@@ -81,7 +98,7 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
                                 InLHS _ => InLHS
                                 _ => InTerm) Normal
          gam <- get Ctxt
-         chktm <- retryDelayedIn env (getAnnot tm) (normaliseHoles gam env chktm_in)
+         chktm <- retryDelayedIn env (getAnnot tm) chktm_in
          log 10 $ "Check after delays: " ++ show chktm
 
          -- As long as we're not in a case block, finish off constraint solving
@@ -101,8 +118,8 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          checkDots
          -- Bind the implicits and any unsolved holes they refer to
          -- This is in implicit mode 'PATTERN' and 'PI'
-         fullImps <- getToBind (getAnnot tm) elabmode impmode env chktm
-         clearToBind -- remove the bound holes
+         fullImps <- getToBind (getAnnot tm) elabmode impmode env [] chktm
+         clearToBind [] -- remove the bound holes
          gam <- get Ctxt
          log 5 $ "Binding implicits " ++ show fullImps ++
                  " in " ++ show chktm
@@ -120,6 +137,7 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          log 5 $ "Elaboration result type " ++ show pty'
 
          normaliseHoleTypes
+         toDel <- deletableCurrentHoles 
          clearSolvedHoles
          dumpConstraints 2 False
          checkUserHoles False -- need to fail if there are any guards
@@ -130,7 +148,6 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
                             pure ptm'
          
          checkArgTypes (getAnnot tm) env ptm' -- Check no unsolved holes in argument types
-         clearPatVars
          -- If there are remaining holes, we need to save them to the ttc
          -- since they haven't been normalised away yet, and they may be
          -- solved later
@@ -139,6 +156,10 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          -- ...and we need to add their compiled forms, for any that might
          -- end up being executed
          traverse compileDef hs
+
+         -- delete the holes we no longer need
+         gam <- get Ctxt
+         setCtxt (promoteHoles (deleteCtxtNames toDel (gamma gam)))
 
          -- Set current holes back to what they were, but removing any
          -- that were solved in the last session

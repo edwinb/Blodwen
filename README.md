@@ -4,7 +4,7 @@ Blodwen
 This is a prototype implementation of Idris 2.
 
 It is intended to be mostly backwards compatible with Idris 1, with some minor
-exceptions. The most notable user visible differences, which might cause 
+exceptions. The most notable user visible differences, which might cause
 Idris 1 programs to fail to type check, are:
 
 + Unbound implicit arguments are always erased, so it is a type error to
@@ -29,7 +29,7 @@ Summary of new features:
   annotation of erased types, and linear types.
 + `let` bindings are now more expressive, and can be used to define pattern
   matching functions locally.
-+ Names which are in scope in a type are also always in scope in the body of 
++ Names which are in scope in a type are also always in scope in the body of
   the corresponding definition.
 + Better inference. Holes are global to a source file, rather than local to
   a definition, meaning that some holes can be left in function types to be
@@ -73,14 +73,14 @@ play. Good luck :).
 
 (Why "Blodwen"? The answer is here: http://ivortheengine.wikia.com/wiki/Idris)
 
+Information about external dependencies are presented in [Install.md](Install.md).
+
 Things still missing
 ====================
 
-+ Some high level syntax, notably record update syntax, dependent pairs, and
-  numeric ranges
++ Some high level syntax, notably dependent pairs, and numeric ranges
 + 'parameters' blocks
-+ Cumulativity and totality checking
-+ Codata (or rather, you can have it, but there's no productivity check...)
++ Cumulativity
 + 'rewrite' doesn't yet work on dependent types
 + Some details of 'with' not yet done (notably recursive with call syntax)
 + Parts of the ide-mode

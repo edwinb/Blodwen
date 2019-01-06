@@ -1,15 +1,18 @@
 module TTImp.ProcessDef
 
-import Core.TT
-import Core.Unify
-import Core.Context
 import Core.CaseBuilder
+import Core.Context
+import Core.Coverage
 import Core.LinearCheck
 import Core.Metadata
 import Core.Normalise
 import Core.Reflect
+import Core.Termination
+import Core.TT
+import Core.Unify
 
 import TTImp.Elab
+import TTImp.Elab.Unelab
 import TTImp.TTImp
 import TTImp.Utils
 
@@ -108,9 +111,9 @@ combineLinear loc ((n, count) :: cs)
        = if n == n' then c :: lookupAll n cs else lookupAll n cs
 
     combine : RigCount -> RigCount -> Core annot RigCount
-    combine Rig1 Rig1 = throw (LinearUsed loc 2 n)
-    combine Rig1 RigW = throw (LinearUsed loc 2 n)
-    combine RigW Rig1 = throw (LinearUsed loc 2 n)
+    combine (Rig1 _) (Rig1 _) = throw (LinearUsed loc 2 n)
+    combine (Rig1 _) RigW = throw (LinearUsed loc 2 n)
+    combine RigW (Rig1 _) = throw (LinearUsed loc 2 n)
     combine RigW RigW = pure RigW
     combine Rig0 c = pure c
     combine c Rig0 = pure c
@@ -194,6 +197,9 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
          lhs_raw_in <- lhsInCurrentNS nest lhs_raw
          let lhs_raw = implicitsAs gam vars lhs_raw_in
          log 5 ("Checking LHS: " ++ show lhs_raw)
+         case env of
+            [] => pure ()
+            _ => log 5 ("In environment: " ++ show env)
          (lhs_in, _, lhsty_in) <- wrapError (InLHS loc defining) $
               inferTerm elab incase defining env nest
                         PATTERN (InLHS mult) lhs_raw
@@ -205,15 +211,16 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
            wrapError (InLHS loc defining) $ checkUserHoles True
          -- Normalise the LHS to get any functions or let bindings evaluated
          -- (this might be allowed, e.g. for 'fromInteger')
-         let lhs = normalise gam env lhs_in
+         let lhs = normalise gam (noLet env) lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
-         let linvars_in = findLinear gam 0 Rig1 lhs
+         let linvars_in = findLinear gam 0 rig1 lhs
          log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
                  show linvars_in
 
          linvars <- combineLinear loc linvars_in
          let lhs' = setLinear linvars lhs
          let lhsty' = setLinear linvars lhsty
+         log 3 ("LHS (before normalise): " ++ show lhs_in)
          log 3 ("LHS: " ++ show lhs' ++ " : " ++ show lhsty')
          setHoleLHS (bindEnv env lhs')
 
@@ -223,6 +230,21 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
          -- expressions (we don't want to abstract over the outer environment
          -- again)
          extend env SubRefl nest lhs' lhsty'
+  where
+    noLet : Env Term vs -> Env Term vs
+    noLet [] = []
+    noLet (Let c v t :: env) = Lam c Explicit t :: noLet env
+    noLet (b :: env) = b :: noLet env
+
+-- Return whether any of the pattern variables are in a trivially empty
+-- type, where trivally empty means one of:
+--  * No constructors
+--  * Every constructor of the family has a return type which conflicts with 
+--    the given constructor's type
+hasEmptyPat : Defs -> Env Term vars -> Term vars -> Bool
+hasEmptyPat defs env (Bind x (PVar c ty) sc)
+   = isEmpty defs (nf defs env ty) || hasEmptyPat defs (PVar c ty :: env) sc
+hasEmptyPat defs env _ = False
 
 export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
@@ -244,7 +266,9 @@ checkClause elab incase mult hashit defining env nest (ImpossibleClause loc lhs_
              gam <- get Ctxt
              let lhs = normaliseHoles gam env lhs_in
              let lhsty = normaliseHoles gam env lhsty_in
-             throw (ValidCase loc env (Left lhs)))
+             if hasEmptyPat gam env lhs
+                then pure Nothing
+                else throw (ValidCase loc env (Left lhs)))
          (\err => case err of
                        ValidCase _ _ _ => throw err
                        WhenUnifying _ env l r err
@@ -439,9 +463,9 @@ nameListEq (x :: xs) (y :: ys) with (nameEq x y)
   nameListEq (x :: xs) (y :: ys) | Nothing = Nothing
 nameListEq _ _ = Nothing
 
-toPats : (Clause, Clause) -> (List Name, ClosedTerm, ClosedTerm)
+toPats : (Clause, Clause) -> (vs ** (Env Term vs, Term vs, Term vs))
 toPats (MkClause {vars} env lhs rhs, _) 
-    = (vars, bindEnv env lhs, bindEnv env rhs)
+    = (_ ** (env, lhs, rhs))
 
 export
 processDef : {auto c : Ref Ctxt Defs} ->
@@ -466,7 +490,7 @@ processDef elab incase env nest loc n_in cs_raw
                            let hashit = visibility glob == Public
                            let mult = if multiplicity glob == Rig0
                                          then Rig0
-                                         else Rig1
+                                         else rig1
                            cs <- traverse (checkClause elab incase mult hashit n env nest) cs_raw
                            (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
                            (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
@@ -486,4 +510,61 @@ processDef elab incase env nest loc n_in cs_raw
                                       "Run time tree\n" ++
                                       show args ++ " " ++ show tr
                                    _ => "No case tree for " ++ show n
+
+                           sc <- calculateSizeChange loc n
+                           log 3 $
+                             let scinfo = map (\s => show (fnCall s) ++ ": " ++ show (fnArgs s)) sc in
+                                 "Size change: " ++ showSep ", " scinfo
+                           setSizeChange loc n sc
+                           cov <- checkCoverage n cs tree_comp
+                           setCovering loc n cov
                      _ => throw (AlreadyDefined loc n)
+  where
+    simplePat : Term vars -> Bool
+    simplePat (Local _ _) = True
+    simplePat Erased = True
+    simplePat _ = False
+
+    -- Is the clause returned from 'checkClause' a catch all clause, i.e.
+    -- one where all the arguments are variables? If so, no need to do the
+    -- (potentially expensive) coverage check
+    catchAll : Maybe (Clause, Clause) -> Bool
+    catchAll Nothing = False
+    catchAll (Just (MkClause env lhs _, _))
+       = all simplePat (getArgs lhs)
+
+    -- Return 'Nothing' if the clause is impossible, otherwise return the
+    -- original
+    checkImpossible : Name -> ClosedTerm -> Core annot (Maybe ClosedTerm)
+    checkImpossible n tm
+        = do itm <- unelabNoPatvars loc [] tm
+             handleClause
+               (do ctxt <- get Ctxt
+                   ok <- checkClause elab False rig1 False n [] (MkNested [])
+                                (ImpossibleClause loc itm)
+                   put Ctxt ctxt
+                   maybe (pure Nothing) (\chktm => pure (Just tm)) ok)
+               (\err => case err of
+                             WhenUnifying _ env l r err
+                               => do gam <- get Ctxt
+                                     if impossibleOK gam (nf gam env l) (nf gam env r)
+                                        then pure Nothing
+                                        else pure (Just tm)
+                             _ => pure (Just tm))
+
+    checkCoverage : Name -> List (Maybe (Clause, Clause)) ->
+                    CaseTree vars -> Core annot Covering
+    checkCoverage n cs ctree
+        = do missCase <- if any catchAll cs
+                            then do log 3 $ "Catch all case in " ++ show n
+                                    pure []
+                            else getMissing n ctree
+             log 3 ("Initially missing in " ++ show n ++ ":\n" ++ 
+                               showSep "\n" (map show missCase))
+             missImp <- traverse (checkImpossible n) missCase
+             let miss = mapMaybe id missImp
+             if isNil miss
+                then do [] <- getNonCoveringRefs loc n
+                           | ns => pure (NonCoveringCall ns)
+                        pure IsCovering
+                else pure (MissingCases miss)
