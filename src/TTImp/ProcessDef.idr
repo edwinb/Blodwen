@@ -246,6 +246,15 @@ hasEmptyPat defs env (Bind x (PVar c ty) sc)
    = isEmpty defs (nf defs env ty) || hasEmptyPat defs (PVar c ty :: env) sc
 hasEmptyPat defs env _ = False
 
+rhsHole : Defs -> Term vars -> Bool
+rhsHole defs tm 
+   = case getFn tm of
+          Ref Func n =>
+              case lookupDefExact n (gamma defs) of
+                   Just (Hole _ _ _) => True
+                   _ => False
+          _ => False
+
 export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -305,7 +314,11 @@ checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_
            checkNameVisibility loc defining vis lhspat
            checkNameVisibility loc defining vis rhs
 
-         addLHS (getAnnot lhs_raw) (length env) env' lhspat
+         gam <- get Ctxt
+         -- Only add the lhs if the rhs is a hole, because we can't case split
+         -- otherwise
+         when (rhsHole gam rhs) $ 
+           addLHS (getAnnot lhs_raw) (length env) env' lhspat
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          when hashit $ 
            do addHash lhspat

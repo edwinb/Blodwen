@@ -186,15 +186,18 @@ mutual
     compare (Nested x1 x2) (Nested y1 y2) 
         = case compare x1 y1 of
                EQ => compare x2 y2
-               t => t
+               GT => GT
+               LT => LT
     compare (CaseBlock x1 x2) (CaseBlock y1 y2) 
         = case compare x1 y1 of
                EQ => compare x2 y2
-               t => t
+               GT => GT
+               LT => LT
     compare (WithBlock x1 x2) (WithBlock y1 y2) 
         = case compare x1 y1 of
                EQ => compare x2 y2
-               t => t
+               GT => GT
+               LT => LT
     compare x y = compare (gnameTag x) (gnameTag y)
 
   export
@@ -205,19 +208,25 @@ mutual
     compare (NS x y) (NS x' y') 
         = case compare y y' of -- Compare base name first (more likely to differ)
                EQ => compare x x'
-               t => t
+               -- Because of the terrible way Idris 1 compiles 'case', this
+               -- is actually faster than just having 't => t'...
+               GT => GT
+               LT => LT
     compare (HN x y) (HN x' y') 
         = case compare y y' of
                EQ => compare x x'
-               t => t
+               GT => GT
+               LT => LT
     compare (PV x y) (PV x' y')
         = case compare y y' of
                EQ => compare x x'
-               t => t
+               GT => GT
+               LT => LT
     compare (DN x y) (DN x' y')
         = case compare y y' of
                EQ => compare x x'
-               t => t
+               GT => GT
+               LT => LT
     compare (GN x) (GN y) = compare x y
 
     compare x y = compare (nameTag x) (nameTag y)
