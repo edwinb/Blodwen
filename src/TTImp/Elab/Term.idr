@@ -155,7 +155,7 @@ mutual
                               then unifyFnArgs ctynf ctynf (reverse args) ret
                               else log 10 $ "Can't unifyFnArgs for " ++ show cty
                       _ => pure ()
-                 case nf defs env cty of
+                 case ctynf of
                       NTCon n _ _ _ =>
                           if isDelayType n defs
                              then throw (InternalError "Force")

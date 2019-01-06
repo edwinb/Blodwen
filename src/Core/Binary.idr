@@ -41,7 +41,7 @@ record TTCFile annot extra where
   version : Int
   ifaceHash : Int
   importHashes : List (List String, Int)
-  holes : List (annot, Name)
+  holes : List (annot, Name, Bool)
   constraints : Context (Constraint annot)
   context : Defs
   extraData : extra
