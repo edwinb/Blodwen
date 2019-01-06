@@ -10,12 +10,15 @@
 (define cast-num 
   (lambda (x) 
     (if (number? x) x 0)))
+(define destroy-prefix
+  (lambda (x)
+    (if (eqv? (string-ref x 0) #\#) "" x)))
 (define cast-string-int
   (lambda (x)
-    (floor (cast-num (string->number x)))))
+    (floor (cast-num (string->number (destroy-prefix x))))))
 (define cast-string-double
   (lambda (x)
-    (cast-num (string->number x))))
+    (cast-num (string->number (destroy-prefix x)))))
 (define string-cons (lambda (x y) (string-append (string x) y)))
 (define get-tag (lambda (x) (vector-ref x 0)))
 (define string-reverse (lambda (x)
