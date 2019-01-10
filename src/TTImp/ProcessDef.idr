@@ -354,7 +354,7 @@ checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (Wi
          log 5 ("Uses env: " ++ show wevars)
          log 5 ("Required type: " ++ show reqty)
 
-         -- TODO: Also abstract over 'wval' in the scope of bNotReq in order
+         -- Abstracting over 'wval' in the scope of bNotReq in order
          -- to get the 'magic with' behaviour
          let wargn = MN "warg" 0
          let scenv = Pi RigW Explicit wvalTy :: wvalEnv

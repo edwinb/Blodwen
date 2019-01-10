@@ -283,10 +283,6 @@ getAnnot (InLHS x y err) = getAnnot err
 getAnnot (InRHS x y err) = getAnnot err
 
 export
-error : Error annot -> Either (Error annot) a
-error = Left
-
-export
 record Core annot t where
   constructor MkCore
   runCore : IO (Either (Error annot) t)

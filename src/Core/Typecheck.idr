@@ -16,7 +16,7 @@ doConvert : (Quote tm, Convert tm) =>
 doConvert loc gam env x y 
     = if convert gam env x y 
          then pure ()
-         else error (CantConvert loc env (quote gam env x) (quote gam env y))
+         else Left (CantConvert loc env (quote gam env x) (quote gam env y))
 
 parameters (loc : annot, gam : Defs)
   mutual
@@ -33,7 +33,7 @@ parameters (loc : annot, gam : Defs)
                             pure $ (Ref (TyCon tag arity) x, embed ty)
                        Just (_, ty) => 
                             pure $ (Ref Func x, embed ty)
-                       Nothing => error (UndefinedName loc x)
+                       Nothing => Left (UndefinedName loc x)
                Just (m, lv) => pure $ (Local Nothing lv, 
                                        binderType (getBinder lv env))
     chk env (RBind nm b sc) 
@@ -48,7 +48,7 @@ parameters (loc : annot, gam : Defs)
                            doConvert loc gam env (quote gam env ty) aty
                            let sc' = scdone (toClosure defaultOpts env a')
                            pure (App f' a', quote gam env sc')
-                  _ => error (NotFunctionType loc env fty)
+                  _ => Left (NotFunctionType loc env fty)
     chk env (RPrimVal x) = pure $ chkConstant x
     chk env RType = pure (TType, TType)
 

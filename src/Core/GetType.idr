@@ -24,7 +24,7 @@ parameters (loc : annot, gam : Defs)
     chk env (Ref nt n)
         = case lookupTyExact n (gamma gam) of
                Just ty => pure (embed ty)
-               Nothing => error (UndefinedName loc n)
+               Nothing => Left (UndefinedName loc n)
     chk env (Bind nm b sc) 
         = do bt <- chkBinder env b
              sct <- chk {vars = nm :: _} (b :: env) sc
@@ -36,7 +36,7 @@ parameters (loc : annot, gam : Defs)
                         do aty <- chk env a
                            let sc' = scdone (toClosure defaultOpts env a)
                            pure (quote gam env sc')
-                  _ => error (NotFunctionType loc env fty)
+                  _ => Left (NotFunctionType loc env fty)
     chk env (PrimVal x) = pure $ chkConstant x
     chk env TType = pure TType
     chk env Erased = pure Erased

@@ -249,6 +249,7 @@ mutual
        PClaim : FC -> Visibility -> List FnOpt -> PTypeDecl -> PDecl
        PDef : FC -> List PClause -> PDecl
        PData : FC -> Visibility -> PDataDecl -> PDecl
+       PParameters : FC -> List (Name, PTerm) -> List PDecl -> PDecl
        PReflect : FC -> PTerm -> PDecl
        PInterface : FC -> 
                     Visibility -> 
@@ -294,6 +295,7 @@ definedIn : List PDecl -> List Name
 definedIn [] = []
 definedIn (PClaim _ _ _ (MkPTy _ n _) :: ds) = n :: definedIn ds
 definedIn (PData _ _ d :: ds) = definedInData d ++ definedIn ds
+definedIn (PParameters _ _ pds :: ds) = definedIn pds ++ definedIn ds
 definedIn (PNamespace _ _ ns :: ds) = definedIn ns ++ definedIn ds
 definedIn (_ :: ds) = definedIn ds
 

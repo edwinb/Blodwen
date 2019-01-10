@@ -853,6 +853,8 @@ abstractEnvType (b :: env) tm
 export
 abstractFullEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
 abstractFullEnvType [] tm = tm
+abstractFullEnvType (Pi c e ty :: env) tm 
+    = abstractFullEnvType env (Bind _ (Pi c e ty) tm)
 abstractFullEnvType (b :: env) tm 
     = abstractFullEnvType env (Bind _ 
 						(Pi (multiplicity b) Explicit (binderType b)) tm)

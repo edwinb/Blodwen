@@ -66,10 +66,10 @@ atom fname
          end <- location
          pure (PRef (MkFC fname start end) x)
   
-whereBlock : FileName -> Rule (List PDecl)
-whereBlock fname
+whereBlock : FileName -> Int -> Rule (List PDecl)
+whereBlock fname col
     = do keyword "where"
-         ds <- block (topDecl fname)
+         ds <- blockAfter col (topDecl fname)
          pure (collectDefs (concat ds))
 
 -- Expect a keyword, but if we get anything else it's a fatal error
@@ -648,12 +648,13 @@ tyDecl fname indents
 
 mutual
   parseRHS : (withArgs : Nat) ->
-             FileName -> FilePos -> IndentInfo -> (lhs : PTerm) -> Rule PClause
-  parseRHS withArgs fname start indents lhs
+             FileName -> FilePos -> Int ->
+             IndentInfo -> (lhs : PTerm) -> Rule PClause
+  parseRHS withArgs fname start col indents lhs
        = do symbol "="
             mustWork $
               do rhs <- expr EqOK fname indents
-                 ws <- option [] (whereBlock fname)
+                 ws <- option [] (whereBlock fname col)
                  atEnd indents
                  end <- location
                  pure (MkPatClause (MkFC fname start end) lhs rhs ws)
@@ -672,11 +673,12 @@ mutual
   clause : Nat -> FileName -> IndentInfo -> Rule PClause
   clause withArgs fname indents
       = do start <- location
+           col <- column
            lhs <- expr NoEq fname indents
            extra <- many parseWithArg
            if (withArgs /= length extra)
               then fatalError "Wrong number of 'with' arguments"
-              else parseRHS withArgs fname start indents (applyArgs lhs extra)
+              else parseRHS withArgs fname start col indents (applyArgs lhs extra)
     where
       applyArgs : PTerm -> List (FC, PTerm) -> PTerm
       applyArgs f [] = f
@@ -895,6 +897,21 @@ mutualDecls fname indents
          end <- location
          pure (PMutual (MkFC fname start end) (concat ds))
 
+paramDecls : FileName -> IndentInfo -> Rule PDecl
+paramDecls fname indents
+    = do start <- location
+         keyword "parameters"
+         commit
+         symbol "("
+         ps <- some (do x <- unqualifiedName
+                        symbol ":"
+                        ty <- typeExpr EqOK fname indents
+                        pure (UN x, ty))
+         symbol ")"
+         ds <- assert_total (nonEmptyBlock (topDecl fname))
+         end <- location
+         pure (PParameters (MkFC fname start end) ps (collectDefs (concat ds)))
+
 fnOpt : Rule FnOpt
 fnOpt
     = do keyword "partial"
@@ -1101,9 +1118,18 @@ topDecl fname indents
          pure [d]
   <|> do d <- definition fname indents
          pure [d]
+  <|> fixDecl fname indents
+  <|> do d <- ifaceDecl fname indents
+         pure [d]
+  <|> do d <- implDecl fname indents
+         pure [d]
+  <|> do d <- recordDecl fname indents
+         pure [d]
   <|> do d <- namespaceDecl fname indents
          pure [d]
   <|> do d <- mutualDecls fname indents
+         pure [d]
+  <|> do d <- paramDecls fname indents
          pure [d]
   <|> do d <- directiveDecl fname indents
          pure [d]
@@ -1116,13 +1142,6 @@ topDecl fname indents
          let cgrest = span isAlphaNum dstr
          pure [PDirective (MkFC fname start end)
                 (CGAction (fst cgrest) (stripBraces (trim (snd cgrest))))]
-  <|> fixDecl fname indents
-  <|> do d <- ifaceDecl fname indents
-         pure [d]
-  <|> do d <- implDecl fname indents
-         pure [d]
-  <|> do d <- recordDecl fname indents
-         pure [d]
   <|> fatalError "Couldn't parse declaration"
 
 -- All the clauses get parsed as one-clause definitions. Collect any

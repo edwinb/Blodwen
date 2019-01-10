@@ -79,11 +79,11 @@ Things still missing
 ====================
 
 + Some high level syntax, notably dependent pairs, and numeric ranges
-+ 'parameters' blocks
++ 'using' blocks
 + Cumulativity
 + 'rewrite' doesn't yet work on dependent types
 + Some details of 'with' not yet done (notably recursive with call syntax)
 + Parts of the ide-mode
-+ Documentation strings
++ Documentation strings and HTML documentation generation
 + ':search' and ':apropos' at the REPL
 + The rest of this "Things still missing" list

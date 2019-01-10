@@ -271,8 +271,9 @@ mutual
       = checkImp rigc process elabinfo env nest tm expected
   checkImp rigc process elabinfo env nest (IVar loc x) expected 
       = case lookup x (names nest) of
-             Just (n', tm) =>
+             Just (nestn, tm) =>
                   do gam <- get Ctxt
+                     let n' = maybe x id nestn
                      case lookupTyExact n' (gamma gam) of
                           Nothing => throw (UndefinedName loc n')
                           Just varty => 
@@ -799,8 +800,8 @@ mutual
                then setMultiplicity b Rig0 :: dropLinear bs
                else b :: dropLinear bs
 
-      applyEnv : Name -> Name -> (Name, (Name, Term vars))
-      applyEnv outer inner = (inner, (GN (Nested outer inner), 
+      applyEnv : Name -> Name -> (Name, (Maybe Name, Term vars))
+      applyEnv outer inner = (inner, (Just (GN (Nested outer inner)), 
                                       mkConstantAppFull (GN (Nested outer inner)) env))
 
       -- Update the names in the declarations to the new 'nested' names.
@@ -809,7 +810,7 @@ mutual
       newName : NestedNames vars -> Name -> Name
       newName nest n 
           = case lookup n (names nest) of
-                 Just (n', _) => n'
+                 Just (Just n', _) => n'
                  _ => n
 
       updateTyName : NestedNames vars -> ImpTy annot -> ImpTy annot

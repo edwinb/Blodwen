@@ -112,7 +112,7 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
          log 2 $ "From: " ++ show alts
          log 5 $ "Nested: " ++ show (mkConstantAppFull casen pre_env)
 
-         let nest' = record { names $= ((casen, (casen, 
+         let nest' = record { names $= ((casen, (Nothing, 
                                   (mkConstantAppFull casen pre_env))) ::) } 
                             nest
          process c u i m True pre_env nest' (IDef loc casen alts')

@@ -120,6 +120,7 @@ public export
 record PPrinter where
   constructor MkPPOpts
   showImplicits : Bool
+  showFullEnv : Bool
   fullNamespace : Bool
 
 public export
@@ -181,7 +182,7 @@ defaultDirs : Dirs
 defaultDirs = MkDirs "." "build" "/usr/local" ["."] []
 
 defaultPPrint : PPrinter
-defaultPPrint = MkPPOpts False False
+defaultPPrint = MkPPOpts False True False
 
 defaultSession : Session
 defaultSession = MkSessionOpts False Chez

@@ -260,7 +260,9 @@ TTC annot String where
               then
                 do val <- coreLift $ getString (buf chunk) (loc chunk) len
                    put Bin (MkBin done (incLoc len chunk) rest)
-                   findString val
+                   -- Sharing strings doesn't (yet) seem to help, it just
+                   -- slows us down...
+                   pure val -- findString val
               else 
                 case rest of
                      [] => throw (TTCError (EndOfBuffer "String"))
@@ -268,7 +270,7 @@ TTC annot String where
                         do val <- coreLift $ getString (buf next) 0 len
                            put Bin (MkBin (chunk :: done)
                                           (incLoc len next) rest)
-                           findString val
+                           pure val -- findString val
 
 export
 TTC annot Bool where

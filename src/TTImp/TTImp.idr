@@ -18,15 +18,15 @@ record NestedNames (vars : List Name) where
   constructor MkNested
   -- A map from names to the decorated version of the name, and the new name
   -- applied to its enclosing environment
-  names : List (Name, (Name, Term vars))
+  names : List (Name, (Maybe Name, Term vars))
 
 export
 Weaken NestedNames where
   weaken (MkNested ns) = MkNested (map wknName ns)
     where
-      wknName : (Name, (Name, Term vars)) ->
-                (Name, (Name, Term (n :: vars)))
-      wknName (n, (n', rep)) = (n, (n', weaken rep))
+      wknName : (Name, (Maybe Name, Term vars)) ->
+                (Name, (Maybe Name, Term (n :: vars)))
+      wknName (n, (mn, rep)) = (n, (mn, weaken rep))
 
 -- Unchecked terms, with implicit arguments
 -- This is the raw, elaboratable form.
@@ -177,6 +177,8 @@ mutual
                 Visibility -> List FnOpt -> ImpTy annot -> ImpDecl annot
        IDef : annot -> Name -> List (ImpClause annot) -> ImpDecl annot
        IData : annot -> Visibility -> ImpData annot -> ImpDecl annot
+       IParameters : annot -> List (Name, RawImp annot) ->
+                     List (ImpDecl annot) -> ImpDecl annot
        IRecord : annot -> Visibility -> ImpRecord annot -> ImpDecl annot
        INamespace : annot -> List String -> List (ImpDecl annot) ->
                     ImpDecl annot
@@ -287,6 +289,7 @@ definedInBlock = concatMap defName
     defName (IClaim _ _ _ _ ty) = [getName ty]
     defName (IData _ _ (MkImpData _ n _ _ cons)) = n :: map getName cons
     defName (IData _ _ (MkImpLater _ n _)) = [n]
+    defName (IParameters _ _ pds) = concatMap defName pds
     defName (IRecord _ _ (MkImpRecord _ n _ _ _)) = [n]
     defName _ = []
 
@@ -423,6 +426,9 @@ mutual
     show (IDef _ n cs) = show n ++ " clauses:\n\t" ++ 
                          showSep "\n\t" (map show cs)
     show (IData _ _ d) = show d
+    show (IParameters _ ps ds) 
+        = "parameters " ++ show ps ++ "\n\t" ++
+          showSep "\n\t" (assert_total $ map show ds)
     show (IRecord _ _ d) = show d
     show (INamespace _ ns decls) 
         = "namespace " ++ show ns ++ 
@@ -932,19 +938,21 @@ mutual
         = do tag 1; toBuf b fc; toBuf b n; toBuf b xs
     toBuf b (IData fc vis d) 
         = do tag 2; toBuf b fc; toBuf b vis; toBuf b d
+    toBuf b (IParameters fc vis d) 
+        = do tag 3; toBuf b fc; toBuf b vis; toBuf b d
     toBuf b (IRecord fc vis r) 
-        = do tag 3; toBuf b fc; toBuf b vis; toBuf b r
+        = do tag 4; toBuf b fc; toBuf b vis; toBuf b r
     toBuf b (INamespace fc xs ds) 
-        = do tag 4; toBuf b fc; toBuf b xs; toBuf b ds
+        = do tag 5; toBuf b fc; toBuf b xs; toBuf b ds
     toBuf b (IReflect fc tm) 
-        = do tag 5; toBuf b fc; toBuf b tm
+        = do tag 6; toBuf b fc; toBuf b tm
     toBuf b (ImplicitNames fc xs) 
-        = do tag 6; toBuf b fc; toBuf b xs
+        = do tag 7; toBuf b fc; toBuf b xs
     toBuf b (IHint fc hintname target) 
-        = do tag 7; toBuf b fc; toBuf b hintname; toBuf b target
+        = do tag 8; toBuf b fc; toBuf b hintname; toBuf b target
     toBuf b (IPragma f) = throw (InternalError "Can't write Pragma")
     toBuf b (ILog n) 
-        = do tag 8; toBuf b n
+        = do tag 9; toBuf b n
 
     fromBuf s b
         = case !getTag of
@@ -959,19 +967,22 @@ mutual
                        d <- fromBuf s b
                        pure (IData fc vis d)
                3 => do fc <- fromBuf s b; vis <- fromBuf s b
+                       d <- fromBuf s b
+                       pure (IParameters fc vis d)
+               4 => do fc <- fromBuf s b; vis <- fromBuf s b
                        r <- fromBuf s b
                        pure (IRecord fc vis r)
-               4 => do fc <- fromBuf s b; xs <- fromBuf s b
+               5 => do fc <- fromBuf s b; xs <- fromBuf s b
                        ds <- fromBuf s b
                        pure (INamespace fc xs ds)
-               5 => do fc <- fromBuf s b; tm <- fromBuf s b
+               6 => do fc <- fromBuf s b; tm <- fromBuf s b
                        pure (IReflect fc tm)
-               6 => do fc <- fromBuf s b; xs <- fromBuf s b
+               7 => do fc <- fromBuf s b; xs <- fromBuf s b
                        pure (ImplicitNames fc xs)
-               7 => do fc <- fromBuf s b; hintname <- fromBuf s b
+               8 => do fc <- fromBuf s b; hintname <- fromBuf s b
                        target <- fromBuf s b
                        pure (IHint fc hintname target)
-               8 => do n <- fromBuf s b
+               9 => do n <- fromBuf s b
                        pure (ILog n)
                _ => corrupt "ImpDecl"
 

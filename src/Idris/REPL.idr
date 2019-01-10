@@ -506,7 +506,13 @@ process (SetOpt opt)
     = do setOpt opt
          pure True
 process (Editing cmd)
-    = do processEdit cmd
+    = do ppopts <- getPPrint
+         -- Since we're working in a local environment, don't do the usual
+         -- thing of printing out the full environment for parameterised
+         -- calls or calls in where blocks
+         setPPrint (record { showFullEnv = False } ppopts)
+         processEdit cmd
+         setPPrint ppopts
          pure True
 process Quit 
     = do iputStrLn "Bye for now!"
