@@ -74,6 +74,13 @@ strTail [NPrimVal (Str str)]
     = Just (NPrimVal (Str (assert_total (strTail str))))
 strTail _ = Nothing
 
+strIndex : Vect 2 (NF vars) -> Maybe (NF vars)
+strIndex [NPrimVal (Str str), NPrimVal (I i)] 
+    = if i >= 0 && cast i < length str
+         then Just (NPrimVal (Ch (assert_total (prim__strIndex str i))))
+         else Nothing
+strIndex _ = Nothing
+
 strCons : Vect 2 (NF vars) -> Maybe (NF vars)
 strCons [NPrimVal (Ch x), NPrimVal (Str y)] 
     = Just (NPrimVal (Str (strCons x y)))
@@ -88,6 +95,11 @@ strReverse : Vect 1 (NF vars) -> Maybe (NF vars)
 strReverse [NPrimVal (Str x)] 
     = Just (NPrimVal (Str (reverse x)))
 strReverse _ = Nothing
+
+strSubstr : Vect 3 (NF vars) -> Maybe (NF vars)
+strSubstr [NPrimVal (I start), NPrimVal (I len), NPrimVal (Str str)] 
+    = Just (NPrimVal (Str (prim__strSubstr start len str)))
+strSubstr _ = Nothing
 
 add : Constant -> Constant -> Maybe Constant
 add (BI x) (BI y) = pure $ BI (x + y)
@@ -177,6 +189,10 @@ gt _ _ = Nothing
 constTy : Constant -> Constant -> Constant -> ClosedTerm
 constTy a b c = PrimVal a `linFnType` (PrimVal b `linFnType` PrimVal c)
 
+constTy3 : Constant -> Constant -> Constant -> Constant -> ClosedTerm
+constTy3 a b c d 
+   = PrimVal a `linFnType` (PrimVal b `linFnType` (PrimVal c `linFnType` PrimVal d))
+
 predTy : Constant -> Constant -> ClosedTerm
 predTy a b = PrimVal a `linFnType` PrimVal b
 
@@ -213,9 +229,11 @@ getOp (GT ty) = binOp gt
 getOp StrLength = strLength
 getOp StrHead = strHead
 getOp StrTail = strTail
+getOp StrIndex = strIndex
 getOp StrCons = strCons
 getOp StrAppend = strAppend
 getOp StrReverse = strReverse
+getOp StrSubstr = strSubstr
 
 getOp (Cast _ y) = castTo y
 
@@ -240,9 +258,11 @@ opName (GT ty) = prim $ "gt_" ++ show ty
 opName StrLength = prim "strLength"
 opName StrHead = prim "strHead"
 opName StrTail = prim "strTail"
+opName StrIndex = prim "strIndex"
 opName StrCons = prim "strCons"
 opName StrAppend = prim "strAppend"
 opName StrReverse = prim "strReverse"
+opName StrSubstr = prim "strSubstr"
 opName (Cast x y) = prim $ "cast_" ++ show x ++ show y
 
 export
@@ -264,9 +284,11 @@ allPrimitives =
     [MkPrim StrLength (predTy StringType IntType) isTotal,
      MkPrim StrHead (predTy StringType CharType) notCovering,
      MkPrim StrTail (predTy StringType StringType) notCovering,
+     MkPrim StrIndex (constTy StringType IntType CharType) notCovering,
      MkPrim StrCons (constTy CharType StringType StringType) isTotal,
      MkPrim StrAppend (arithTy StringType) isTotal,
-     MkPrim StrReverse (predTy StringType StringType) isTotal] ++
+     MkPrim StrReverse (predTy StringType StringType) isTotal,
+     MkPrim StrSubstr (constTy3 IntType IntType StringType StringType) isTotal] ++
 
     map (\t => MkPrim (Cast t StringType) (predTy t StringType) isTotal) [IntType, IntegerType, CharType, DoubleType] ++
     map (\t => MkPrim (Cast t IntegerType) (predTy t IntegerType) isTotal) [StringType, IntType, CharType, DoubleType] ++

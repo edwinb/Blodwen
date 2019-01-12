@@ -11,6 +11,8 @@ import Core.TT
 import Data.List
 import Data.Vect
 
+%default covering
+
 schString : String -> String
 schString s = concatMap okchar (unpack s)
   where
@@ -91,9 +93,11 @@ schOp (GT ty) [x, y] = boolop ">" [x, y]
 schOp StrLength [x] = op "string-length" [x]
 schOp StrHead [x] = op "string-ref" [x, "0"]
 schOp StrTail [x] = op "substring" [x, "1", op "string-length" [x]]
+schOp StrIndex [x, i] = op "string-ref" [x, i]
 schOp StrCons [x, y] = op "string-cons" [x, y]
 schOp StrAppend [x, y] = op "string-append" [x, y]
 schOp StrReverse [x] = op "string-reverse" [x]
+schOp StrSubstr [x, y, z] = op "string-substr" [x, y, z]
 
 schOp (Cast IntType StringType) [x] = op "number->string" [x]
 schOp (Cast IntegerType StringType) [x] = op "number->string" [x]

@@ -112,9 +112,11 @@ data PrimFn : Nat -> Type where
      StrLength : PrimFn 1
      StrHead : PrimFn 1
      StrTail : PrimFn 1
+     StrIndex : PrimFn 2
      StrCons : PrimFn 2
      StrAppend : PrimFn 2
      StrReverse : PrimFn 1
+     StrSubstr : PrimFn 3
 
      Cast : Constant -> Constant -> PrimFn 1
 
@@ -134,9 +136,11 @@ Show (PrimFn arity) where
   show StrLength = "op_strlen"
   show StrHead = "op_strhead"
   show StrTail = "op_strtail"
+  show StrIndex = "op_strindex"
   show StrCons = "op_strcons"
   show StrAppend = "++"
   show StrReverse = "op_strrev"
+  show StrSubstr = "op_strsubstr"
   show (Cast x y) = "cast-" ++ show x ++ "-" ++ show y
 
 public export
