@@ -15,6 +15,7 @@ data Token = Ident String
            | Keyword String
            | Unrecognised String
            | Comment String
+           | DocComment String
            | CGDirective String
            | EndInput
 
@@ -30,6 +31,7 @@ Show Token where
   show (Keyword x) = x
   show (Unrecognised x) = "Unrecognised " ++ x
   show (Comment x) = "comment"
+  show (DocComment x) = "doc comment"
   show (CGDirective x) = "CGDirective " ++ x
   show EndInput = "end of input"
 
@@ -53,6 +55,9 @@ toEndComment (S k)
 blockComment : Lexer
 blockComment = is '{' <+> is '-' <+> toEndComment 1
               
+docComment : Lexer
+docComment = is '|' <+> is '|' <+> is '|' <+> many (isNot '\n')
+
 ident : Lexer
 ident = pred startIdent <+> many (pred validIdent)
   where
@@ -124,7 +129,7 @@ validSymbol = some (oneOf opChars)
 export
 reservedSymbols : List String
 reservedSymbols
-    = symbols ++ ["%", "\\", ":", "=", "|", "<-", "->", "=>", "?", "&"]
+    = symbols ++ ["%", "\\", ":", "=", "|", "|||", "<-", "->", "=>", "?", "&"]
 
 symbolChar : Char -> Bool
 symbolChar c = c `elem` unpack opChars
@@ -133,6 +138,7 @@ rawTokens : TokenMap Token
 rawTokens = 
     [(comment, Comment),
      (blockComment, Comment),
+     (docComment, DocComment),
      (cgDirective, mkDirective),
      (holeIdent, \x => HoleIdent (assert_total (strTail x)))] ++
     map (\x => (exact x, Symbol)) symbols ++
@@ -162,6 +168,7 @@ lex str
       notComment : TokenData Token -> Bool
       notComment t = case tok t of
                           Comment _ => False
+                          DocComment _ => False -- TODO!
                           _ => True
 
 testLex : String -> String
