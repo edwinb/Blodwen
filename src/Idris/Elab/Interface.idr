@@ -279,7 +279,8 @@ elabInterface {vars} fc vis env nest constraints iname params dets mcon body
              log 5 $ "Top level methods: " ++ show fns
              traverse (processDecl False env nest) fns
              traverse (\n => do mn <- inCurrentNS n
-                                setFlag fc mn TCInline) meth_names
+                                setFlag fc mn TCInline
+                                setFlag fc mn Overloadable) meth_names
              pure ()
 
     -- Check that a default definition is correct. We just discard it here once
