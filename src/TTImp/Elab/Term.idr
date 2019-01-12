@@ -243,7 +243,6 @@ mutual
                                 then forced else throw err)
 
   insertLazy : Defs -> RawImp annot -> ExpType (NF vars) -> RawImp annot
-  insertLazy defs tm@(IBindVar _ _) _ = tm
   -- If the expected type is "Delayed" and the given term doesn't elaborate
   -- then we'll try inserting a "Delay"
   insertLazy defs tm (FnType [] (NTCon n _ _ args))
