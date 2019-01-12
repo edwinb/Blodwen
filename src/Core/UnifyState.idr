@@ -258,11 +258,14 @@ checkUserHoles now
     = do hs <- getCurrentHoleInfo
          traverse checkValidHole hs
          let hs' = if any isUserName (map snd hs) then [] else hs
-         when (not (isNil hs') && now) $ throw (UnsolvedHoles hs)
+         when (not (isNil hs') && now) $ throw (UnsolvedHoles (nubBy sndEq hs))
          -- Note the hole names, to ensure they are resolved
          -- by the end of elaborating the current source file
          traverse (\x => addDelayedHoleName (fst x) (snd x)) hs'
          pure ()
+  where
+    sndEq : (a, Name) -> (a, Name) -> Bool
+    sndEq x y = snd x == snd y
 
 export
 checkDelayedHoles : {auto u : Ref UST (UState annot)} ->
@@ -272,8 +275,12 @@ checkDelayedHoles
     = do hs <- getDelayedHoleInfo
          allHs <- getHoleNames
          if (not (isNil hs)) 
-            then pure (Just (UnsolvedHoles hs))
+            then pure (Just (UnsolvedHoles (nubBy sndEq hs)))
             else pure Nothing
+  where
+    sndEq : (a, Name) -> (a, Name) -> Bool
+    sndEq x y = snd x == snd y
+
 
 -- Check that the argument types in a type are valid. If the unbound
 -- implicit rules bind a thing too late (they bind dependencies at the point 

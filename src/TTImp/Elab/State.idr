@@ -879,11 +879,13 @@ successful elabmode ((tm, elab) :: elabs)
                                 InLHS _ => InLHS
                                 _ => InTerm) Normal
          init_st <- getAllState
+         log 5 $ "Trying elaborator for " ++ show tm
          Right res <- tryError elab
                | Left err => do rest <- successful elabmode elabs
-                                log 10 $ show tm ++ " failure"
+                                log 5 $ "Result for " ++ show tm ++ ": failure"
                                 pure (Left (tm, err) :: rest)
 
+         log 5 $ "Result for " ++ show tm ++ ": success"
          elabState <- getAllState -- save state at end of successful elab
          -- reinitialise state for next elabs
          putAllState init_st

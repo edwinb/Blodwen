@@ -1,15 +1,10 @@
 1/1: Building eta (eta.blod)
-eta.blod:14:10--16:1:While processing right hand side of Main.etaBad at eta.blod:14:1--16:1:
+eta.blod:14:10--15:1:While processing right hand side of Main.etaBad at eta.blod:14:1--15:1:
 When unifying ?x = ?x and MkTest = (\x => (\y => (MkTest ?_ ?_)))
 Mismatch between:
 	Integer
 and
 	Nat
-eta.blod:13:32--13:32:Unsolved holes:
-Main.{_:63} introduced at eta.blod:13:32--13:32
-Main.{_:66} introduced at eta.blod:13:45--13:47
-Main.{_:67} introduced at eta.blod:13:47--13:48
-
 1/1: Building eta2 (eta2.blod)
 eta2.blod:1:25--1:26:While processing type of Main.test at eta2.blod:1:1--2:1:
 Hole cannot depend on an unbound implicit a
@@ -20,6 +15,3 @@ Mismatch between:
 	Nat
 and
 	a
-eta2.blod:4:9--5:1:Unsolved holes:
-Main.{_:8} introduced at eta2.blod:4:9--5:1
-
