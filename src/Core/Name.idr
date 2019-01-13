@@ -18,7 +18,7 @@ mutual
   data Name =
     ||| A user provided name
     UN String |
-    ||| A machine generated name; String is for display only, so Ints must be uniquely generated. 
+    ||| A machine generated name
     MN String Int  |
     ||| A name in a hierarchical namespace, namespaces are in reverse order (innermost name first)
     NS (List String) Name  |
@@ -135,7 +135,7 @@ mutual
   Eq Name where
     (==) (UN x) (UN y) = x == y
     -- Put the arguments which are more likely to differ first
-    (==) (MN x y) (MN x' y') = y == y'
+    (==) (MN x y) (MN x' y') = y == y' && x == x'
     (==) (NS xs x) (NS xs' x') = x == x' && xs == xs'
     (==) (HN x y) (HN x' y') = y == y' && x == x'
     (==) (PV x y) (PV x' y') = x == x' && y == y'
@@ -211,38 +211,50 @@ mutual
     compare (Nested x1 x2) (Nested y1 y2)
         = case compare x1 y1 of
                EQ => compare x2 y2
-               t => t
-    compare (CaseBlock x1 x2) (CaseBlock y1 y2)
+               GT => GT
+               LT => LT
+    compare (CaseBlock x1 x2) (CaseBlock y1 y2) 
         = case compare x1 y1 of
                EQ => compare x2 y2
-               t => t
-    compare (WithBlock x1 x2) (WithBlock y1 y2)
+               GT => GT
+               LT => LT
+    compare (WithBlock x1 x2) (WithBlock y1 y2) 
         = case compare x1 y1 of
                EQ => compare x2 y2
-               t => t
+               GT => GT
+               LT => LT
     compare x y = compare (gnameTag x) (gnameTag y)
 
   export
   Ord Name where
     compare (UN x) (UN y) = compare x y
     compare (MN x y) (MN x' y') 
-        = compare y y'
-    compare (NS x y) (NS x' y')
-        = case compare y y' of -- Compare base name first (more likely to differ)
-               EQ => compare x x'
-               t => t
-    compare (HN x y) (HN x' y')
         = case compare y y' of
                EQ => compare x x'
-               t => t
+               GT => GT
+               LT => LT
+    compare (NS x y) (NS x' y') 
+        = case compare y y' of -- Compare base name first (more likely to differ)
+               EQ => compare x x'
+               -- Because of the terrible way Idris 1 compiles 'case', this
+               -- is actually faster than just having 't => t'...
+               GT => GT
+               LT => LT
+    compare (HN x y) (HN x' y') 
+        = case compare y y' of
+               EQ => compare x x'
+               GT => GT
+               LT => LT
     compare (PV x y) (PV x' y')
         = case compare y y' of
                EQ => compare x x'
-               t => t
+               GT => GT
+               LT => LT
     compare (DN x y) (DN x' y')
         = case compare y y' of
                EQ => compare x x'
-               t => t
+               GT => GT
+               LT => LT
     compare (GN x) (GN y) = compare x y
 
     compare x y = compare (nameTag x) (nameTag y)

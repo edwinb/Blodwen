@@ -42,7 +42,9 @@ processDecls : {auto c : Ref Ctxt Defs} ->
 processDecls decls
     = do xs <- traverse processDecl decls
          Nothing <- checkDelayedHoles 
-             | Just err => pure (mapMaybe id xs ++ [err])
+             | Just err => pure (case mapMaybe id xs of
+                                      [] => [err]
+                                      errs => errs)
          hs <- getHoleNames
          traverse addToSave hs
          pure (mapMaybe id xs)

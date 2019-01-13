@@ -12,4 +12,3 @@ etaGood3 f = Refl
 
 etaBad : MkTest = (\x : Nat => \y => MkTest ? ?)
 etaBad = Refl
-

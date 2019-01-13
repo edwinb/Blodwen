@@ -10,6 +10,9 @@ import Data.List
 
 %default covering
 
+public export
+data Phase = CompileTime | RunTime
+
 data ArgType : List Name -> Type where
      Known : RigCount -> (ty : Term vars) -> ArgType vars -- arg has type 'ty'
      Stuck : (fty : Term vars) -> ArgType vars 
@@ -51,6 +54,10 @@ data NamedPats : List Name -> -- pattern variables still to process
             -- and its type. The type has no variable names; any names it
             -- refers to are explicit
             NamedPats vars ns -> NamedPats vars (pvar :: ns)
+
+getPatInfo : NamedPats vars todo -> List Pat
+getPatInfo [] = []
+getPatInfo (x :: xs) = pat x :: getPatInfo xs
 
 updatePats : Env Term vars -> 
              NF vars -> NamedPats vars todo -> NamedPats vars todo
@@ -143,20 +150,21 @@ take [] ps = []
 take (x :: xs) (p :: ps) = p :: take xs ps
 
 data PatClause : (vars : List Name) -> (todo : List Name) -> Type where
-     MkPatClause : NamedPats vars todo -> 
+     MkPatClause : List Name -> -- names matched so far (from original lhs)
+                   NamedPats vars todo -> 
                    (rhs : Term vars) -> PatClause vars todo
 
 getNPs : PatClause vars todo -> NamedPats vars todo
-getNPs (MkPatClause lhs rhs) = lhs
+getNPs (MkPatClause _ lhs rhs) = lhs
 
 Show (PatClause vars todo) where
-  show (MkPatClause ps rhs) 
-     = show ps ++ " => " ++ show rhs
+  show (MkPatClause _ ps rhs) 
+     = show (getPatInfo ps) ++ " => " ++ show rhs
 
 substInClause : Defs -> PatClause vars (a :: todo) -> PatClause vars (a :: todo)
-substInClause {vars} {a} defs (MkPatClause (MkInfo pat pprf fty :: pats) rhs)
-    = MkPatClause (MkInfo pat pprf fty :: 
-                     substInPats defs a (mkTerm vars pat) pats) rhs
+substInClause {vars} {a} defs (MkPatClause pvars (MkInfo pat pprf fty :: pats) rhs)
+    = MkPatClause pvars (MkInfo pat pprf fty :: 
+                           substInPats defs a (mkTerm vars pat) pats) rhs
 
 data LengthMatch : List a -> List b -> Type where
      NilMatch : LengthMatch [] []
@@ -183,26 +191,44 @@ Show (Partitions ps) where
 
 data ClauseType = ConClause | VarClause
 
-clauseType : PatClause vars (a :: as) -> ClauseType
--- If it's irrelevant, treat it as a variable
-clauseType (MkPatClause (MkInfo _ _ (Known Rig0 t) :: _) rhs) = VarClause
-clauseType (MkPatClause (MkInfo (PCon x y xs) _ _ :: _) rhs) = ConClause
-clauseType (MkPatClause (MkInfo (PConst x) _ _ :: _) rhs) = ConClause
-clauseType (MkPatClause (_ :: _) rhs) = VarClause
+namesIn : List Name -> Pat -> Bool
+namesIn pvars (PCon _ _ ps) = all (namesIn pvars) ps
+namesIn pvars (PVar n) = n `elem` pvars
+namesIn pvars _ = True
 
-partition : (ps : List (PatClause vars (a :: as))) -> Partitions ps
-partition [] = NoClauses
-partition (x :: xs) with (partition xs)
-  partition (x :: (cs ++ ps)) | (ConClauses cs rest) 
-        = case clauseType x of
+namesFrom : Pat -> List Name
+namesFrom (PCon _ _ ps) = concatMap namesFrom ps
+namesFrom (PVar n) = [n]
+namesFrom _ = []
+
+clauseType : Phase -> PatClause vars (a :: as) -> ClauseType
+-- If it's irrelevant, a constructor, and there's no names we haven't seen yet
+-- and don't see later, treat it as a variable
+-- Or, if we're compiling for runtime we won't be able to split on it, so
+-- also treat it as a variable
+clauseType CompileTime (MkPatClause pvars (MkInfo (PCon x y xs) _ (Known Rig0 t) :: rest) rhs) 
+    = if all (namesIn (pvars ++ concatMap namesFrom (getPatInfo rest))) xs
+         then VarClause
+         else ConClause
+clauseType phase (MkPatClause pvars (MkInfo _ _ (Known Rig0 t) :: _) rhs) 
+    = VarClause
+clauseType phase (MkPatClause _ (MkInfo (PCon x y xs) _ _ :: _) rhs) = ConClause
+clauseType phase (MkPatClause _ (MkInfo (PConst x) _ _ :: _) rhs) = ConClause
+clauseType phase (MkPatClause _ (_ :: _) rhs) = VarClause
+
+partition : Phase -> (ps : List (PatClause vars (a :: as))) -> Partitions ps
+partition phase [] = NoClauses
+partition phase (x :: xs) with (partition phase xs)
+  partition phase (x :: (cs ++ ps)) | (ConClauses cs rest) 
+        = case clauseType phase x of
                ConClause => ConClauses (x :: cs) rest
                VarClause => VarClauses [x] (ConClauses cs rest)
-  partition (x :: (vs ++ ps)) | (VarClauses vs rest) 
-        = case clauseType x of
+  partition phase (x :: (vs ++ ps)) | (VarClauses vs rest) 
+        = case clauseType phase x of
                ConClause => ConClauses [x] (VarClauses vs rest)
                VarClause => VarClauses (x :: vs) rest
-  partition (x :: []) | NoClauses
-        = case clauseType x of
+  partition phase (x :: []) | NoClauses
+        = case clauseType phase x of
                ConClause => ConClauses [x] NoClauses
                VarClause => VarClauses [x] NoClauses
 
@@ -239,14 +265,14 @@ Show (Group vars todo) where
 data GroupMatch : ConType -> List Pat -> Group vars todo -> Type where
   ConMatch : LengthMatch ps newargs ->
              GroupMatch (CName n tag) ps 
-               (ConGroup {newargs} n tag (MkPatClause pats rhs :: rest))
+               (ConGroup {newargs} n tag (MkPatClause pvs pats rhs :: rest))
   ConstMatch : GroupMatch (CConst c) []
-                  (ConstGroup c (MkPatClause pats rhs :: rest))
+                  (ConstGroup c (MkPatClause pvs pats rhs :: rest))
   NoMatch : GroupMatch ct ps g
 
 checkGroupMatch : (c : ConType) -> (ps : List Pat) -> (g : Group vars todo) ->
                   GroupMatch c ps g
-checkGroupMatch (CName x tag) ps (ConGroup {newargs} x' tag' (MkPatClause pats rhs :: rest)) 
+checkGroupMatch (CName x tag) ps (ConGroup {newargs} x' tag' (MkPatClause pvs pats rhs :: rest)) 
     = case checkLengthMatch ps newargs of
            Nothing => NoMatch
            Just prf => case (nameEq x x', decEq tag tag') of
@@ -254,7 +280,7 @@ checkGroupMatch (CName x tag) ps (ConGroup {newargs} x' tag' (MkPatClause pats r
                             _ => NoMatch
 checkGroupMatch (CName x tag) ps (ConstGroup _ xs) = NoMatch
 checkGroupMatch (CConst x) ps (ConGroup _ _ xs) = NoMatch
-checkGroupMatch (CConst c) [] (ConstGroup c' (MkPatClause pats rhs :: rest)) 
+checkGroupMatch (CConst c) [] (ConstGroup c' (MkPatClause pvs pats rhs :: rest)) 
     = case constantEq c c' of
            Nothing => NoMatch
            Just Refl => ConstMatch
@@ -323,9 +349,10 @@ updatePatNames ns (pi :: ps)
     update p = p
 
 groupCons : Defs ->
+            List Name ->
             List (PatClause vars (a :: todo)) -> 
             StateT Int (Either CaseError) (List (Group vars todo))
-groupCons defs cs 
+groupCons defs pvars cs 
      = gc [] cs
   where
     addConG : Name -> (tag : Int) -> List Pat -> NamedPats vars todo ->
@@ -346,22 +373,24 @@ groupCons defs cs
              let pats' = updatePatNames (updateNames (zip patnames pargs))
                                         (weakenNs patnames pats)
              let clause = MkPatClause {todo = patnames ++ todo} 
+                              pvars 
                               (newargs ++ pats') 
                               (weakenNs patnames rhs)
              pure [ConGroup n tag [clause]]
     addConG {todo} n tag pargs pats rhs (g :: gs) with (checkGroupMatch (CName n tag) pargs g)
       addConG {todo} n tag pargs pats rhs
-              ((ConGroup {newargs} n tag ((MkPatClause ps tm) :: rest)) :: gs)
+              ((ConGroup {newargs} n tag ((MkPatClause pvars ps tm) :: rest)) :: gs)
                    | (ConMatch {newargs} lprf) 
         = do let newps = newPats pargs lprf ps
              let pats' = updatePatNames (updateNames (zip newargs pargs))
                                         (weakenNs newargs pats)
              let newclause : PatClause (newargs ++ vars) (newargs ++ todo)
-                   = MkPatClause (newps ++ pats')
+                   = MkPatClause pvars
+                                 (newps ++ pats')
                                  (weakenNs newargs rhs)
              -- put the new clause at the end of the group, since we
              -- match the clauses top to bottom.
-             pure ((ConGroup n tag (MkPatClause ps tm :: rest ++ [newclause]))
+             pure ((ConGroup n tag (MkPatClause pvars ps tm :: rest ++ [newclause]))
                          :: gs)
       addConG n tag pargs pats rhs (g :: gs) | NoMatch 
         = do gs' <- addConG n tag pargs pats rhs gs
@@ -372,14 +401,14 @@ groupCons defs cs
                 (acc : List (Group vars todo)) ->
                 StateT Int (Either CaseError) (List (Group vars todo))
     addConstG c pats rhs [] 
-        = pure [ConstGroup c [MkPatClause pats rhs]]
+        = pure [ConstGroup c [MkPatClause pvars pats rhs]]
     addConstG {todo} c pats rhs (g :: gs) with (checkGroupMatch (CConst c) [] g)
       addConstG {todo} c pats rhs
-              ((ConstGroup c ((MkPatClause ps tm) :: rest)) :: gs) | ConstMatch                    
+              ((ConstGroup c ((MkPatClause pvars ps tm) :: rest)) :: gs) | ConstMatch                    
           = let newclause : PatClause vars todo
-                  = MkPatClause pats rhs in
+                  = MkPatClause pvars pats rhs in
                 pure ((ConstGroup c 
-                      (MkPatClause ps tm :: rest ++ [newclause])) :: gs)
+                      (MkPatClause pvars ps tm :: rest ++ [newclause])) :: gs)
       addConstG c pats rhs (g :: gs) | NoMatch 
           = do gs' <- addConstG c pats rhs gs
                pure (g :: gs')
@@ -408,7 +437,7 @@ groupCons defs cs
          List (PatClause vars (a :: todo)) -> 
          StateT Int (Either CaseError) (List (Group vars todo))
     gc acc [] = pure acc
-    gc {a} acc ((MkPatClause (MkInfo pat pprf fty :: pats) rhs) :: cs) 
+    gc {a} acc ((MkPatClause pvars (MkInfo pat pprf fty :: pats) rhs) :: cs) 
         = do acc' <- addGroup pat pats rhs acc
              gc acc' cs
 
@@ -550,7 +579,7 @@ moveFirst el nps = getPat el nps :: dropPat el nps
 
 shuffleVars : (el : Elem x todo) -> PatClause vars todo ->
               PatClause vars (x :: dropElem todo el)
-shuffleVars el (MkPatClause lhs rhs) = MkPatClause (moveFirst el lhs) rhs
+shuffleVars el (MkPatClause pvars lhs rhs) = MkPatClause pvars (moveFirst el lhs) rhs
 
 {- 'match' does the work of converting a group of pattern clauses into
    a case tree, given a default case if none of the clauses match -}
@@ -562,31 +591,32 @@ mutual
      the unprocessed patterns. "err" is the tree for when the patterns don't
      cover the input (i.e. the "fallthrough" pattern, which at the top
      level will be an error). -}
-  match : Defs -> List (PatClause vars todo) -> (err : Maybe (CaseTree vars)) -> 
-               StateT Int (Either CaseError) (CaseTree vars)
+  match : Defs -> Phase ->
+          List (PatClause vars todo) -> (err : Maybe (CaseTree vars)) -> 
+         StateT Int (Either CaseError) (CaseTree vars)
   -- Before 'partition', reorder the arguments so that the one we
   -- inspect next has a concrete type that is the same in all cases, and
   -- has the most distinct constructors (via pickNext)
-  match {todo = (_ :: _)} defs clauses err 
+  match {todo = (_ :: _)} defs phase clauses err 
       = case pickNext defs (map getNPs clauses) of
              Nothing => lift $ Left DifferingTypes
              Just (_ ** next) =>
                 let clauses' = map (shuffleVars next) clauses
-                    ps = partition clauses' in
+                    ps = partition phase clauses' in
                     maybe (pure (Unmatched "No clauses"))
                           pure
-                          !(mixture defs ps err)
-  match {todo = []} defs [] err 
+                          !(mixture defs phase ps err)
+  match {todo = []} defs phase [] err 
        = maybe (pure (Unmatched "No patterns"))
                pure err
-  match {todo = []} defs ((MkPatClause [] rhs) :: _) err 
+  match {todo = []} defs phase ((MkPatClause pvars [] rhs) :: _) err 
        = pure $ STerm rhs
 
-  caseGroups : Defs ->
+  caseGroups : Defs -> Phase ->
                Elem pvar vars -> Term vars ->
                List (Group vars todo) -> Maybe (CaseTree vars) ->
                StateT Int (Either CaseError) (CaseTree vars)
-  caseGroups {vars} defs el ty gs errorCase
+  caseGroups {vars} defs phase el ty gs errorCase
       = do g <- altGroups gs
            pure (Case el (resolveRefs vars ty) g)
     where
@@ -596,61 +626,62 @@ mutual
                            (\e => pure [DefaultCase e]) 
                            errorCase
       altGroups (ConGroup {newargs} cn tag rest :: cs) 
-          = do crest <- match defs rest (map (weakenNs newargs) errorCase)
+          = do crest <- match defs phase rest (map (weakenNs newargs) errorCase)
                cs' <- altGroups cs
                pure (ConCase cn tag newargs crest :: cs')
       altGroups (ConstGroup c rest :: cs)
-          = do crest <- match defs rest errorCase
+          = do crest <- match defs phase rest errorCase
                cs' <- altGroups cs
                pure (ConstCase c crest :: cs')
 
-  conRule : Defs ->
+  conRule : Defs -> Phase ->
             List (PatClause vars (a :: todo)) ->
             Maybe (CaseTree vars) -> 
             StateT Int (Either CaseError) (CaseTree vars)
-  conRule defs [] err = maybe (pure (Unmatched "No constructor clauses")) pure err 
+  conRule defs phase [] err = maybe (pure (Unmatched "No constructor clauses")) pure err 
   -- ASSUMPTION, not expressed in the type, that the patterns all have
   -- the same variable (pprf) for the first argument. If not, the result
   -- will be a broken case tree... so we should find a way to express this
   -- in the type if we can.
-  conRule {a} defs cs@(MkPatClause (MkInfo pat pprf fty :: pats) rhs :: rest) err 
+  conRule {a} defs phase cs@(MkPatClause pvars (MkInfo pat pprf fty :: pats) rhs :: rest) err 
       = do let refinedcs = map (substInClause defs) cs
-           groups <- groupCons defs refinedcs
+           groups <- groupCons defs pvars refinedcs
            ty <- case fty of
                       Known _ t => pure t
                       _ => lift $ Left UnknownType
-           caseGroups defs pprf ty groups err
+           caseGroups defs phase pprf ty groups err
 
-  varRule : Defs ->
+  varRule : Defs -> Phase ->
             List (PatClause vars (a :: todo)) ->
             Maybe (CaseTree vars) -> 
             StateT Int (Either CaseError) (CaseTree vars)
-  varRule {vars} {a} defs cs err 
+  varRule {vars} {a} defs phase cs err 
       = do let alts' = map updateVar cs
-           match defs alts' err
+           match defs phase alts' err
     where
       updateVar : PatClause vars (a :: todo) -> PatClause vars todo
       -- replace the name with the relevant variable on the rhs
-      updateVar (MkPatClause (MkInfo (PVar n) prf fty :: pats) rhs)
-          = MkPatClause (substInPats defs a (Local Nothing prf) pats)
-                        (substName n (Local Nothing prf) rhs) 
+      updateVar (MkPatClause pvars (MkInfo (PVar n) prf fty :: pats) rhs)
+          = MkPatClause (n :: pvars) 
+                        (substInPats defs a (Local Nothing prf) pats)
+                        (substName n (Local Nothing prf) rhs)
       -- match anything, name won't appear in rhs but need to update
       -- LHS pattern types based on what we've learned
-      updateVar (MkPatClause (MkInfo pat prf fty :: pats) rhs)
-          = MkPatClause (substInPats defs a (mkTerm vars pat) pats) rhs
+      updateVar (MkPatClause pvars (MkInfo pat prf fty :: pats) rhs)
+          = MkPatClause pvars (substInPats defs a (mkTerm vars pat) pats) rhs
 
   mixture : {ps : List (PatClause vars (a :: todo))} ->
-            Defs ->
+            Defs -> Phase ->
             Partitions ps -> 
             Maybe (CaseTree vars) -> 
             StateT Int (Either CaseError) (Maybe (CaseTree vars))
-  mixture defs (ConClauses cs rest) err 
-      = do fallthrough <- mixture defs rest err
-           pure (Just !(conRule defs cs fallthrough))
-  mixture defs (VarClauses vs rest) err 
-      = do fallthrough <- mixture defs rest err
-           pure (Just !(varRule defs vs fallthrough))
-  mixture defs {a} {todo} NoClauses err 
+  mixture defs phase (ConClauses cs rest) err 
+      = do fallthrough <- mixture defs phase rest err
+           pure (Just !(conRule defs phase cs fallthrough))
+  mixture defs phase (VarClauses vs rest) err 
+      = do fallthrough <- mixture defs phase rest err
+           pure (Just !(varRule defs phase vs fallthrough))
+  mixture defs {a} {todo} phase NoClauses err 
       = pure err
 
 mkPatClause : Defs ->
@@ -660,7 +691,7 @@ mkPatClause defs args ty (ps, rhs)
     = maybe (Left DifferingArgNumbers)
             (\eq => 
                let nty = nf defs [] ty in
-                 Right (MkPatClause (mkNames args ps eq (Just nty))
+                 Right (MkPatClause [] (mkNames args ps eq (Just nty))
                     (rewrite sym (appendNilRightNeutral args) in 
                              (weakenNs args rhs))))
             (checkLengthMatch args ps)
@@ -685,18 +716,18 @@ mkPatClause defs args ty (ps, rhs)
                              (fst fa_tys)) 
 
 export
-patCompile : Defs -> 
+patCompile : Defs -> Phase ->
              ClosedTerm -> List (List Pat, ClosedTerm) -> 
              Maybe (CaseTree []) ->
              Either CaseError (args ** CaseTree args)
-patCompile defs ty [] def 
+patCompile defs phase ty [] def 
     = maybe (pure ([] ** Unmatched "No definition"))
             (\e => pure ([] ** e))
             def
-patCompile defs ty (p :: ps) def 
+patCompile defs phase ty (p :: ps) def 
     = do let ns = getNames 0 (fst p)
          pats <- traverse (mkPatClause defs ns ty) (p :: ps)
-         (cases, _) <- runStateT (match defs pats 
+         (cases, _) <- runStateT (match defs phase pats 
                                     (rewrite sym (appendNilRightNeutral ns) in
                                              map (weakenNs ns) def)) 0
          pure (_ ** cases)
@@ -711,8 +742,7 @@ toPatClause loc n (lhs, rhs) with (unapply lhs)
   toPatClause loc n (apply (Ref Func fn) args, rhs) | ArgsList 
       = case nameEq n fn of
              Nothing => throw (GenericMsg loc ("Wrong function name in pattern LHS " ++ show (n, fn)))
-             Just Refl => do -- putStrLn $ "Clause: " ++ show (apply (Ref Func fn) args) ++ " = " ++ show rhs
-                             pure (map argToPat args, rhs)
+             Just Refl => pure (map argToPat args, rhs)
   toPatClause loc n (apply f args, rhs) | ArgsList 
       = throw (GenericMsg loc "Not a function name in pattern LHS")
 
@@ -722,24 +752,24 @@ toPatClause loc n (lhs, rhs) with (unapply lhs)
 -- the names of the top level variables we created are returned in 'args'
 export
 simpleCase : {auto x : Ref Ctxt Defs} ->
-             annot -> Name -> ClosedTerm -> (def : Maybe (CaseTree [])) ->
+             annot -> Phase -> Name -> ClosedTerm -> (def : Maybe (CaseTree [])) ->
              (clauses : List (ClosedTerm, ClosedTerm)) ->
              Core annot (args ** CaseTree args)
-simpleCase loc fn ty def clauses 
+simpleCase loc phase fn ty def clauses 
     = do ps <- traverse (toPatClause loc fn) clauses
          defs <- get Ctxt
-         case patCompile defs ty ps def of
+         case patCompile defs phase ty ps def of
               Left err => throw (CaseCompile loc fn err)
               Right ok => pure ok
 
 export
 getPMDef : {auto x : Ref Ctxt Defs} ->
-           annot -> Name -> ClosedTerm -> List Clause -> 
+           annot -> Phase -> Name -> ClosedTerm -> List Clause -> 
            Core annot (args ** CaseTree args)
 -- If there's no clauses, make a definition with the right number of arguments
 -- for the type, which we can use in coverage checking to ensure that one of
 -- the arguments has an empty type
-getPMDef loc fn ty []
+getPMDef loc phase fn ty []
     = do defs <- get Ctxt
          pure (getArgs 0 (nf defs [] ty) ** Unmatched "No clauses")
   where
@@ -747,10 +777,10 @@ getPMDef loc fn ty []
     getArgs i (NBind x (Pi _ _ _) sc)
         = MN "arg" i :: getArgs i (sc (toClosure defaultOpts [] Erased))
     getArgs i _ = []
-getPMDef loc fn ty clauses
+getPMDef loc phase fn ty clauses
     = do defs <- get Ctxt
          let cs = map (toClosed defs) clauses
-         simpleCase loc fn ty Nothing cs
+         simpleCase loc phase fn ty Nothing cs
   where
     close : Defs ->
             Int -> (plets : Bool) -> Env Term vars -> Term vars -> ClosedTerm

@@ -57,14 +57,26 @@ checkClause loc (MkRawClause pvars lhs rhs)
     bind [] tm = tm
     bind ((n, ty) :: ps) tm = RBind n (PVar RigW ty) (bind ps tm)
 
+nameListEq : (xs : List Name) -> (ys : List Name) -> Maybe (xs = ys)
+nameListEq [] [] = Just Refl
+nameListEq (x :: xs) (y :: ys) with (nameEq x y)
+  nameListEq (x :: xs) (x :: ys) | (Just Refl) with (nameListEq xs ys)
+    nameListEq (x :: xs) (x :: xs) | (Just Refl) | Just Refl= Just Refl
+    nameListEq (x :: xs) (x :: ys) | (Just Refl) | Nothing = Nothing
+  nameListEq (x :: xs) (y :: ys) | Nothing = Nothing
+nameListEq _ _ = Nothing
+
 addFn : {auto c : Ref Ctxt Defs} ->
         annot -> (def : RawFnDef) -> Core annot ()
 addFn loc (MkRawFn n ty cs)
     = do tyc <- check loc [] ty TType
          addDef n (newDef [] tyc Public None)
          csc <- traverse (\x => checkClause loc x) cs
-         (_ ** tree) <- getPMDef loc n tyc csc
-         addFnDef loc n tree tree []
+         (cargs ** treec) <- getPMDef loc CompileTime n tyc csc
+         (rargs ** treer) <- getPMDef loc RunTime n tyc csc
+         let Just Refl = nameListEq cargs rargs
+                 | Nothing => throw (InternalError "WAT")
+         addFnDef loc n treec treer []
 
 addData : {auto c : Ref Ctxt Defs} ->
           annot -> (def : RawData) -> Core annot ()

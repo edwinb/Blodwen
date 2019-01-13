@@ -112,9 +112,11 @@ data PrimFn : Nat -> Type where
      StrLength : PrimFn 1
      StrHead : PrimFn 1
      StrTail : PrimFn 1
+     StrIndex : PrimFn 2
      StrCons : PrimFn 2
      StrAppend : PrimFn 2
      StrReverse : PrimFn 1
+     StrSubstr : PrimFn 3
 
      Cast : Constant -> Constant -> PrimFn 1
 
@@ -134,9 +136,11 @@ Show (PrimFn arity) where
   show StrLength = "op_strlen"
   show StrHead = "op_strhead"
   show StrTail = "op_strtail"
+  show StrIndex = "op_strindex"
   show StrCons = "op_strcons"
   show StrAppend = "++"
   show StrReverse = "op_strrev"
+  show StrSubstr = "op_strsubstr"
   show (Cast x y) = "cast-" ++ show x ++ "-" ++ show y
 
 public export
@@ -853,6 +857,8 @@ abstractEnvType (b :: env) tm
 export
 abstractFullEnvType : Env Term vars -> (tm : Term vars) -> ClosedTerm
 abstractFullEnvType [] tm = tm
+abstractFullEnvType (Pi c e ty :: env) tm 
+    = abstractFullEnvType env (Bind _ (Pi c e ty) tm)
 abstractFullEnvType (b :: env) tm 
     = abstractFullEnvType env (Bind _ 
 						(Pi (multiplicity b) Explicit (binderType b)) tm)

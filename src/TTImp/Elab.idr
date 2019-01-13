@@ -97,7 +97,6 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          solveConstraints (case elabmode of
                                 InLHS _ => InLHS
                                 _ => InTerm) Normal
-         gam <- get Ctxt
          chktm <- retryDelayedIn env (getAnnot tm) chktm_in
          log 10 $ "Check after delays: " ++ show chktm
 
@@ -165,7 +164,7 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          -- that were solved in the last session
          allhs <- getHoleInfo
          when (not incase) $
-            restoreHoles (filter (\x => not (snd x `elem` map snd allhs)) oldhs)
+            restoreHoles (filter (\x => not (snd x `elem` map (Basics.fst . snd) allhs)) oldhs)
 
          -- On the LHS, finish by tidying up the plets (changing things that
          -- were of the form x@_, where the _ is inferred to be a variable,

@@ -364,15 +364,18 @@ TTC annot (PrimFn n) where
   toBuf b StrLength = tag 11
   toBuf b StrHead = tag 12
   toBuf b StrTail = tag 13
-  toBuf b StrCons = tag 14
-  toBuf b StrAppend = tag 15
-  toBuf b StrReverse = tag 16
-  toBuf b (Cast x y) = do tag 17; toBuf b x; toBuf b y
+  toBuf b StrIndex = tag 14
+  toBuf b StrCons = tag 15
+  toBuf b StrAppend = tag 16
+  toBuf b StrReverse = tag 17
+  toBuf b StrSubstr = tag 18
+  toBuf b (Cast x y) = do tag 19; toBuf b x; toBuf b y
 
   fromBuf {n} s b
       = case n of
              S Z => fromBuf1 s b
              S (S Z) => fromBuf2 s b
+             S (S (S Z)) => fromBuf3 s b
              _ => corrupt "PrimFn"
     where
       fromBuf1 : Ref Share (StringMap String) -> Ref Bin Binary ->
@@ -383,8 +386,8 @@ TTC annot (PrimFn n) where
                  11 => pure StrLength
                  12 => pure StrHead
                  13 => pure StrTail
-                 16 => pure StrReverse
-                 17 => do x <- fromBuf s b; y <- fromBuf s b; pure (Cast x y)
+                 17 => pure StrReverse
+                 19 => do x <- fromBuf s b; y <- fromBuf s b; pure (Cast x y)
                  _ => corrupt "PrimFn 1"
 
       fromBuf2 : Ref Share (StringMap String) -> Ref Bin Binary ->
@@ -401,9 +404,17 @@ TTC annot (PrimFn n) where
                  8 => do ty <- fromBuf s b; pure (EQ ty)
                  9 => do ty <- fromBuf s b; pure (GTE ty)
                  10 => do ty <- fromBuf s b; pure (GT ty)
-                 14 => pure StrCons
-                 15 => pure StrAppend
+                 14 => pure StrIndex
+                 15 => pure StrCons
+                 16 => pure StrAppend
                  _ => corrupt "PrimFn 2"
+      
+      fromBuf3 : Ref Share (StringMap String) -> Ref Bin Binary ->
+                 Core annot (PrimFn 3)
+      fromBuf3 s b
+          = case !getTag of
+                 18 => pure StrSubstr
+                 _ => corrupt "PrimFn 3"
              
 mutual
   export

@@ -70,6 +70,12 @@ showImplicits
     = do pp <- getPPrint
          pure (showImplicits pp)
 
+showFullEnv : {auto c : Ref Ctxt Defs} ->
+              Core annot Bool
+showFullEnv
+    = do pp <- getPPrint
+         pure (showFullEnv pp)
+
 fullNamespace : {auto c : Ref Ctxt Defs} ->
                 Core annot Bool
 fullNamespace
@@ -226,7 +232,12 @@ mutual
                 Nothing => do fn' <- toPTerm appPrec fn
                               mkApp fn' args
                 Just def => do fn' <- toPTerm appPrec fn
-                               mkApp fn' (drop (length (vars def)) args)
+                               fenv <- showFullEnv
+                               let args' 
+                                     = if fenv 
+                                          then args
+                                          else drop (length (vars def)) args
+                               mkApp fn' args'
   toPTermApp fn args 
       = do fn' <- toPTerm appPrec fn
            mkApp fn' args
@@ -298,6 +309,12 @@ mutual
       = pure (Just (PDef emptyFC !(traverse toPClause cs)))
   toPDecl (IData _ vis d)
       = pure (Just (PData emptyFC vis !(toPData d)))
+  toPDecl (IParameters _ ps ds)
+      = do ds' <- traverse toPDecl ds
+           pure (Just (PParameters emptyFC 
+                !(traverse (\ntm => do tm' <- toPTerm startPrec (snd ntm)
+                                       pure (fst ntm, tm')) ps)
+                (mapMaybe id ds')))
   toPDecl (IRecord _ vis r)
       = do (n, ps, con, fs) <- toPRecord r
            pure (Just (PRecord emptyFC vis n ps con fs))

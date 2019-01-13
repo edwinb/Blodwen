@@ -425,7 +425,7 @@ mutual
              Just defty =>
                 do -- Make smaller hole
                    let hole = newDef [] defty Public (Hole (length sofar) False False)
-                   addHoleName loc newhole
+                   addHoleName loc newhole False
                    addDef newhole hole
                    -- Solve old hole with it
                    case mkOldHoleDef holetype newhole sofar (sofar ++ args) of
@@ -1247,7 +1247,9 @@ solveConstraints : {auto c : Ref Ctxt Defs} ->
                    UnifyMode -> (smode : SolveMode) -> Core annot ()
 solveConstraints mode smode
     = do hs <- getHoleInfo
-         traverse (retryHole mode smode) hs
+         let solvable = mapMaybe (\ (l, n, r) => if r then Just (l, n)
+                                                      else Nothing) hs
+         traverse (retryHole mode smode) solvable
          -- One more iteration if any holes have been resolved
          hs' <- getHoleInfo
          when (length hs' < length hs) $ solveConstraints mode smode
@@ -1264,8 +1266,9 @@ giveUpSearch
          traverse searchToHole hs
          pure ()
   where
-    searchToHole : (annot, Name) -> Core annot ()
-    searchToHole (_, hole)
+    searchToHole : (annot, Name, Bool) -> Core annot ()
+    searchToHole (_, hole, False) = pure ()
+    searchToHole (_, hole, True)
         = do gam <- get Ctxt
              case lookupDefExact hole (gamma gam) of
                   Just (BySearch _ _) =>

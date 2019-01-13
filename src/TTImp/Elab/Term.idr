@@ -155,7 +155,7 @@ mutual
                               then unifyFnArgs ctynf ctynf (reverse args) ret
                               else log 10 $ "Can't unifyFnArgs for " ++ show cty
                       _ => pure ()
-                 case nf defs env cty of
+                 case ctynf of
                       NTCon n _ _ _ =>
                           if isDelayType n defs
                              then throw (InternalError "Force")
@@ -243,7 +243,6 @@ mutual
                                 then forced else throw err)
 
   insertLazy : Defs -> RawImp annot -> ExpType (NF vars) -> RawImp annot
-  insertLazy defs tm@(IBindVar _ _) _ = tm
   -- If the expected type is "Delayed" and the given term doesn't elaborate
   -- then we'll try inserting a "Delay"
   insertLazy defs tm (FnType [] (NTCon n _ _ args))
@@ -271,8 +270,9 @@ mutual
       = checkImp rigc process elabinfo env nest tm expected
   checkImp rigc process elabinfo env nest (IVar loc x) expected 
       = case lookup x (names nest) of
-             Just (n', tm) =>
+             Just (nestn, tm) =>
                   do gam <- get Ctxt
+                     let n' = maybe x id nestn
                      case lookupTyExact n' (gamma gam) of
                           Nothing => throw (UndefinedName loc n')
                           Just varty => 
@@ -799,8 +799,8 @@ mutual
                then setMultiplicity b Rig0 :: dropLinear bs
                else b :: dropLinear bs
 
-      applyEnv : Name -> Name -> (Name, (Name, Term vars))
-      applyEnv outer inner = (inner, (GN (Nested outer inner), 
+      applyEnv : Name -> Name -> (Name, (Maybe Name, Term vars))
+      applyEnv outer inner = (inner, (Just (GN (Nested outer inner)), 
                                       mkConstantAppFull (GN (Nested outer inner)) env))
 
       -- Update the names in the declarations to the new 'nested' names.
@@ -809,7 +809,7 @@ mutual
       newName : NestedNames vars -> Name -> Name
       newName nest n 
           = case lookup n (names nest) of
-                 Just (n', _) => n'
+                 Just (Just n', _) => n'
                  _ => n
 
       updateTyName : NestedNames vars -> ImpTy annot -> ImpTy annot
@@ -901,7 +901,7 @@ mutual
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
                                      (_, IMustUnify _ _ _, _) => arg
-                                     (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
+--                                      (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      -- if the argument is borrowed, it's okay to use it in
                      -- unrestricted context, because we'll be out of the

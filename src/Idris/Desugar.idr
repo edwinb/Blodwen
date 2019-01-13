@@ -423,6 +423,9 @@ mutual
   getDecl AsDef (PFixity _ _ _ _) = Nothing
   getDecl AsDef (PDirective _ _) = Nothing
   getDecl AsDef d = Just d
+  
+  getDecl p (PParameters fc ps pds) 
+      = Just (PParameters fc ps (mapMaybe (getDecl p) pds))
 
   getDecl Single d = Just d
 
@@ -460,6 +463,16 @@ mutual
 
   desugarDecl ps (PData fc vis ddecl) 
       = pure [IData fc vis !(desugarData ps ddecl)]
+  desugarDecl ps (PParameters fc params pds)
+      = do pds' <- traverse (desugarDecl (ps ++ map fst params)) pds
+           params' <- traverse (\ ntm => do tm' <- desugar AnyExpr ps (snd ntm)
+                                            pure (fst ntm, tm')) params
+           -- Look for implicitly bindable names in the parameters
+           let pnames = concatMap (findBindableNames True
+                                    (ps ++ map fst params) [])
+                                    (map snd params')
+           let paramsb = map (\ (n, tm) => (n, doBind pnames tm)) params'
+           pure [IParameters fc paramsb (concat pds')]
   desugarDecl ps (PReflect fc tm)
       = pure [IReflect fc !(desugar AnyExpr ps tm)]
   desugarDecl ps (PInterface fc vis cons tn params det conname body)

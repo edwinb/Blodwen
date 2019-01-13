@@ -617,31 +617,27 @@ bindImplVars mode gam env imps asvs scope scty = doBinds 0 env imps scope scty
   where
     -- Replace the name applied to the given number of arguments 
     -- with another term
-    repName : Name -> (new : Term vars) -> Term vars -> Term vars
-    repName old new (Local r p) = Local r p
-    repName old new (Ref nt fn)
+    repName : Name -> Nat -> (new : Term vars) -> Term vars -> Term vars
+    repName old locs new (Local r p) = Local r p
+    repName old locs new (Ref nt fn)
         = case nameEq old fn of
                Nothing => Ref nt fn
                Just Refl => new
-    repName old new (Bind y b tm) 
-        = Bind y (assert_total (map (repName old new) b)) 
-                 (repName old (weaken new) tm)
-    repName old new (App fn arg) 
+    repName old locs new (Bind y b tm) 
+        = Bind y (assert_total (map (repName old locs new) b)) 
+                 (repName old locs (weaken new) tm)
+    repName old locs new (App fn arg) 
         = case getFnArgs (App fn arg) of
                (Ref nt fn', args) =>
                    if old == fn'
-                      then let locs = case lookupDefExact fn' (gamma gam) of
-                                           Just (Hole i _ _) => i
-                                           _ => 0
-                                        in
-                               apply new (map (repName old new) (drop locs args))
+                      then apply new (map (repName old locs new) (drop locs args))
                       else apply (Ref nt fn')
-                                 (map (repName old new) args)
-               (fn', args) => apply (repName old new fn') 
-                                    (map (repName old new) args)
-    repName old new (PrimVal y) = PrimVal y
-    repName old new Erased = Erased
-    repName old new TType = TType
+                                 (map (repName old locs new) args)
+               (fn', args) => apply (repName old locs new fn') 
+                                    (map (repName old locs new) args)
+    repName old locs new (PrimVal y) = PrimVal y
+    repName old locs new Erased = Erased
+    repName old locs new TType = TType
     
     doBinds : Int -> Env Term vars -> List (Name, Term vars) ->
               Term vars -> Term vars -> (Term vars, Term vars)
@@ -649,13 +645,17 @@ bindImplVars mode gam env imps asvs scope scty = doBinds 0 env imps scope scty
     doBinds i env ((n, ty) :: imps) scope scty
       = let (scope', ty') = doBinds (i + 1) env imps scope scty
             tmpN = MN "unb" i
-            repNameTm = repName n (Ref Bound tmpN) scope' 
-            repNameTy = repName n (Ref Bound tmpN) ty'
+            ndef = lookupDefExact n (gamma gam)
+            locs = case ndef of
+                        Just (Hole i _ _) => i
+                        _ => 0
+            repNameTm = repName n locs (Ref Bound tmpN) scope' 
+            repNameTy = repName n locs (Ref Bound tmpN) ty'
 
             n' = dropNS n in
             case mode of
                  PATTERN =>
-                    case lookupDefExact n (gamma gam) of
+                    case ndef of
                          Just (PMDef _ _ _ _ _) =>
                             -- if n is an accessible pattern variable, bind it,
                             -- otherwise reduce it
@@ -679,7 +679,7 @@ bindImplVars mode gam env imps asvs scope scty = doBinds 0 env imps scope scty
                              Bind n' (PVTy RigW ty) (refToLocal Nothing tmpN n' repNameTy))
                  -- unless explicitly given, unbound implicits are Rig0
                  PI rig =>
-                    case lookupDefExact n (gamma gam) of
+                    case ndef of
                        Just (PMDef _ _ _ _ _) =>
                           let tm = normaliseHolesScope gam env (applyTo (Ref Func n) env) in
                               (subst tm (refToLocal Nothing tmpN n repNameTm),
@@ -879,11 +879,13 @@ successful elabmode ((tm, elab) :: elabs)
                                 InLHS _ => InLHS
                                 _ => InTerm) Normal
          init_st <- getAllState
+         log 5 $ "Trying elaborator for " ++ show tm
          Right res <- tryError elab
                | Left err => do rest <- successful elabmode elabs
-                                log 10 $ show tm ++ " failure"
+                                log 5 $ "Result for " ++ show tm ++ ": failure"
                                 pure (Left (tm, err) :: rest)
 
+         log 5 $ "Result for " ++ show tm ++ ": success"
          elabState <- getAllState -- save state at end of successful elab
          -- reinitialise state for next elabs
          putAllState init_st

@@ -246,6 +246,15 @@ hasEmptyPat defs env (Bind x (PVar c ty) sc)
    = isEmpty defs (nf defs env ty) || hasEmptyPat defs (PVar c ty :: env) sc
 hasEmptyPat defs env _ = False
 
+rhsHole : Defs -> Term vars -> Bool
+rhsHole defs tm 
+   = case getFn tm of
+          Ref Func n =>
+              case lookupDefExact n (gamma defs) of
+                   Just (Hole _ _ _) => True
+                   _ => False
+          _ => False
+
 export -- to allow program search to use it to check candidate clauses
 checkClause : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState annot)} ->
@@ -305,7 +314,11 @@ checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_
            checkNameVisibility loc defining vis lhspat
            checkNameVisibility loc defining vis rhs
 
-         addLHS (getAnnot lhs_raw) (length env) env' lhspat
+         gam <- get Ctxt
+         -- Only add the lhs if the rhs is a hole, because we can't case split
+         -- otherwise
+         when (rhsHole gam rhs) $ 
+           addLHS (getAnnot lhs_raw) (length env) env' lhspat
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
          when hashit $ 
            do addHash lhspat
@@ -341,7 +354,7 @@ checkClause {c} {u} {i} {m} {vars} elab incase mult hashit defining env nest (Wi
          log 5 ("Uses env: " ++ show wevars)
          log 5 ("Required type: " ++ show reqty)
 
-         -- TODO: Also abstract over 'wval' in the scope of bNotReq in order
+         -- Abstracting over 'wval' in the scope of bNotReq in order
          -- to get the 'magic with' behaviour
          let wargn = MN "warg" 0
          let scenv = Pi RigW Explicit wvalTy :: wvalEnv
@@ -492,8 +505,10 @@ processDef elab incase env nest loc n_in cs_raw
                                          then Rig0
                                          else rig1
                            cs <- traverse (checkClause elab incase mult hashit n env nest) cs_raw
-                           (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
-                           (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
+                           (cargs ** tree_comp) <- getPMDef loc CompileTime
+                                                        n ty (map fst (mapMaybe id cs))
+                           (rargs ** tree_rt) <- getPMDef loc RunTime
+                                                        n ty (map snd (mapMaybe id cs))
                            
                            let Just Refl = nameListEq cargs rargs
                                    | Nothing => throw (InternalError "WAT")

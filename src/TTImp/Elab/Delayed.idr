@@ -55,12 +55,21 @@ mutual
   retryDelayedIn env loc (Ref nt n)
       = do defs <- get Ctxt
            case lookupDefExact n (gamma defs) of
+                Just (Guess g cs) =>
+                    -- Also look for delayed names inside guarded definitions.
+                    -- This helps with error messages because it shows any
+                    -- problems in delayed elaborators before the constraint
+                    -- failure, and it might also solve some constraints
+                    do retryDelayedIn env loc (embed g)
+                       pure (Ref nt n)
                 Just Delayed => 
-                    do ok <- runDelayed loc n
+                    do log 5 $ "Retrying " ++ show n
+                       ok <- runDelayed loc n
                        -- On success, substitute the result in, and go 
                        -- around again,
                        if ok
                           then do defs <- get Ctxt
+                                  log 5 $ "Success, looking for holes in result"
                                   let tm' = normaliseHoles defs env (Ref nt n)
                                   res <- retryDelayedIn env loc tm'
                                   log 5 $ "Substituted delayed hole " ++ show res

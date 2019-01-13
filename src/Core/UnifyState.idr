@@ -61,9 +61,11 @@ public export
 record UnifyState annot where
      constructor MkUnifyState
      logLevel : Nat
-     holes : List (annot, Name)
+     holes : List (annot, Name, Bool)
             -- unsolved metavariables in gamma (holes and guarded constants)
-            -- along with where they were introduced
+            -- along with where they were introduced,
+            -- also whether they can be retried (i.e. they include constraints
+            -- or search data)
      currentHoles : List (annot, Name) -- unsolved metavariables in this session
      delayedHoles : List (annot, Name)
                               -- unsolved metavariables which must be resolved 
@@ -123,7 +125,7 @@ isHole : {auto u : Ref UST (UState annot)} ->
          Name -> Core annot Bool
 isHole n 
     = do ust <- get UST
-         pure (n `elem` map snd (holes ust))
+         pure (n `elem` map (Basics.fst . snd) (holes ust))
 
 export
 isCurrentHole : {auto u : Ref UST (UState annot)} ->
@@ -137,11 +139,11 @@ getHoleNames : {auto u : Ref UST (UState annot)} ->
                Core annot (List Name)
 getHoleNames 
     = do ust <- get UST
-         pure (map snd (holes ust))
+         pure (map (Basics.fst . snd) (holes ust))
 
 export
 getHoleInfo : {auto u : Ref UST (UState annot)} ->
-               Core annot (List (annot, Name))
+               Core annot (List (annot, Name, Bool))
 getHoleInfo 
     = do ust <- get UST
          pure (holes ust)
@@ -184,10 +186,10 @@ restoreHoles hs
 
 export
 addHoleName : {auto u : Ref UST (UState annot)} ->
-              annot -> Name -> Core annot ()
-addHoleName loc n
+              annot -> Name -> Bool -> Core annot ()
+addHoleName loc n retry
     = do ust <- get UST
-         put UST (record { holes $= ((loc, n) ::),
+         put UST (record { holes $= ((loc, n, retry) ::),
                            currentHoles $= ((loc, n) ::) } ust)
 
 -- Note that the given hole name arises from a type declaration, so needs
@@ -208,7 +210,7 @@ removeHoleName : {auto u : Ref UST (UState annot)} ->
                  Name -> Core annot ()
 removeHoleName n
     = do ust <- get UST
-         put UST (record { holes $= dropFirst (\x, y => x == snd y) n,
+         put UST (record { holes $= dropFirst (\x, y => x == fst (snd y)) n,
                            currentHoles $= dropFirst (\x, y => x == snd y) n,
                            delayedHoles $= dropFirst (\x, y => x == snd y) n } 
                   ust)
@@ -256,11 +258,14 @@ checkUserHoles now
     = do hs <- getCurrentHoleInfo
          traverse checkValidHole hs
          let hs' = if any isUserName (map snd hs) then [] else hs
-         when (not (isNil hs') && now) $ throw (UnsolvedHoles hs)
+         when (not (isNil hs') && now) $ throw (UnsolvedHoles (nubBy sndEq hs))
          -- Note the hole names, to ensure they are resolved
          -- by the end of elaborating the current source file
          traverse (\x => addDelayedHoleName (fst x) (snd x)) hs'
          pure ()
+  where
+    sndEq : (a, Name) -> (a, Name) -> Bool
+    sndEq x y = snd x == snd y
 
 export
 checkDelayedHoles : {auto u : Ref UST (UState annot)} ->
@@ -270,8 +275,12 @@ checkDelayedHoles
     = do hs <- getDelayedHoleInfo
          allHs <- getHoleNames
          if (not (isNil hs)) 
-            then pure (Just (UnsolvedHoles hs))
+            then pure (Just (UnsolvedHoles (nubBy sndEq hs)))
             else pure Nothing
+  where
+    sndEq : (a, Name) -> (a, Name) -> Bool
+    sndEq x y = snd x == snd y
+
 
 -- Check that the argument types in a type are valid. If the unbound
 -- implicit rules bind a thing too late (they bind dependencies at the point 
@@ -427,7 +436,7 @@ addConstant loc env tm ty constrs
          let defty = mkConstantTy env ty
          let guess = newDef [] defty Public (Guess def constrs)
          cn <- genName "p"
-         addHoleName loc cn
+         addHoleName loc cn True
          addDef cn guess
          pure cn
 
@@ -440,7 +449,7 @@ addNamedHole : {auto u : Ref UST (UState annot)} ->
 addNamedHole loc cn patvar env ty
     = do let defty = mkConstantTy env ty
          let hole = newDef [] defty Public (Hole (length env) patvar False)
-         addHoleName loc cn
+         addHoleName loc cn False
          addDef cn hole
 
 -- Given a type, add a new global metavariable and return its name
@@ -465,7 +474,7 @@ addSearchable loc env ty depth def
     = do cn <- genName "search"
          let defty = mkConstantTy env ty
          let hole = newDef [] defty Public (BySearch depth def)
-         addHoleName loc cn
+         addHoleName loc cn True
          addDef cn hole
          pure cn
 
@@ -481,7 +490,7 @@ addDelayedElab loc env ty
     = do cn <- genName "delayed"
          let defty = mkConstantTy env ty
          let hole = newDef [] defty Public Delayed
-         addHoleName loc cn
+         addHoleName loc cn False
          addDef cn hole
          pure (cn, defty)
 

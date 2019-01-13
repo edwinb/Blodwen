@@ -25,7 +25,7 @@ import Data.Buffer
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 export
 ttcVersion : Int
-ttcVersion = 28
+ttcVersion = 29
 
 export
 checkTTCVersion : Int -> Int -> Core annot ()
@@ -41,7 +41,7 @@ record TTCFile annot extra where
   version : Int
   ifaceHash : Int
   importHashes : List (List String, Int)
-  holes : List (annot, Name)
+  holes : List (annot, Name, Bool)
   constraints : Context (Constraint annot)
   context : Defs
   extraData : extra
