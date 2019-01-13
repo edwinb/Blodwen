@@ -505,8 +505,10 @@ processDef elab incase env nest loc n_in cs_raw
                                          then Rig0
                                          else rig1
                            cs <- traverse (checkClause elab incase mult hashit n env nest) cs_raw
-                           (cargs ** tree_comp) <- getPMDef loc n ty (map fst (mapMaybe id cs))
-                           (rargs ** tree_rt) <- getPMDef loc n ty (map snd (mapMaybe id cs))
+                           (cargs ** tree_comp) <- getPMDef loc CompileTime
+                                                        n ty (map fst (mapMaybe id cs))
+                           (rargs ** tree_rt) <- getPMDef loc RunTime
+                                                        n ty (map snd (mapMaybe id cs))
                            
                            let Just Refl = nameListEq cargs rargs
                                    | Nothing => throw (InternalError "WAT")

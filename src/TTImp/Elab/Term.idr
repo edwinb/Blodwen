@@ -901,7 +901,7 @@ mutual
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
                                      (_, IMustUnify _ _ _, _) => arg
-                                     (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
+--                                      (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      -- if the argument is borrowed, it's okay to use it in
                      -- unrestricted context, because we'll be out of the

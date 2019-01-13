@@ -33,10 +33,10 @@ data HasType : Fin k -> Ty -> Vect k Ty -> Type where
      Pop  : HasType i t gam -> HasType (FS i) t (Cons u gam)
 
 data Lang : Vect k Ty -> Ty -> Type where
-     Var : HasType i t gam -> Lang gam t
+     Var : {i : _} -> HasType i t gam -> Lang gam t
      Val : (x : interpTy a) -> Lang gam a
      Lam : (scope : Lang (Cons s gam) t) -> Lang gam (Arrow s t)
-     App : Lang gam (Arrow s t) -> Lang gam s -> Lang gam t
+     App : {s : _} -> Lang gam (Arrow s t) -> Lang gam s -> Lang gam t
      Op : (interpTy a -> interpTy b -> interpTy c) ->
           Lang gam a -> Lang gam b -> Lang gam c
 
@@ -60,4 +60,3 @@ testId = Lam (Var Stop)
 
 testAdd : Lang gam (Arrow (Base Nat) (Arrow (Base Nat) (Base Nat)))
 testAdd = Lam (Lam (Op plus (Var Stop) (Var (Pop Stop))))
-
