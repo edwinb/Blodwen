@@ -901,6 +901,12 @@ mutual
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
                                      (_, IMustUnify _ _ _, _) => arg
+-- For the moment: allow erased constructors to appear here, and check
+-- when building the case tree. It would be better to have the check here,
+-- but it's fiddly to add. In general, it's okay to match on an erased thing
+-- if it's value can be determined from other arguments, which means that it's
+-- either solvable by unification, or an instance of a collapsible type
+-- reconstructed from other non-erased arguments.
 --                                      (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      -- if the argument is borrowed, it's okay to use it in

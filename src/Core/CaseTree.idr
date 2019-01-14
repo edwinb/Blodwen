@@ -31,6 +31,7 @@ mutual
 public export
 data CaseError = DifferingArgNumbers
                | DifferingTypes
+               | MatchErased (vars ** (Env Term vars, Term vars))
                | UnknownType
 
 export

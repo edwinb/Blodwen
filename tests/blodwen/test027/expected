@@ -1,0 +1,6 @@
+1/1: Building erase (erase.blod)
+erase.blod:5:1--6:1:Attempt to match on erased argument False in Main.bad
+erase.blod:19:1--20:1:Attempt to match on erased argument Z in Main.minusBad
+Welcome to Blodwen. Good luck.
+Main> \m => minus (S (S m)) m prf
+Main> Bye for now!

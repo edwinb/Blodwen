@@ -450,24 +450,31 @@ getFirstArgType (p :: _) = argType p
 -- Check whether all the initial patterns have the same concrete, known
 -- and matchable type, which is multiplicity > 0. 
 -- If so, it's okay to match on it
-sameType : Defs -> Env Term ns -> List (NamedPats ns (p :: ps)) -> Bool
-sameType defs env [] = True
+sameType : Defs -> Env Term ns -> List (NamedPats ns (p :: ps)) -> 
+           Either CaseError ()
+sameType defs env [] = Right ()
 sameType {ns} defs env (p :: xs) = -- all known (map getFirstArgType (p :: xs)) &&
     case getFirstArgType p of
          Known _ t => sameTypeAs (nf defs env t) (map getFirstArgType xs)
-         _ => False
+         _ => Left DifferingTypes
   where
+    firstPat : NamedPats ns (np :: nps) -> Pat
+    firstPat (pinf :: _) = pat pinf
+
     headEq : NF ns -> NF ns -> Bool
     headEq (NTCon n _ _ _) (NTCon n' _ _ _) = n == n'
     headEq (NPrimVal c) (NPrimVal c') = c == c'
     headEq _ _ = False
 
-    sameTypeAs : NF ns -> List (ArgType ns) -> Bool
-    sameTypeAs ty [] = True
-    sameTypeAs ty (Known Rig0 t :: xs) = False -- Can't match on erased thing
+    sameTypeAs : NF ns -> List (ArgType ns) -> Either CaseError ()
+    sameTypeAs ty [] = Right ()
+    sameTypeAs ty (Known Rig0 t :: xs) 
+          = Left (MatchErased (_ ** (env, mkTerm _ (firstPat p))))  -- Can't match on erased thing
     sameTypeAs ty (Known c t :: xs) 
-          = headEq ty (nf defs env t) && sameTypeAs ty xs
-    sameTypeAs ty _ = False
+          = if headEq ty (nf defs env t)
+               then sameTypeAs ty xs
+               else Left DifferingTypes
+    sameTypeAs ty _ = Left DifferingTypes
 
 -- Check whether all the initial patterns are the same, or are all a variable.
 -- If so, we'll match it to refine later types and move on
@@ -522,19 +529,21 @@ countDiff xs = length (distinct [] (map getFirstCon xs))
             else distinct (p :: acc) ps
 
 getScore : Defs -> Elem x (p :: ps) -> 
-           List (NamedPats ns (p :: ps)) -> Maybe (Elem x (p :: ps), Nat)
+           List (NamedPats ns (p :: ps)) -> 
+           Either CaseError (Elem x (p :: ps), Nat)
 getScore defs prf npss 
-    = if sameType defs (mkEnv ns) npss
-         then Just (prf, countDiff npss)
-         else Nothing
+    = case sameType defs (mkEnv ns) npss of
+           Left err => Left err
+           Right _ => Right (prf, countDiff npss)
 
-bestOf : Maybe (Elem p ps, Nat) -> Maybe (Elem q ps, Nat) ->
-         Maybe (x ** (Elem x ps, Nat))
-bestOf Nothing Nothing = Nothing
-bestOf Nothing (Just p) = Just (_ ** p)
-bestOf (Just p) Nothing = Just (_ ** p)
-bestOf (Just (p, psc)) (Just (q, qsc))
-    = Just (_ ** (p, psc))
+bestOf : Either CaseError (Elem p ps, Nat) -> 
+         Either CaseError (Elem q ps, Nat) ->
+         Either CaseError (x ** (Elem x ps, Nat))
+bestOf (Left err) (Left _) = Left err
+bestOf (Left _) (Right p) = Right (_ ** p)
+bestOf (Right p) (Left _) = Right (_ ** p)
+bestOf (Right (p, psc)) (Right (q, qsc))
+    = Right (_ ** (p, psc))
          -- at compile time, left to right helps coverage check
          -- (by refining types, so we know the type of the thing we're
          -- discriminating on)
@@ -544,7 +553,7 @@ bestOf (Just (p, psc)) (Just (q, qsc))
 --          else Just (_ ** (q, qsc))
 
 pickBest : Defs -> List (NamedPats ns (p :: ps)) -> 
-           Maybe (x ** (Elem x (p :: ps), Nat))
+           Either CaseError (x ** (Elem x (p :: ps), Nat))
 pickBest {ps = []} defs npss 
     = if samePat npss
          then pure (_ ** (Here, 0))
@@ -557,21 +566,21 @@ pickBest {ps = q :: qs} defs npss
          then pure (_ ** (Here, 0))
          else
             case pickBest defs (map tail npss) of
-                 Nothing => 
+                 Left err => 
                     do el <- getScore defs Here npss
                        pure (_ ** el)
-                 Just (_ ** (var, score)) =>
-                    bestOf (getScore defs Here npss) (Just (There var, score))
+                 Right (_ ** (var, score)) =>
+                    bestOf (getScore defs Here npss) (Right (There var, score))
 
 -- Pick the next variable to inspect from the list of LHSs.
 -- Choice *must* be the same type family, so pick the leftmost argument
 -- where this applies.
 pickNext : Defs -> List (NamedPats ns (p :: ps)) -> 
-           Maybe (x ** Elem x (p :: ps))
+           Either CaseError (x ** Elem x (p :: ps))
 pickNext defs npss 
    = case pickBest defs npss of
-          Nothing => Nothing
-          Just (_ ** (best, _)) => Just (_ ** best)
+          Left err => Left err
+          Right (_ ** (best, _)) => Right (_ ** best)
 
 moveFirst : (el : Elem x ps) -> NamedPats ns ps ->
             NamedPats ns (x :: dropElem ps el)
@@ -599,8 +608,8 @@ mutual
   -- has the most distinct constructors (via pickNext)
   match {todo = (_ :: _)} defs phase clauses err 
       = case pickNext defs (map getNPs clauses) of
-             Nothing => lift $ Left DifferingTypes
-             Just (_ ** next) =>
+             Left err => lift $ Left err
+             Right (_ ** next) =>
                 let clauses' = map (shuffleVars next) clauses
                     ps = partition phase clauses' in
                     maybe (pure (Unmatched "No clauses"))
