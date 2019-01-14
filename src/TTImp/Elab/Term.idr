@@ -475,14 +475,14 @@ mutual
         -- if it fails, it may just be that the expected type is not yet
         -- resolved, so come back to it
       = delayOnFailure loc env expected rewriteErr (\delayed =>
-          do (rulev, rulet) <- check rigc process elabinfo env nest rule Unknown
+          do (rulev, rulet) <- check Rig0 process elabinfo env nest rule Unknown
              (lemma, pred, predty) <- elabRewrite loc env expected rulet
 
              rname <- genVarName "_"
              pname <- genVarName "_"
 
              let pbind = Let Rig0 pred predty
-             let rbind = Let RigW (weaken rulev) (weaken rulet)
+             let rbind = Let Rig0 (weaken rulev) (weaken rulet)
 
              let env' = rbind :: pbind :: env
 
