@@ -476,8 +476,9 @@ replace' {vars} tmpi defs env lhs parg tm
              sc' = replace' (tmpi + 1) defs env lhs parg 
                             (scfn (toClosure defaultOpts env (Ref Bound x'))) in
              Bind x b' (refToLocal (Just (multiplicity b)) x' x sc')
+    repSub (NApp hd []) = quote (noGam defs) env (NApp hd [])
     repSub (NApp hd args) 
-       = apply (quote (noGam defs) env (NApp hd []))
+       = apply (replace' tmpi defs env lhs parg (NApp hd []))
                 (map (replace' tmpi defs env lhs parg) 
                      (map (evalClosure defs) args))
     repSub (NDCon n t a args)
