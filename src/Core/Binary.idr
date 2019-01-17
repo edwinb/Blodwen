@@ -121,6 +121,7 @@ writeToTTC extradata fname
                                    cgdirectives = cgdirectives defs
                                  } initCtxt)
                          defs
+         log 5 $ "Writing " ++ fname ++ " with hash " ++ show (ifaceHash defs)
          toBuf buf (MkTTCFile ttcVersion (ifaceHash defs) (importHashes defs)
                               (holes ust) (constraints ust) defs'
                               extradata)
