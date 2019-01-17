@@ -37,11 +37,11 @@ schFooter : String
 schFooter = ")"
 
 mutual
-  racketPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
-  racketPrim vs CCall [ret, fn, args, world]
+  racketPrim : Int -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
+  racketPrim i vs CCall [ret, fn, args, world]
       = throw (InternalError ("Can't compile C FFI calls to Racket yet"))
-  racketPrim vs prim args 
-      = schExtCommon racketPrim vs prim args
+  racketPrim i vs prim args 
+      = schExtCommon racketPrim i vs prim args
 
 compileToRKT : Ref Ctxt Defs ->
                ClosedTerm -> (outfile : String) -> Core annot ()
@@ -50,7 +50,7 @@ compileToRKT c tm outfile
          defs <- get Ctxt
          compdefs <- traverse (getScheme racketPrim defs) ns
          let code = concat compdefs
-         main <- schExp racketPrim [] !(compileExp tm)
+         main <- schExp racketPrim 0 [] !(compileExp tm)
          support <- readDataFile "racket/support.rkt"
          let scm = schHeader ++ support ++ code ++ "(void " ++ main ++ ")\n" ++ schFooter
          Right () <- coreLift $ writeFile outfile scm

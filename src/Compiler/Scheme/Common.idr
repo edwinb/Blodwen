@@ -184,13 +184,13 @@ schCaseDef : Maybe String -> String
 schCaseDef Nothing = ""
 schCaseDef (Just tm) = "(else " ++ tm ++ ")"
 
-parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String)
+parameters (schExtPrim : {vars : _} -> Int -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String)
   mutual
-    schConAlt : SVars vars -> String -> CConAlt vars -> Core annot String
-    schConAlt {vars} vs target (MkConAlt n tag args sc)
+    schConAlt : Int -> SVars vars -> String -> CConAlt vars -> Core annot String
+    schConAlt {vars} i vs target (MkConAlt n tag args sc)
         = let vs' = extendSVars args vs in
               pure $ "((" ++ show tag ++ ") "
-                          ++ bindArgs 1 args vs' !(schExp vs' sc) ++ ")"
+                          ++ bindArgs 1 args vs' !(schExp i vs' sc) ++ ")"
       where
         bindArgs : Int -> (ns : List Name) -> SVars (ns ++ vars) -> String -> String
         bindArgs i [] vs body = body
@@ -198,60 +198,62 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
             = "(let ((" ++ v ++ " " ++ "(vector-ref " ++ target ++ " " ++ show i ++ "))) "
                     ++ bindArgs (i + 1) ns vs body ++ ")"
 
-    schConstAlt : SVars vars -> String -> CConstAlt vars -> Core annot String
-    schConstAlt vs target (MkConstAlt c exp)
-        = pure $ "((equal? " ++ target ++ " " ++ schConstant c ++ ") " ++ !(schExp vs exp) ++ ")"
+    schConstAlt : Int -> SVars vars -> String -> CConstAlt vars -> Core annot String
+    schConstAlt i vs target (MkConstAlt c exp)
+        = pure $ "((equal? " ++ target ++ " " ++ schConstant c ++ ") " ++ !(schExp i vs exp) ++ ")"
       
     -- oops, no traverse for Vect in Core
-    schArgs : SVars vars -> Vect n (CExp vars) -> Core annot (Vect n String)
-    schArgs vs [] = pure []
-    schArgs vs (arg :: args) = pure $ !(schExp vs arg) :: !(schArgs vs args)
+    schArgs : Int -> SVars vars -> Vect n (CExp vars) -> Core annot (Vect n String)
+    schArgs i vs [] = pure []
+    schArgs i vs (arg :: args) = pure $ !(schExp i vs arg) :: !(schArgs i vs args)
 
     export
-    schExp : SVars vars -> CExp vars -> Core annot String
-    schExp vs (CLocal el) = pure $ lookupSVar el vs
-    schExp vs (CRef n) = pure $ schName n
-    schExp vs (CLam x sc) 
+    schExp : Int -> SVars vars -> CExp vars -> Core annot String
+    schExp i vs (CLocal el) = pure $ lookupSVar el vs
+    schExp i vs (CRef n) = pure $ schName n
+    schExp i vs (CLam x sc) 
        = do let vs' = extendSVars [x] vs 
-            sc' <- schExp vs' sc
+            sc' <- schExp i vs' sc
             pure $ "(lambda (" ++ lookupSVar Here vs' ++ ") " ++ sc' ++ ")"
-    schExp vs (CLet x val sc) 
+    schExp i vs (CLet x val sc) 
        = do let vs' = extendSVars [x] vs
-            val' <- schExp vs val
-            sc' <- schExp vs' sc
+            val' <- schExp i vs val
+            sc' <- schExp i vs' sc
             pure $ "(let ((" ++ lookupSVar Here vs' ++ " " ++ val' ++ ")) " ++ sc' ++ ")"
-    schExp vs (CApp x []) 
-        = pure $ "(" ++ !(schExp vs x) ++ ")"
-    schExp vs (CApp x args) 
-        = pure $ "(" ++ !(schExp vs x) ++ " " ++ showSep " " !(traverse (schExp vs) args) ++ ")"
-    schExp vs (CCon x tag args) 
-        = pure $ schConstructor tag !(traverse (schExp vs) args)
-    schExp vs (COp op args) 
-        = pure $ schOp op !(schArgs vs args)
-    schExp vs (CExtPrim p args) 
-        = schExtPrim vs (toPrim p) args
-    schExp vs (CForce t) = pure $ "(force " ++ !(schExp vs t) ++ ")"
-    schExp vs (CDelay t) = pure $ "(delay " ++ !(schExp vs t) ++ ")"
-    schExp vs (CConCase sc alts def) 
-        = do tcode <- schExp vs sc
-             defc <- maybe (pure Nothing) (\v => pure (Just !(schExp vs v))) def
-             pure $ "(let ((sc " ++ tcode ++ ")) (case (get-tag sc) "
-                     ++ showSep " " !(traverse (schConAlt vs "sc") alts)
+    schExp i vs (CApp x []) 
+        = pure $ "(" ++ !(schExp i vs x) ++ ")"
+    schExp i vs (CApp x args) 
+        = pure $ "(" ++ !(schExp i vs x) ++ " " ++ showSep " " !(traverse (schExp i vs) args) ++ ")"
+    schExp i vs (CCon x tag args) 
+        = pure $ schConstructor tag !(traverse (schExp i vs) args)
+    schExp i vs (COp op args) 
+        = pure $ schOp op !(schArgs i vs args)
+    schExp i vs (CExtPrim p args) 
+        = schExtPrim i vs (toPrim p) args
+    schExp i vs (CForce t) = pure $ "(force " ++ !(schExp i vs t) ++ ")"
+    schExp i vs (CDelay t) = pure $ "(delay " ++ !(schExp i vs t) ++ ")"
+    schExp i vs (CConCase sc alts def) 
+        = do tcode <- schExp (i+1) vs sc
+             defc <- maybe (pure Nothing) (\v => pure (Just !(schExp i vs v))) def
+             let n = "sc" ++ show i
+             pure $ "(let ((" ++ n ++ " " ++ tcode ++ ")) (case (get-tag " ++ n ++ ") "
+                     ++ showSep " " !(traverse (schConAlt (i+1) vs n) alts)
                      ++ schCaseDef defc ++ "))"
-    schExp vs (CConstCase sc alts def) 
-        = do defc <- maybe (pure Nothing) (\v => pure (Just !(schExp vs v))) def
-             tcode <- schExp vs sc
-             pure $ "(let ((sc " ++ tcode ++ ")) (cond " -- ++ !(schExp vs sc) ++ " " 
-                      ++ showSep " " !(traverse (schConstAlt vs "sc") alts)
+    schExp i vs (CConstCase sc alts def) 
+        = do defc <- maybe (pure Nothing) (\v => pure (Just !(schExp i vs v))) def
+             tcode <- schExp (i+1) vs sc
+             let n = "sc" ++ show i
+             pure $ "(let ((" ++ n ++ " " ++ tcode ++ ")) (cond "
+                      ++ showSep " " !(traverse (schConstAlt (i+1) vs n) alts)
                       ++ schCaseDef defc ++ "))"
-    schExp vs (CPrimVal c) = pure $ schConstant c
-    schExp vs CErased = pure "'()"
-    schExp vs (CCrash msg) = pure $ "(error " ++ show msg ++ ")"
+    schExp i vs (CPrimVal c) = pure $ schConstant c
+    schExp i vs CErased = pure "'()"
+    schExp i vs (CCrash msg) = pure $ "(error " ++ show msg ++ ")"
 
   -- Need to convert the argument (a list of scheme arguments that may
   -- have been constructed at run time) to a scheme list to be passed to apply
-  readArgs : SVars vars -> CExp vars -> Core annot String
-  readArgs vs tm = pure $ "(blodwen-read-args " ++ !(schExp vs tm) ++ ")"
+  readArgs : Int -> SVars vars -> CExp vars -> Core annot String
+  readArgs i vs tm = pure $ "(blodwen-read-args " ++ !(schExp i vs tm) ++ ")"
 
   fileOp : String -> String
   fileOp op = "(blodwen-file-op (lambda () " ++ op ++ "))"
@@ -259,43 +261,43 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
   -- External primitives which are common to the scheme codegens (they can be
   -- overridden)
   export
-  schExtCommon : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
-  schExtCommon vs SchemeCall [ret, CPrimVal (Str fn), args, world]
+  schExtCommon : Int -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
+  schExtCommon i vs SchemeCall [ret, CPrimVal (Str fn), args, world]
      = pure $ mkWorld ("(apply " ++ fn ++" "
-                  ++ !(readArgs vs args) ++ ")")
-  schExtCommon vs SchemeCall [ret, fn, args, world]
-       = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp vs fn) ++")) "
-                    ++ !(readArgs vs args) ++ ")")
-  schExtCommon vs PutStr [arg, world] 
-      = pure $ "(display " ++ !(schExp vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
-  schExtCommon vs GetStr [world] 
+                  ++ !(readArgs i vs args) ++ ")")
+  schExtCommon i vs SchemeCall [ret, fn, args, world]
+       = pure $ mkWorld ("(apply (eval (string->symbol " ++ !(schExp i vs fn) ++")) "
+                    ++ !(readArgs i vs args) ++ ")")
+  schExtCommon i vs PutStr [arg, world] 
+      = pure $ "(display " ++ !(schExp i vs arg) ++ ") " ++ mkWorld (schConstructor 0 []) -- code for MkUnit
+  schExtCommon i vs GetStr [world] 
       = pure $ mkWorld "(blodwen-get-line (current-input-port))"
-  schExtCommon vs FileOpen [file, mode, bin, world]
+  schExtCommon i vs FileOpen [file, mode, bin, world]
       = pure $ mkWorld $ fileOp $ "(blodwen-open " 
-                                      ++ !(schExp vs file) ++ " "
-                                      ++ !(schExp vs mode) ++ " "
-                                      ++ !(schExp vs bin) ++ ")"
-  schExtCommon vs FileClose [file, world]
-      = pure $ "(blodwen-close-port " ++ !(schExp vs file) ++ ") " ++ mkWorld (schConstructor 0 [])
-  schExtCommon vs FileReadLine [file, world]
-      = pure $ mkWorld $ fileOp $ "(blodwen-get-line " ++ !(schExp vs file) ++ ")"
-  schExtCommon vs FileWriteLine [file, str, world]
+                                      ++ !(schExp i vs file) ++ " "
+                                      ++ !(schExp i vs mode) ++ " "
+                                      ++ !(schExp i vs bin) ++ ")"
+  schExtCommon i vs FileClose [file, world]
+      = pure $ "(blodwen-close-port " ++ !(schExp i vs file) ++ ") " ++ mkWorld (schConstructor 0 [])
+  schExtCommon i vs FileReadLine [file, world]
+      = pure $ mkWorld $ fileOp $ "(blodwen-get-line " ++ !(schExp i vs file) ++ ")"
+  schExtCommon i vs FileWriteLine [file, str, world]
       = pure $ mkWorld $ fileOp $ "(blodwen-putstring " 
-                                        ++ !(schExp vs file) ++ " "
-                                        ++ !(schExp vs str) ++ ")"
-  schExtCommon vs FileEOF [file, world]
-      = pure $ mkWorld $ "(blodwen-eof " ++ !(schExp vs file) ++ ")"
-  schExtCommon vs NewIORef [_, val, world]
-      = pure $ mkWorld $ "(box " ++ !(schExp vs val) ++ ")"
-  schExtCommon vs ReadIORef [_, ref, world]
-      = pure $ mkWorld $ "(unbox " ++ !(schExp vs ref) ++ ")"
-  schExtCommon vs WriteIORef [_, ref, val, world]
+                                        ++ !(schExp i vs file) ++ " "
+                                        ++ !(schExp i vs str) ++ ")"
+  schExtCommon i vs FileEOF [file, world]
+      = pure $ mkWorld $ "(blodwen-eof " ++ !(schExp i vs file) ++ ")"
+  schExtCommon i vs NewIORef [_, val, world]
+      = pure $ mkWorld $ "(box " ++ !(schExp i vs val) ++ ")"
+  schExtCommon i vs ReadIORef [_, ref, world]
+      = pure $ mkWorld $ "(unbox " ++ !(schExp i vs ref) ++ ")"
+  schExtCommon i vs WriteIORef [_, ref, val, world]
       = pure $ mkWorld $ "(set-box! " 
-                           ++ !(schExp vs ref) ++ " " 
-                           ++ !(schExp vs val) ++ ")"
-  schExtCommon vs (Unknown n) args 
+                           ++ !(schExp i vs ref) ++ " " 
+                           ++ !(schExp i vs val) ++ ")"
+  schExtCommon i vs (Unknown n) args 
       = throw (InternalError ("Can't compile unknown external primitive " ++ show n))
-  schExtCommon vs prim args 
+  schExtCommon i vs prim args 
       = throw (InternalError ("Badly formed external primitive " ++ show prim
                                 ++ " " ++ show args))
 
@@ -308,15 +310,15 @@ parameters (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars)
   schDef n (MkFun args exp)
      = let vs = initSVars args in
            pure $ "(define " ++ schName n ++ " (lambda (" ++ schArglist vs ++ ") "
-                      ++ !(schExp vs exp) ++ "))\n"
+                      ++ !(schExp 0 vs exp) ++ "))\n"
   schDef n (MkError exp)
-     = pure $ "(define (" ++ schName n ++ " . any-args) " ++ !(schExp [] exp) ++ ")\n"
+     = pure $ "(define (" ++ schName n ++ " . any-args) " ++ !(schExp 0 [] exp) ++ ")\n"
   schDef n (MkCon t a) = pure "" -- Nothing to compile here
   
 -- Convert the name to scheme code
 -- (There may be no code generated, for example if it's a constructor)
 export
-getScheme : (schExtPrim : {vars : _} -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String) ->
+getScheme : (schExtPrim : {vars : _} -> Int -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String) ->
             Defs -> Name -> Core annot String
 getScheme schExtPrim defs n
     = case lookupGlobalExact n (gamma defs) of

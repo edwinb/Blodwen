@@ -89,6 +89,8 @@ mutual
   toCExpTm defs n (Ref _ fn) = CApp (CRef fn) []
   toCExpTm defs n (Bind x (Lam _ _ _) sc)
       = CLam x (toCExp defs n sc)
+  toCExpTm defs n (Bind x (Let Rig0 val _) sc)
+      = CLet x CErased (toCExp defs n sc)
   toCExpTm defs n (Bind x (Let _ val _) sc)
       = CLet x (toCExp defs n val) (toCExp defs n sc)
   toCExpTm defs n (Bind x b tm) = CErased

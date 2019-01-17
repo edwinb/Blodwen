@@ -763,7 +763,7 @@ reverse = prim__strReverse
 public export
 substr : Nat -> Nat -> String -> String
 substr s e = prim__strSubstr (prim__cast_IntegerInt (natToInteger s))
-                             (prim__cast_IntegerInt (natToInteger s))
+                             (prim__cast_IntegerInt (natToInteger e))
 
 public export
 strCons : Char -> String -> String
