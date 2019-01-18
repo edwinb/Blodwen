@@ -104,3 +104,10 @@
 (define (blodwen-condition-broadcast c) (condition-variable-broadcast! c))
 
 (define (blodwen-sleep s) (sleep s))
+
+(define (blodwen-args)
+  (define (blodwen-build-args args)
+    (if (null? args)
+        (vector 0 '())
+        (vector 1 '() (car args) (blodwen-build-args (cdr args)))))
+    (blodwen-build-args (argv)))

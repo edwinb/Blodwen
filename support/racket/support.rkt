@@ -108,3 +108,11 @@
 
 (define (blodwen-sleep s) (sleep s))
 
+(define (blodwen-args)
+  (define (blodwen-build-args args)
+    (if (null? args)
+        (vector 0 '())
+        (vector 1 '() (car args) (blodwen-build-args (cdr args)))))
+    (blodwen-build-args 
+      (cons (path->string (find-system-path 'run-file))
+            (vector->list (current-command-line-arguments)))))
