@@ -61,6 +61,62 @@ expandToArity (S k) fn (a :: args) = expandToArity k (addArg fn a) args
 -- Underapplied, saturate with lambdas
 expandToArity num fn [] = etaExpand 0 num fn []
 
+-- Rewrite applications of Nat constructors and functions to more optimal
+-- versions using Integer
+
+-- None of these should be hard coded, but we'll do it this way until we
+-- have a more general approach to optimising data types!
+natHack : CExp vars -> CExp vars
+natHack (CCon (NS ["Prelude"] (UN "Z")) _ []) = CPrimVal (BI 0)
+natHack (CCon (NS ["Prelude"] (UN "S")) _ [k])
+    = CApp (CRef (UN "prim__add_Integer")) [CPrimVal (BI 1), k]
+natHack (CApp (CRef (NS ["Prelude"] (UN "natToInteger"))) [k]) = k
+natHack (CApp (CRef (NS ["Prelude"] (UN "integerToNat"))) [k]) = k
+natHack (CApp (CRef (NS ["Prelude"] (UN "plus"))) args)
+    = CApp (CRef (UN "prim__add_Integer")) args
+natHack (CApp (CRef (NS ["Prelude"] (UN "mult"))) args)
+    = CApp (CRef (UN "prim__mul_Integer")) args
+natHack (CApp (CRef (NS ["Nat", "Data"] (UN "minus"))) args)
+    = CApp (CRef (UN "prim__sub_Integer")) args
+natHack t = t
+
+isNatCon : Name -> Bool
+isNatCon (NS ["Prelude"] (UN "Z")) = True
+isNatCon (NS ["Prelude"] (UN "S")) = True
+isNatCon _ = False
+
+natBranch : CConAlt vars -> Bool
+natBranch (MkConAlt n _ _ _) = isNatCon n
+
+trySBranch : CExp vars -> CConAlt vars -> Maybe (CExp vars)
+trySBranch n (MkConAlt (NS ["Prelude"] (UN "S")) _ [arg] sc)
+    = Just (CLet arg (CApp (CRef (UN "prim__sub_Integer")) [n, CPrimVal (BI 1)]) 
+                 sc)
+trySBranch _ _ = Nothing
+
+tryZBranch : CConAlt vars -> Maybe (CExp vars)
+tryZBranch (MkConAlt (NS ["Prelude"] (UN "Z")) _ [] sc) = Just sc
+tryZBranch _ = Nothing
+
+getSBranch : CExp vars -> List (CConAlt vars) -> Maybe (CExp vars)
+getSBranch n [] = Nothing
+getSBranch n (x :: xs) = trySBranch n x <+> getSBranch n xs
+
+getZBranch : List (CConAlt vars) -> Maybe (CExp vars)
+getZBranch [] = Nothing
+getZBranch (x :: xs) = tryZBranch x <+> getZBranch xs
+
+-- Rewrite case trees on Nat to be case trees on Integer
+natHackTree : CExp vars -> CExp vars
+natHackTree (CConCase sc alts def)
+   = if any natBranch alts
+        then let def' = maybe def Just (getSBranch sc alts) in
+                 case getZBranch alts of
+                      Nothing => maybe (CCrash "No branches") id def'
+                      Just zalt => CConstCase sc [MkConstAlt (BI 0) zalt] def'
+        else CConCase sc alts def
+natHackTree t = t
+
 -- Compiling external primitives, laziness, etc
 specialApp : Defs -> Term vars -> List (CExp vars) -> Maybe (CExp vars)
 specialApp defs (Ref _ n) args
@@ -104,7 +160,9 @@ mutual
   toCExp defs n tm with (unapply tm)
     toCExp defs n (apply f args) | ArgsList 
         = let args' = map (toCExp defs n) args in
-              maybe (expandToArity (numArgs defs f) (toCExpTm defs n f) args')
+              maybe (natHack 
+                      (expandToArity (numArgs defs f) 
+                                       (toCExpTm defs n f) args'))
               id
               (specialApp defs f args')
 
@@ -140,10 +198,12 @@ mutual
   toCExpTree defs n (Case x scTy [ConCase cn t args sc])
       = if isDelay cn defs
            then forceIn defs n (CLocal x) args (toCExpTree defs n sc)
-           else CConCase (CLocal x) (conCases defs n [ConCase cn t args sc])
-                         Nothing
+           else natHackTree 
+                  (CConCase (CLocal x) (conCases defs n [ConCase cn t args sc])
+                            Nothing)
   toCExpTree defs n (Case x scTy alts@(ConCase _ _ _ _ :: _)) 
-      = CConCase (CLocal x) (conCases defs n alts) (getDef defs n alts)
+      = natHackTree 
+           (CConCase (CLocal x) (conCases defs n alts) (getDef defs n alts))
   toCExpTree defs n (Case x scTy alts@(ConstCase _ _ :: _)) 
       = CConstCase (CLocal x) (constCases defs n alts) (getDef defs n alts)
   toCExpTree defs n (Case x scTy alts@(DefaultCase sc :: _)) 

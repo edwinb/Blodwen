@@ -52,7 +52,7 @@
     (if (port? p) (write-string p s) void)
     0)
 
-(define (blodwen-open file mode)
+(define (blodwen-open file mode bin)
     (cond 
         ((string=? mode "r") (open-input-file file))
         ((string=? mode "w") (open-output-file file))
