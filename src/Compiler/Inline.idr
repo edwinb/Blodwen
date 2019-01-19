@@ -46,12 +46,6 @@ extendLoc env (n :: ns) = CLocal Here :: weakenEnv (extendLoc env ns)
 Stack : List Name -> Type
 Stack vars = List (CExp vars)
     
-evalLocal : EEnv free vars -> Elem x (vars ++ free) ->
-            CExp free
-evalLocal {vars = []} env p = CLocal p
-evalLocal {vars = x :: xs} (v :: env) Here = v
-evalLocal {vars = x :: xs} (_ :: env) (There later) = evalLocal env later
-
 unload : Stack vars -> CExp vars -> CExp vars
 unload [] e = e
 unload (a :: args) e = unload args (CApp e [a])
@@ -79,6 +73,15 @@ thinAll {outer} {inner} (n :: ns) exp
 
 parameters (defs : Defs)
   mutual
+    evalLocal : List Name -> Stack free ->
+                EEnv free vars -> Elem x (vars ++ free) ->
+                CExp free
+    evalLocal {vars = []} rec stk env p = unload stk (CLocal p)
+    evalLocal {vars = x :: xs} rec stk (v :: env) Here 
+        = eval rec env stk (weakenNs xs v)
+    evalLocal {vars = x :: xs} rec stk (_ :: env) (There later) 
+        = evalLocal rec stk env later
+
     tryApply : List Name -> Stack free -> EEnv free vars -> CDef -> Maybe (CExp free)
     tryApply {free} {vars} rec stk env (MkFun args exp)
         = do (env', stk') <- takeFromStack env stk args
@@ -88,7 +91,7 @@ parameters (defs : Defs)
     tryApply rec stk env _ = Nothing
 
     eval : List Name -> EEnv free vars -> Stack free -> CExp (vars ++ free) -> CExp free
-    eval rec env stk (CLocal p) = unload stk $ evalLocal env p
+    eval rec env stk (CLocal p) = evalLocal rec stk env p
     eval rec env stk (CRef n) 
         = case lookupGlobalExact n (gamma defs) of
                Nothing => unload stk (CRef n)

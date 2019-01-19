@@ -143,6 +143,7 @@ public export
 (||) True x = True
 (||) False x = x
 
+%inline
 public export
 intToBool : Int -> Bool
 intToBool 0 = False
