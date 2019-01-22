@@ -267,68 +267,100 @@ interface Quote (tm : List Name -> Type) where
   quote defs env tm 
       = unsafePerformIO (do num <- newIORef 0
                             quoteGen num defs env tm)
-   
+  
+data Bounds : List Name -> Type where
+     None : Bounds []
+     Add : (x : Name) -> Name -> Bounds xs -> Bounds (x :: xs)
+
 mutual
-  quoteArgs : IORef Int -> Defs -> Env Term free -> List (Closure free) -> 
-              IO (List (Term free))
-  quoteArgs num defs env [] = pure []
-  quoteArgs num defs env (thunk :: args) 
-        = pure $ !(quoteGen num defs env (evalClosure defs thunk)) :: 
-                 !(quoteArgs num defs env args)
+  quoteArgs : IORef Int -> Defs -> Bounds bound ->
+              Env Term free -> List (Closure free) -> 
+              IO (List (Term (bound ++ free)))
+  quoteArgs num defs bound env [] = pure []
+  quoteArgs num defs bound env (thunk :: args) 
+        = pure $ !(quoteGenNF num defs bound env (evalClosure defs thunk)) :: 
+                 !(quoteArgs num defs bound env args)
 
-  quoteHead :  NHead free -> IO (Term free)
-  quoteHead (NLocal r y) = pure $ Local r y
-  quoteHead (NRef nt n) = pure $ Ref nt n
+  quoteHead : Bounds bound -> NHead free -> IO (Term (bound ++ free))
+  quoteHead {bound} _ (NLocal r y) 
+      = pure $ Local r (addThere bound y)
+    where
+      addThere : (ys : List Name) -> Elem x xs -> Elem x (ys ++ xs)
+      addThere [] el = el
+      addThere (x :: xs) el = There (addThere xs el)
+  quoteHead bs (NRef Bound n) 
+     = case findName bs of
+            Just (_ ** p) => pure $ Local Nothing (elemExtend p)
+            Nothing => pure $ Ref Bound n
+    where
+      findName : Bounds bound' -> Maybe (x ** Elem x bound')
+      findName None = Nothing
+      findName (Add x n' ns)
+          = case nameEq n n' of
+                 Just Refl => Just (_ ** Here)
+                 Nothing => do (_ ** p) <- findName ns
+                               Just (_ ** There p)
+  quoteHead bound (NRef nt n) = pure $ Ref nt n
 
-  quoteBinder : IORef Int -> Defs -> Env Term free -> Binder (NF free) -> 
-                IO (Binder (Term free))
-  quoteBinder num defs env (Lam c x ty) 
-      = do ty' <- quoteGen num defs env ty
+  quoteBinder : IORef Int -> Defs -> Bounds bound ->
+                Env Term free -> Binder (NF free) -> 
+                IO (Binder (Term (bound ++ free)))
+  quoteBinder num defs bound env (Lam c x ty) 
+      = do ty' <- quoteGenNF num defs bound env ty
            pure (Lam c x ty')
-  quoteBinder num defs env (Let c val ty) 
-      = do val' <- quoteGen num defs env val
-           ty' <- quoteGen num defs env ty
+  quoteBinder num defs bound env (Let c val ty) 
+      = do val' <- quoteGenNF num defs bound env val
+           ty' <- quoteGenNF num defs bound env ty
            pure (Let c val' ty')
-  quoteBinder num defs env (Pi c x ty) 
-      = do ty' <- quoteGen num defs env ty
+  quoteBinder num defs bound env (Pi c x ty) 
+      = do ty' <- quoteGenNF num defs bound env ty
            pure (Pi c x ty')
-  quoteBinder num defs env (PVar c ty) 
-      = do ty' <- quoteGen num defs env ty
+  quoteBinder num defs bound env (PVar c ty) 
+      = do ty' <- quoteGenNF num defs bound env ty
            pure (PVar c ty')
-  quoteBinder num defs env (PLet c val ty) 
-      = do val' <- quoteGen num defs env val
-           ty' <- quoteGen num defs env ty
+  quoteBinder num defs bound env (PLet c val ty) 
+      = do val' <- quoteGenNF num defs bound env val
+           ty' <- quoteGenNF num defs bound env ty
            pure (PLet c val' ty')
-  quoteBinder num defs env (PVTy c ty) 
-      = do ty' <- quoteGen num defs env ty
+  quoteBinder num defs bound env (PVTy c ty) 
+      = do ty' <- quoteGenNF num defs bound env ty
            pure (PVTy c ty')
+  
+  -- quoteGen, but also keeping track of the locals we introduced and
+  -- need to resolve
+  quoteGenNF : IORef Int ->
+               Defs -> Bounds bound -> 
+               Env Term vars -> NF vars -> IO (Term (bound ++ vars))
+  quoteGenNF num defs bound env (NBind n b sc) 
+      = do var <- genName num "qv"
+           sc' <- quoteGenNF num defs (Add n var bound) env 
+                       (sc (toClosure defaultOpts env (Ref Bound var)))
+           b' <- quoteBinder num defs bound env b
+           pure (Bind n b' sc') -- ?halp) -- (refToLocal Nothing var n sc'))
+  quoteGenNF num defs bound env (NApp f args) 
+      = do f' <- quoteHead bound f
+           args' <- quoteArgs num defs bound env args
+           pure $ apply f' args'
+  quoteGenNF num defs bound env (NDCon nm tag arity xs) 
+      = if isDelay nm defs
+           then do xs' <- quoteArgs num defs bound env (map toHolesOnly xs)
+                   pure $ apply (Ref (DataCon tag arity) nm) xs'
+           else do xs' <- quoteArgs num defs bound env xs
+                   pure $ apply (Ref (DataCon tag arity) nm) xs'
+    where
+      toHolesOnly : Closure vs -> Closure vs
+      toHolesOnly (MkClosure _ locs env tm) = MkClosure withHoles locs env tm
+  quoteGenNF num defs bound env (NTCon nm tag arity xs) 
+      = do xs' <- quoteArgs num defs bound env xs
+           pure $ apply (Ref (TyCon tag arity) nm) xs'
+  quoteGenNF num defs bound env (NPrimVal x) = pure $ PrimVal x
+  quoteGenNF num defs bound env NErased = pure $ Erased
+  quoteGenNF num defs bound env NType = pure $ TType
 
   export
   Quote NF where
-    quoteGen num defs env (NBind n b sc) 
-        = do var <- genName num "qv"
-             sc' <- quoteGen num defs env (sc (toClosure defaultOpts env (Ref Bound var)))
-             b' <- quoteBinder num defs env b
-             pure (Bind n b' (refToLocal Nothing var n sc'))
-    quoteGen num defs env (NApp f args) 
-        = do f' <- quoteHead f
-             args' <- quoteArgs num defs env args
-             pure $ apply f' args'
-    quoteGen num defs env (NDCon nm tag arity xs) 
-        = if isDelay nm defs
-             then do xs' <- quoteArgs num defs env (map toHolesOnly xs)
-                     pure $ apply (Ref (DataCon tag arity) nm) xs'
-             else do xs' <- quoteArgs num defs env xs
-                     pure $ apply (Ref (DataCon tag arity) nm) xs'
-      where
-        toHolesOnly : Closure vs -> Closure vs
-        toHolesOnly (MkClosure _ locs env tm) = MkClosure withHoles locs env tm
-    quoteGen num defs env (NTCon nm tag arity xs) 
-        = do xs' <- quoteArgs num defs env xs
-             pure $ apply (Ref (TyCon tag arity) nm) xs'
-    quoteGen num defs env (NPrimVal x) = pure $ PrimVal x
-    quoteGen num defs env NErased = pure $ Erased
-    quoteGen num defs env NType = pure $ TType
+    quoteGen num defs env tm 
+        = quoteGenNF num defs None env tm
 
   export
   Quote Term where
