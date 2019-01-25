@@ -11,6 +11,7 @@ import Idris.IDEMode.Commands
 import public Idris.REPLOpts
 import Idris.Syntax
 
+
 -- Output informational messages, unless quiet flag is set
 export
 iputStrLn : {auto o : Ref ROpts REPLOpts} ->
@@ -20,9 +21,10 @@ iputStrLn msg
          case idemode opts of
               REPL False => coreLift $ putStrLn msg
               REPL _ => pure ()
-              IDEMode i =>
-                send (SExpList [SymbolAtom "write-string", 
-                                toSExp msg, toSExp i])
+              IDEMode i _ f =>
+                send f (SExpList [SymbolAtom "write-string", 
+                                 toSExp msg, toSExp i])
+                                                                
 
 printWithStatus : {auto o : Ref ROpts REPLOpts} ->
                   String -> String -> Core annot ()
@@ -30,11 +32,11 @@ printWithStatus status msg
     = do opts <- get ROpts
          case idemode opts of
               REPL _ => coreLift $ putStrLn msg
-              IDEMode i =>
+              IDEMode i _ f =>
                 do let m = SExpList [SymbolAtom status, toSExp msg, 
                                      -- highlighting; currently blank
                                      SExpList []]
-                   send (SExpList [SymbolAtom "return", m, toSExp i])
+                   send f (SExpList [SymbolAtom "return", m, toSExp i])
 
 export
 printResult : {auto o : Ref ROpts REPLOpts} ->
@@ -59,14 +61,14 @@ emitError err
               REPL _ => 
                   do msg <- display err
                      coreLift $ putStrLn msg
-              IDEMode i =>
+              IDEMode i _ f =>
                   do msg <- perror err
                      case getAnnot err of
                           Nothing => iputStrLn msg
                           Just fc =>
-                            send (SExpList [SymbolAtom "warning", 
-                                    SExpList [toSExp (file fc), 
-                                              toSExp (addOne (startPos fc)), 
+                            send f (SExpList [SymbolAtom "warning", 
+                                   SExpList [toSExp (file fc), 
+                                            toSExp (addOne (startPos fc)), 
                                               toSExp (addOne (endPos fc)), 
                                               toSExp msg,
                                               -- highlighting; currently blank

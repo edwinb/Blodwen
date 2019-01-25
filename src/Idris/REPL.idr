@@ -337,8 +337,8 @@ processEdit (MakeLemma line name)
                                             else papp)
                      case idemode opts of
                           REPL _ => printResult (show name ++ " : " ++ show pty ++ "\n" ++ pappstr)
-                          IDEMode i =>
-                            send (SExpList [SymbolAtom "return", 
+                          IDEMode i _ f =>
+                            send f (SExpList [SymbolAtom "return", 
                                     SExpList [SymbolAtom "ok",
                                       SExpList [SymbolAtom "metavariable-lemma",
                                         SExpList [SymbolAtom "replace-metavariable",

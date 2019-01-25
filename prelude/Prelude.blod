@@ -18,7 +18,7 @@ As such, it should contain:
   basic types
 - Char and String manipulation
 - Show, Eq, Ord, and implementations for all types in the prelude
-- Interfaces and functions for basic proof (cong, Uninhabited, etc)
+- Interfaces and functions for basic proof (cong, Uninhabited, etc) --
 - Semigroup, Monoid
 - Functor, Applicative, Monad and related functions
 - Foldable
