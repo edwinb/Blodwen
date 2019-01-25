@@ -451,7 +451,7 @@ process Edit
 process (Compile ctm outfile)
     = do i <- newRef ImpST (initImpState {annot = FC})
          ttimp <- desugar AnyExpr [] (PApp replFC (PRef replFC (UN "unsafePerformIO")) ctm)
-         (tm, _, ty) <- inferTerm elabTop False (UN "[input]") 
+         (_, tm, ty) <- inferTerm elabTop False (UN "[input]") 
                                [] (MkNested []) NONE InExpr ttimp 
          ok <- compile !findCG tm outfile
          maybe (pure ())

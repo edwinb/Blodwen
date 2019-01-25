@@ -193,11 +193,13 @@ data ClauseType = ConClause | VarClause
 
 namesIn : List Name -> Pat -> Bool
 namesIn pvars (PCon _ _ ps) = all (namesIn pvars) ps
+namesIn pvars (PTCon _ _ ps) = all (namesIn pvars) ps
 namesIn pvars (PVar n) = n `elem` pvars
 namesIn pvars _ = True
 
 namesFrom : Pat -> List Name
 namesFrom (PCon _ _ ps) = concatMap namesFrom ps
+namesFrom (PTCon _ _ ps) = concatMap namesFrom ps
 namesFrom (PVar n) = [n]
 namesFrom _ = []
 
@@ -213,6 +215,7 @@ clauseType CompileTime (MkPatClause pvars (MkInfo (PCon x y xs) _ (Known Rig0 t)
 clauseType phase (MkPatClause pvars (MkInfo _ _ (Known Rig0 t) :: _) rhs) 
     = VarClause
 clauseType phase (MkPatClause _ (MkInfo (PCon x y xs) _ _ :: _) rhs) = ConClause
+clauseType phase (MkPatClause _ (MkInfo (PTCon x y xs) _ _ :: _) rhs) = ConClause
 clauseType phase (MkPatClause _ (MkInfo (PConst x) _ _ :: _) rhs) = ConClause
 clauseType phase (MkPatClause _ (_ :: _) rhs) = VarClause
 
@@ -417,17 +420,9 @@ groupCons defs pvars cs
                List (Group vars todo) -> 
                StateT Int (Either CaseError) (List (Group vars todo))
     addGroup (PCon n t pargs) pats rhs acc 
-        -- Erase forced arguments here
---         = do let pargs' = case lookupDefExact n (gamma defs) of
---                                Just (DCon _ _ f) => dropForced 0 f pargs
---                                _ => pargs
          = addConG n t pargs pats rhs acc
-      where
-        dropForced : Nat -> List Nat -> List Pat -> List Pat
-        dropForced i fs [] = []
-        dropForced i fs (x :: xs)
-            = if i `elem` fs then PAny :: dropForced (S i) fs xs
-                             else x :: dropForced (S i) fs xs
+    addGroup (PTCon n t pargs) pats rhs acc 
+         = addConG n t pargs pats rhs acc
     addGroup (PConst c) pats rhs acc 
         = addConstG c pats rhs acc
     addGroup _ pats rhs acc = pure acc -- Can't happen, not a constructor
@@ -464,6 +459,7 @@ sameType {ns} defs env (p :: xs) = -- all known (map getFirstArgType (p :: xs)) 
     headEq : NF ns -> NF ns -> Bool
     headEq (NTCon n _ _ _) (NTCon n' _ _ _) = n == n'
     headEq (NPrimVal c) (NPrimVal c') = c == c'
+    headEq NType NType = True
     headEq _ _ = False
 
     sameTypeAs : NF ns -> List (ArgType ns) -> Either CaseError ()
@@ -512,12 +508,14 @@ countDiff xs = length (distinct [] (map getFirstCon xs))
   where
     isVar : Pat -> Bool
     isVar (PCon _ _ _) = False
+    isVar (PTCon _ _ _) = False
     isVar (PConst _) = False
     isVar _ = True
 
     -- Return whether two patterns would lead to the same match
     sameCase : Pat -> Pat -> Bool
     sameCase (PCon _ t _) (PCon _ t' _) = t == t'
+    sameCase (PTCon _ t _) (PTCon _ t' _) = t == t'
     sameCase (PConst c) (PConst c') = c == c'
     sameCase x y = isVar x && isVar y
 

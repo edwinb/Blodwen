@@ -1,0 +1,4 @@
+$1 typecase.blod < input
+$1 typecase2.blod --check
+
+rm -rf build

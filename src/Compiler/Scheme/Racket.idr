@@ -10,6 +10,7 @@ import Core.Directory
 import Core.Name
 import Core.TT
 
+import Data.CMap
 import Data.List
 import Data.Vect
 import System
@@ -46,11 +47,11 @@ mutual
 compileToRKT : Ref Ctxt Defs ->
                ClosedTerm -> (outfile : String) -> Core annot ()
 compileToRKT c tm outfile
-    = do ns <- findUsedNames tm
+    = do (ns, tags) <- findUsedNames tm
          defs <- get Ctxt
          compdefs <- traverse (getScheme racketPrim defs) ns
          let code = concat compdefs
-         main <- schExp racketPrim 0 [] !(compileExp tm)
+         main <- schExp racketPrim 0 [] !(compileExp tags tm)
          support <- readDataFile "racket/support.rkt"
          let scm = schHeader ++ support ++ code ++ "(void " ++ main ++ ")\n" ++ schFooter
          Right () <- coreLift $ writeFile outfile scm

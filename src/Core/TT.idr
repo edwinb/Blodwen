@@ -93,6 +93,17 @@ Eq Constant where
   WorldType == WorldType = True
   _ == _ = False
 
+-- for typecase
+export
+constTag : Constant -> Int
+constTag IntType = 1
+constTag IntegerType = 2
+constTag StringType = 3
+constTag CharType = 4
+constTag DoubleType = 5
+constTag WorldType = 6
+constTag _ = 0
+
 -- All the internal operators, parameterised by their arity
 public export
 data PrimFn : Nat -> Type where

@@ -35,7 +35,7 @@ mkIfaceData {vars} fc vis env constraints n conName ps dets meths
                     else [NoHints, SearchBy dets] 
           retty = apply (IVar fc n) (map (IVar fc) (map fst ps))
           conty = mkTy Implicit Rig0 (map jname ps) $
-                  mkTy Explicit RigW (map bhere constraints ++ map bname meths) retty
+                  mkTy Explicit rig1 (map bhere constraints ++ map bname meths) retty
           con = MkImpTy fc conName (bindTypeNames (map fst ps ++ map fst meths ++ vars) conty) in
           IData fc vis (MkImpData fc n 
                                   (bindTypeNames (map fst ps ++ map fst meths ++ vars)

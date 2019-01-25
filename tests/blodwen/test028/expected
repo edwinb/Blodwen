@@ -1,0 +1,20 @@
+"Nat"
+"List of Nat"
+"List of Something else"
+"List of Something else"
+"List of Bool"
+"Int"
+"Something else"
+"List of Type"
+"List of Int"
+43
+42
+1/1: Building typecase (typecase.blod)
+Welcome to Blodwen. Good luck.
+Main> Main> Main.strangeId is total
+Main> Main.strangeId':
+strangeId' _
+Main> Bye for now!
+1/1: Building typecase2 (typecase2.blod)
+typecase2.blod:5:1--6:1:Attempt to match on erased argument Nat in Main.strangeId
+typecase2.blod:9:1--10:1:Attempt to match on erased argument Nat in Main.foo

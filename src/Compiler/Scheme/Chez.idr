@@ -11,6 +11,7 @@ import Core.Name
 import Core.Options
 import Core.TT
 
+import Data.CMap
 import Data.List
 import Data.Vect
 import System
@@ -100,11 +101,11 @@ compileToSS : Ref Ctxt Defs ->
 compileToSS c tm outfile
     = do ds <- getDirectives Chez
          let libs = findLibs ds
-         ns <- findUsedNames tm
+         (ns, tags) <- findUsedNames tm
          defs <- get Ctxt
          compdefs <- traverse (getScheme chezExtPrim defs) ns
          let code = concat compdefs
-         main <- schExp chezExtPrim 0 [] !(compileExp tm)
+         main <- schExp chezExtPrim 0 [] !(compileExp tags tm)
          chez <- coreLift findChez
          support <- readDataFile "chez/support.ss"
          let scm = schHeader chez libs ++ support ++ code ++ main ++ schFooter

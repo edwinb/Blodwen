@@ -1,7 +1,5 @@
 module TTImp.Elab
 
-import Compiler.CompileExpr
-
 import Core.CaseTree
 import Core.Context
 import Core.LinearCheck
@@ -152,9 +150,6 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          -- solved later
          hs <- getHoleNames
          traverse addToSave hs
-         -- ...and we need to add their compiled forms, for any that might
-         -- end up being executed
-         traverse compileDef hs
 
          -- delete the holes we no longer need
          gam <- get Ctxt

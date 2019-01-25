@@ -130,6 +130,15 @@ getMissingAlts defs (NPrimVal c) alts
     isDefault : CaseAlt vars -> Bool
     isDefault (DefaultCase _) = True
     isDefault _ = False
+-- Similarly for types
+getMissingAlts defs NType alts
+    = if any isDefault alts
+         then []
+         else [DefaultCase (Unmatched "Coverage check")]
+  where
+    isDefault : CaseAlt vars -> Bool
+    isDefault (DefaultCase _) = True
+    isDefault _ = False
 getMissingAlts defs nfty alts  
     = let allCons = getCons defs nfty 
           validCons = filter (\x => matchNF defs nfty (fst x)) allCons in

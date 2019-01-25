@@ -21,19 +21,6 @@ expandAmbigName : ElabMode -> EState vars ->
 -- Insert implicit dots here, for things we can't match on directly
 -- (Only when mode is InLHS and it's not the name of the function we're 
 -- defining)
-expandAmbigName (InLHS _) estate defs env nest orig args (IPrimVal fc c) exp
-    = if isType c
-         then IMustUnify fc "Primitive type constructor" orig
-         else orig
-  where
-    isType : Constant -> Bool
-    isType IntType = True
-    isType IntegerType = True
-    isType StringType = True
-    isType CharType = True
-    isType DoubleType = True
-    isType WorldType = True
-    isType _ = False
 expandAmbigName (InLHS _) estate defs env nest orig args (IBindVar fc n) exp
    = if n `elem` lhsPatVars estate
         then IMustUnify fc "Non linear pattern variable" orig
@@ -80,6 +67,7 @@ expandAmbigName mode estate defs env nest orig args (IVar fc x) exp
     wrapDot : ElabMode -> Name -> List (RawImp annot) -> 
               Def -> RawImp annot -> RawImp annot
     wrapDot _ _ _ (DCon _ _ _) tm = tm
+    wrapDot _ _ _ (TCon _ _ _ _ _ _) tm = tm
     wrapDot (InLHS _) n' [arg] _ tm 
        = if n' == defining estate || isPrimApp n' arg
             then tm

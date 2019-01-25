@@ -195,7 +195,9 @@ data Def : Type where
 						 (forcedpos : List Nat) -> -- argument positions whose value is
 			                         -- forced by the constructors type
 			       Def
-     TCon  : (tag : Int) -> (arity : Nat) -> 
+     TCon  : (tag : Int) -> -- Need to take care to make this unique when
+                            -- loading from ttc
+             (arity : Nat) -> 
              (mwith : List Name) -> -- defined mutually with these
 						 (parampos : List Nat) -> -- argument positions which are parametric
              (detpos : List Nat) -> -- argument postitions for determining auto search
