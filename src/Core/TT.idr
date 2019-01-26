@@ -96,12 +96,13 @@ Eq Constant where
 -- for typecase
 export
 constTag : Constant -> Int
-constTag IntType = 1
-constTag IntegerType = 2
-constTag StringType = 3
-constTag CharType = 4
-constTag DoubleType = 5
-constTag WorldType = 6
+-- 1 = ->, 2 = Type
+constTag IntType = 3
+constTag IntegerType = 4
+constTag StringType = 5
+constTag CharType = 6
+constTag DoubleType = 7
+constTag WorldType = 8
 constTag _ = 0
 
 -- All the internal operators, parameterised by their arity
@@ -565,26 +566,27 @@ mutual
                    LocalEnv free vars -> 
                    Env Term free ->
                    Term (vars ++ free) -> Closure free
+       MkNFClosure : NF free -> Closure free
 
--- The head of a value: things you can apply arguments to
-public export
-data NHead : List Name -> Type where
-     NLocal : Maybe RigCount -> Elem x vars -> NHead vars
-     NRef   : NameType -> Name -> NHead vars
+  -- The head of a value: things you can apply arguments to
+  public export
+  data NHead : List Name -> Type where
+       NLocal : Maybe RigCount -> Elem x vars -> NHead vars
+       NRef   : NameType -> Name -> NHead vars
 
--- Values themselves
-public export
-data NF : List Name -> Type where
-     NBind    : (x : Name) -> Binder (NF vars) ->
-                (Closure vars -> NF vars) -> NF vars
-     NApp     : NHead vars -> List (Closure vars) -> NF vars
-     NDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
-                List (Closure vars) -> NF vars
-     NTCon    : Name -> (tag : Int) -> (arity : Nat) -> 
-                List (Closure vars) -> NF vars
-     NPrimVal : Constant -> NF vars
-     NErased  : NF vars
-     NType    : NF vars
+  -- Values themselves
+  public export
+  data NF : List Name -> Type where
+       NBind    : (x : Name) -> Binder (NF vars) ->
+                  (Closure vars -> NF vars) -> NF vars
+       NApp     : NHead vars -> List (Closure vars) -> NF vars
+       NDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
+                  List (Closure vars) -> NF vars
+       NTCon    : Name -> (tag : Int) -> (arity : Nat) -> 
+                  List (Closure vars) -> NF vars
+       NPrimVal : Constant -> NF vars
+       NErased  : NF vars
+       NType    : NF vars
 
 %name Env env
 

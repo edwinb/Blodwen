@@ -74,6 +74,9 @@ parameters (defs : Defs, opts : EvalOpts)
     evalLocal {vars = (x :: xs)} 
               env ((MkClosure _ loc' env' tm') :: locs) stk r Here 
         = eval env' loc' stk tm'
+    evalLocal {vars = (x :: xs)} 
+              env ((MkNFClosure nf) :: locs) stk r Here 
+        = nf
     evalLocal {vars = (x :: xs)} env (_ :: loc) stk r (There later) 
         = evalLocal env loc stk r later
 
@@ -165,13 +168,13 @@ parameters (defs : Defs, opts : EvalOpts)
 
     evalConAlt : Env Term free -> 
                  LocalEnv free (more ++ vars) ->
-                 Stack free -> Nat -> 
+                 Stack free -> 
                  (args : List Name) -> 
                  List (Closure free) -> 
                  CaseTree (args ++ more) ->
                  (default : NF free) -> 
                  NF free
-    evalConAlt {more} {vars} env loc stk arity args args' sc def
+    evalConAlt {more} {vars} env loc stk args args' sc def
          = maybe def (\bound => 
                             let loc' : LocalEnv _ ((args ++ more) ++ vars) 
                                 = rewrite sym (appendAssociative args more vars) in
@@ -186,12 +189,12 @@ parameters (defs : Defs, opts : EvalOpts)
     -- Ordinary constructor matching
     tryAlt {more} {vars} env loc stk (NDCon nm tag' arity args') (ConCase x tag args sc) def
          = if tag == tag'
-              then evalConAlt env loc stk arity args args' sc def
+              then evalConAlt env loc stk args args' sc def
               else def
     -- Type constructor matching, in typecase
     tryAlt {more} {vars} env loc stk (NTCon nm tag' arity args') (ConCase nm' tag args sc) def
          = if nm == nm'
-              then evalConAlt env loc stk arity args args' sc def
+              then evalConAlt env loc stk args args' sc def
               else def
     -- Primitive type matching, in typecase
     tryAlt env loc stk (NPrimVal c) (ConCase (UN x) tag [] sc) def
@@ -201,6 +204,13 @@ parameters (defs : Defs, opts : EvalOpts)
     -- Type of type matching, in typecase
     tryAlt env loc stk NType (ConCase (UN "Type") tag [] sc) def
          = evalTree env loc stk sc def
+    -- Arrow matching, in typecase
+    tryAlt {more} {vars}  
+           env loc stk (NBind x (Pi _ _ aty) scty) (ConCase (UN "->") tag [s,t] sc) def
+       = evalConAlt {more} {vars} env loc stk [s,t]
+                  [MkNFClosure aty, 
+                   MkNFClosure (scty (toClosure defaultOpts env Erased))]
+                  sc def
     -- Constructor matching
     tryAlt env loc stk (NPrimVal c') (ConstCase c sc) def
          = if c == c' then evalTree env loc stk sc def
@@ -215,6 +225,7 @@ parameters (defs : Defs, opts : EvalOpts)
         concrete (NDCon _ _ _ _) = True
         concrete (NTCon _ _ _ _) = True
         concrete (NPrimVal _) = True
+        concrete (NBind _ _ _) = True
         concrete NType = True
         concrete _ = False
     tryAlt _ _ _ _ _ def = def
@@ -255,6 +266,7 @@ evalWithOpts = eval
 
 evalClosure defs (MkClosure h loc env tm)
     = eval defs h env loc [] tm
+evalClosure defs (MkNFClosure nf) = nf
     
 
 export
@@ -378,6 +390,7 @@ mutual
     where
       toHolesOnly : Closure vs -> Closure vs
       toHolesOnly (MkClosure _ locs env tm) = MkClosure withHoles locs env tm
+      toHolesOnly c = c
   quoteGenNF num defs bound env (NTCon nm tag arity xs) 
       = do xs' <- quoteArgs num defs bound env xs
            pure $ apply (Ref (TyCon tag arity) nm) xs'
@@ -503,6 +516,7 @@ mutual
       where
         toHolesOnly : Closure vs -> Closure vs
         toHolesOnly (MkClosure _ locs env tm) = MkClosure withHoles locs env tm
+        toHolesOnly c = c
     convGen num defs env (NTCon name tag _ xs) (NTCon name' tag' _ xs')
         = do as <- allConv num defs env xs xs'
              -- Need to compare names rather than tags since tags may be

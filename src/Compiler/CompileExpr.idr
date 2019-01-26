@@ -165,6 +165,8 @@ mutual
       = CLet x CErased (toCExp defs tags n sc)
   toCExpTm defs tags n (Bind x (Let _ val _) sc)
       = CLet x (toCExp defs tags n val) (toCExp defs tags n sc)
+  toCExpTm defs tags n (Bind x (Pi c e ty) sc) 
+      = CCon (UN "->") 1 []
   toCExpTm defs tags n (Bind x b tm) = CErased
   -- We'd expect this to have been dealt with in toCExp, but for completeness...
   toCExpTm defs tags n (App tm arg) 
@@ -175,7 +177,7 @@ mutual
                then CPrimVal c
                else CCon (UN (show c)) t []
   toCExpTm defs tags n Erased = CErased
-  toCExpTm defs tags n TType = CCon (UN "Type") 7 []
+  toCExpTm defs tags n TType = CCon (UN "Type") 2 []
 
   toCExp : Defs -> NameTags -> Name -> Term vars -> CExp vars
   toCExp defs tags n tm with (unapply tm)

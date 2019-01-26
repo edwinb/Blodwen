@@ -367,9 +367,14 @@ groupCons defs pvars cs
     -- The type of 'ConGroup' ensures that we refer to the arguments by
     -- the same name in each of the clauses
     addConG {todo} n tag pargs pats rhs [] 
-        = do let cty = case lookupTyExact n (gamma defs) of
-                            Just t => nf defs (mkEnv vars) (embed t)
-                            _ => NErased
+        = do let cty 
+                 = if n == UN "->"
+                      then NBind (MN "_" 0) (Pi RigW Explicit NType) $
+                              const $ NBind (MN "_" 1) (Pi RigW Explicit NType) $
+                                const NType
+                      else case lookupTyExact n (gamma defs) of
+                              Just t => nf defs (mkEnv vars) (embed t)
+                              _ => NErased
              (patnames ** newargs) <- nextNames {vars} "e" pargs (Just cty)
              -- Update non-linear names in remaining patterns (to keep
              -- explicit dependencies in types accurate)

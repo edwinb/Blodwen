@@ -700,6 +700,7 @@ mutual
 
       defOK : Bool -> ElabMode -> NameType -> Bool
       defOK False (InLHS _) (DataCon _ _) = True
+      defOK False (InLHS _) (TyCon _ _) = True
       defOK False (InLHS _) _ = False
       defOK _ _ _ = True
 
@@ -971,6 +972,11 @@ mutual
   checkPi rigc process elabinfo loc env nest rigf info n argty retty expected
       = do let impmode = implicitMode elabinfo
            let elabmode = elabMode elabinfo
+           case (elabmode, rigc) of
+                (InLHS _, Rig0) => pure ()
+                (InLHS _, _) =>
+                    throw (GenericMsg loc "Can't match on function types (yet?)")
+                _ => pure ()
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest argty (FnType [] TType)
            let env' : Env Term (n :: _) = Pi RigW info tyv :: env

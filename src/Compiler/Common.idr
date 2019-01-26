@@ -69,10 +69,12 @@ findUsedNames tm
          let cns = toList (fromList allNs)
          -- Initialise the type constructor list with explicit names for
          -- the primitives (this is how we look up the tags)
-         let tyconInit = insert (UN "Type") 7 
-                           (primTags 1 empty 
+         -- Use '1' for '->' constructor (although we can't match it yet!)
+         let tyconInit = insert (UN "->") 1 $
+                         insert (UN "Type") 2 $
+                            primTags 3 empty 
                                      [IntType, IntegerType, StringType,
-                                      CharType, DoubleType, WorldType])
+                                      CharType, DoubleType, WorldType]
          let tycontags = mkNameTags defs tyconInit 100 cns
          traverse (compileDef tycontags) cns
          traverse inlineDef cns
