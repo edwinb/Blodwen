@@ -7,7 +7,7 @@ import Parser.Support
 import public Control.Catchable
 import public Data.IORef
 
-%default covering
+%default total
 
 public export
 data TTCErrorMsg
