@@ -536,14 +536,16 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
-                  do (tm, exp) <- mkOuterHole loc n True env topexp
-                     log 5 $ "Added Bound implicit " ++ show (n, (tm, exp))
+                  do (tm, exp, bty) <- mkPatternHole loc n env
+                                                (implicitMode elabinfo)
+                                                topexp
+                     log 5 $ "Added Bound implicit " ++ show (n, (tm, exp, bty))
                      defs <- get Ctxt
                      log 10 $ show (lookupDefExact n (gamma defs))
                      est <- get EST
                      put EST 
                          (record { boundNames $= ((n, (tm, exp)) ::),
-                                   toBind $= ((n, (tm, exp)) :: ) } est)
+                                   toBind $= ((n, (tm, bty)) :: ) } est)
                      addNameType loc (UN str) env exp
                      checkExp rigc process loc elabinfo env nest tm exp topexp
                 Just (tm, ty) =>
@@ -972,11 +974,6 @@ mutual
   checkPi rigc process elabinfo loc env nest rigf info n argty retty expected
       = do let impmode = implicitMode elabinfo
            let elabmode = elabMode elabinfo
-           case (elabmode, rigc) of
-                (InLHS _, Rig0) => pure ()
-                (InLHS _, _) =>
-                    throw (GenericMsg loc "Can't match on function types (yet?)")
-                _ => pure ()
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest argty (FnType [] TType)
            let env' : Env Term (n :: _) = Pi RigW info tyv :: env

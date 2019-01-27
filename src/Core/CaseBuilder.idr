@@ -304,6 +304,9 @@ nextNames {vars} root (p :: pats) fty
           let fa_tys : (Maybe (NF vars), ArgType vars)
                   = case fty of
                          Nothing => (Nothing, Unknown)
+                         Just (NBind _ (Pi c _ NErased) fsc) =>
+                            (Just (fsc (toClosure defaultOpts env (Ref Bound n))),
+                              Unknown)
                          Just (NBind _ (Pi c _ farg) fsc) =>
                             (Just (fsc (toClosure defaultOpts env (Ref Bound n))),
                               Known c (quote initCtxt env farg))
@@ -370,7 +373,7 @@ groupCons defs pvars cs
         = do let cty 
                  = if n == UN "->"
                       then NBind (MN "_" 0) (Pi RigW Explicit NType) $
-                              const $ NBind (MN "_" 1) (Pi RigW Explicit NType) $
+                              const $ NBind (MN "_" 1) (Pi RigW Explicit NErased) $
                                 const NType
                       else case lookupTyExact n (gamma defs) of
                               Just t => nf defs (mkEnv vars) (embed t)

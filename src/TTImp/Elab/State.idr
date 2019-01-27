@@ -400,6 +400,43 @@ mkOuterHole loc n patvar topenv _
          tm <- addBoundName loc n patvar env ty
          pure (embedSub sub tm, embedSub sub ty)
 
+export
+mkPatternHole : {auto e : Ref EST (EState vars)} ->
+                {auto c : Ref Ctxt Defs} ->
+                {auto e : Ref UST (UState annot)} ->
+                annot -> Name -> Env Term vars -> ImplicitMode ->
+                ExpType (Term vars) ->
+                Core annot (Term vars, Term vars, Term vars)
+mkPatternHole loc n env (PI _) exp
+    = do (tm, exp) <- mkOuterHole loc n True env exp
+         pure (tm, exp, exp)
+mkPatternHole {vars} loc n topenv imode (FnType [] expected)
+    = do est <- get EST
+         let sub = subEnv est
+         let env = outerEnv est
+         case bindInner topenv expected sub of
+              Nothing => mkPatternHole loc n topenv imode Unknown
+              Just exp' =>
+                  do tm <- addBoundName loc n True env exp'
+                     pure (apply (embedSub sub tm) (mkArgs sub), 
+                           expected,
+                           embedSub sub exp')
+  where
+    mkArgs : SubVars newvars vs -> List (Term vs)
+    mkArgs SubRefl = []
+    mkArgs (DropCons p) = Local Nothing Here :: map weaken (mkArgs p)
+    mkArgs _ = []
+
+    bindInner : Env Term vs -> Term vs -> SubVars newvars vs -> 
+                Maybe (Term newvars)
+    bindInner env ty SubRefl = Just ty
+    bindInner {vs = x :: _} (b :: env) ty (DropCons p)
+        = bindInner env (Bind x b ty) p
+    bindInner _ _ _ = Nothing
+
+mkPatternHole loc n env _ _
+    = throw (InternalError "Not yet")
+
 -- Clear the 'toBind' list, except for the names given
 export
 clearToBind : {auto e : Ref EST (EState vs)} ->

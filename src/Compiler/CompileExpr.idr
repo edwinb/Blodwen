@@ -166,7 +166,8 @@ mutual
   toCExpTm defs tags n (Bind x (Let _ val _) sc)
       = CLet x (toCExp defs tags n val) (toCExp defs tags n sc)
   toCExpTm defs tags n (Bind x (Pi c e ty) sc) 
-      = CCon (UN "->") 1 []
+      = CCon (UN "->") 1 [toCExp defs tags n ty,
+                          CLam x (toCExp defs tags n sc)]
   toCExpTm defs tags n (Bind x b tm) = CErased
   -- We'd expect this to have been dealt with in toCExp, but for completeness...
   toCExpTm defs tags n (App tm arg) 

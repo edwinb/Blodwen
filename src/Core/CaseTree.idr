@@ -141,10 +141,11 @@ argToPat tm with (unapply tm)
          = PCon cn tag (assert_total (map argToPat args))
   argToPat (apply (Ref (TyCon tag _) cn) args) | ArgsList 
          = PTCon cn tag (assert_total (map argToPat args))
-  argToPat (apply (Ref Bound var) []) | ArgsList = PVar var
+  argToPat (apply (Ref Bound var) _) | ArgsList = PVar var
   argToPat (apply (Bind n (Pi _ _ aty) scty) []) | ArgsList
         = PTCon (UN "->") 0 (assert_total 
-                               [argToPat aty, argToPat (subst Erased scty)])
+                               [argToPat aty, 
+                                argToPat (subst Erased scty)])
   -- Only the ones we can match on become PConst
   argToPat (apply (PrimVal c) []) | ArgsList 
         = if constTag c == 0
