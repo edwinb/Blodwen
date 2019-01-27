@@ -6,7 +6,7 @@ import Core.TT
 
 import Data.Vect
 
-%default covering
+%default total
 
 public export
 record Prim where
