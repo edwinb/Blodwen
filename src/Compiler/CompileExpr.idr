@@ -10,7 +10,7 @@ import Data.List
 import Data.CMap
 import Data.Vect
 
-%default covering
+%default total
 
 -- Calculate tags for type constructors from all of the modules - they need
 -- to be globally unique so we don't do this until just before compilation,
