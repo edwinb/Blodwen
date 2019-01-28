@@ -8,6 +8,7 @@ import Core.CaseTree
 import Data.List
 
 %default covering
+%hide Language.Reflection.Binder
 
 -- Get the type of an already typechecked thing.
 -- We need this (occasionally) because we don't store types in subterms (e.g. on

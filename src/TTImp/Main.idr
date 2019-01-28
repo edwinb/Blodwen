@@ -21,6 +21,8 @@ import TTImp.TTImp
 
 import Parser.RawImp
 
+import CompilerRuntime
+
 usageMsg : Core () ()
 usageMsg = coreLift $ putStrLn "Usage: ttimp [source file]"
 
@@ -49,7 +51,7 @@ stMain
                             writeToTTC () !(getTTCFileName fname ".ttc")
          repl {c} {u} {m}
 
-main : IO ()
+main : BIO ()
 main = do putStrLn "Welcome to TTImp. Good luck."
           coreRun stMain
                (\err : Error () => putStrLn ("Uncaught error: " ++ show err))

@@ -9,6 +9,10 @@ import Data.List
 
 %default covering
 
+%hide Language.Reflection.Raw
+%hide Language.Reflection.Binder
+%hide FFI_C.Raw
+
 export
 doConvert : (Quote tm, Convert tm) => 
             annot -> Defs -> Env Term outer -> 

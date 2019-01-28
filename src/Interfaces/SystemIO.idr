@@ -1,8 +1,9 @@
 module Interfaces.SystemIO
 
 import Control.Monad.StateE
-import Control.IOExcept
 import Core.Context
+
+import CompilerRuntime
 
 public export
 interface SystemIO (m : Type -> Type) where
@@ -13,5 +14,9 @@ SystemIO IO where
   getArgs = lift getArgs
 
 export
-SystemIO (IOExcept (Error annot)) where
+SystemIO BIO where
+  getArgs = lift getArgs
+
+export
+SystemIO (BIOExcept (Error annot)) where
   getArgs = lift (ioe_lift getArgs)

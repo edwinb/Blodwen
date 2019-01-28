@@ -2,6 +2,8 @@ module Data.IOHash
 
 import Data.IOArray
 
+import CompilerRuntime
+
 -- A simple implementation of a mutable hash table
 
 export
@@ -14,7 +16,7 @@ record IOHash key value where
 
 export
 new : (key -> key -> Bool) ->
-      (key -> Int) -> Nat -> IO (IOHash key valInt)
+      (key -> Int) -> Nat -> BIO (IOHash key valInt)
 new eq hash n
     = do arr <- newArray (cast n) []
          pure (MkTable eq hash (cast n) arr)
@@ -23,7 +25,7 @@ findPos : Int -> Int -> Int
 findPos hash x = assert_total $ if x <=0 then 0 else abs (hash `mod` x)
 
 export
-insert : key -> value -> IOHash key value -> IO ()
+insert : key -> value -> IOHash key value -> BIO ()
 insert k v table
     = do let arr = buckets table
          let pos = hash table k `findPos` numBuckets table
@@ -31,7 +33,7 @@ insert k v table
          unsafeWriteArray arr pos ((k, v) :: row)
 
 export
-update : key -> value -> IOHash key value -> IO ()
+update : key -> value -> IOHash key value -> BIO ()
 update k v table
     = do let arr = buckets table
          let pos = hash table k `findPos` numBuckets table
@@ -46,7 +48,7 @@ update k v table
                      else ((k', v') :: updateVal eq k v rest)
 
 export
-delete : key -> IOHash key value -> IO ()
+delete : key -> IOHash key value -> BIO ()
 delete k table
     = do let arr = buckets table
          let pos = hash table k `findPos` numBuckets table
@@ -60,7 +62,7 @@ delete k table
         = if eq k k' then rest else ((k', v') :: deleteVal eq k rest)
 
 export
-lookup : key -> IOHash key value -> IO (Maybe value)
+lookup : key -> IOHash key value -> BIO (Maybe value)
 lookup k table
     = do let arr = buckets table
          let pos = hash table k `findPos` numBuckets table

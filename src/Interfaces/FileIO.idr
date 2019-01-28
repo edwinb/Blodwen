@@ -1,8 +1,8 @@
 module Interfaces.FileIO
 
 import Control.Monad.StateE
-import Control.IOExcept
 import Core.Context
+import CompilerRuntime
 
 public export
 interface FileIO (m : Type -> Type) where
@@ -12,11 +12,12 @@ interface FileIO (m : Type -> Type) where
               SE s err m (Either FileError ())
 
 export
-FileIO IO where
+FileIO BIO where
   readFile f = lift (readFile f)
   writeFile f c = lift (writeFile f c)
 
 export
-FileIO (IOExcept (Error annot)) where
+FileIO (BIOExcept (Error annot)) where
+  -- not handling errors for now
   readFile f = lift (ioe_lift (readFile f))
   writeFile f c = lift (ioe_lift (writeFile f c))

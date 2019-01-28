@@ -2,6 +2,8 @@ module Idris.CommandLine
 
 import Data.Vect
 
+import CompilerRuntime
+
 %default total
 
 public export
@@ -145,7 +147,7 @@ getOpts opts = parseOpts options opts
 
 
 export covering
-getCmdOpts : IO (Either String (List CLOpt))
+getCmdOpts : BIO (Either String (List CLOpt))
 getCmdOpts = do (_ :: opts) <- getArgs
                     | pure (Left "Invalid command line")
                 pure $ getOpts opts

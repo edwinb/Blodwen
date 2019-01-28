@@ -1,0 +1,99 @@
+package ttimp
+
+modules = Compiler.Common,
+          Compiler.CompileExpr,
+          Compiler.Scheme.Chez,
+          Compiler.Scheme.Chicken,
+          Compiler.Scheme.Common,
+          Compiler.Scheme.Racket,
+          Compiler.Inline,
+          
+          Control.Delayed,
+
+          Core.AutoSearch,
+          Core.Binary,
+          Core.CaseBuilder,
+          Core.CaseTree,
+          Core.CompileExpr,
+          Core.Context, 
+          Core.Core,
+          Core.Coverage,
+          Core.Directory,
+          Core.GetType,
+          Core.Hash,
+          Core.InitPrimitives,
+          Core.LinearCheck,
+          Core.Metadata,
+          Core.Name,
+          Core.Normalise,
+          Core.Options,
+          Core.Primitives,
+          Core.ProcessTT,
+          Core.Reflect,
+          Core.Termination,
+          Core.TT,
+          Core.TTC,
+          Core.Typecheck,
+          Core.Unify,
+          Core.UnifyState,
+
+          Control.Monad.StateE,
+
+          Data.Bool.Extra,
+          Data.CMap,
+          Data.CSet,
+          Data.StringMap,
+
+          Interfaces.FileIO,
+          Interfaces.SystemIO,
+
+          Parser.Lexer,
+          Parser.Raw,
+          Parser.RawImp,
+          Parser.REPL,
+          Parser.Support,
+
+          Text.Lexer,
+          Text.Lexer.Core,
+          Text.Parser,
+          Text.Parser.Core,
+          Text.Quantity,
+          Text.Token,
+
+          TTImp.BindImplicits,
+          TTImp.CaseSplit,
+          TTImp.Elab,
+          TTImp.Elab.Ambiguity,
+          TTImp.Elab.Case,
+          TTImp.Elab.Delayed,
+          TTImp.Elab.Record,
+          TTImp.Elab.Rewrite,
+          TTImp.Elab.State,
+          TTImp.Elab.Term,
+          TTImp.Elab.Unelab,
+          TTImp.ExprSearch,
+          TTImp.GenerateDef,
+          TTImp.MakeLemma,
+          TTImp.ProcessData,
+          TTImp.ProcessDef,
+          TTImp.ProcessRecord,
+          TTImp.ProcessType,
+          TTImp.ProcessTTImp,
+          TTImp.Reflect,
+          TTImp.REPL,
+          TTImp.RunElab,
+          TTImp.TTImp,
+          TTImp.Utils,
+
+          Utils.Binary
+
+sourcedir = src
+
+executable = ttimpjvmout
+
+opts = "--partial-eval --portable-codegen jvm"
+
+pkgs = idrisjvmffi
+
+main = TTImp.Main
+

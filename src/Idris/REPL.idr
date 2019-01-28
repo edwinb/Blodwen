@@ -39,7 +39,8 @@ import TTImp.Reflect
 
 import Control.Catchable
 
-import System
+-- import System
+import CompilerRuntime
 
 %default covering
 

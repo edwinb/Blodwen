@@ -7,6 +7,8 @@ import public Text.Parser
 import Core.TT
 import Data.List.Views
 
+import CompilerRuntime
+
 %default total
 
 public export
@@ -20,7 +22,7 @@ EmptyRule ty = Grammar (TokenData Token) False ty
 public export
 data ParseError = ParseFail String (Maybe (Int, Int)) (List Token)
                 | LexFail (Int, Int, String)
-                | FileFail FileError
+                | FileFail BFileError
 
 export
 Show ParseError where
@@ -57,9 +59,9 @@ runParser str p
                    Right (val, _) => Right val
 
 export
-parseFile : (fn : String) -> Rule ty -> IO (Either ParseError ty)
+parseFile : (fn : String) -> Rule ty -> BIO (Either ParseError ty)
 parseFile fn p
-    = do Right str <- readFile fn
+    = do Right str <- bReadFile fn
              | Left err => pure (Left (FileFail err))
          pure (runParser str p)
 

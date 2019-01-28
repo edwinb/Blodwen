@@ -7,6 +7,8 @@ import Core.Name
 
 import System.Info
 
+import CompilerRuntime
+
 %default total
 
 isWindows : Bool
@@ -104,7 +106,7 @@ pathToNS wdir fname
 
 -- Create subdirectories, if they don't exist
 export
-mkdirs : List String -> IO (Either FileError ())
+mkdirs : List String -> BIO (Either FileError ())
 mkdirs [] = pure (Right ())
 mkdirs (d :: ds)
     = do ok <- changeDir d
