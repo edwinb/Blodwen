@@ -539,7 +539,7 @@ processCatch cmd
 
 parseRepl : String -> Either ParseError REPLCmd
 parseRepl inp
-    = case fnameCmd [(":load", Load), (":l", Load), (":cd", CD)] inp of
+    = case fnameCmd [(":load ", Load), (":l ", Load), (":cd ", CD)] inp of
            Nothing => runParser inp (do c <- command; eoi; pure c)
            Just cmd => Right cmd
   where
