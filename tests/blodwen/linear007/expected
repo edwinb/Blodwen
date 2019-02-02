@@ -1,0 +1,4 @@
+1/1: Building LCase (LCase.idr)
+LCase.idr:8:30--9:25:While processing right hand side of Main.foo at LCase.idr:6:1--12:1:
+While processing right hand side of case-block-27-in-Main.foo at LCase.idr:8:25--9:25:
+There are 0 uses of linear name y

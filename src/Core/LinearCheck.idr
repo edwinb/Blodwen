@@ -194,7 +194,7 @@ mutual
 
            let used_in = count Here usedsc
            log 10 (show rig ++ " " ++ show nm ++ ": " ++ show used_in)
-           holeFound <- if isLinear (multiplicity b)
+           holeFound <- if not erase && isLinear (multiplicity b)
                            then updateHoleUsage (used_in == 0) Here sc'
                            else pure False
 
@@ -206,10 +206,10 @@ mutual
                                             else used_in
                            _ => used_in
 
-           checkUsageOK used (rigMult (multiplicity b) rig)
+           when (not erase) $ checkUsageOK used (rigMult (multiplicity b) rig)
            gam <- get Ctxt
            let bt = discharge gam env nm b' bt sc' sct (usedb ++ doneScope usedsc)
-           borrowOK gam b (fst bt)
+           when (not erase) $ borrowOK gam b (fst bt)
            pure bt
     where
       rig : RigCount
