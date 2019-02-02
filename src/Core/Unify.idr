@@ -1215,7 +1215,7 @@ retryHole mode smode (loc, hole)
                                newcs => do let gdef = record { definition = Guess tm newcs } def
                                            gam <- get Ctxt
                                            setCtxt (addCtxt hole gdef (gamma gam))
-                     BySearch depth fn => 
+                     BySearch srig depth fn => 
                        case smode of
                             LastChance =>
                                 do log 5 $ "Last chance at " ++ show hole
@@ -1271,7 +1271,7 @@ giveUpSearch
     searchToHole (_, hole, True)
         = do gam <- get Ctxt
              case lookupDefExact hole (gamma gam) of
-                  Just (BySearch _ _) =>
+                  Just (BySearch _ _ _) =>
                          updateDef hole (const (Just (Hole 0 False False)))
                   _ => pure ()
 

@@ -63,11 +63,11 @@ infixl 9 `div`, `mod`
 -----------------------
 
 public export %inline
-the : (0 a : Type) -> a -> a
+the : (0 a : Type) -> (1 x : a) -> a
 the _ x = x
 
 public export %inline
-id : a -> a
+id : (1 x : a) -> a
 id x = x
 
 public export %inline

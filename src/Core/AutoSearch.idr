@@ -30,11 +30,13 @@ getAllEnv : (done : List Name) ->
             Env Term vars -> List (Term (done ++ vars), Term (done ++ vars))
 getAllEnv done [] = []
 getAllEnv {vars = v :: vs} done (b :: env) 
-   = let rest = getAllEnv (done ++ [v]) env in
-         (Local Nothing (weakenElem {ns = done} Here), 
-           rewrite appendAssociative done [v] vs in 
-              weakenNs (done ++ [v]) (binderType b)) :: 
-                   rewrite appendAssociative done [v] vs in rest
+   = let rest = getAllEnv (done ++ [v]) env in 
+         if multiplicity b /= Rig0
+            then (Local Nothing (weakenElem {ns = done} Here), 
+                     rewrite appendAssociative done [v] vs in 
+                        weakenNs (done ++ [v]) (binderType b)) :: 
+                             rewrite appendAssociative done [v] vs in rest
+            else rewrite appendAssociative done [v] vs in rest
 
 nameIsHole : {auto c : Ref Ctxt Defs} ->
              annot -> Name -> Core annot Bool
@@ -311,7 +313,7 @@ searchLocal : {auto c : Ref Ctxt Defs} ->
           Name -> Core annot (Term vars)
 searchLocal loc defaults depth trying env nty topty defining 
     = do defs <- get Ctxt
-         searchLocalWith loc defaults depth trying env (getAllEnv [] env) 
+         searchLocalWith loc defaults depth trying env (getAllEnv [] env)
                          nty topty defining
 
 
@@ -468,7 +470,7 @@ Core.Unify.search loc defaults depth trying defining topty n_in
                    -- if it's arising from an auto implicit
                    case definition glob of
                         Hole locs False _ => searchHole loc defaults depth trying defining n topty gam glob
-                        BySearch _ _ => searchHole loc defaults depth trying defining n topty gam glob
+                        BySearch _ _ _ => searchHole loc defaults depth trying defining n topty gam glob
                         _ => throw (InternalError $ "Not a hole: " ++ show n ++ " in " ++ show defining)
               _ => throw (UndefinedName loc n_in)
   where

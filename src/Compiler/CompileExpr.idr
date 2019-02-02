@@ -292,7 +292,7 @@ toCDef tags n (Hole _ _ _)
     = pure $ MkError $ CCrash ("Encountered unimplemented hole " ++ show n)
 toCDef tags n (Guess _ _)
     = pure $ MkError $ CCrash ("Encountered constrained hole " ++ show n)
-toCDef tags n (BySearch _ _)
+toCDef tags n (BySearch _ _ _)
     = pure $ MkError $ CCrash ("Encountered incomplete proof search " ++ show n)
 toCDef tags n def
     = pure $ MkError $ CCrash ("Encountered uncompilable name " ++ show (n, def))

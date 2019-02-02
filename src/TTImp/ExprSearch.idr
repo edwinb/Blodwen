@@ -471,7 +471,7 @@ search loc opts defining topty n_in
                    -- if it's arising from an auto implicit
                    case definition glob of
                         Hole locs False _ => searchHole loc opts defining n locs topty gam glob
-                        BySearch _ _ => searchHole loc opts defining n 
+                        BySearch _ _ _ => searchHole loc opts defining n 
                                                    (getArity gam [] (type glob)) 
                                                    topty gam glob
                         _ => do log 10 $ show n_in ++ " not a hole"
