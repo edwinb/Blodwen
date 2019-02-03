@@ -147,12 +147,13 @@ mutual
        PDoBlock : FC -> List PDo -> PTerm
        PList : FC -> List PTerm -> PTerm
        PPair : FC -> PTerm -> PTerm -> PTerm
+       PDPair : FC -> PTerm -> PTerm -> PTerm -> PTerm
        PUnit : FC -> PTerm
        PIfThenElse : FC -> PTerm -> PTerm -> PTerm -> PTerm
        PComprehension : FC -> PTerm -> List PDo -> PTerm
        PRewrite : FC -> PTerm -> PTerm -> PTerm
 
-       -- TODO: Dependent pairs, ranges, idiom brackets (?), 
+       -- TODO: Ranges, idiom brackets (?), 
        -- 'with' disambiguation
 
   public export
@@ -464,6 +465,9 @@ mutual
     show (PList _ xs)
         = "[" ++ showSep ", " (map show xs) ++ "]"
     show (PPair _ l r) = "(" ++ show l ++ ", " ++ show r ++ ")"
+    show (PDPair _ l (PImplicit _) r) = "(" ++ show l ++ " ** " ++ show r ++ ")"
+    show (PDPair _ l ty r) = "(" ++ show l ++ " : " ++ show ty ++ 
+                                 " ** " ++ show r ++ ")"
     show (PUnit _) = "()"
     show (PIfThenElse _ x t e) = "if " ++ show x ++ " then " ++ show t ++
                                  " else " ++ show e

@@ -78,7 +78,7 @@ Information about external dependencies are presented in [Install.md](Install.md
 Things still missing
 ====================
 
-+ Some high level syntax, notably dependent pairs, and numeric ranges
++ Some high level syntax, notably numeric ranges
 + 'using' blocks
 + Cumulativity
 + 'rewrite' doesn't yet work on dependent types
