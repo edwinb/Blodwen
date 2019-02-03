@@ -141,7 +141,9 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
                               -- or 'linearCheck' will fail
          ptm' <- the (Core _ (Term vars)) $ case elabmode of
                     InLHS _ => pure ptm'
-                    _ => do linearCheck (getAnnot tm) rigc False env ptm'
+                    _ => do when (not incase) $
+                                do linearCheck (getAnnot tm) rigc False env ptm'
+                                   pure ()
                             pure ptm'
          
          checkArgTypes (getAnnot tm) env ptm' -- Check no unsolved holes in argument types
@@ -172,6 +174,9 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
                         let ret = doPLetRenames vs [] ptm'
                         pure (ret, ret,
                               doPLetRenames vs [] pty')
+              -- On the RHS, erase everything in a 0-multiplicity position
+              -- (This doesn't do a full linearity check, just erases by
+              -- type)
               _ => do perase <- linearCheck (getAnnot tm) rigc True env ptm'
                       pure (ptm', perase, pty')
 
