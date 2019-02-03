@@ -26,12 +26,19 @@ mkArgs loc env (NBind n (Pi c info ty) sc)
          pure ((argName, arg) :: rest, restTy)
 mkArgs loc env ty = pure ([], ty)
 
+-- We can only resolve things which are at any multiplicity. Expression
+-- search happens before linearity checking and we can't guarantee that just
+-- because something is apparently available now, it will be available by the
+-- time we get to linearity checking.
+-- To remove this limitation, we probably need to make 'case' blocks part of
+-- the core, then there is a chance that multiplicities will stay up to date
+-- better...
 getAllEnv : (done : List Name) -> 
             Env Term vars -> List (Term (done ++ vars), Term (done ++ vars))
 getAllEnv done [] = []
 getAllEnv {vars = v :: vs} done (b :: env) 
    = let rest = getAllEnv (done ++ [v]) env in 
-         if multiplicity b /= Rig0
+         if multiplicity b == RigW
             then (Local Nothing (weakenElem {ns = done} Here), 
                      rewrite appendAssociative done [v] vs in 
                         weakenNs (done ++ [v]) (binderType b)) :: 
