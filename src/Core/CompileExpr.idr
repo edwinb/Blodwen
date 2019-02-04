@@ -11,11 +11,14 @@ import Data.Vect
 %default total
 
 mutual
+  ||| CExp - an expression ready for compiling.
   public export
   data CExp : List Name -> Type where
        CLocal : Elem x vars -> CExp vars
        CRef : Name -> CExp vars
+       -- Lambda expression
        CLam : (x : Name) -> CExp (x :: vars) -> CExp vars
+       -- Let bindings
        CLet : (x : Name) -> CExp vars -> CExp (x :: vars) -> CExp vars
        -- Application of a defined function. The length of the argument list is
        -- exactly the same length as expected by its definition (so saturate with
@@ -27,12 +30,18 @@ mutual
        COp : PrimFn arity -> Vect arity (CExp vars) -> CExp vars
        -- Externally defined primitive operations
        CExtPrim : (p : Name) -> List (CExp vars) -> CExp vars
+       -- A forced (evaluated) value (TODO: is this right?)
        CForce : CExp vars -> CExp vars
+       -- A delayed value (lazy? TODO: check)
        CDelay : CExp vars -> CExp vars
+       -- A case match statement
        CConCase : (sc : CExp vars) -> List (CConAlt vars) -> Maybe (CExp vars) -> CExp vars
        CConstCase : (sc : CExp vars) -> List (CConstAlt vars) -> Maybe (CExp vars) -> CExp vars
+       -- A primitive value
        CPrimVal : Constant -> CExp vars
+       -- An erased value
        CErased : CExp vars
+       -- Some sort of crash?
        CCrash : String -> CExp vars
 
   public export
@@ -55,39 +64,39 @@ data CDef : Type where
      MkError : CExp [] -> CDef
 
 mutual
-  export 
+  export
   Show (CExp vars) where
     show (CLocal {x} y) = "!" ++ show x
     show (CRef x) = show x
     show (CLam x y) = "(%lam " ++ show x ++ " " ++ show y ++ ")"
     show (CLet x y z) = "(%let " ++ show x ++ " " ++ show y ++ " " ++ show z ++ ")"
-    show (CApp x xs) 
+    show (CApp x xs)
         = assert_total $ "(" ++ show x ++ " " ++ show xs ++ ")"
-    show (CCon x tag xs) 
+    show (CCon x tag xs)
         = assert_total $ "(%con " ++ show x ++ " " ++ show tag ++ " " ++ show xs ++ ")"
-    show (COp op xs) 
+    show (COp op xs)
         = assert_total $ "(" ++ show op ++ " " ++ show xs ++ ")"
-    show (CExtPrim p xs) 
+    show (CExtPrim p xs)
         = assert_total $ "(%extern " ++ show p ++ " " ++ show xs ++ ")"
     show (CForce x) = "(%force " ++ show x ++ ")"
     show (CDelay x) = "(%delay " ++ show x ++ ")"
-    show (CConCase sc xs def) 
+    show (CConCase sc xs def)
         = assert_total $ "(%case " ++ show sc ++ " " ++ show xs ++ " " ++ show def ++ ")"
-    show (CConstCase sc xs def) 
+    show (CConstCase sc xs def)
         = assert_total $ "(%case " ++ show sc ++ " " ++ show xs ++ " " ++ show def ++ ")"
     show (CPrimVal x) = show x
     show CErased = "___"
     show (CCrash x) = "(CRASH " ++ show x ++ ")"
 
-  export 
+  export
   Show (CConAlt vars) where
     show (MkConAlt x tag args exp)
          = "(%concase " ++ show x ++ " " ++ show tag ++ " " ++
              show args ++ " " ++ show exp ++ ")"
 
-  export 
+  export
   Show (CConstAlt vars) where
-    show (MkConstAlt x exp) 
+    show (MkConstAlt x exp)
          = "(%constcase " ++ show x ++ " " ++ show exp ++ ")"
 
 export
@@ -101,19 +110,19 @@ mutual
   thin : (n : Name) -> CExp (outer ++ inner) -> CExp (outer ++ n :: inner)
   thin n (CLocal prf) = CLocal (insertElem prf)
   thin n (CRef x) = CRef x
-  thin {outer} {inner} n (CLam x sc) 
+  thin {outer} {inner} n (CLam x sc)
       = let sc' = thin {outer = x :: outer} {inner} n sc in
             CLam x sc'
-  thin {outer} {inner} n (CLet x val sc) 
+  thin {outer} {inner} n (CLet x val sc)
       = let sc' = thin {outer = x :: outer} {inner} n sc in
             CLet x (thin n val) sc'
-  thin n (CApp x xs) 
+  thin n (CApp x xs)
       = CApp (thin n x) (assert_total (map (thin n) xs))
-  thin n (CCon x tag xs) 
+  thin n (CCon x tag xs)
       = CCon x tag (assert_total (map (thin n) xs))
-  thin n (COp x xs) 
+  thin n (COp x xs)
       = COp x (assert_total (map (thin n) xs))
-  thin n (CExtPrim p xs) 
+  thin n (CExtPrim p xs)
       = CExtPrim p (assert_total (map (thin n) xs))
   thin n (CForce x) = CForce (thin n x)
   thin n (CDelay x) = CDelay (thin n x)
@@ -128,10 +137,10 @@ mutual
   thin n (CCrash x) = CCrash x
 
   thinConAlt : (n : Name) -> CConAlt (outer ++ inner) -> CConAlt (outer ++ n :: inner)
-  thinConAlt {outer} {inner} n (MkConAlt x tag args sc) 
-        = let sc' : CExp ((args ++ outer) ++ inner) 
+  thinConAlt {outer} {inner} n (MkConAlt x tag args sc)
+        = let sc' : CExp ((args ++ outer) ++ inner)
                   = rewrite sym (appendAssociative args outer inner) in sc in
-              MkConAlt x tag args 
+              MkConAlt x tag args
                (rewrite appendAssociative args outer (n :: inner) in
                         thin n sc')
 
@@ -151,18 +160,18 @@ mutual
   embed (CExtPrim p args) = CExtPrim p (assert_total (map embed args))
   embed (CForce e) = CForce (embed e)
   embed (CDelay e) = CDelay (embed e)
-  embed (CConCase sc alts def) 
-      = CConCase (embed sc) (assert_total (map embedAlt alts)) 
+  embed (CConCase sc alts def)
+      = CConCase (embed sc) (assert_total (map embedAlt alts))
                  (assert_total (map embed def))
-  embed (CConstCase sc alts def) 
-      = CConstCase (embed sc) (assert_total (map embedConstAlt alts)) 
+  embed (CConstCase sc alts def)
+      = CConstCase (embed sc) (assert_total (map embedConstAlt alts))
                    (assert_total (map embed def))
   embed (CPrimVal c) = CPrimVal c
   embed CErased = CErased
   embed (CCrash msg) = CCrash msg
-  
+
   embedAlt : CConAlt args -> CConAlt (args ++ vars)
-  embedAlt {args} {vars} (MkConAlt n t as sc) 
+  embedAlt {args} {vars} (MkConAlt n t as sc)
      = MkConAlt n t as (rewrite appendAssociative as args vars in embed sc)
 
   embedConstAlt : CConstAlt args -> CConstAlt (args ++ vars)

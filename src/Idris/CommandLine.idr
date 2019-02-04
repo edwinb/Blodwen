@@ -17,21 +17,35 @@ Show PkgCommand where
   show Install = "--install"
   show REPL = "--repl"
 
+||| CLOpt - possible command line options
 public export
 data CLOpt
-  = CheckOnly
-  | ExecFn String
-  | SetCG String
-  | NoPrelude
-  | ShowPrefix
-  | Version
-  | Help
-  | Quiet
-  | PkgPath String
-  | Package PkgCommand String
-  | InputFile String
-  | IdeMode
-  | BlodwenPaths
+  =
+   ||| Only typecheck the given file
+  CheckOnly |
+   ||| Execute a given function after checking the source file
+  ExecFn String |
+   ||| Use a specific code generator (default chez)
+  SetCG String |
+   ||| Don't implicitly import Prelude
+  NoPrelude |
+   ||| Show the installation prefix
+  ShowPrefix |
+   ||| Display blodwen version
+  Version |
+   ||| Display help text
+  Help |
+   ||| Run Blodwen in quiet mode
+  Quiet |
+   ||| Add a package as a dependency
+  PkgPath String |
+   ||| Build or install a given package, depending on PkgCommand
+  Package PkgCommand String |
+   ||| The input Blodwen file
+  InputFile String |
+   ||| Whether or not to run in IdeMode (easily parsable for other tools)
+  IdeMode |
+  BlodwenPaths
 
 ActType : List String -> Type
 ActType [] = List CLOpt
