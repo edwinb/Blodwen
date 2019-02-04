@@ -11,6 +11,7 @@ import Core.Name
 import Core.Options
 import Core.TT
 
+import Data.CMap
 import Data.List
 import Data.Vect
 import System
@@ -37,21 +38,21 @@ schFooter : String
 schFooter = ")"
 
 mutual
-  chickenPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
-  chickenPrim vs CCall [ret, fn, args, world]
+  chickenPrim : Int -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
+  chickenPrim i vs CCall [ret, fn, args, world]
       = throw (InternalError ("Can't compile C FFI calls to Chicken Scheme yet"))
-  chickenPrim vs prim args 
-      = schExtCommon chickenPrim vs prim args
+  chickenPrim i vs prim args 
+      = schExtCommon chickenPrim i vs prim args
 
 compileToSCM : Ref Ctxt Defs ->
                ClosedTerm -> (outfile : String) -> Core annot ()
 compileToSCM c tm outfile
     = do ds <- getDirectives Chicken
-         ns <- findUsedNames tm
+         (ns, tags) <- findUsedNames tm
          defs <- get Ctxt
          compdefs <- traverse (getScheme chickenPrim defs) ns
          let code = concat compdefs
-         main <- schExp chickenPrim [] !(compileExp tm)
+         main <- schExp chickenPrim 0 [] !(compileExp tags tm)
          support <- readDataFile "chicken/support.scm"
          let scm = schHeader ds ++ support ++ code ++ main ++ schFooter
          Right () <- coreLift $ writeFile outfile scm

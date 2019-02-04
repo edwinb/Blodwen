@@ -158,3 +158,9 @@
 
 (define (blodwen-sleep s) (sleep (make-time 'time-duration 0 s)))
 
+(define (blodwen-args)
+  (define (blodwen-build-args args)
+    (if (null? args)
+        (vector 0 '())
+        (vector 1 '() (car args) (blodwen-build-args (cdr args)))))
+    (blodwen-build-args (command-line)))

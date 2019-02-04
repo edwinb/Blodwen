@@ -25,7 +25,7 @@ import Data.Buffer
 -- *and* the 'annot' type are the same, or there are no holes/constraints
 export
 ttcVersion : Int
-ttcVersion = 29
+ttcVersion = 30
 
 export
 checkTTCVersion : Int -> Int -> Core annot ()
@@ -121,6 +121,7 @@ writeToTTC extradata fname
                                    cgdirectives = cgdirectives defs
                                  } initCtxt)
                          defs
+         log 5 $ "Writing " ++ fname ++ " with hash " ++ show (ifaceHash defs)
          toBuf buf (MkTTCFile ttcVersion (ifaceHash defs) (importHashes defs)
                               (holes ust) (constraints ust) defs'
                               extradata)

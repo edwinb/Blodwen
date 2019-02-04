@@ -1,6 +1,7 @@
 module TTImp.Elab.Rewrite
 
 import Core.Context
+import Core.GetType
 import Core.Normalise
 import Core.TT
 import Core.Unify
@@ -17,12 +18,14 @@ findRewriteLemma loc rulety
              Just n => pure n
 
 getRewriteTerms : annot -> Defs -> NF vars -> Error annot ->
-                  Core annot (NF vars, NF vars)
+                  Core annot (NF vars, NF vars, NF vars)
 getRewriteTerms loc defs (NTCon eq t a args) err
     = if isEqualTy eq defs
          then case reverse args of
-                   (rhs :: lhs :: _) =>
-                        pure (evalClosure defs lhs, evalClosure defs rhs)
+                   (rhs :: lhs :: rhsty :: lhsty :: _) =>
+                        pure (evalClosure defs lhs, 
+                              evalClosure defs rhs,
+                              evalClosure defs lhsty)
                    _ => throw err
          else throw err
 getRewriteTerms loc defs ty err
@@ -41,16 +44,18 @@ elabRewrite loc env expected rulety
     = do defs <- get Ctxt
          parg <- genVarName "rwarg"
          let tynf = nf defs env rulety
-         (lt, rt) <- getRewriteTerms loc defs tynf (NotRewriteRule loc env rulety)
+         (lt, rt, lty) <- getRewriteTerms loc defs tynf (NotRewriteRule loc env rulety)
          lemn <- findRewriteLemma loc rulety
 
          let rwexp_sc = replace defs env lt (Ref Bound parg) (nf defs env expected)
-         let pred = Bind parg (Lam RigW Explicit Erased)
+         let pred = Bind parg (Lam RigW Explicit (quote (noGam defs) env lty))
                           (refToLocal (Just RigW) parg parg rwexp_sc)
-         let predty = Bind parg (Pi RigW Explicit Erased) Erased
+         predty <- getType loc env pred
 
          -- if the rewritten expected type converts with the original,
          -- then the rewrite did nothing, which is an error
+         log 5 $ "Rewrite data: " ++ show pred ++ " : " ++ show predty ++
+                   "\n\tReplacing " ++ show (quote defs env lt) ++ " gives " ++ show rwexp_sc ++ " for " ++ show expected
          when (convert defs env rwexp_sc expected) $
              throw (RewriteNoChange loc env rulety expected)
          pure (lemn, pred, predty)

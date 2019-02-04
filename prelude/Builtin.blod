@@ -59,6 +59,20 @@ snd (x, y) = y
 -- This directive tells auto implicit search what to use to look inside pairs
 %pair Pair fst snd
 
+namespace DPair
+  public export
+  data DPair : (a : Type) -> (a -> Type) -> Type where
+       MkDPair : {0 a : Type} -> {0 p : a -> Type} -> 
+                 (1 x : a) -> (1 y : p x)-> DPair a p
+
+  public export
+  fst : DPair a p -> a
+  fst (MkDPair x y) = x
+
+  public export
+  snd : (x : DPair a p) -> p (fst x)
+  snd (MkDPair x y) = y
+
 -- The empty type
 
 public export
@@ -75,22 +89,22 @@ data Equal : forall a, b . a -> b -> Type where
 %inline
 public export
 rewrite__impl : {0 x, y : a} -> (0 p : _) -> 
-                (1 rule : x = y) -> (1 val : p y) -> p x
+                (0 rule : x = y) -> (1 val : p y) -> p x
 rewrite__impl p Refl prf = prf
 
 %rewrite Equal rewrite__impl
 
 %inline
 public export
-replace : forall x, y, p . x = y -> p x -> p y
+replace : forall x, y, p . (0 rule : x = y) -> p x -> p y
 replace Refl prf = prf
 
 %inline
 public export
-sym : x = y -> y = x
+sym : (0 rule : x = y) -> y = x
 sym Refl = Refl
 
 %inline
 public export
-trans : forall a, b, c . a = b -> b = c -> a = c
+trans : forall a, b, c . (0 l : a = b) -> (0 r : b = c) -> a = c
 trans Refl Refl = Refl

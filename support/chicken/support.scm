@@ -55,7 +55,7 @@
     (if (output-port? p) (put-string p s) void)
     0)
 
-(define (blodwen-open file mode)
+(define (blodwen-open file mode bin)
     (cond 
         ((string=? mode "r") (open-input-file file))
         ((string=? mode "w") (open-output-file file))
@@ -104,3 +104,10 @@
 (define (blodwen-condition-broadcast c) (condition-variable-broadcast! c))
 
 (define (blodwen-sleep s) (sleep s))
+
+(define (blodwen-args)
+  (define (blodwen-build-args args)
+    (if (null? args)
+        (vector 0 '())
+        (vector 1 '() (car args) (blodwen-build-args (cdr args)))))
+    (blodwen-build-args (argv)))

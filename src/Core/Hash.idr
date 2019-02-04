@@ -18,7 +18,7 @@ interface Hashable a where
   hashWithSalt : Int -> a -> Int
   
   hash = hashWithSalt 5381
-  hashWithSalt h i = hash i
+  hashWithSalt h i = h * 33 + hash i
 
 export
 Hashable Int where

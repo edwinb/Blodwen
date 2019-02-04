@@ -475,14 +475,14 @@ mutual
         -- if it fails, it may just be that the expected type is not yet
         -- resolved, so come back to it
       = delayOnFailure loc env expected rewriteErr (\delayed =>
-          do (rulev, rulet) <- check rigc process elabinfo env nest rule Unknown
+          do (rulev, rulet) <- check Rig0 process elabinfo env nest rule Unknown
              (lemma, pred, predty) <- elabRewrite loc env expected rulet
 
              rname <- genVarName "_"
              pname <- genVarName "_"
 
              let pbind = Let Rig0 pred predty
-             let rbind = Let RigW (weaken rulev) (weaken rulet)
+             let rbind = Let Rig0 (weaken rulev) (weaken rulet)
 
              let env' = rbind :: pbind :: env
 
@@ -536,14 +536,16 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
-                  do (tm, exp) <- mkOuterHole loc n True env topexp
-                     log 5 $ "Added Bound implicit " ++ show (n, (tm, exp))
+                  do (tm, exp, bty) <- mkPatternHole loc n env
+                                                (implicitMode elabinfo)
+                                                topexp
+                     log 5 $ "Added Bound implicit " ++ show (n, (tm, exp, bty))
                      defs <- get Ctxt
                      log 10 $ show (lookupDefExact n (gamma defs))
                      est <- get EST
                      put EST 
                          (record { boundNames $= ((n, (tm, exp)) ::),
-                                   toBind $= ((n, (tm, exp)) :: ) } est)
+                                   toBind $= ((n, (tm, bty)) :: ) } est)
                      addNameType loc (UN str) env exp
                      checkExp rigc process loc elabinfo env nest tm exp topexp
                 Just (tm, ty) =>
@@ -700,6 +702,7 @@ mutual
 
       defOK : Bool -> ElabMode -> NameType -> Bool
       defOK False (InLHS _) (DataCon _ _) = True
+      defOK False (InLHS _) (TyCon _ _) = True
       defOK False (InLHS _) _ = False
       defOK _ _ _ = True
 
@@ -901,6 +904,12 @@ mutual
                                      (_, IAs _ _ (IBindVar _ _), _) => arg
                                      (_, IAs _ _ (Implicit _), _) => arg
                                      (_, IMustUnify _ _ _, _) => arg
+-- For the moment: allow erased constructors to appear here, and check
+-- when building the case tree. It would be better to have the check here,
+-- but it's fiddly to add. In general, it's okay to match on an erased thing
+-- if it's value can be determined from other arguments, which means that it's
+-- either solvable by unification, or an instance of a collapsible type
+-- reconstructed from other non-erased arguments.
 --                                      (InLHS (Rig1 _), _, Rig0) => IMustUnify loc "Erased argument" arg
                                      _ => arg
                      -- if the argument is borrowed, it's okay to use it in
@@ -1149,11 +1158,25 @@ mutual
                     _ => 
                        do gam <- get Ctxt
                           est <- get EST
+                          let env = updateMults (linearUsed est) env
                           n <- addSearchable loc env (quote (noGam gam) env ty) 500
                                              (defining est)
                           log 5 $ "Initiate search: " ++ show n ++
                                   " for " ++ show (quote (noGam gam) env ty)
+                                  ++ "\nIn env " ++ show env
+                                  ++ " used linear vars " ++ show (map fst (linearUsed est))
                           pure (mkConstantApp n env)
+    where
+      toRig0 : Elem x vs -> Env Term vs -> Env Term vs
+      toRig0 Here (b :: bs) = setMultiplicity b Rig0 :: bs
+      toRig0 (There p) (b :: bs) = b :: toRig0 p bs
+
+      -- If the name is used elsewhere, update its multiplicity so it's
+      -- not used by the search
+      updateMults : List (x ** Elem x vs) -> Env Term vs -> Env Term vs
+      updateMults [] env = env
+      updateMults ((_ ** p) :: us) env = updateMults us (toRig0 p env)
+
 
   -- Get the implicit arguments that need to be inserted at this point
   -- in a function application. Do this by reading off implicit Pis

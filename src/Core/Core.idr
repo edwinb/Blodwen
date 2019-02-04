@@ -190,6 +190,9 @@ Show annot => Show (Error annot) where
       = show fc ++ ":Patterns for " ++ show n ++ " require matching on different types"
   show (CaseCompile fc n UnknownType) 
       = show fc ++ ":Can't infer type to match in " ++ show n
+  show (CaseCompile fc n (MatchErased (_ ** (env, tm))))
+      = show fc ++ ":Attempt to match on erased argument " ++ show tm ++ 
+                   " in " ++ show n
   show (BadDotPattern fc env reason x y)
       = show fc ++ ":Can't match on " ++ show x ++ 
            (if reason /= "" then " (" ++ reason ++ ")" else "") ++

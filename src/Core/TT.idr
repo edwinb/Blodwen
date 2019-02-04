@@ -93,6 +93,18 @@ Eq Constant where
   WorldType == WorldType = True
   _ == _ = False
 
+-- for typecase
+export
+constTag : Constant -> Int
+-- 1 = ->, 2 = Type
+constTag IntType = 3
+constTag IntegerType = 4
+constTag StringType = 5
+constTag CharType = 6
+constTag DoubleType = 7
+constTag WorldType = 8
+constTag _ = 0
+
 -- All the internal operators, parameterised by their arity
 public export
 data PrimFn : Nat -> Type where
@@ -280,14 +292,20 @@ setMultiplicity (Pi c x ty) c' = Pi c' x ty
 setMultiplicity (PVar c ty) c' = PVar c' ty
 setMultiplicity (PLet c val ty) c' = PLet c' val ty
 setMultiplicity (PVTy c ty) c' = PVTy c' ty
+        
+showCount : RigCount -> String
+showCount Rig0 = "0 "
+showCount (Rig1 False) = "1 "
+showCount (Rig1 True) = "& "
+showCount RigW = ""
   
 Show ty => Show (Binder ty) where
-	show (Lam _ _ t) = "\\" ++ show t
-	show (Pi _ _ t) = "Pi " ++ show t
-	show (Let _ v t) = "let " ++ show v ++ " : " ++ show t
-	show (PVar _ t) = "pat " ++ show t
-	show (PLet _ v t) = "plet " ++ show v ++ ": " ++ show t
-	show (PVTy _ t) = "pty " ++ show t
+	show (Lam c _ t) = "\\" ++ showCount c ++ show t
+	show (Pi c _ t) = "Pi " ++ showCount c ++ show t
+	show (Let c v t) = "let " ++ showCount c ++ show v ++ " : " ++ show t
+	show (PVar c t) = "pat " ++ showCount c ++ show t
+	show (PLet c v t) = "plet " ++ showCount c ++ show v ++ ": " ++ show t
+	show (PVTy c t) = "pty " ++ showCount c ++ show t
 
 export
 setType : Binder tm -> tm -> Binder tm
@@ -554,26 +572,27 @@ mutual
                    LocalEnv free vars -> 
                    Env Term free ->
                    Term (vars ++ free) -> Closure free
+       MkNFClosure : NF free -> Closure free
 
--- The head of a value: things you can apply arguments to
-public export
-data NHead : List Name -> Type where
-     NLocal : Maybe RigCount -> Elem x vars -> NHead vars
-     NRef   : NameType -> Name -> NHead vars
+  -- The head of a value: things you can apply arguments to
+  public export
+  data NHead : List Name -> Type where
+       NLocal : Maybe RigCount -> Elem x vars -> NHead vars
+       NRef   : NameType -> Name -> NHead vars
 
--- Values themselves
-public export
-data NF : List Name -> Type where
-     NBind    : (x : Name) -> Binder (NF vars) ->
-                (Closure vars -> NF vars) -> NF vars
-     NApp     : NHead vars -> List (Closure vars) -> NF vars
-     NDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
-                List (Closure vars) -> NF vars
-     NTCon    : Name -> (tag : Int) -> (arity : Nat) -> 
-                List (Closure vars) -> NF vars
-     NPrimVal : Constant -> NF vars
-     NErased  : NF vars
-     NType    : NF vars
+  -- Values themselves
+  public export
+  data NF : List Name -> Type where
+       NBind    : (x : Name) -> Binder (NF vars) ->
+                  (Closure vars -> NF vars) -> NF vars
+       NApp     : NHead vars -> List (Closure vars) -> NF vars
+       NDCon    : Name -> (tag : Int) -> (arity : Nat) -> 
+                  List (Closure vars) -> NF vars
+       NTCon    : Name -> (tag : Int) -> (arity : Nat) -> 
+                  List (Closure vars) -> NF vars
+       NPrimVal : Constant -> NF vars
+       NErased  : NF vars
+       NType    : NF vars
 
 %name Env env
 
@@ -1249,12 +1268,6 @@ Show (Term vars) where
   show tm with (unapply tm)
     show (apply f args) | ArgsList = showApp f args
       where
-        showCount : RigCount -> String
-        showCount Rig0 = "0 "
-        showCount (Rig1 False) = "1 "
-        showCount (Rig1 True) = "& "
-        showCount RigW = ""
-
         vCount : Elem x xs -> Nat
         vCount Here = 0
         vCount (There p) = 1 + vCount p
@@ -1297,7 +1310,8 @@ Show (Term vars) where
 export
 Show (Env Term vars) where
   show [] = "empty"
-  show ((::) {x} b bs) = with Strings (show x ++ " " ++ show b ++ "; " ++ show bs)
+  show ((::) {x} b bs) 
+	    = with Strings (show x ++ " " ++ show b ++ "; " ++ show bs)
 
 
 -- Raw terms, not yet typechecked

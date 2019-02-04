@@ -31,6 +31,7 @@ mutual
 public export
 data CaseError = DifferingArgNumbers
                | DifferingTypes
+               | MatchErased (vars ** (Env Term vars, Term vars))
                | UnknownType
 
 export
@@ -140,13 +141,17 @@ argToPat tm with (unapply tm)
          = PCon cn tag (assert_total (map argToPat args))
   argToPat (apply (Ref (TyCon tag _) cn) args) | ArgsList 
          = PTCon cn tag (assert_total (map argToPat args))
-  argToPat (apply (Ref Bound var) []) | ArgsList = PVar var
+  argToPat (apply (Ref Bound var) _) | ArgsList = PVar var
+  argToPat (apply (Bind n (Pi _ _ aty) scty) []) | ArgsList
+        = PTCon (UN "->") 0 (assert_total 
+                               [argToPat aty, 
+                                argToPat (subst Erased scty)])
   -- Only the ones we can match on become PConst
-  argToPat (apply (PrimVal c@(I i)) []) | ArgsList = PConst c
-  argToPat (apply (PrimVal c@(BI i)) []) | ArgsList = PConst c
-  argToPat (apply (PrimVal c@(Str i)) []) | ArgsList = PConst c
-  argToPat (apply (PrimVal c@(Ch i)) []) | ArgsList = PConst c
-  argToPat (apply (PrimVal c) []) | ArgsList = PConstTy c
+  argToPat (apply (PrimVal c) []) | ArgsList 
+        = if constTag c == 0
+             then PConst c
+             else PTCon (UN (show c)) 0 []
+  argToPat (apply TType []) | ArgsList = PTCon (UN "Type") 0 []
   argToPat (apply f args) | ArgsList = PAny
    
 -- Convert a pattern back into a term so that we can refine types of patterns

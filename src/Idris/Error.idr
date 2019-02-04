@@ -182,6 +182,9 @@ perror (CaseCompile _ n DifferingTypes)
     = pure $ "Patterns for " ++ show n ++ " require matching on different types"
 perror (CaseCompile _ n UnknownType)
     = pure $ "Can't infer type to match in " ++ show n
+perror (CaseCompile fc n (MatchErased (_ ** (env, tm)))) 
+    = pure $ "Attempt to match on erased argument " ++ !(pshow env tm) ++ 
+             " in " ++ show n
 perror (BadDotPattern _ env reason x y)
     = pure $ "Can't match on " ++ !(pshow env x) ++
            (if reason /= "" then " (" ++ reason ++ ")" else "") ++ "\n" ++

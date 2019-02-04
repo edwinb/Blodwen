@@ -176,6 +176,29 @@ mutual
                  pure (POp (MkFC fname start end) op l r))
                <|> pure l
 
+  dpair : FileName -> FilePos -> IndentInfo -> Rule PTerm
+  dpair fname start indents
+      = do x <- unqualifiedName
+           symbol ":"
+           ty <- expr EqOK fname indents
+           loc <- location
+           symbol "**"
+           rest <- dpair fname loc indents <|> expr EqOK fname indents
+           end <- location
+           pure (PDPair (MkFC fname start end) 
+                        (PRef (MkFC fname start loc) (UN x))
+                        ty
+                        rest)
+    <|> do l <- expr EqOK fname indents
+           loc <- location
+           symbol "**"
+           rest <- dpair fname loc indents <|> expr EqOK fname indents
+           end <- location
+           pure (PDPair (MkFC fname start end)
+                        l
+                        (PImplicit (MkFC fname start end))
+                        rest)
+
   bracketedExpr : FileName -> FilePos -> IndentInfo -> Rule PTerm
   bracketedExpr fname start indents
       -- left section. This may also be a prefix operator, but we'll sort
@@ -191,6 +214,9 @@ mutual
            end <- location
            pure (PUnit (MkFC fname start end))
       -- right section (1-tuple is just an expression)
+    <|> do p <- dpair fname start indents
+           symbol ")"
+           pure p
     <|> do e <- expr EqOK fname indents
            (do op <- iOperator
                symbol ")"

@@ -11,6 +11,7 @@ import Core.Name
 import Core.Options
 import Core.TT
 
+import Data.CMap
 import Data.List
 import Data.Vect
 import System
@@ -78,22 +79,22 @@ mutual
   getFArgs (CCon _ 1 [ty, val, rest]) = pure $ (ty, val) :: !(getFArgs rest)
   getFArgs arg = throw (InternalError ("Badly formed c call argument list " ++ show arg))
 
-  chezExtPrim : SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
-  chezExtPrim vs CCall [ret, CPrimVal (Str fn), fargs, world]
+  chezExtPrim : Int -> SVars vars -> ExtPrim -> List (CExp vars) -> Core annot String
+  chezExtPrim i vs CCall [ret, CPrimVal (Str fn), fargs, world]
       = do args <- getFArgs fargs
            argTypes <- traverse tySpec (map fst args)
            retType <- tySpec ret
-           argsc <- traverse (schExp chezExtPrim vs) (map snd args)
+           argsc <- traverse (schExp chezExtPrim 0 vs) (map snd args)
            pure $ handleRet retType ("((foreign-procedure #f " ++ show fn ++ " ("
                     ++ showSep " " argTypes ++ ") " ++ retType ++ ") "
                     ++ showSep " " argsc ++ ")")
-  chezExtPrim vs CCall [ret, fn, args, world]
+  chezExtPrim i vs CCall [ret, fn, args, world]
       = pure "(error \"bad ffi call\")"
       -- throw (InternalError ("C FFI calls must be to statically known functions (" ++ show fn ++ ")"))
-  chezExtPrim vs GetStr [world]
+  chezExtPrim i vs GetStr [world]
       = pure $ mkWorld "(get-line (current-input-port))"
-  chezExtPrim vs prim args
-      = schExtCommon chezExtPrim vs prim args
+  chezExtPrim i vs prim args
+      = schExtCommon chezExtPrim i vs prim args
 
 ||| Compile a Blodwen expression to chez scheme
 compileToSS : Ref Ctxt Defs ->
@@ -101,11 +102,11 @@ compileToSS : Ref Ctxt Defs ->
 compileToSS c tm outfile
     = do ds <- getDirectives Chez
          let libs = findLibs ds
-         ns <- findUsedNames tm
+         (ns, tags) <- findUsedNames tm
          defs <- get Ctxt
          compdefs <- traverse (getScheme chezExtPrim defs) ns
          let code = concat compdefs
-         main <- schExp chezExtPrim [] !(compileExp tm)
+         main <- schExp chezExtPrim 0 [] !(compileExp tags tm)
          chez <- coreLift findChez
          support <- readDataFile "chez/support.ss"
          let scm = schHeader chez libs ++ support ++ code ++ main ++ schFooter

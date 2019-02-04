@@ -6,6 +6,7 @@ import Compiler.Inline
 import Core.Context
 import Core.TT
 
+import Data.CMap
 import Data.CSet
 
 %include C "sys/stat.h"
@@ -58,18 +59,42 @@ getDesc : Name -> Gamma -> List Name
 getDesc n g
     = CSet.toList $ getAllDesc [n] empty g
 
-||| Find all the names which need compiling, from a given expression, and compile
-||| them to CExp form (and update that in the Defs)
+-- Calculate a unique tag for each type constructor name we're compiling
+-- This is so that type constructor names get globally unique tags
+mkNameTags : Defs -> NameTags -> Int -> List Name -> NameTags
+mkNameTags defs tags t [] = tags
+mkNameTags defs tags t (n :: ns)
+    = case lookupDefExact n (gamma defs) of
+           Just (TCon _ _ _ _ _ _)
+              => mkNameTags defs (insert n t tags) (t + 1) ns
+           _ => mkNameTags defs tags t ns
+
+-- Find all the names which need compiling, from a given expression, and compile
+-- them to CExp form (and update that in the Defs)
 export
-findUsedNames : {auto c : Ref Ctxt Defs} -> Term vars -> Core annot (List Name)
+findUsedNames : {auto c : Ref Ctxt Defs} -> Term vars -> Core annot (List Name, NameTags)
 findUsedNames tm
     = do defs <- get Ctxt
          let ns = toList (getRefs tm)
          let allNs = ns ++ concatMap (\n => getDesc n (gamma defs)) ns
          let cns = toList (fromList allNs)
-         traverse compileDef cns
+         -- Initialise the type constructor list with explicit names for
+         -- the primitives (this is how we look up the tags)
+         -- Use '1' for '->' constructor (although we can't match it yet!)
+         let tyconInit = insert (UN "->") 1 $
+                         insert (UN "Type") 2 $
+                            primTags 3 empty 
+                                     [IntType, IntegerType, StringType,
+                                      CharType, DoubleType, WorldType]
+         let tycontags = mkNameTags defs tyconInit 100 cns
+         traverse (compileDef tycontags) cns
          traverse inlineDef cns
-         pure cns
+         pure (cns, tycontags)
+  where
+    primTags : Int -> NameTags -> List Constant -> NameTags
+    primTags t tags [] = tags
+    primTags t tags (c :: cs)
+        = primTags (t + 1) (insert (UN (show c)) t tags) cs
 
 -- Some things missing from Prelude.File
 

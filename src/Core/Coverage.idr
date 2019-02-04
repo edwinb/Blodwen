@@ -97,9 +97,19 @@ mutual
   matchNF defs (NPrimVal c) (NPrimVal c') = c == c'
   matchNF _ _ _ = True
 
+emptyRHS : CaseTree vars -> CaseTree vars
+emptyRHS (Case el sc alts) = Case el sc (map emptyRHSalt alts)
+  where
+    emptyRHSalt : CaseAlt vars -> CaseAlt vars
+    emptyRHSalt (ConCase n t args sc) = ConCase n t args (emptyRHS sc)
+    emptyRHSalt (ConstCase c sc) = ConstCase c (emptyRHS sc)
+    emptyRHSalt (DefaultCase sc) = DefaultCase (emptyRHS sc)
+emptyRHS (STerm s) = STerm Erased
+emptyRHS sc = sc
+
 mkAlt : CaseTree vars -> (Name, Int, Nat) -> CaseAlt vars
 mkAlt sc (cn, t, ar)
-    = ConCase cn t (map (MN "m") (take ar [0..])) (weakenNs _ sc)
+    = ConCase cn t (map (MN "m") (take ar [0..])) (weakenNs _ (emptyRHS sc))
 
 altMatch : CaseAlt vars -> CaseAlt vars -> Bool
 altMatch _ (DefaultCase _) = True
@@ -113,6 +123,15 @@ getMissingAlts : Defs -> NF vars -> List (CaseAlt vars) -> List (CaseAlt vars)
 -- If it's a primitive, there's too many to reasonably check, so require a 
 -- catch all
 getMissingAlts defs (NPrimVal c) alts
+    = if any isDefault alts
+         then []
+         else [DefaultCase (Unmatched "Coverage check")]
+  where
+    isDefault : CaseAlt vars -> Bool
+    isDefault (DefaultCase _) = True
+    isDefault _ = False
+-- Similarly for types
+getMissingAlts defs NType alts
     = if any isDefault alts
          then []
          else [DefaultCase (Unmatched "Coverage check")]

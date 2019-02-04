@@ -69,9 +69,6 @@ readModule top loc vis reexp imp as
          defs <- get Ctxt
          when top $ put Ctxt (record { importHashes $= ((as, hash) ::) } defs)
 
-         -- If we're rexporting, it needs to be part of the module hash
-         when reexp $ addHash imp
-
          modNS <- getNS
          when vis $ setVisible imp
          traverse (\ mimp => 
@@ -89,13 +86,16 @@ readImport imp
     = readModule True (loc imp) True (reexport imp) (path imp) (nameAs imp)
 
 readHash : {auto c : Ref Ctxt Defs} ->
+           {auto u : Ref UST (UState FC)} ->
            Import -> Core FC (List String, Int)
 readHash imp
     = do fname <- nsToPath (loc imp) (path imp)
          h <- readIFaceHash fname
          -- If the import is a 'public' import, then it forms part of
          -- our own interface so add its hash to our hash
-         when (reexport imp) $ addHash h
+         when (reexport imp) $ 
+            do log 5 $ "Reexporting " ++ show (path imp) ++ " hash " ++ show h
+               addHash h
          pure (nameAs imp, h)
 
 prelude : Import
@@ -182,6 +182,8 @@ processMod srcf ttcf msg mod sourcecode
                         else addPrelude (imports mod)
 
                 hs <- traverse readHash imps
+                defs <- get Ctxt
+                log 5 $ "Current hash " ++ show (ifaceHash defs)
                 log 5 $ show (moduleNS mod) ++ " hashes:\n" ++
                         show (sort hs)
                 imphs <- readImportHashes ttcf
