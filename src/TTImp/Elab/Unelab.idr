@@ -100,6 +100,7 @@ mutual
                 (RawImp annot, Term vars) ->
                 Core annot (RawImp annot, Term vars)
   unelabSugar NoSugar res = pure res
+  unelabSugar ImplicitHoles res = pure res
   unelabSugar _ (tm, ty) 
       = let (f, args) = getFnArgs tm [] in
             case f of

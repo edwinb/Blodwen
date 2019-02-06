@@ -2,17 +2,17 @@ data Vect : Nat -> Type -> Type where
      Nil : Vect Z a
      (::) : a -> Vect k a -> Vect (S k) a
 
-record DPair a p where
-  constructor MkDPair
+record MyDPair a p where
+  constructor MkMyDPair
   dfst : a
   dsnd : p dfst
 
-cons : t -> DPair Nat (\n => Vect n t) -> DPair Nat (\n => Vect n t)
+cons : t -> MyDPair Nat (\n => Vect n t) -> MyDPair Nat (\n => Vect n t)
 cons val xs
     = record { dfst = S (dfst xs), 
                dsnd = val :: dsnd xs } xs
 
-cons' : t -> DPair Nat (\n => Vect n t) -> DPair Nat (\n => Vect n t)
+cons' : t -> MyDPair Nat (\n => Vect n t) -> MyDPair Nat (\n => Vect n t)
 cons' val
     = record { dfst $= S, 
                dsnd $= (val ::) }
@@ -28,8 +28,8 @@ record Person where
   age, shoesize : Int
   more : Stats
 
-testPair : DPair Nat (\n => Vect n Int)
-testPair = MkDPair _ [1,2,3,4,5]
+testPair : MyDPair Nat (\n => Vect n Int)
+testPair = MkMyDPair _ [1,2,3,4,5]
 
 testPerson : Person
 testPerson = MkPerson "Fred" 1337 10 (MkStats 10 10)

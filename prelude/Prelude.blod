@@ -63,11 +63,11 @@ infixl 9 `div`, `mod`
 -----------------------
 
 public export %inline
-the : (0 a : Type) -> a -> a
+the : (0 a : Type) -> (1 x : a) -> a
 the _ x = x
 
 public export %inline
-id : a -> a
+id : (1 x : a) -> a
 id x = x
 
 public export %inline
@@ -1014,6 +1014,10 @@ Show () where
 export
 (Show a, Show b) => Show (a, b) where
   show (x, y) = "(" ++ show x ++ ", " ++ show y ++ ")"
+
+export
+(Show a, {y : a} -> Show (p y)) => Show (DPair a p) where
+    show (y ** prf) = "(" ++ show y ++ " ** " ++ show prf ++ ")"
 
 export
 Show a => Show (List a) where

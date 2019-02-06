@@ -39,6 +39,7 @@ addBracket fc tm = if needed tm then PBracketed fc tm else tm
     needed (PBracketed _ _) = False
     needed (PRef _ _) = False
     needed (PPair _ _ _) = False
+    needed (PDPair _ _ _ _) = False
     needed (PUnit _) = False
     needed (PComprehension _ _ _) = False
     needed (PList _ _) = False
@@ -92,6 +93,13 @@ sugarApp (PApp fc (PApp _ (PRef _ (UN "Pair")) l) r)
     = PPair fc (unbracket l) (unbracket r)
 sugarApp (PApp fc (PApp _ (PRef _ (UN "MkPair")) l) r)
     = PPair fc (unbracket l) (unbracket r)
+sugarApp tm@(PApp fc (PApp _ (PRef _ (UN "DPair")) l) rb)
+    = case unbracket rb of
+           PLam _ _ _ n _ r
+               => PDPair fc (PRef fc n) (unbracket l) (unbracket r)
+           _ => tm
+sugarApp (PApp fc (PApp _ (PRef _ (UN "MkDPair")) l) r)
+    = PDPair fc (unbracket l) (PImplicit fc) (unbracket r)
 sugarApp (PApp fc (PApp _ (PRef _ (UN "Equal")) l) r)
     = PEq fc l r
 sugarApp (PRef fc (UN "Nil")) = PList fc []

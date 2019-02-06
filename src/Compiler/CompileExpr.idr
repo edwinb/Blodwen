@@ -19,6 +19,7 @@ public export
 NameTags : Type
 NameTags = SortedMap Int
 
+||| Extract the number of arguments from a term
 numArgs : Defs -> Term vars -> Nat
 numArgs defs (Ref (DataCon tag arity) n) = arity
 numArgs defs (Ref (TyCon tag arity) n) = arity
@@ -45,9 +46,9 @@ etaExpand i Z exp args = mkApp exp (map mkLocal (reverse args))
     mkApp (CCon n t args) args' = CCon n t (args ++ args')
     mkApp (CExtPrim p args) args' = CExtPrim p (args ++ args')
     mkApp tm args = CApp tm args
-    
+
 etaExpand i (S k) exp args
-    = CLam (MN "x" i) (etaExpand (i + 1) k (weaken exp) 
+    = CLam (MN "x" i) (etaExpand (i + 1) k (weaken exp)
                          ((_ ** Here) :: map weakenEl args))
 
 expandToArity : Nat -> CExp vars -> List (CExp vars) -> CExp vars
@@ -129,7 +130,7 @@ natHackTree t = t
 specialApp : Defs -> Term vars -> List (CExp vars) -> Maybe (CExp vars)
 specialApp defs (Ref _ n) args
     = cond
-        [(isDelay n defs && not (isNil args), 
+        [(isDelay n defs && not (isNil args),
               case reverse (filter notErased args) of
                    [a] => Just (CDelay a)
                    _ => Nothing),
@@ -166,7 +167,8 @@ mutual
   toCExpTm defs tags n (Bind x (Let _ val _) sc)
       = CLet x (toCExp defs tags n val) (toCExp defs tags n sc)
   toCExpTm defs tags n (Bind x (Pi c e ty) sc) 
-      = CCon (UN "->") 1 []
+      = CCon (UN "->") 1 [toCExp defs tags n ty,
+                          CLam x (toCExp defs tags n sc)]
   toCExpTm defs tags n (Bind x b tm) = CErased
   -- We'd expect this to have been dealt with in toCExp, but for completeness...
   toCExpTm defs tags n (App tm arg) 
@@ -218,7 +220,7 @@ mutual
             CExp (cargs ++ vars) -> CExp vars
   forceIn defs n exp [] tree = tree
   forceIn defs n exp [dexp] tree = CLet dexp (CForce exp) tree
-  forceIn defs n exp (d :: ds) tree 
+  forceIn defs n exp (d :: ds) tree
       = forceIn defs n exp ds (CLet d CErased tree)
 
   toCExpTree : Defs -> NameTags -> Name -> CaseTree vars -> CExp vars
@@ -248,7 +250,7 @@ data ArgList : Nat -> List Name -> Type where
 
 mkArgList : Int -> (n : Nat) -> (ns ** ArgList n ns)
 mkArgList i Z = (_ ** NoArgs)
-mkArgList i (S k) 
+mkArgList i (S k)
     = let (_ ** rec) = mkArgList (i + 1) k in
           (_ ** ConsArg (MN "arg" i) rec)
 
@@ -256,7 +258,7 @@ toCDef : {auto c : Ref Ctxt Defs} -> NameTags -> Name -> Def -> Core annot CDef
 toCDef tags n None
     = pure $ MkError $ CCrash ("Encountered undefined name " ++ show n)
 toCDef tags n (PMDef _ args _ tree _)
-    = pure $ MkFun _ (toCExpTree !(get Ctxt) tags n tree) 
+    = pure $ MkFun _ (toCExpTree !(get Ctxt) tags n tree)
 toCDef tags n (ExternDef arity)
     = let (ns ** args) = mkArgList 0 arity in
           pure $ MkFun _ (CExtPrim n (map toArgExp (getVars args)))
@@ -291,7 +293,7 @@ toCDef tags n (Hole _ _ _)
     = pure $ MkError $ CCrash ("Encountered unimplemented hole " ++ show n)
 toCDef tags n (Guess _ _)
     = pure $ MkError $ CCrash ("Encountered constrained hole " ++ show n)
-toCDef tags n (BySearch _ _)
+toCDef tags n (BySearch _ _ _)
     = pure $ MkError $ CCrash ("Encountered incomplete proof search " ++ show n)
 toCDef tags n def
     = pure $ MkError $ CCrash ("Encountered uncompilable name " ++ show (n, def))
@@ -303,6 +305,7 @@ compileExp tags tm
     = do defs <- get Ctxt
          pure (toCExp defs tags (UN "main") tm)
 
+||| Given a name, look up an expression, and compile it to a CExp in the environment
 export
 compileDef : {auto c : Ref Ctxt Defs} -> NameTags -> Name -> Core annot ()
 compileDef tags n

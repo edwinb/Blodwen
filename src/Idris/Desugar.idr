@@ -209,6 +209,26 @@ mutual
            let pval = apply (IVar fc (UN "MkPair")) [l', r']
            pure $ IAlternative fc (UniqueDefault pval)
                   [apply (IVar fc (UN "Pair")) [l', r'], pval]
+  desugar side ps (PDPair fc (PRef nfc (UN n)) (PImplicit _) r) 
+      = do r' <- desugar side ps r
+           let pval = apply (IVar fc (UN "MkDPair")) [IVar nfc (UN n), r']
+           pure $ IAlternative fc (UniqueDefault pval)
+                  [apply (IVar fc (UN "DPair")) 
+                      [Implicit nfc, 
+                       ILam nfc RigW Explicit (Just (UN n)) (Implicit nfc) r'],
+                   pval]
+  desugar side ps (PDPair fc (PRef nfc (UN n)) ty r) 
+      = do ty' <- desugar side ps ty
+           r' <- desugar side ps r
+           pure $ apply (IVar fc (UN "DPair"))
+                        [ty', 
+                         ILam nfc RigW Explicit (Just (UN n)) ty' r']
+  desugar side ps (PDPair fc l (PImplicit _) r) 
+      = do l' <- desugar side ps l
+           r' <- desugar side ps r
+           pure $ apply (IVar fc (UN "MkDPair")) [l', r']
+  desugar side ps (PDPair fc l ty r) 
+      = throw (GenericMsg fc "Invalid dependent pair type")
   desugar side ps (PUnit fc) 
       = pure $ IAlternative fc (UniqueDefault (IVar fc (UN "MkUnit")))
                [IVar fc (UN "Unit"), 

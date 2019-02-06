@@ -285,6 +285,7 @@ getAnnot (InCon x y err) = getAnnot err
 getAnnot (InLHS x y err) = getAnnot err
 getAnnot (InRHS x y err) = getAnnot err
 
+-- Core is a wrapper around IO that is specialised for efficiency.
 export
 record Core annot t where
   constructor MkCore

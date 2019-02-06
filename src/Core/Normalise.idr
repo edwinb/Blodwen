@@ -56,7 +56,8 @@ parameters (defs : Defs, opts : EvalOpts)
     eval env loc stk Erased = NErased
     eval env loc stk TType = NType
 
-    evalLocal : Env Term free -> LocalEnv free vars -> Stack free -> 
+    evalLocal : Env Term free -> 
+                LocalEnv free vars -> Stack free -> 
                 Maybe RigCount -> Elem x (vars ++ free) -> NF free
     evalLocal {vars = []} env loc stk r p 
         = if isLet p env && not (holesOnly opts)
@@ -74,9 +75,22 @@ parameters (defs : Defs, opts : EvalOpts)
     evalLocal {vars = (x :: xs)} 
               env ((MkClosure _ loc' env' tm') :: locs) stk r Here 
         = eval env' loc' stk tm'
-    evalLocal {vars = (x :: xs)} 
+    evalLocal {free} {vars = (x :: xs)} 
               env ((MkNFClosure nf) :: locs) stk r Here 
-        = nf
+        = applyToStack nf stk
+      where
+        applyToStack : NF free -> Stack free -> NF free
+        applyToStack (NBind _ (Lam r e ty) sc) (arg :: stk)
+            = applyToStack (sc arg) stk
+        applyToStack (NApp (NRef nt fn) args) stk
+            = evalRef env locs (args ++ stk) nt fn
+        applyToStack (NApp (NLocal r p) args) stk
+            = evalLocal env locs (args ++ stk) r 
+                  (insertElemNames {outer=[]} xs p)
+        applyToStack (NDCon n t a args) stk = NDCon n t a (args ++ stk)
+        applyToStack (NTCon n t a args) stk = NTCon n t a (args ++ stk)
+        applyToStack nf _ = nf
+
     evalLocal {vars = (x :: xs)} env (_ :: loc) stk r (There later) 
         = evalLocal env loc stk r later
 
@@ -206,10 +220,10 @@ parameters (defs : Defs, opts : EvalOpts)
          = evalTree env loc stk sc def
     -- Arrow matching, in typecase
     tryAlt {more} {vars}  
-           env loc stk (NBind x (Pi _ _ aty) scty) (ConCase (UN "->") tag [s,t] sc) def
+           env loc stk (NBind x (Pi r e aty) scty) (ConCase (UN "->") tag [s,t] sc) def
        = evalConAlt {more} {vars} env loc stk [s,t]
                   [MkNFClosure aty, 
-                   MkNFClosure (scty (toClosure defaultOpts env Erased))]
+                   MkNFClosure (NBind x (Lam r e aty) scty)]
                   sc def
     -- Constructor matching
     tryAlt env loc stk (NPrimVal c') (ConstCase c sc) def

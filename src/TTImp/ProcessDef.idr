@@ -555,7 +555,8 @@ processDef elab incase env nest loc n_in cs_raw
         = do itm <- unelabNoPatvars loc [] tm
              handleClause
                (do ctxt <- get Ctxt
-                   ok <- checkClause elab False rig1 False n [] (MkNested [])
+                   log 3 $ "Checking for impossibility: " ++ show itm
+                   ok <- checkClause elab incase rig1 False n [] (MkNested [])
                                 (ImpossibleClause loc itm)
                    put Ctxt ctxt
                    maybe (pure Nothing) (\chktm => pure (Just tm)) ok)

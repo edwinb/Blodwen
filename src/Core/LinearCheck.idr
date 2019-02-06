@@ -1,5 +1,6 @@
 module Core.LinearCheck
 
+import Core.CaseTree
 import Core.Context
 import Core.Normalise
 import Core.Options
@@ -97,6 +98,35 @@ mutual
       = do updateHoleUsageArgs False var as
            pure ty
 
+  updateHoleUsagePats : {auto c : Ref Ctxt Defs} ->
+                        {auto u : Ref UST (UState annot)} ->
+                        (useInHole : Bool) ->
+                        Elem x vars -> List (Term vars) ->
+                        (vs ** (Env Term vs, Term vs, Term vs)) ->
+                        Core annot Bool
+  updateHoleUsagePats {vars} useInHole var args (vs ** (env, lhs, rhs))
+      = do -- Find the argument which corresponds to var
+           let argpos = findArg Z args
+           log 10 $ "At positions " ++ show argpos
+           -- Find what it's position is in env by looking at the lhs args
+           let vars = mapMaybe (findLocal (getArgs lhs)) argpos
+           hs <- traverse (\vsel => updateHoleUsage useInHole (DPair.snd vsel) rhs)
+                          vars
+           pure (or (map Delay hs))
+    where
+      findArg : Nat -> List (Term vars) -> List Nat
+      findArg i [] = []
+      findArg i (Local _ vel :: els)
+          = if sameVar var vel
+               then i :: findArg (1 + i) els
+               else findArg (1 + i) els
+      findArg i (_ :: els) = findArg (1 + i) els
+
+      findLocal : List (Term vs) -> Nat -> Maybe (x ** Elem x vs)
+      findLocal (Local _ el :: _) Z = Just (_ ** el)
+      findLocal (_ :: els) (S k) = findLocal els k
+      findLocal _ _ = Nothing
+        
   updateHoleUsage : {auto c : Ref Ctxt Defs} ->
                     {auto u : Ref UST (UState annot)} ->
                     (useInHole : Bool) ->
@@ -108,6 +138,18 @@ mutual
   updateHoleUsage useInHole var (Bind n b sc)
         = updateHoleUsage useInHole (There var) sc
   updateHoleUsage useInHole var tm with (unapply tm)
+    updateHoleUsage useInHole var (apply (Ref nt (GN (CaseBlock fn i))) args) | ArgsList 
+        = do gam <- getCtxt
+             aupd <- updateHoleUsageArgs useInHole var args
+             case lookupDefExact (GN (CaseBlock fn i)) gam of
+                  Just (PMDef _ _ _ _ pats)
+                    => do log 5 $ with Strings ( "Checking for holes in " ++ 
+                                  show fn ++ "\n" ++ show pats ++
+                                  "\nfrom " ++ show args ++
+                                  "\nfor arg " ++ show (Local Nothing var))
+                          hs <- traverse (updateHoleUsagePats useInHole var args) pats
+                          pure (or (aupd :: map Delay hs))
+                  _ => pure aupd
     updateHoleUsage useInHole var (apply (Ref nt fn) args) | ArgsList 
         = do gam <- getCtxt
              case lookupDefTyExact fn gam of
@@ -149,7 +191,7 @@ mutual
   lcheck' {vars} loc rig erase env (Local {x} r v) 
       = let (rigb, ty) = lookup v env in
             do gam <- get Ctxt
-               rigSafe rigb rig
+               when (not erase) $ rigSafe rigb rig
                pure (Local r v, nf gam env ty, used rig, Nothing)
     where
       rigSafe : RigCount -> RigCount -> Core annot ()
@@ -166,15 +208,15 @@ mutual
 
   lcheck' loc rig erase env (Ref nt fn)
       = do gam <- get Ctxt
-           case lookupDefTyExact fn (gamma gam) of
-                Nothing => throw (InternalError ("Linearity checking failed on " ++ show fn))
+           dty <- lcheckDef loc rig erase env fn
+           case dty of
                 -- Don't count variable usage in holes, so as far as linearity
                 -- checking is concerned, update the type so that the binders
                 -- are in Rig0
-                Just (Hole locs _ _, ty) => 
+                (Hole locs _ _, ty) => 
                      pure (Ref nt fn, nf gam env (embed (unusedHoleArgs locs ty)), 
                            [], Nothing)
-                Just (def, ty) => 
+                (def, ty) => 
                      pure (Ref nt fn, nf gam env (embed ty), [], Nothing)
     where
       unusedHoleArgs : Nat -> Term vars -> Term vars
@@ -194,7 +236,7 @@ mutual
 
            let used_in = count Here usedsc
            log 10 (show rig ++ " " ++ show nm ++ ": " ++ show used_in)
-           holeFound <- if isLinear (multiplicity b)
+           holeFound <- if not erase && isLinear (multiplicity b)
                            then updateHoleUsage (used_in == 0) Here sc'
                            else pure False
 
@@ -206,10 +248,10 @@ mutual
                                             else used_in
                            _ => used_in
 
-           checkUsageOK used (rigMult (multiplicity b) rig)
+           when (not erase) $ checkUsageOK used (rigMult (multiplicity b) rig)
            gam <- get Ctxt
            let bt = discharge gam env nm b' bt sc' sct (usedb ++ doneScope usedsc)
-           borrowOK gam b (fst bt)
+           when (not erase) $ borrowOK gam b (fst bt)
            pure bt
     where
       rig : RigCount
@@ -330,6 +372,180 @@ mutual
              (Bind nm (PLet c val ty) scope, bty, used, Nothing)
   discharge gam env nm (PVTy c ty) bindty scope scopety used
        = (Bind nm (PVTy c ty) scope, bindty, used, Nothing)
+  
+  data ArgUsage 
+       = UseAny -- RigW so we don't care
+       | Use0 -- argument position not used
+       | Use1 -- argument position used exactly once
+       | UseKeep -- keep as is
+       | UseUnknown -- hole, so can't tell
+
+  Show ArgUsage where
+    show UseAny = "any"
+    show Use0 = "0"
+    show Use1 = "1"
+    show UseKeep = "keep"
+    show UseUnknown = "unknown"
+
+  -- Check argument usage in case blocks. Returns a list of how each argument
+  -- in the case block is used, to build the appropriate type for the outer
+  -- block.
+  getArgUsage : {auto c : Ref Ctxt Defs} ->
+                {auto e : Ref UST (UState annot)} ->
+                annot -> RigCount -> ClosedTerm ->
+                List (vs ** (Env Term vs, Term vs, Term vs)) ->
+                Core annot (List ArgUsage)
+  getArgUsage loc rig ty pats
+      = do us <- traverse (getPUsage ty) pats
+           pure (map snd !(combine us))
+    where
+      getCaseUsage : Term ns -> Env Term vs -> List (Term vs) -> 
+                     Usage vs -> Term vs ->
+                     Core annot (List (Name, ArgUsage))
+      getCaseUsage (Bind n (Pi (Rig1 _) e ty) sc) env (Local _ el :: args) used rhs
+          = do rest <- getCaseUsage sc env args used rhs
+               let used_in = count el used
+               holeFound <- updateHoleUsage (used_in == 0) el rhs
+               let ause
+                   = if holeFound && used_in == 0
+                             then UseUnknown
+                             else if used_in == 0
+                                     then Use0
+                                     else Use1
+               pure ((n, ause) :: rest)
+      getCaseUsage (Bind n (Pi c e ty) sc) env (arg :: args) used rhs
+          = do rest <- getCaseUsage sc env args used rhs
+               case c of
+                    Rig0 => pure ((n, Use0) :: rest)
+                    Rig1 _ => pure ((n, UseKeep) :: rest)
+                    _ => pure ((n, UseKeep) :: rest)
+      getCaseUsage tm env args used rhs = pure []
+    
+      checkUsageOK : Nat -> Name -> Bool -> RigCount -> Core annot ()
+      checkUsageOK used nm isloc Rig0 = pure ()
+      checkUsageOK used nm isloc RigW = pure ()
+      checkUsageOK used nm True (Rig1 False)
+          = if used > 1
+               then throw (LinearUsed loc used nm)
+               else pure ()
+      checkUsageOK used nm isloc (Rig1 False)
+          = if used == 1 
+               then pure ()
+               else throw (LinearUsed loc used nm)
+      checkUsageOK used nm isloc (Rig1 True)
+          = if used == 0 
+               then pure ()
+               else throw (LinearMisuse loc nm (Rig1 True) (Rig1 False))
+
+      -- Is the variable one of the lhs arguments; i.e. do we treat it as
+      -- affine rather than linear
+      isLocArg : Elem x vars -> List (Term vars) -> Bool
+      isLocArg p [] = False
+      isLocArg p (Local _ p' :: args)
+          = if sameVar p p'
+               then True
+               else isLocArg p args
+      isLocArg p (_ :: args) = isLocArg p args
+
+      -- As checkEnvUsage in general, but it's okay for local variables to
+      -- remain unused (since in that case, they must be used outside the
+      -- case block)
+      checkEnvUsage : RigCount -> 
+                      Env Term vars -> Usage (done ++ vars) -> 
+                      List (Term (done ++ vars)) ->
+                      Term (done ++ vars) -> Core annot ()
+      checkEnvUsage rig [] usage args tm = pure ()
+      checkEnvUsage rig {done} {vars = nm :: xs} (b :: env) usage args tm
+          = do let pos = localPrf {later = done}
+               let used_in = count pos usage
+
+               holeFound <- if isLinear (multiplicity b)
+                               then updateHoleUsage (used_in == 0) pos tm
+                               else pure False
+               let used = case rigMult (multiplicity b) rig of
+                               Rig1 False => if holeFound && used_in == 0 
+                                                then 1 
+                                                else used_in
+                               _ => used_in
+               checkUsageOK used nm (isLocArg pos args) 
+                                    (rigMult (multiplicity b) rig)
+               checkEnvUsage {done = done ++ [nm]} rig env 
+                     (rewrite sym (appendAssociative done [nm] xs) in usage)
+                     (rewrite sym (appendAssociative done [nm] xs) in args)
+                     (rewrite sym (appendAssociative done [nm] xs) in tm)
+
+      getPUsage : ClosedTerm -> (vs ** (Env Term vs, Term vs, Term vs)) ->
+                  Core annot (List (Name, ArgUsage))
+      getPUsage ty (_ ** (penv, lhs, rhs))
+          = do (rhs', _, used, _) <- lcheck loc rig False penv rhs
+               let args = getArgs lhs
+               checkEnvUsage {done = []} rig penv used args rhs'
+               getCaseUsage ty penv args used rhs
+      
+      combineUsage : (Name, ArgUsage) -> (Name, ArgUsage) -> 
+                     Core annot (Name, ArgUsage)
+      combineUsage (n, Use0) (_, Use1)
+          = throw (GenericMsg loc ("Inconsistent usage of " ++ show n ++ " in case branches"))
+      combineUsage (n, Use1) (_, Use0)
+          = throw (GenericMsg loc ("Inconsistent usage of " ++ show n ++ " in case branches"))
+      combineUsage (n, UseAny) _ = pure (n, UseAny)
+      combineUsage _ (n, UseAny) = pure (n, UseAny)
+      combineUsage (n, UseKeep) _ = pure (n, UseKeep)
+      combineUsage _ (n, UseKeep) = pure (n, UseKeep)
+      combineUsage (n, UseUnknown) _ = pure (n, UseUnknown)
+      combineUsage _ (n, UseUnknown) = pure (n, UseUnknown)
+      combineUsage x y = pure x
+
+      combineUsages : List (Name, ArgUsage) -> List (Name, ArgUsage) ->
+                      Core annot (List (Name, ArgUsage))
+      combineUsages [] [] = pure []
+      combineUsages (u :: us) (v :: vs)
+          = do u' <- combineUsage u v
+               us' <- combineUsages us vs
+               pure (u' :: us')
+      combineUsages _ _ = throw (InternalError "Argument usage lists inconsistent")
+                  
+      combine : List (List (Name, ArgUsage)) -> Core annot (List (Name, ArgUsage))
+      combine [] = pure []
+      combine [x] = pure x
+      combine (x :: xs)
+          = do xs' <- combine xs
+               combineUsages x xs'
+
+  lcheckDef : {auto c : Ref Ctxt Defs} ->
+              {auto u : Ref UST (UState annot)} ->
+              annot -> RigCount -> (erase : Bool) -> Env Term vars -> Name -> 
+              Core annot (Def, ClosedTerm)
+  lcheckDef loc rig False env fn@(GN (CaseBlock _ _))
+      = do defs <- get Ctxt
+           case lookupDefTyExact fn (gamma defs) of
+                Nothing => throw (InternalError ("Linearity checking failed on " ++ show fn))
+                Just (PMDef h args ct rt pats, ty)
+                   => do u <- getArgUsage loc rig ty pats
+                         log 5 $ "Arg usage for " ++ show fn ++
+                                 "\ntype: " ++ show ty ++
+                                 "\n" ++ show u
+                         pure (PMDef h args ct rt pats, 
+                               updateUsage u ty)
+                Just t => pure t
+    where
+      updateUsage : List ArgUsage -> Term ns -> Term ns
+      updateUsage (u :: us) (Bind n (Pi c e ty) sc)
+          = let sc' = updateUsage us sc
+                c' = case u of
+                          Use0 => Rig0
+                          Use1 => rig1 -- ignore usage elsewhere, we checked here
+                          UseUnknown => Rig0 -- don't know, need to update hole types
+                          UseKeep => c -- matched here, so count usage elsewhere
+                          UseAny => c in -- no constraint, so leave alone
+                Bind n (Pi c' e ty) sc'
+      updateUsage _ ty = ty
+  lcheckDef loc rig erase env fn
+      = do defs <- get Ctxt
+           case lookupDefTyExact fn (gamma defs) of
+                Nothing => throw (InternalError ("Linearity checking failed on " ++ show fn))
+                Just t => pure t
+
 
 checkEnvUsage : {auto c : Ref Ctxt Defs} ->
                 {auto u : Ref UST (UState annot)} ->

@@ -536,14 +536,16 @@ mutual
            est <- get EST
            case lookup n (boundNames est) of
                 Nothing =>
-                  do (tm, exp) <- mkOuterHole loc n True env topexp
-                     log 5 $ "Added Bound implicit " ++ show (n, (tm, exp))
+                  do (tm, exp, bty) <- mkPatternHole loc n env
+                                                (implicitMode elabinfo)
+                                                topexp
+                     log 5 $ "Added Bound implicit " ++ show (n, (tm, exp, bty))
                      defs <- get Ctxt
                      log 10 $ show (lookupDefExact n (gamma defs))
                      est <- get EST
                      put EST 
                          (record { boundNames $= ((n, (tm, exp)) ::),
-                                   toBind $= ((n, (tm, exp)) :: ) } est)
+                                   toBind $= ((n, (tm, bty)) :: ) } est)
                      addNameType loc (UN str) env exp
                      checkExp rigc process loc elabinfo env nest tm exp topexp
                 Just (tm, ty) =>
@@ -972,11 +974,6 @@ mutual
   checkPi rigc process elabinfo loc env nest rigf info n argty retty expected
       = do let impmode = implicitMode elabinfo
            let elabmode = elabMode elabinfo
-           case (elabmode, rigc) of
-                (InLHS _, Rig0) => pure ()
-                (InLHS _, _) =>
-                    throw (GenericMsg loc "Can't match on function types (yet?)")
-                _ => pure ()
            (tyv, tyt) <- check Rig0 process (record { topLevel = False } elabinfo) 
                                env nest argty (FnType [] TType)
            let env' : Env Term (n :: _) = Pi RigW info tyv :: env
@@ -1161,11 +1158,25 @@ mutual
                     _ => 
                        do gam <- get Ctxt
                           est <- get EST
+                          let env = updateMults (linearUsed est) env
                           n <- addSearchable loc env (quote (noGam gam) env ty) 500
                                              (defining est)
                           log 5 $ "Initiate search: " ++ show n ++
                                   " for " ++ show (quote (noGam gam) env ty)
+                                  ++ "\nIn env " ++ show env
+                                  ++ " used linear vars " ++ show (map fst (linearUsed est))
                           pure (mkConstantApp n env)
+    where
+      toRig0 : Elem x vs -> Env Term vs -> Env Term vs
+      toRig0 Here (b :: bs) = setMultiplicity b Rig0 :: bs
+      toRig0 (There p) (b :: bs) = b :: toRig0 p bs
+
+      -- If the name is used elsewhere, update its multiplicity so it's
+      -- not used by the search
+      updateMults : List (x ** Elem x vs) -> Env Term vs -> Env Term vs
+      updateMults [] env = env
+      updateMults ((_ ** p) :: us) env = updateMults us (toRig0 p env)
+
 
   -- Get the implicit arguments that need to be inserted at this point
   -- in a function application. Do this by reading off implicit Pis

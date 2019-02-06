@@ -292,14 +292,20 @@ setMultiplicity (Pi c x ty) c' = Pi c' x ty
 setMultiplicity (PVar c ty) c' = PVar c' ty
 setMultiplicity (PLet c val ty) c' = PLet c' val ty
 setMultiplicity (PVTy c ty) c' = PVTy c' ty
+        
+showCount : RigCount -> String
+showCount Rig0 = "0 "
+showCount (Rig1 False) = "1 "
+showCount (Rig1 True) = "& "
+showCount RigW = ""
   
 Show ty => Show (Binder ty) where
-	show (Lam _ _ t) = "\\" ++ show t
-	show (Pi _ _ t) = "Pi " ++ show t
-	show (Let _ v t) = "let " ++ show v ++ " : " ++ show t
-	show (PVar _ t) = "pat " ++ show t
-	show (PLet _ v t) = "plet " ++ show v ++ ": " ++ show t
-	show (PVTy _ t) = "pty " ++ show t
+	show (Lam c _ t) = "\\" ++ showCount c ++ show t
+	show (Pi c _ t) = "Pi " ++ showCount c ++ show t
+	show (Let c v t) = "let " ++ showCount c ++ show v ++ " : " ++ show t
+	show (PVar c t) = "pat " ++ showCount c ++ show t
+	show (PLet c v t) = "plet " ++ showCount c ++ show v ++ ": " ++ show t
+	show (PVTy c t) = "pty " ++ showCount c ++ show t
 
 export
 setType : Binder tm -> tm -> Binder tm
@@ -1262,12 +1268,6 @@ Show (Term vars) where
   show tm with (unapply tm)
     show (apply f args) | ArgsList = showApp f args
       where
-        showCount : RigCount -> String
-        showCount Rig0 = "0 "
-        showCount (Rig1 False) = "1 "
-        showCount (Rig1 True) = "& "
-        showCount RigW = ""
-
         vCount : Elem x xs -> Nat
         vCount Here = 0
         vCount (There p) = 1 + vCount p
@@ -1310,7 +1310,8 @@ Show (Term vars) where
 export
 Show (Env Term vars) where
   show [] = "empty"
-  show ((::) {x} b bs) = with Strings (show x ++ " " ++ show b ++ "; " ++ show bs)
+  show ((::) {x} b bs) 
+	    = with Strings (show x ++ " " ++ show b ++ "; " ++ show bs)
 
 
 -- Raw terms, not yet typechecked

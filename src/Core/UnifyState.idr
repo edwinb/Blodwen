@@ -473,7 +473,7 @@ addSearchable : {auto u : Ref UST (UState annot)} ->
 addSearchable loc env ty depth def
     = do cn <- genName "search"
          let defty = mkConstantTy env ty
-         let hole = newDef [] defty Public (BySearch depth def)
+         let hole = newDef [] defty Public (BySearch RigW depth def)
          addHoleName loc cn True
          addDef cn hole
          pure cn
@@ -553,7 +553,7 @@ dumpHole lvl hole
                          log lvl $ "?" ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
                                            ++ if inj then " (Invertible)" else ""
-                    Just (BySearch _ _, ty) =>
+                    Just (BySearch _ _ _, ty) =>
                          log lvl $ "Search " ++ show hole ++ " : " ++ 
                                            show (normaliseHoles gam [] ty)
                     Just (PMDef _ args t _ _, ty) =>
