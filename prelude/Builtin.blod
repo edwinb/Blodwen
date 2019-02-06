@@ -108,3 +108,7 @@ sym Refl = Refl
 public export
 trans : forall a, b, c . (0 l : a = b) -> (0 r : b = c) -> a = c
 trans Refl Refl = Refl
+
+public export
+believe_me : a -> b
+believe_me = prim__believe_me _ _

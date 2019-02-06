@@ -370,6 +370,7 @@ TTC annot (PrimFn n) where
   toBuf b StrReverse = tag 17
   toBuf b StrSubstr = tag 18
   toBuf b (Cast x y) = do tag 19; toBuf b x; toBuf b y
+  toBuf b BelieveMe = tag 20
 
   fromBuf {n} s b
       = case n of
@@ -414,6 +415,7 @@ TTC annot (PrimFn n) where
       fromBuf3 s b
           = case !getTag of
                  18 => pure StrSubstr
+                 20 => pure BelieveMe
                  _ => corrupt "PrimFn 3"
              
 mutual

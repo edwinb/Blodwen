@@ -131,6 +131,7 @@ data PrimFn : Nat -> Type where
      StrSubstr : PrimFn 3
 
      Cast : Constant -> Constant -> PrimFn 1
+     BelieveMe : PrimFn 3
 
 export
 Show (PrimFn arity) where
@@ -154,6 +155,7 @@ Show (PrimFn arity) where
   show StrReverse = "op_strrev"
   show StrSubstr = "op_strsubstr"
   show (Cast x y) = "cast-" ++ show x ++ "-" ++ show y
+  show BelieveMe = "believe_me"
 
 public export
 data PiInfo = Implicit | Explicit | AutoImplicit

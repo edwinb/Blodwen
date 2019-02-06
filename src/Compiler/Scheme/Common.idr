@@ -125,6 +125,8 @@ schOp (Cast IntType CharType) [x] = op "integer->char" [x]
 
 schOp (Cast from to) [x] = "(error \"Invalid cast " ++ show from ++ "->" ++ show to ++ "\")"
 
+schOp BelieveMe [_,_,x] = x
+
 ||| Extended primitives for the scheme backend, outside the standard set of primFn
 public export
 data ExtPrim = CCall | SchemeCall | PutStr | GetStr 
