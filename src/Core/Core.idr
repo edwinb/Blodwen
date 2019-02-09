@@ -47,6 +47,7 @@ data Error annot
     | NotRecordType annot Name
     | IncompatibleFieldUpdate annot (List String)
     | InvalidImplicit annot (Env Term vars) Name (Term vars)
+    | TryWithImplicits annot (Env Term vars) (List (Name, Term vars))
     | CantSolveGoal annot (Term [])
     | DeterminingArg annot Name (Env Term vars) (Term vars)
     | UnsolvedHoles (List (annot, Name))
@@ -163,6 +164,10 @@ Show annot => Show (Error annot) where
   show (IncompatibleFieldUpdate fc flds) 
       = show fc ++ ":Field update " ++ showSep "->" flds ++ " not compatible with other updates" 
   show (InvalidImplicit fc env n tm) = show fc ++ ":" ++ show n ++ " is not a valid implicit argument in " ++ show tm 
+  show (TryWithImplicits fc env imps) 
+     = show fc ++ ":Need to bind implicits " 
+          ++ showSep "," (map (\x => show (fst x) ++ " : " ++ show (snd x)) imps)
+          ++ "\n(The front end should probably have done this for you. Please report!)"
   show (CantSolveGoal fc g) = show fc ++ ":Can't solve goal " ++ assert_total (show g)
   show (DeterminingArg fc n env g)
       = show fc ++ ":Can't solve goal " ++ assert_total (show g) ++ 
@@ -254,6 +259,7 @@ getAnnot (NotRecordField loc _ _) = Just loc
 getAnnot (NotRecordType loc _) = Just loc
 getAnnot (IncompatibleFieldUpdate loc _) = Just loc
 getAnnot (InvalidImplicit loc _ y tm) = Just loc
+getAnnot (TryWithImplicits loc _ _) = Just loc
 getAnnot (CantSolveGoal loc tm) = Just loc
 getAnnot (DeterminingArg loc y env tm) = Just loc
 getAnnot (UnsolvedHoles ((loc, _) :: xs)) = Just loc

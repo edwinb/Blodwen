@@ -13,6 +13,7 @@ import TTImp.TTImp
 import TTImp.Elab.Delayed
 import public TTImp.Elab.State
 import public TTImp.Elab.Term
+import TTImp.Elab.Unelab
 
 import Data.List
 import Data.List.Views
@@ -137,7 +138,8 @@ elabTerm {vars} process incase defining env env' sub nest impmode elabmode tm ty
          toDel <- deletableCurrentHoles 
          clearSolvedHoles
          dumpConstraints 2 False
-         checkUserHoles False -- need to fail if there are any guards
+         when (not incase) $ checkUserHoles False 
+                              -- need to fail if there are any guards
                               -- or 'linearCheck' will fail
          ptm' <- the (Core _ (Term vars)) $ case elabmode of
                     InLHS _ => pure ptm'
@@ -231,7 +233,32 @@ checkTerm : {auto c : Ref Ctxt Defs} ->
             (term : RawImp annot) -> (ty : Term vars) ->
             Core annot (Term vars, Term vars) 
 checkTerm process incase defining env env' sub nest impmode elabmode tm ty 
-    = do (tm_elab, tm_erase, _) <- elabTerm process incase defining env env' sub nest 
-                                            impmode elabmode tm (FnType [] ty)
+    = do ctxt <- get Ctxt
+         ust <- get UST
+         imp <- get ImpST
+         mv <- get Meta
+         (tm_elab, tm_erase, _) <- 
+           catch {t = Error annot} -- grr, shouldn't need this!
+                 (elabTerm process incase defining env env' sub nest 
+                              impmode elabmode tm (FnType [] ty))
+            (\err => case err of
+                          -- reset the state and try again after adding the
+                          -- needed implicits (see note in Elab.Case for why
+                          -- we need to do this)
+                          TryWithImplicits loc benv ns
+                              => do put Ctxt ctxt
+                                    put UST ust
+                                    put ImpST imp
+                                    put Meta mv
+                                    elabTerm process incase defining env env' sub nest
+                                          impmode elabmode
+                                          !(bindImps loc benv ns tm) (FnType [] ty)
+                          _ => throw err)
          pure (tm_elab, tm_erase)
-
+  where
+    bindImps : annot -> Env Term vs -> List (Name, Term vs) -> RawImp annot -> 
+               Core annot (RawImp annot)
+    bindImps loc env [] ty = pure ty
+    bindImps loc env ((n, ty) :: ntys) sc
+        = pure $ IPi loc Rig0 Implicit (Just n)
+                     !(unelabNoSugar loc env ty) !(bindImps loc env ntys sc)

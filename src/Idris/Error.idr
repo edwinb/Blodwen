@@ -136,6 +136,12 @@ perror (IncompatibleFieldUpdate fc flds)
              " not compatible with other updates"
 perror (InvalidImplicit _ env n tm)
     = pure $ show n ++ " is not a valid implicit argument in " ++ !(pshow env tm)
+perror (TryWithImplicits _ env imps)
+    = pure $ "Need to bind implicits "
+             ++ showSep ", " !(traverse (tshow env) imps)
+  where
+    tshow : Env Term vars -> (Name, Term vars) -> Core FC String
+    tshow env (n, ty) = pure $ show n ++ " : " ++ !(pshow env ty)
 perror (CantSolveGoal _ g)
     = let (_ ** (env', g')) = dropPis [] g in
           pure $ "Can't find an implementation for " ++ !(pshow env' g')

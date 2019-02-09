@@ -22,6 +22,24 @@ import Data.List.Views
 
 %default covering
 
+shrinkImp : SubVars outer vars -> (Name, Term vars) -> Maybe (Name, Term outer)
+shrinkImp sub (n, tm)
+    = do tm' <- shrinkTerm tm sub
+         pure (n, tm')
+
+findImpsIn : annot -> Env Term vars -> List (Name, Term vars) -> Term vars -> Core annot ()
+findImpsIn loc env ns (Bind n b@(Pi _ Implicit ty) sc)
+    = findImpsIn loc (b :: env) 
+                 ((n, weaken ty) :: map (\x => (fst x, weaken (snd x))) ns)
+                 sc
+findImpsIn loc env ns (Bind n b sc)
+    = findImpsIn loc (b :: env) 
+                 (map (\x => (fst x, weaken (snd x))) ns)
+                 sc
+findImpsIn loc env ns ty
+    = when (not (isNil ns)) $
+           throw (TryWithImplicits loc env (reverse ns))
+
 export
 caseBlock : {auto c : Ref Ctxt Defs} -> {auto u : Ref UST (UState annot)} ->
             {auto e : Ref EST (EState vars)} ->
@@ -45,11 +63,16 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
                                      then throw err
                                      else pure scrtm_in)
 
+         est <- get EST
+         fullImps_in <- getToBind loc (elabMode elabinfo)
+                               (implicitMode elabinfo) env [] scrtm
+         let fullImps = mapMaybe (shrinkImp (subEnv est)) fullImps_in
+         log 5 $ "Doing a case under unbound implicits " ++ show fullImps
+
          gam <- get Ctxt
          log 2 $ "Case scrutinee: " ++ show caseRig ++ " " ++ 
                   show scrtm ++ " : " ++ show (normaliseHoles gam env scrty)
          scrn <- genName "scr"
-         est <- get EST
          casen <- genCaseName (defining est)
          log 5 $ "Names used elsewhere: " ++ show (map fst (linearUsed est))
 
@@ -93,16 +116,24 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
                                  log 10 $ "Invented hole for case type " ++ show t
                                  pure (mkConstantApp t env)
 
-         let casefnty = abstractOver env $
+         let casefnty = abstractOver gam env (Just (subEnv est)) fullImps $
                           absOthers {done = []} (allow splitOn env) smaller 
                             (maybe (Bind scrn (Pi caseRig Explicit scrty) 
                                        (weaken caseretty))
                                    (const caseretty) splitOn)
 
+         -- If we've had to add implicits to the case type (because there
+         -- were unbound implicits) then we're in a bit of a mess. Easiest
+         -- way out is to throw an error and try again with the implicits
+         -- actually bound! This is rather hacky, but a lot less fiddly than
+         -- the alternative of fixing up the environment
+         when (not (isNil fullImps)) $ findImpsIn loc [] [] casefnty
+
          log 10 $ "Env: " ++ show (length vars) ++ " " ++ show vars
          log 10 $ "Outer env: " ++ show (outerEnv est)
          log 10 $ "Shrunk env: " ++ show svars
-         log 2 $ "Case function type: " ++ show casen ++ " : " ++ show casefnty
+         log 2 $ "Case function type: " ++ show casen ++ " : " ++ 
+                                      show (normaliseHoles gam [] casefnty)
 
          addDef casen (newDef [] casefnty Private None)
          setFlag loc casen Inline
@@ -292,14 +323,46 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
                       else b in
               b' :: mkLocalEnv bs
 
+    -- Abstract over the environment, inserting binders for the
+    -- unbound implicits at the point in the environment where they were
+    -- created (which is after the outer environment was bound)
     export
-    abstractOver : Env Term vs -> (tm : Term vs) -> ClosedTerm
-    abstractOver [] tm = tm
-    abstractOver (b :: env) tm 
+    abstractOver : Defs -> Env Term vs -> 
+                   Maybe (SubVars outer vs) -> List (Name, Term outer) ->
+                   (tm : Term vs) -> ClosedTerm
+    abstractOver defs [] Nothing imps tm 
+        = tm
+    abstractOver defs [] (Just SubRefl) imps tm 
+        = let tm' = if isNil imps then tm
+                       else normaliseHoles defs [] tm
+              (bimptm, _) =
+                bindImplicits (implicitMode elabinfo) defs [] imps []
+                              tm' TType in
+              renameImplicits (gamma defs) bimptm
+    abstractOver defs (b :: env) (Just SubRefl) imps tm 
+        = let c : RigCount
+                = case multiplicity b of
+                       Rig1 _ => Rig0
+                       r => r
+              tm' = if isNil imps then tm
+                       else normaliseHoles defs (b :: env) tm
+              (bimptm, _) =
+                 bindImplicits (implicitMode elabinfo) defs (b :: env) imps []
+                               tm' TType in
+                   abstractOver defs env Nothing imps 
+                      (Bind _ (Pi c Explicit (binderType b)) 
+                             (renameImplicits (gamma defs) bimptm))
+    abstractOver defs (b :: env) (Just (DropCons p)) imps tm 
         = let c = case multiplicity b of
                        Rig1 _ => Rig0
                        r => r in
-          abstractOver env (Bind _ 
+          abstractOver defs env (Just p) imps (Bind _ 
+                (Pi c Explicit (binderType b)) tm)
+    abstractOver defs (b :: env) _ imps tm 
+        = let c = case multiplicity b of
+                       Rig1 _ => Rig0
+                       r => r in
+          abstractOver defs env Nothing imps (Bind _ 
                 (Pi c Explicit (binderType b)) tm)
 
 

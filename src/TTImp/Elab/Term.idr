@@ -282,6 +282,7 @@ mutual
                                             then tyenv
                                             else quote (noGam gam) env ty_nf
                                 log 5 $ "Type of " ++ show n' ++ " : " ++ show ty
+                                log 5 $ "(Originally " ++ show varty ++ ")"
                                 log 5 $ "Term: " ++ show (apply tm imps)
                                 checkExp rigc process loc elabinfo env nest 
                                          (apply tm imps) ty expected
