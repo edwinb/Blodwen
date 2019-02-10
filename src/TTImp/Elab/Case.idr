@@ -399,6 +399,7 @@ caseBlock {vars} {c} {u} {i} {m} rigc process elabinfo loc env nest
     usedIn (IBindVar _ n) = [UN n]
     usedIn (IApp _ f a) = usedIn f ++ usedIn a
     usedIn (IAs _ n a) = n :: usedIn a
+    usedIn (IAlternative _ _ alts) = concatMap usedIn alts
     usedIn _ = []
 
     -- Replace a variable in the argument list; if the reference is to
