@@ -70,3 +70,9 @@ ideMode : List CLOpt -> Bool
 ideMode [] = False
 ideMode (IdeMode :: _) = True
 ideMode (_ :: xs) = ideMode xs
+
+export
+ideModeSocket : List CLOpt -> Bool
+ideModeSocket [] = False
+ideModeSocket (IdeModeSocket :: _) = True
+ideModeSocket (_ :: xs) = ideModeSocket xs

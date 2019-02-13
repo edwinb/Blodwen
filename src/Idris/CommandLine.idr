@@ -45,7 +45,10 @@ data CLOpt
   InputFile String |
    ||| Whether or not to run in IdeMode (easily parsable for other tools)
   IdeMode |
+   ||| Whether or not to run IdeMode (using a socket instead of stdin/stdout)
+  IdeModeSocket | 
   BlodwenPaths
+
 
 ActType : List String -> Type
 ActType [] = List CLOpt
@@ -72,6 +75,9 @@ options = [MkOpt ["--check", "-c"] [] [CheckOnly]
 
            MkOpt ["--ide-mode"] [] [IdeMode]
               (Just "Run the REPL with machine-readable syntax"),
+           
+           MkOpt ["--ide-mode-socket"] [] [IdeModeSocket]
+              (Just "Run the ide socket mode"),
 
            MkOpt ["--prefix"] [] [ShowPrefix]
               (Just "Show installation prefix"),
