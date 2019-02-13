@@ -2,6 +2,7 @@ module Idris.IDEMode.Commands
 
 import Core.Core
 import Core.Name
+import public Idris.REPLOpts
 
 %default covering
 
@@ -146,13 +147,17 @@ export
 version : Int -> Int -> SExp
 version maj min = toSExp (SymbolAtom "protocol-version", maj, min)
 
-hex : Int -> IO ()
-hex num = foreign FFI_C "printf" (String -> Int -> IO ()) "%06x" num
+hex : File -> Int -> IO ()
+hex (FHandle h) num = foreign FFI_C "fprintf" (Ptr -> String -> Int -> IO ()) h "%06x" num
+
+sendLine : File -> String -> IO ()
+sendLine (FHandle h) st = 
+  map (const ()) (prim_fwrite h st)
 
 export
-send : SExpable a => a -> Core annot ()
-send resp
+send : SExpable a => File -> a -> Core annot ()
+send f resp
     = do let r = show (toSExp resp) ++ "\n"
-         coreLift $ hex (cast (length r))
-         coreLift $ putStr r
-         coreLift $ fflush stdout
+         coreLift $ hex f (cast (length r))
+         coreLift $ sendLine f r
+         coreLift $ fflush f

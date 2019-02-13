@@ -1,10 +1,11 @@
 module Idris.REPLOpts
 
 import Idris.Syntax
+import Idris.Socket
 
 public export
 data OutputMode 
-  = IDEMode Integer 
+  = IDEMode Integer File File
   | REPL Bool -- quiet flag (ignore iputStrLn)
 
 public export
@@ -36,6 +37,11 @@ setOutput : {auto o : Ref ROpts REPLOpts} ->
 setOutput m
     = do opts <- get ROpts
          put ROpts (record { idemode = m } opts)
+
+export
+getOutput : {auto o : Ref ROpts REPLOpts} -> Core annot OutputMode
+getOutput = do opts <- get ROpts
+               pure (idemode opts)
 
 export
 setSource : {auto o : Ref ROpts REPLOpts} ->

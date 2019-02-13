@@ -13,21 +13,22 @@ modules = Idris.CommandLine,
           Idris.REPLCommon,
           Idris.REPLOpts,
           Idris.Resugar,
-
+          Idris.Socket,
+          Idris.Socket.Raw,
+          Idris.Socket.Data,
           Idris.Elab.Implementation,
           Idris.Elab.Interface,
           Idris.Elab.Record,
-
           Idris.IDEMode.CaseSplit,
           Idris.IDEMode.Commands,
           Idris.IDEMode.MakeClause,
           Idris.IDEMode.Parser,
           Idris.IDEMode.REPL,
           Idris.IDEMode.TokenLine
-
+	  
 sourcedir = src
 executable = blodwen
--- opts = "--partial-eval --cg-opt -O2"
+--opts = "--partial-eval --cg-opt -O2"
 opts = "--partial-eval"
 
 main = Idris.Main
