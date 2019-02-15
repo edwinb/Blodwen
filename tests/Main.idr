@@ -5,7 +5,7 @@ import System
 %default covering
 
 ttimpTests : List String
-ttimpTests 
+ttimpTests
     = ["test001", "test002", "test003", "test004", "test005",
        "test006", "test007", "test008", "test009",
        "case001",
@@ -21,7 +21,7 @@ blodwenTests
        "test021", "test022", "test023", "test024", "test025",
        "test026", "test027", "test028", "test029", "test030",
        "chez001", "chez002", "chez003", "chez004", "chez005",
-       "chez006",
+       "chez006", "chez007",
        "chicken001", "chicken002",
        "error001", "error002", "error003", "error004", "error005",
        "error006",
@@ -47,12 +47,12 @@ blodwenTests
        "with001"]
 
 chdir : String -> IO Bool
-chdir dir 
+chdir dir
     = do ok <- foreign FFI_C "chdir" (String -> IO Int) dir
          pure (ok == 0)
 
 fail : String -> IO ()
-fail err 
+fail err
     = do putStrLn err
          exitWith (ExitFailure 1)
 
@@ -82,4 +82,3 @@ main
          if (any not (ttimps ++ blods))
             then exitWith (ExitFailure 1)
             else exitWith ExitSuccess
-
