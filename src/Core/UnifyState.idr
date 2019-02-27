@@ -312,6 +312,8 @@ mkConstant : Env Term vars -> Term vars -> ClosedTerm
 mkConstant [] tm = tm
 mkConstant (Let c val ty :: env) tm
     = mkConstant env (subst val tm)
+mkConstant (PLet c val ty :: env) tm
+    = mkConstant env (subst val tm)
 mkConstant {vars = x :: _} (b :: env) tm 
     = let ty = binderType b in
           mkConstant env (Bind x (Lam (multiplicity b) Explicit ty) tm)
@@ -329,6 +331,10 @@ mkConstantAppArgs : Bool -> Env Term vars ->
                     List (Term done) -> List (Term (vars ++ done))
 mkConstantAppArgs lets [] xs = xs
 mkConstantAppArgs lets (Let c val ty :: env) xs
+    = if lets
+         then Local Nothing Here :: map weaken (mkConstantAppArgs lets env xs)
+         else map weaken (mkConstantAppArgs lets env xs)
+mkConstantAppArgs lets (PLet c val ty :: env) xs
     = if lets
          then Local Nothing Here :: map weaken (mkConstantAppArgs lets env xs)
          else map weaken (mkConstantAppArgs lets env xs)
@@ -357,6 +363,7 @@ mkConstantAppArgsSub lets (b :: env) SubRefl xs
              then Local Nothing Here :: map weaken rec
              else case b of
                      Let _ _ _ => map weaken rec
+                     PLet _ _ _ => map weaken rec
                      _ => Local Nothing Here :: map weaken rec
 mkConstantAppArgsSub lets (b :: env) (DropCons p) xs
     = map weaken (mkConstantAppArgsSub lets env p xs)
@@ -366,6 +373,7 @@ mkConstantAppArgsSub lets (b :: env) (KeepCons p) xs
              then Local Nothing Here :: map weaken rec
              else case b of
                      Let _ _ _ => map weaken rec
+                     PLet _ _ _ => map weaken rec
                      _ => Local Nothing Here :: map weaken rec
 
 export
@@ -393,6 +401,7 @@ mkConstantAppArgsOthers lets (b :: env) (DropCons p) xs
              then Local Nothing Here :: map weaken rec
              else case b of
                      Let _ _ _ => map weaken rec
+                     PLet _ _ _ => map weaken rec
                      _ => Local Nothing Here :: map weaken rec
 
 export

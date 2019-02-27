@@ -91,3 +91,11 @@ reverseOnto acc (x::xs) = reverseOnto (x::acc) xs
 export
 reverse : List a -> List a
 reverse = reverseOnto []
+
+public export
+data NonEmpty : (xs : List a) -> Type where
+    IsNonEmpty : NonEmpty (x :: xs)
+
+export
+Uninhabited (NonEmpty []) where
+  uninhabited IsNonEmpty impossible

@@ -48,7 +48,7 @@ infixr 7 ::, ++
 -- Functor/Applicative/Monad/Algebra operators
 infixl 1 >>=
 infixr 2 <|>
-infixl 3 <*>
+infixl 3 <*>, *>, <*
 infixr 4 <$>
 infixl 6 <+>
 
@@ -67,7 +67,7 @@ the : (0 a : Type) -> (1 x : a) -> a
 the _ x = x
 
 public export %inline
-id : (1 x : a) -> a
+id : (x : a) -> a
 id x = x
 
 public export %inline
@@ -426,7 +426,17 @@ interface Functor f => Applicative f where
   pure : a -> f a
   (<*>) : f (a -> b) -> f a -> f b
 
+public export
+(<*) : Applicative f => f a -> f b -> f a
+a <* b = map const a <*> b
+
+public export
+(*>) : Applicative f => f a -> f b -> f b
+a *> b = map (const id) a <*> b
+
 %allow_overloads pure
+%allow_overloads (<*)
+%allow_overloads (*>)
 
 public export
 interface Applicative f => Alternative f where

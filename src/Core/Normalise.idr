@@ -30,41 +30,42 @@ Stack vars = List (Closure vars)
 -- declared because it needs to be used within the block but has to be
 -- defined outside it!
 evalWithOpts : Defs -> EvalOpts ->
-               Env Term free -> LocalEnv free vars -> Stack free ->
-               Term (vars ++ free) -> NF free
+               Env Term free -> LocalEnv free vars -> 
+               Term (vars ++ free) -> Stack free -> NF free
 
 parameters (defs : Defs, opts : EvalOpts)
   mutual
-    eval : Env Term free -> LocalEnv free vars -> Stack free ->
-           Term (vars ++ free) -> NF free
-    eval env loc stk (Local r p) = evalLocal env loc stk r p
-    eval env loc stk (Ref nt fn)
+    eval : Env Term free -> LocalEnv free vars -> 
+           Term (vars ++ free) -> Stack free -> 
+           NF free
+    eval env loc (Local r p) stk = evalLocal p env loc stk r
+    eval env loc (Ref nt fn) stk
          = evalRef env loc stk nt fn
-    eval env loc (closure :: stk) (Bind x (Lam _ _ ty) sc) 
-         = eval env (closure :: loc) stk sc
-    eval env loc stk (Bind x b@(Let n val ty) sc) 
+    eval env loc (Bind x (Lam _ _ ty) sc) (closure :: stk)
+         = eval env (closure :: loc) sc stk
+    eval env loc (Bind x b@(Let n val ty) sc) stk
          = if holesOnly opts
-              then NBind x (map (eval env loc stk) b)
-                      (\arg => eval env (arg :: loc) stk sc)
-              else eval env (MkClosure opts loc env val :: loc) stk sc
-    eval env loc stk (Bind x b sc) 
-         = NBind x (map (eval env loc stk) b)
-               (\arg => eval env (arg :: loc) stk sc)
-    eval env loc stk (App fn arg) 
-         = eval env loc (MkClosure opts loc env arg :: stk) fn
-    eval env loc stk (PrimVal x) = NPrimVal x
-    eval env loc stk Erased = NErased
-    eval env loc stk TType = NType
+              then NBind x (map (\tm => eval env loc tm stk) b)
+                      (\arg => eval env (arg :: loc) sc stk)
+              else eval env (MkClosure opts loc env val :: loc) sc stk
+    eval env loc (Bind x b sc) stk
+         = NBind x (map (\tm => eval env loc tm stk) b)
+               (\arg => eval env (arg :: loc) sc stk)
+    eval env loc (App fn arg) stk
+         = eval env loc fn (MkClosure opts loc env arg :: stk)
+    eval env loc (PrimVal x) stk = NPrimVal x
+    eval env loc Erased stk = NErased
+    eval env loc TType stk = NType
 
-    evalLocal : Env Term free -> 
+    evalLocal : Elem x (vars ++ free) -> Env Term free -> 
                 LocalEnv free vars -> Stack free -> 
-                Maybe RigCount -> Elem x (vars ++ free) -> NF free
-    evalLocal {vars = []} env loc stk r p 
-        = if isLet p env && not (holesOnly opts)
+                Maybe RigCount -> NF free
+    evalLocal {vars = []} p env loc stk r 
+        = if not (holesOnly opts) && isLet p env
              -- getBinder does a lot of work to weaken the types as
              -- necessary, so only do it if we really need to
              then case getBinder p env of
-                       Let _ val ty => eval env [] stk val
+                       Let _ val ty => eval env [] val stk
                        b => NApp (NLocal r p) stk
              else NApp (NLocal r p) stk
       where
@@ -73,10 +74,10 @@ parameters (defs : Defs, opts : EvalOpts)
         isLet Here _ = False
         isLet (There p) (b :: env) = isLet p env
     evalLocal {vars = (x :: xs)} 
-              env ((MkClosure _ loc' env' tm') :: locs) stk r Here 
-        = eval env' loc' stk tm'
+              Here env ((MkClosure _ loc' env' tm') :: locs) stk r
+        = eval env' loc' tm' stk
     evalLocal {free} {vars = (x :: xs)} 
-              env ((MkNFClosure nf) :: locs) stk r Here 
+              Here env ((MkNFClosure nf) :: locs) stk r
         = applyToStack nf stk
       where
         applyToStack : NF free -> Stack free -> NF free
@@ -85,14 +86,14 @@ parameters (defs : Defs, opts : EvalOpts)
         applyToStack (NApp (NRef nt fn) args) stk
             = evalRef env locs (args ++ stk) nt fn
         applyToStack (NApp (NLocal r p) args) stk
-            = evalLocal env locs (args ++ stk) r 
-                  (insertElemNames {outer=[]} xs p)
+          = let p' = insertElemNames {outer=[]} xs p in
+                evalLocal p' env locs (args ++ stk) r
         applyToStack (NDCon n t a args) stk = NDCon n t a (args ++ stk)
         applyToStack (NTCon n t a args) stk = NTCon n t a (args ++ stk)
         applyToStack nf _ = nf
 
-    evalLocal {vars = (x :: xs)} env (_ :: loc) stk r (There later) 
-        = evalLocal env loc stk r later
+    evalLocal {vars = (x :: xs)} (There later) env (_ :: loc) stk r
+        = evalLocal later env loc stk r
 
     evalOp : (Vect arity (NF free) -> Maybe (NF free)) ->
              NameType -> Name -> Stack free -> NF free
@@ -261,47 +262,47 @@ parameters (defs : Defs, opts : EvalOpts)
       = let x' : List.Elem _ ((args ++ vars) ++ free) 
                = rewrite sym (appendAssociative args vars free) in
                          elemExtend x
-            xval = evalLocal env loc [] Nothing x' in
+            xval = evalLocal x' env loc [] Nothing in
                    findAlt env loc stk xval alts def
     evalTree {args} {vars} {free} env loc stk (STerm tm) def 
           = let tm' : Term ((args ++ vars) ++ free) 
                     = rewrite sym (appendAssociative args vars free) in
                               embed tm in
             case fuel opts of
-                 Nothing => eval env loc stk tm'
+                 Nothing => eval env loc tm' stk
                  Just Z => def
                  Just (S k) => 
                       let opts' = record { fuel = Just k } opts in
-                          evalWithOpts defs opts' env loc stk tm'
+                          evalWithOpts defs opts' env loc tm' stk
     evalTree env loc stk (Unmatched msg) def = def
     evalTree env loc stk Impossible def = def
     
 evalWithOpts = eval
 
 evalClosure defs (MkClosure h loc env tm)
-    = eval defs h env loc [] tm
+    = eval defs h env loc tm []
 evalClosure defs (MkNFClosure nf) = nf
     
 
 export
 nf : Defs -> Env Term free -> Term free -> NF free
-nf defs env tm = eval defs defaultOpts env [] [] tm
+nf defs env tm = eval defs defaultOpts env [] tm []
 
 export
 nfOpts : EvalOpts -> Defs -> Env Term free -> Term free -> NF free
-nfOpts opts defs env tm = eval defs opts env [] [] tm
+nfOpts opts defs env tm = eval defs opts env [] tm []
 
 -- Only evaluate names which stand for solved holes
 export
 nfHoles : Defs -> Env Term free -> Term free -> NF free
-nfHoles defs env tm = eval defs withHoles env [] [] tm
+nfHoles defs env tm = eval defs withHoles env [] tm []
 
 -- Evaluate everything, even if not visible or not total (but work as
 -- normal under binders and delay)
 -- ('normalise' mode at the REPL)
 export
 nfAll : Defs -> Env Term free -> Term free -> NF free
-nfAll defs env tm = eval defs withAll env [] [] tm
+nfAll defs env tm = eval defs withAll env [] tm []
 
 genName : IORef Int -> String -> IO Name
 genName num root 
@@ -390,7 +391,7 @@ mutual
            sc' <- quoteGenNF num defs (Add n var bound) env 
                        (sc (toClosure defaultOpts env (Ref Bound var)))
            b' <- quoteBinder num defs bound env b
-           pure (Bind n b' sc') -- ?halp) -- (refToLocal Nothing var n sc'))
+           pure (Bind n b' sc')
   quoteGenNF num defs bound env (NApp f args) 
       = do f' <- quoteHead bound f
            args' <- quoteArgs num defs bound env args

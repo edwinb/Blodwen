@@ -447,34 +447,11 @@ export
 notCovering : Totality
 notCovering = MkTotality Unchecked (MissingCases [])
 
-data SameElem : Elem x xs -> Elem x' xs -> Type where
-     SameHere : SameElem Here Here
-     SameThere : SameElem p1 p2 -> SameElem (There p1) (There p2)
-
-hereNotThere : SameElem Here (There later) -> Void
-hereNotThere SameHere impossible
-hereNotThere (SameThere _) impossible
-
-thereNotHere : SameElem (There later) Here -> Void
-thereNotHere SameHere impossible
-thereNotHere (SameThere _) impossible
-
-thereLater : (same : SameElem p1 p2 -> Void) -> SameElem (There p1) (There p2) -> Void
-thereLater same (SameThere p) = same p
-
-sameElem : (p1 : Elem x xs) -> (p2 : Elem x' xs) -> Dec (SameElem p1 p2)
-sameElem Here Here = Yes SameHere
-sameElem Here (There later) = No hereNotThere
-sameElem (There later) Here = No thereNotHere
-sameElem (There p1) (There p2) with (sameElem p1 p2)
-  sameElem (There p1) (There p2) | No same = No (thereLater same)
-  sameElem (There p1) (There p2) | (Yes later) = Yes (SameThere later)
-
 export
 sameVar : Elem x xs -> Elem y xs -> Bool
-sameVar p1 p2 = case sameElem p1 p2 of
-                     Yes prf => True
-                     No contra => False
+sameVar Here Here = True
+sameVar (There p1) (There p2) = sameVar p1 p2
+sameVar _ _ = False
 
 export
 Eq a => Eq (Binder a) where
@@ -1074,33 +1051,52 @@ merge ((_ ** v) :: vs) xs
 		= merge vs ((_ ** v) :: filter (\p => not (sameVar v (DPair.snd p))) xs)
 
 mutual
-  findUsed : Env Term vars -> List (x ** Elem x vars) ->
-                 Term vars -> List (x ** Elem x vars)
+  vCount : Elem x xs -> Nat
+  vCount Here = Z
+  vCount (There p) = S (vCount p)
+
+  dropS : List Nat -> List Nat
+  dropS [] = []
+  dropS (Z :: xs) = dropS xs
+  dropS (S p :: xs) = p :: dropS xs
+
+	-- Quicker, if less safe, to store variables as a Nat, for quick comparison
+  findUsed : Env Term vars -> List Nat -> Term vars -> List Nat
   findUsed env used (Local r y) 
-    = if any (\p => sameVar y (DPair.snd p)) used
-         then used
-         else	assert_total (findUsedInBinder env ((_ ** y) :: used)
-                                             (getBinder y env))
+    = let yn = vCount y in
+					if elem yn used 
+						 then used
+						 else	assert_total (findUsedInBinder env (yn :: used)
+																								 (getBinder y env))
   findUsed env used (Bind x b tm) 
     = assert_total $
-        dropHere (findUsed (b :: env)
-                     (weakenVars (findUsedInBinder env used b))
-                     tm)
+        dropS (findUsed (b :: env)
+                        (map S (findUsedInBinder env used b))
+                        tm)
   findUsed env used (App fn arg) 
     = findUsed env (findUsed env used fn) arg
   findUsed env used _ = used
   
-  findUsedInBinder : Env Term vars -> List (x ** Elem x vars) ->
-										 Binder (Term vars) -> List (x ** Elem x vars)
+  findUsedInBinder : Env Term vars -> List Nat ->
+										 Binder (Term vars) -> List Nat
   findUsedInBinder env used (Let _ val ty) 
     = findUsed env (findUsed env used val) ty
   findUsedInBinder env used (PLet _ val ty)
     = findUsed env (findUsed env used val) ty
   findUsedInBinder env used b = findUsed env used (binderType b)
 
+toElem : (vars : List Name) -> Nat -> Maybe (x ** Elem x vars)
+toElem (v :: vs) Z = Just (_ ** Here)
+toElem (v :: vs) (S k)
+   = do (_ ** prf) <- toElem vs k 
+        Just (_ ** There prf)
+toElem _ _ = Nothing
+
 export
 findUsedLocs : Env Term vars -> Term vars -> List (x ** Elem x vars)
-findUsedLocs env tm = findUsed env [] tm
+findUsedLocs env tm 
+    = mapMaybe (toElem _) (findUsed env [] tm)
+
 
 -- Find the smallest subset of the environment which is needed to type check
 -- the given term
