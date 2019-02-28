@@ -322,6 +322,13 @@ interface Quote (tm : List Name -> Type) where
   quote defs env tm 
       = unsafePerformIO (do num <- newIORef 0
                             quoteGen num defs env tm)
+
+firstInf : Defs -> List (Closure vars) -> Bool
+firstInf defs [] = False
+firstInf defs (c :: cs)
+    = case evalClosure defs c of
+           NDCon n _ _ _ => isInfinite n defs
+           _ => False
   
 data Bounds : List Name -> Type where
      None : Bounds []
@@ -397,7 +404,7 @@ mutual
            args' <- quoteArgs num defs bound env args
            pure $ apply f' args'
   quoteGenNF num defs bound env (NDCon nm tag arity xs) 
-      = if isDelay nm defs
+      = if isDelay nm defs && firstInf defs xs
            then do xs' <- quoteArgs num defs bound env (map toHolesOnly xs)
                    pure $ apply (Ref (DataCon tag arity) nm) xs'
            else do xs' <- quoteArgs num defs bound env xs
@@ -523,7 +530,8 @@ mutual
              as <- allConv num defs env args args'
              pure $ hs && as
     convGen num defs env (NDCon nm tag _ xs) (NDCon nm' tag' _ xs') 
-        = if isDelay nm defs || isDelay nm' defs
+        = if (isDelay nm defs && firstInf defs xs)
+             || (isDelay nm' defs && firstInf defs xs')
              then do as <- allConv num defs env (map toHolesOnly xs) (map toHolesOnly xs')
                      pure (tag == tag' && as)
              else do as <- allConv num defs env xs xs'
