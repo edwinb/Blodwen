@@ -50,32 +50,36 @@ impossibleOK _ _ _ = False
 -- 'bound' counts the number of variables locally bound; these are the
 -- only ones we're checking linearity of (we may be shadowing names if this
 -- is a local definition, so we need to leave the earlier ones alone)
-findLinear : Defs -> Nat -> RigCount -> Term vars -> List (Name, RigCount)
-findLinear gam bound rig (Bind n b sc) = findLinear gam (S bound) rig sc
-findLinear gam bound rig tm with (unapply tm)
-  findLinear gam bound rig (apply (Ref _ n) []) | ArgsList = []
-  findLinear gam bound rig (apply (Ref _ n) args) | ArgsList 
+findLinear : Bool -> Defs -> Nat -> RigCount -> Term vars -> List (Name, RigCount)
+findLinear top gam bound rig (Bind n b sc) = findLinear top gam (S bound) rig sc
+findLinear top gam bound rig tm with (unapply tm)
+  findLinear top gam bound rig (apply (Ref _ n) []) | ArgsList = []
+  findLinear top gam bound rig (apply (Ref nt n) args) | ArgsList 
       = case lookupTyExact n (gamma gam) of
              Nothing => []
-             Just nty => findLinArg (nf gam [] nty) args
+             Just nty => findLinArg (accessible nt rig) (nf gam [] nty) args
     where
+      accessible : NameType -> RigCount -> RigCount
+      accessible Func r = if top then r else Rig0
+      accessible _ r = r
+
       boundHere : Nat -> Elem x xs -> Bool
       boundHere Z p = False
       boundHere (S k) Here = True
       boundHere (S k) (There p) = boundHere k p
 
-      findLinArg : NF [] -> List (Term vars) -> List (Name, RigCount)
-      findLinArg (NBind x (Pi c _ _) sc) (Local {x=a} _ prf :: as) 
+      findLinArg : RigCount -> NF [] -> List (Term vars) -> List (Name, RigCount)
+      findLinArg rig (NBind x (Pi c _ _) sc) (Local {x=a} _ prf :: as) 
           = if boundHere bound prf
                then (a, rigMult c rig) :: 
-                    findLinArg (sc (toClosure defaultOpts [] (Ref Bound x))) as
-               else findLinArg (sc (toClosure defaultOpts [] (Ref Bound x))) as
-      findLinArg (NBind x (Pi c _ _) sc) (a :: as) 
-          = findLinear gam bound (rigMult c rig) a ++
-                findLinArg (sc (toClosure defaultOpts [] (Ref Bound x))) as
-      findLinArg ty (a :: as) = findLinear gam bound rig a ++ findLinArg ty as
-      findLinArg _ [] = []
-  findLinear gam bound rig (apply f args) | ArgsList = []
+                    findLinArg rig (sc (toClosure defaultOpts [] (Ref Bound x))) as
+               else findLinArg rig (sc (toClosure defaultOpts [] (Ref Bound x))) as
+      findLinArg rig (NBind x (Pi c _ _) sc) (a :: as) 
+          = findLinear False gam bound (rigMult c rig) a ++
+                findLinArg rig (sc (toClosure defaultOpts [] (Ref Bound x))) as
+      findLinArg rig ty (a :: as) = findLinear False gam bound rig a ++ findLinArg rig ty as
+      findLinArg _ _ [] = []
+  findLinear top gam bound rig (apply f args) | ArgsList = []
 
 setLinear : List (Name, RigCount) -> Term vars -> Term vars
 setLinear vs (Bind x (PVar c ty) sc)
@@ -213,7 +217,7 @@ checkLHS {vars} loc elab incase mult hashit defining env nest lhs_raw
          -- (this might be allowed, e.g. for 'fromInteger')
          let lhs = normalise gam (noLet env) lhs_in
          let lhsty = normaliseHoles gam env lhsty_in
-         let linvars_in = findLinear gam 0 rig1 lhs
+         let linvars_in = findLinear True gam 0 rig1 lhs
          log 5 $ "Linearity of names in " ++ show defining ++ ": " ++ 
                  show linvars_in
 
@@ -319,7 +323,9 @@ checkClause {vars} elab incase mult hashit defining env nest (PatClause loc lhs_
          -- otherwise
          when (rhsHole gam rhs) $ 
            addLHS (getAnnot lhs_raw) (length env) env' lhspat
+         log 3 ("In env " ++ show env')
          log 3 ("Clause: " ++ show lhspat ++ " = " ++ show rhs)
+         log 3 ("Erased RHS: " ++ show rhs_erased)
          when hashit $ 
            do addHash lhspat
               addHash rhs
