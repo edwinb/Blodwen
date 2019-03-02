@@ -224,23 +224,24 @@ mutual
       = forceIn defs n exp ds (CLet d CErased tree)
 
   toCExpTree : Defs -> NameTags -> Name -> CaseTree vars -> CExp vars
-  toCExpTree defs tags n (Case x scTy [ConCase cn t args sc])
+  toCExpTree defs tags n alts@(Case x scTy (ConCase cn t args sc :: rest))
       = if isDelay cn defs
            then forceIn defs n (CLocal x) args (toCExpTree defs tags n sc)
-           else natHackTree 
-                  (CConCase (CLocal x) (conCases defs tags n [ConCase cn t args sc])
-                            Nothing)
-  toCExpTree defs tags n (Case x scTy alts@(ConCase _ _ _ _ :: _)) 
+           else toCExpTree' defs tags n alts
+  toCExpTree defs tags n alts = toCExpTree' defs tags n alts
+
+  toCExpTree' : Defs -> NameTags -> Name -> CaseTree vars -> CExp vars
+  toCExpTree' defs tags n (Case x scTy alts@(ConCase _ _ _ _ :: _)) 
       = natHackTree 
            (CConCase (CLocal x) (conCases defs tags n alts) (getDef defs tags n alts))
-  toCExpTree defs tags n (Case x scTy alts@(ConstCase _ _ :: _)) 
+  toCExpTree' defs tags n (Case x scTy alts@(ConstCase _ _ :: _)) 
       = CConstCase (CLocal x) (constCases defs tags n alts) (getDef defs tags n alts)
-  toCExpTree defs tags n (Case x scTy alts@(DefaultCase sc :: _)) 
+  toCExpTree' defs tags n (Case x scTy alts@(DefaultCase sc :: _)) 
       = toCExpTree defs tags n sc
-  toCExpTree defs tags n (Case x scTy []) = CCrash $ "Missing case tree in " ++ show n
-  toCExpTree defs tags n (STerm tm) = toCExp defs tags n tm
-  toCExpTree defs tags n (Unmatched msg) = CCrash msg 
-  toCExpTree defs tags n Impossible = CCrash $ "Impossible case encountered in " ++ show n
+  toCExpTree' defs tags n (Case x scTy []) = CCrash $ "Missing case tree in " ++ show n
+  toCExpTree' defs tags n (STerm tm) = toCExp defs tags n tm
+  toCExpTree' defs tags n (Unmatched msg) = CCrash msg 
+  toCExpTree' defs tags n Impossible = CCrash $ "Impossible case encountered in " ++ show n
 
 -- Need this for ensuring that argument list matches up to operator arity for
 -- builtins
