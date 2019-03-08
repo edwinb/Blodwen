@@ -1,4 +1,4 @@
-PREFIX = ${HOME}/.blodwen
+PREFIX = $(subst \,/,${HOME})/.blodwen
 export BLODWEN_PATH = ${CURDIR}/prelude/build:${CURDIR}/base/build
 export BLODWEN_DATA = ${CURDIR}/support
 
