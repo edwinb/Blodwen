@@ -48,8 +48,6 @@ install:
 	$(MKDIR) ${DESTDIR}${PREFIX}/blodwen/support/chez
 	$(MKDIR) ${DESTDIR}${PREFIX}/blodwen/support/chicken
 	$(MKDIR) ${DESTDIR}${PREFIX}/blodwen/support/racket
-	make -C prelude install BLODWEN=../blodwen
-	make -C base install BLODWEN=../blodwen
 
 	$(INSTALL) blodwen ${DESTDIR}${BINDIR}
 	$(INSTALL) support/chez/* ${DESTDIR}${PREFIX}/blodwen/support/chez
