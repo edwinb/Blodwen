@@ -53,7 +53,7 @@ Installation
 
 To build and install what exists of it so far:
 
-+ Optionally, set the `PREFIX` in `Makefile`
++ Optionally, set or override the `PREFIX` in `Makefile`
 + `make all`
   + This builds the main executable `blodwen`, and a minimal dependently
     typed language with implicit syntax, `ttimp`. Most likely you'll only
