@@ -16,6 +16,7 @@ import Idris.Parser
 import Idris.REPLCommon
 import Idris.REPLOpts
 import Idris.Syntax
+import Parser.Unlit
 
 import Control.Catchable
 import Interfaces.FileIO
@@ -151,6 +152,7 @@ export
 getParseErrorLoc : String -> ParseError -> FC
 getParseErrorLoc fname (ParseFail _ (Just pos) _) = MkFC fname pos pos
 getParseErrorLoc fname (LexFail (l, c, _)) = MkFC fname (l, c) (l, c)
+getParseErrorLoc fname (LitFail (l :: _)) = MkFC fname (l, 0) (l, 0)
 getParseErrorLoc fname _ = replFC
 
 -- Process everything in the module; return the syntax information which
@@ -230,7 +232,7 @@ process : {auto c : Ref Ctxt Defs} ->
 process buildmsg file
     = do Right res <- coreLift (readFile file)
                | Left err => pure [FileErr file err]
-         case runParser res (do p <- prog file; eoi; pure p) of
+         case runParser (isLitFile file) True res (do p <- prog file; eoi; pure p) of
               Left err => pure [ParseFail (getParseErrorLoc file err) err]
               Right mod =>
                 -- Processing returns a list of errors across a whole module,

@@ -72,7 +72,7 @@ repl : {auto c : Ref Ctxt Defs} ->
 repl
     = do coreLift (putStr "Blodwen> ")
          inp <- coreLift getLine
-         case runParser inp command of
+         case runParser False False inp command of
               Left err => do coreLift (printLn err)
                              repl
               Right cmd =>

@@ -27,7 +27,7 @@ processDecls decls
 export
 runMain : {auto c : Ref Ctxt Defs} -> Core () ()
 runMain
-    = case runParser "main" raw of
+    = case runParser False False "main" raw of
            Left err => coreLift (printLn "Can't happen, error parsing 'main'")
            Right raw => do
              (ptm, pty) <- infer () [] raw
@@ -41,7 +41,7 @@ process : {auto c : Ref Ctxt Defs} ->
 process file
     = do Right res <- coreLift (readFile file)
                | Left err => coreLift (putStrLn ("File error: " ++ show err))
-         case runParser res (do p <- prog; eoi; pure p) of
+         case runParser False False res (do p <- prog; eoi; pure p) of
               Left err => coreLift (putStrLn ("TT Parse error: " ++ show err))
               Right decls => 
                    catch (processDecls decls)
