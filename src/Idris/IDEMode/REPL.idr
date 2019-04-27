@@ -73,7 +73,7 @@ initIDESocketFile p = do
             Right (s, _) => 
                socketToFile s             
 
-getChar : File -> IO (Char)
+getChar : File -> IO Char
 getChar (FHandle h) = do
   if !(fEOF (FHandle h)) then do
     putStrLn "Alas the file is done, aborting"
@@ -81,8 +81,7 @@ getChar (FHandle h) = do
   else do
     chr <- map cast $ foreign FFI_C "getc" (Ptr -> IO Int) h
     if !(ferror (FHandle h)) then do
-      err <- foreign FFI_C "ferror" (Ptr -> IO Int) h 
-      putStrLn ("Failed to get even a simple char " ++ show err)
+      putStrLn "Failed to read a character"
       exit 1
     else pure chr
   
@@ -215,26 +214,32 @@ loop : {auto c : Ref Ctxt Defs} ->
        {auto o : Ref ROpts REPLOpts} ->
        Core FC ()
 loop
-    = do 
-    res <- getOutput 
-    case res of
-      REPL _ => printError "Running idemode but output isn't"
-      IDEMode _ inf outf => do
-        inp <- coreLift $ getInput inf
-        end <- coreLift $ fEOF inf
-        if end then pure ()
-        else case parseSExp inp of
-          Left err =>
-            do printError ("Parse error: " ++ show err)
-               loop
-          Right sexp =>
-            case getMsg sexp of
-              Just (cmd, i) => 
-                do processCatch cmd
-                   loop 
-              Nothing => 
-                do printError "Unrecognised command"
-                   loop
+    = do res <- getOutput 
+         case res of
+              REPL _ => printError "Running idemode but output isn't"
+              IDEMode _ inf outf => do
+                inp <- coreLift $ getInput inf
+                end <- coreLift $ fEOF inf
+                if end then pure ()
+                else case parseSExp inp of
+                  Left err =>
+                    do printError ("Parse error: " ++ show err)
+                       loop
+                  Right sexp =>
+                    case getMsg sexp of
+                      Just (cmd, i) => 
+                        do updateOutput i
+                           processCatch cmd
+                           loop 
+                      Nothing => 
+                        do printError "Unrecognised command"
+                           loop
+  where
+    updateOutput : Integer -> Core FC ()
+    updateOutput idx
+        = do IDEMode _ i o <- getOutput
+                 | _ => pure ()
+             setOutput (IDEMode idx i o)
 
 export
 replIDE : {auto c : Ref Ctxt Defs} ->
@@ -243,11 +248,11 @@ replIDE : {auto c : Ref Ctxt Defs} ->
           {auto m : Ref Meta (Metadata FC)} ->
           {auto o : Ref ROpts REPLOpts} ->
           Core FC ()
-replIDE = do 
-  res <- getOutput 
-  case res of
-    REPL _ => printError "Running idemode but output isn't"
-    IDEMode _ inf outf => do
-      send inf (version 2 0) 
-      loop
+replIDE
+    = do res <- getOutput
+         case res of
+              REPL _ => printError "Running idemode but output isn't"
+              IDEMode _ inf outf => do
+                send outf (version 2 0)
+                loop
 
