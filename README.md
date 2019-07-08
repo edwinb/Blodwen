@@ -1,6 +1,8 @@
 Blodwen
 =======
 
+NOTE: This is now deprecated. See https://github.com/edwinb/Idris2 instead.
+
 This is a prototype implementation of Idris 2.
 
 It is intended to be mostly backwards compatible with Idris 1, with some minor
