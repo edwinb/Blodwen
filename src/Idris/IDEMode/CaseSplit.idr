@@ -8,6 +8,8 @@ import TTImp.CaseSplit
 import TTImp.TTImp
 import TTImp.Utils
 
+import Parser.Unlit
+
 import Idris.IDEMode.TokenLine
 import Idris.REPLOpts
 import Idris.Resugar
@@ -171,14 +173,19 @@ mutual
 export
 getClause : {auto c : Ref Ctxt Defs} ->
             {auto m : Ref Meta (Metadata FC)} ->
+            {auto o : Ref ROpts REPLOpts} ->
             Int -> Name -> Core FC (Maybe String)
 getClause l n
     = do defs <- get Ctxt
          Just (loc, n, envlen, ty) <- findTyDeclAt (\p, n => onLine (l-1) p)
              | Nothing => pure Nothing
          let argns = getEnvArgNames defs envlen (nf defs [] ty)
-         pure (Just (indent loc ++ fnName True n ++ concat (map (" " ++) argns) ++ 
+         Just srcLine <- getSourceLine l
+           | Nothing => pure Nothing
+         let (lit, src) = isLit srcLine
+         pure (Just (indent lit loc ++ fnName True n ++ concat (map (" " ++) argns) ++
                   " = ?" ++ fnName False n ++ "_rhs"))
   where
-    indent : FC -> String
-    indent fc = pack (replicate (cast (snd (startPos fc))) ' ')
+    indent : Bool -> FC -> String
+    indent True fc = ">" ++ pack (replicate (cast (max 0 (snd (startPos fc) - 1))) ' ')
+    indent False fc = pack (replicate (cast (snd (startPos fc))) ' ')

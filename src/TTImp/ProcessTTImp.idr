@@ -97,7 +97,7 @@ process file
     = do Right res <- coreLift (readFile file)
                | Left err => do coreLift (putStrLn ("File error: " ++ show err))
                                 pure False
-         case runParser res (do p <- prog; eoi; pure p) of
+         case runParser False False res (do p <- prog; eoi; pure p) of
               Left err => do coreLift (putStrLn ("TTImp Parse error: " ++ show err))
                              pure False
               Right decls => 

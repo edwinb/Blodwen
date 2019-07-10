@@ -39,6 +39,8 @@ import TTImp.Reflect
 
 import Control.Catchable
 
+import Parser.Unlit
+
 import System
 
 %default covering
@@ -230,21 +232,21 @@ anyAt p loc y = p loc
 
 printClause : {auto c : Ref Ctxt Defs} ->
               {auto s : Ref Syn SyntaxInfo} ->
-              Nat -> ImpClause FC ->
+              Bool -> Nat -> ImpClause FC ->
               Core FC String
-printClause i (PatClause _ lhsraw rhsraw)
+printClause l i (PatClause _ lhsraw rhsraw)
     = do lhs <- pterm lhsraw
          rhs <- pterm rhsraw
-         pure (pack (replicate i ' ') ++ show lhs ++ " = " ++ show rhs)
-printClause i (WithClause _ lhsraw wvraw csraw)
+         pure ((if l then ">" else "") ++ (pack (replicate i ' ') ++ show lhs ++ " = " ++ show rhs))
+printClause l i (WithClause _ lhsraw wvraw csraw)
     = do lhs <- pterm lhsraw
          wval <- pterm wvraw
-         cs <- traverse (printClause (i + 2)) csraw
-         pure (pack (replicate i ' ') ++ show lhs ++ " with (" ++ show wval ++ ")\n" ++
-                 showSep "\n" cs)
-printClause i (ImpossibleClause _ lhsraw)
+         cs <- traverse (printClause l (i + 2)) csraw
+         pure ((if l then ">" else "") ++ (pack (replicate i ' ') ++ show lhs ++ " with (" ++ show wval ++ ")\n" ++
+                 showSep "\n" cs))
+printClause l i (ImpossibleClause _ lhsraw)
     = do lhs <- pterm lhsraw
-         pure (pack (replicate i ' ') ++ show lhs ++ " impossible")
+         pure ((if l then ">" else "") ++ (pack (replicate i ' ') ++ show lhs ++ " impossible"))
 
 processEdit : {auto c : Ref Ctxt Defs} ->
               {auto u : Ref UST (UState FC)} ->
@@ -317,9 +319,13 @@ processEdit (GenerateDef line name)
                   catch 
                     (do Just (fc, cs) <- makeDef (\p, n => onLine line p) n'
                            | Nothing => processEdit (AddClause line name)
-                        ls <- traverse (printClause (cast (snd (startPos fc)))) cs
+                        Just srcLine <- getSourceLine line
+                          | Nothing => printError "Source line not found"
+                        let (lit, _) = isLit srcLine
+                        let l : Nat = if lit then cast (max 0 (snd (startPos fc) - 1)) else cast (snd (startPos fc))
+                        ls <- traverse (printClause lit l) cs
                         printResult $ showSep "\n" ls)
-                    (\err => printError $ "Can't find a definition for " ++ show n')
+                    (\err => printError $ "Can't find a definition for " ++ show n' ++ ": " ++ show err)
               Just _ => printError "Already defined"
               Nothing => printError $ "Can't find declaration for " ++ show name
 processEdit (MakeLemma line name)
@@ -540,7 +546,7 @@ processCatch cmd
 parseRepl : String -> Either ParseError REPLCmd
 parseRepl inp
     = case fnameCmd [(":load ", Load), (":l ", Load), (":cd ", CD)] inp of
-           Nothing => runParser inp (do c <- command; eoi; pure c)
+           Nothing => runParser False False inp (do c <- command; eoi; pure c)
            Just cmd => Right cmd
   where
     -- a right load of hackery - we can't tokenise the filename using the

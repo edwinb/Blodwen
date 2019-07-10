@@ -10,6 +10,8 @@ import Core.Primitives
 import Core.InitPrimitives
 import Core.UnifyState
 
+import Parser.Unlit
+
 import Idris.Desugar
 import Idris.Error
 import Idris.Parser
@@ -53,7 +55,7 @@ readHeader loc mod
     = do path <- nsToSource loc mod
          Right res <- coreLift (readFile path)
             | Left err => throw (FileErr path err)
-         case runParser res (progHdr path) of
+         case runParser (isLitFile path) False res (progHdr path) of
               Left err => throw (ParseFail (getParseErrorLoc path err) err)
               Right mod => pure (path, mod)
 

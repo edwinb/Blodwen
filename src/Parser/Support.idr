@@ -2,6 +2,7 @@ module Parser.Support
 
 import public Text.Lexer
 import public Parser.Lexer
+import public Parser.Unlit
 import public Text.Parser
 
 import Core.TT
@@ -21,6 +22,7 @@ public export
 data ParseError = ParseFail String (Maybe (Int, Int)) (List Token)
                 | LexFail (Int, Int, String)
                 | FileFail FileError
+                | LitFail (List Int)
 
 export
 Show ParseError where
@@ -31,6 +33,8 @@ Show ParseError where
       = "Lex error at " ++ show (c, l) ++ " input: " ++ str
   show (FileFail err)
       = "File error: " ++ show err
+  show (LitFail l)
+      = "Lit error(s) at " ++ show l
 
 export
 eoi : EmptyRule ()
@@ -43,25 +47,28 @@ eoi
     isEOI _ = False
 
 export
-runParser : String -> Grammar (TokenData Token) e ty -> Either ParseError ty
-runParser str p 
-    = case lex str of
-           Left err => Left $ LexFail err
-           Right toks => 
-              case parse p toks of
-                   Left (Error err []) => 
-                          Left $ ParseFail err Nothing []
-                   Left (Error err (t :: ts)) => 
-                          Left $ ParseFail err (Just (line t, col t))
-                                               (map tok (t :: ts))
-                   Right (val, _) => Right val
+runParser : Bool -> Bool -> String -> Grammar (TokenData Token) e ty -> Either ParseError ty
+runParser lit enforce str p
+    = case unlit lit enforce str of
+           Left l  => Left $ LitFail l
+           Right str =>
+              case lex str of
+                   Left err => Left $ LexFail err
+                   Right toks =>
+                      case parse p toks of
+                           Left (Error err []) =>
+                                  Left $ ParseFail err Nothing []
+                           Left (Error err (t :: ts)) =>
+                                  Left $ ParseFail err (Just (line t, col t))
+                                                       (map tok (t :: ts))
+                           Right (val, _) => Right val
 
 export
 parseFile : (fn : String) -> Rule ty -> IO (Either ParseError ty)
 parseFile fn p
     = do Right str <- readFile fn
              | Left err => pure (Left (FileFail err))
-         pure (runParser str p)
+         pure (runParser (isLitFile fn) True str p)
 
 
 -- Some basic parsers used by all the intermediate forms
