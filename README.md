@@ -75,7 +75,7 @@ play. Good luck :).
 
 (Why "Blodwen"? The answer is here: http://ivortheengine.wikia.com/wiki/Idris)
 
-Information about external dependencies are presented in [Install.md](Install.md).
+Information about external dependencies are presented in [INSTALL.md](INSTALL.md).
 
 Things still missing
 ====================
