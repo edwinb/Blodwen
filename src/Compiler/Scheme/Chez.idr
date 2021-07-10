@@ -23,11 +23,17 @@ firstExists : List String -> IO (Maybe String)
 firstExists [] = pure Nothing
 firstExists (x :: xs) = if !(exists x) then pure (Just x) else firstExists xs
 
-findChez : IO String
-findChez
+findBin : String -> List String -> IO String
+findBin name altNames
     = do e <- firstExists [p ++ x | p <- ["/usr/bin/", "/usr/local/bin/"],
-                                    x <- ["scheme", "chez", "chezscheme9.5"]]
-         maybe (pure "/usr/bin/env scheme") pure e
+                                    x <- (name :: altNames)]
+         maybe (pure ("/usr/bin/env " ++ name)) pure e
+
+findChez : IO String
+findChez = findBin "scheme" ["chez", "chezscheme9.5"]
+
+findChezScript : IO String
+findChezScript = findBin "scheme-script" []
 
 findLibs : List String -> List String
 findLibs = mapMaybe (isLib . trim)
@@ -46,8 +52,8 @@ escapeQuotes s = pack $ foldr escape [] $ unpack s
     escape c   cs = c :: cs
 
 schHeader : String -> List String -> String
-schHeader chez libs
-  = "#!" ++ chez ++ " --script\n\n" ++
+schHeader chezScript libs
+  = "#!" ++ chezScript ++ "\n\n" ++
     "(import (chezscheme))\n" ++
     "(case (machine-type)\n" ++
     "  [(i3le ti3le a6le ta6le) (load-shared-object \"libc.so.6\")]\n" ++
@@ -107,7 +113,7 @@ compileToSS c tm outfile
          compdefs <- traverse (getScheme chezExtPrim defs) ns
          let code = concat compdefs
          main <- schExp chezExtPrim 0 [] !(compileExp tags tm)
-         chez <- coreLift findChez
+         chez <- coreLift findChezScript
          support <- readDataFile "chez/support.ss"
          let scm = schHeader chez libs ++ support ++ code ++ main ++ schFooter
          Right () <- coreLift $ writeFile outfile scm

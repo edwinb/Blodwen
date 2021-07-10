@@ -1,0 +1,4 @@
+$1 hello.blod < input
+./hello.ss
+rm -rf build hello.ss
+
